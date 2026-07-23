@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "CareDesk"
+  },
+  "shell": {
+    "loading": "Loading…",
+    "skipToContent": "Skip to main content",
+    "primaryNavigation": "Primary navigation",
+    "emptyDashboardTitle": "Nothing here yet",
+    "emptyDashboardBody": "Once an employment case is opened, it will appear here."
+  },
+  "health": {
+    "ok": "System is healthy",
+    "unreachable": "Unable to reach the server"
+  }
+}

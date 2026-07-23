@@ -1,0 +1,34 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+}
+
+.cd-skip-link {
+  position: absolute;
+  inset-inline-start: -9999px;
+  top: var(--space-2);
+  z-index: 100;
+  background-color: var(--color-bg-surface);
+  color: var(--color-action);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-input);
+  border: 2px solid var(--color-focus);
+}
+
+.cd-skip-link:focus {
+  inset-inline-start: var(--space-2);
+}

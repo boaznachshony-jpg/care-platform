@@ -5,9 +5,87 @@ families that directly employ a foreign live-in caregiver.
 
 ## Current status
 
-The repository is in **documentation and foundation planning**. It contains no
-production application code. `caredesk_prototype.html` is a visual reference
-only and must not be used as a production code base.
+**Milestone 0 (Repository Foundation) is in progress** on branch
+`foundation/milestone-0` — a pnpm monorepo with a Vite/React web shell, a
+Fastify API shell, shared domain/application/infrastructure packages, and
+deterministic mock adapters for every external dependency (auth, AI,
+storage, audit, timeline). No product feature, no real database schema, no
+real authentication, and no live AI provider exist yet — see
+[Repository Bootstrap Plan](docs/architecture/repository-bootstrap-plan.md)
+for the full scope and Definition of Done. `caredesk_prototype.html` is a
+visual reference only and must not be used as a production code base.
+
+## Local development
+
+Requires Node (version pinned in `.nvmrc`) and `corepack` for pnpm:
+
+```bash
+corepack enable
+pnpm install
+pnpm check   # format:check + lint + typecheck + test + build
+```
+
+Run the web and API shells locally:
+
+```bash
+pnpm dev       # apps/web on http://localhost:5173
+pnpm dev:api   # apps/api on http://localhost:4000
+```
+
+`apps/web`'s Dashboard page calls `apps/api`'s `/health` endpoint — run both
+together to see it succeed. See `CONTRIBUTING.md` for the full workflow,
+branching policy, and how to add an ADR.
+
+## Architecture boundaries
+
+Dependencies point inward, per Constitution §5:
+
+```text
+apps/web, apps/api        → Presentation
+packages/application      → Application (use cases, ports)
+packages/domain            → Domain (entities, status vocabulary)
+packages/infrastructure   → Infrastructure (mock adapters implementing the ports)
+```
+
+`packages/rules` and `packages/workflows` are Milestone 0 shells only — no
+legal, payroll, or workflow content belongs in them yet (Milestone 2).
+`packages/ui`, `packages/design-tokens`, and `packages/i18n` are
+domain-neutral and used by `apps/web` only.
+
+## Mocks
+
+Every external dependency is behind a port (`packages/application/src/ports`)
+with an in-memory or deterministic mock implementation
+(`packages/infrastructure/src/mocks`) — `MockAuthService`,
+`DenyByDefaultAuthorizationService`, `InMemoryAuditService`,
+`InMemoryTimelineService`, `InMemoryDocumentStorage`, `MockAIProvider`, and
+shell `InMemoryRuleRepository`/`InMemoryWorkflowRepository`. Swapping a mock
+for a real adapter (Supabase, a real AI provider, real object storage)
+requires the corresponding ADR to reach **Accepted** first — see
+`docs/adr/`.
+
+## Synthetic data
+
+`packages/testing` is the only source of fixture data. Every fixture uses
+the `example.invalid` email domain and a name prefixed "Synthetic" — no real
+personal data belongs in this repository, in any branch, at any time
+(Constitution §16, §25). See `database/seed/README.md` for the seed
+strategy once real tables exist.
+
+## Troubleshooting
+
+- **`pnpm install` fails to resolve a workspace package** — confirm
+  `pnpm-workspace.yaml` still lists `apps/*` and `packages/*`, and that the
+  package you added has a `name` field starting with `@caredesk/`.
+- **Vite dev server can't reach the API** — start `pnpm dev:api` in a second
+  terminal; `apps/web` reads `VITE_API_BASE_URL` from `.env` (copy
+  `.env.example`), defaulting to `http://localhost:4000`.
+- **A `docs/**` file is unexpectedly reformatted** — it shouldn't be:
+  `.prettierignore` excludes authority documents so Prettier never rewrites
+  reviewed content; if it happens, that's a bug in `.prettierignore`.
+- **Database commands fail** — `database/docker-compose.yml` requires Docker
+  locally; it has not been run or verified in every environment this
+  repository has been developed in (see `database/README.md`).
 
 ## Start here
 

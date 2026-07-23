@@ -1,1 +1,29 @@
 .claude/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.turbo/
+.vite/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor/OS
+.DS_Store
+Thumbs.db

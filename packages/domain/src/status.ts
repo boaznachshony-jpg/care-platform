@@ -1,0 +1,106 @@
+/**
+ * Canonical status/enum vocabulary. Source of truth is SYNC_MATRIX.md
+ * "Canonical status enums" and "Sensitivity classes" tables — do not add,
+ * rename, or reorder a value here without updating that table in the same
+ * change (SYNC_MATRIX.md validation gate).
+ */
+
+export const EMPLOYMENT_CASE_STATUSES = [
+  'draft',
+  'active',
+  'suspended',
+  'ended',
+  'cancelled',
+  'archived',
+] as const;
+export type EmploymentCaseStatus = (typeof EMPLOYMENT_CASE_STATUSES)[number];
+
+export const DOCUMENT_VERSION_STATUSES = [
+  'uploaded',
+  'pending_verification',
+  'verified',
+  'rejected',
+  'superseded',
+] as const;
+export type DocumentVersionStatus = (typeof DOCUMENT_VERSION_STATUSES)[number];
+
+export const DOCUMENT_COMPLIANCE_STATUSES = [
+  'missing',
+  'valid',
+  'expiring',
+  'expired',
+  'not_applicable',
+] as const;
+export type DocumentComplianceStatus = (typeof DOCUMENT_COMPLIANCE_STATUSES)[number];
+
+export const TASK_STATUSES = [
+  'open',
+  'in_progress',
+  'blocked',
+  'completed',
+  'deferred',
+  'cancelled',
+] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const WORKFLOW_INSTANCE_STATUSES = [
+  'not_started',
+  'active',
+  'blocked',
+  'completed',
+  'cancelled',
+] as const;
+export type WorkflowInstanceStatus = (typeof WORKFLOW_INSTANCE_STATUSES)[number];
+
+export const PAYROLL_PERIOD_STATUSES = [
+  'draft',
+  'review_required',
+  'approved',
+  'paid',
+  'locked',
+  'voided',
+] as const;
+export type PayrollPeriodStatus = (typeof PAYROLL_PERIOD_STATUSES)[number];
+
+export const PAYMENT_RECORD_STATUSES = [
+  'planned',
+  'recorded',
+  'confirmed',
+  'failed',
+  'cancelled',
+  'refunded',
+] as const;
+export type PaymentRecordStatus = (typeof PAYMENT_RECORD_STATUSES)[number];
+
+export const RULE_VERSION_STATUSES = [
+  'draft',
+  'under_review',
+  'approved',
+  'active',
+  'suspended',
+  'superseded',
+  'retired',
+] as const;
+export type RuleVersionStatus = (typeof RULE_VERSION_STATUSES)[number];
+
+export const NOTIFICATION_REQUIREMENT_STATUSES = [
+  'pending',
+  'in_progress',
+  'confirmed',
+  'waived',
+  'not_applicable',
+  'failed',
+] as const;
+export type NotificationRequirementStatus = (typeof NOTIFICATION_REQUIREMENT_STATUSES)[number];
+
+export const SENSITIVITY_CLASSES = [
+  'general',
+  'employment_sensitive',
+  'financial_sensitive',
+  'identity_sensitive',
+  'care_sensitive',
+] as const;
+export type SensitivityClass = (typeof SENSITIVITY_CLASSES)[number];
+
+export const RACI_ROLES = ['responsible', 'accountable', 'consulted', 'informed'] as const;
+export type RaciRole = (typeof RACI_ROLES)[number];

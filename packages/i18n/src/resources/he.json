@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "CareDesk"
+  },
+  "shell": {
+    "loading": "טוען…",
+    "skipToContent": "דלג לתוכן הראשי",
+    "primaryNavigation": "ניווט ראשי",
+    "emptyDashboardTitle": "עדיין אין כאן כלום",
+    "emptyDashboardBody": "כשייפתח תיק העסקה, הוא יופיע כאן."
+  },
+  "health": {
+    "ok": "המערכת פעילה",
+    "unreachable": "לא ניתן להתחבר לשרת"
+  }
+}
