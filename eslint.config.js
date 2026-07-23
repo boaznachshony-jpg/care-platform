@@ -40,6 +40,9 @@ export default [
       ...reactHooks.configs.recommended.rules,
       ...jsxA11y.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
+      // TypeScript itself reports genuinely-undefined identifiers; eslint's
+      // no-undef false-positives on ambient DOM types (RequestInit etc.).
+      'no-undef': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',

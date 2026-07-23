@@ -8,3 +8,6 @@ export * from './ports/document-storage.js';
 export * from './ports/ai-provider.js';
 export * from './ports/rule-repository.js';
 export * from './ports/workflow-repository.js';
+export * from './ports/case-foundation-repository.js';
+export * from './use-cases/open-employment-case.js';
+export * from './use-cases/get-employment-case.js';

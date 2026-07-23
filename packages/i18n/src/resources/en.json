@@ -12,5 +12,36 @@
   "health": {
     "ok": "System is healthy",
     "unreachable": "Unable to reach the server"
+  },
+  "nav": {
+    "dashboard": "Home",
+    "openCase": "Open employment case"
+  },
+  "case": {
+    "openTitle": "Open an employment case",
+    "openIntro": "Enter the care recipient, employer, and caregiver details to open a new case. Sensitive fields such as passport and bank details are added later through a secure channel.",
+    "sectionRecipient": "Care recipient",
+    "sectionEmployer": "Employer",
+    "sectionCaregiver": "Caregiver",
+    "recipientFullName": "Care recipient name",
+    "recipientCareLevel": "Care level",
+    "recipientCity": "City",
+    "employerFullName": "Employer name",
+    "employerRelationship": "Relationship to recipient",
+    "employerCity": "City",
+    "caregiverLegalName": "Caregiver legal name (as in passport)",
+    "caregiverPreferredName": "Preferred name",
+    "caregiverNationality": "Nationality",
+    "caregiverLanguage": "Primary language",
+    "startDate": "Employment start date",
+    "submit": "Open case",
+    "submitting": "Opening case…",
+    "openFailed": "Opening the case failed. Your input was kept — you can retry.",
+    "fieldRequired": "Required field",
+    "viewTitle": "Employment case",
+    "statusDraft": "Draft",
+    "statusActive": "Active",
+    "caseNotFound": "Case not found",
+    "loadFailed": "Failed to load the case"
   }
 }

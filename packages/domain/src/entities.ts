@@ -59,6 +59,32 @@ export interface TenantMembership {
   mfaRequired: boolean;
 }
 
+export interface CareRecipient {
+  id: CareRecipientId;
+  tenantId: TenantId;
+  fullName: string;
+  careLevel: string | null;
+  city: string | null;
+}
+
+export interface Employer {
+  id: EmployerId;
+  tenantId: TenantId;
+  fullName: string;
+  relationshipToRecipient: string;
+  city: string | null;
+}
+
+export interface Caregiver {
+  id: CaregiverId;
+  tenantId: TenantId;
+  legalName: string;
+  preferredName: string | null;
+  nationality: string;
+  primaryLanguage: string | null;
+  status: 'active' | 'inactive';
+}
+
 export interface EmploymentCase {
   id: EmploymentCaseId;
   tenantId: TenantId;

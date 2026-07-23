@@ -12,5 +12,36 @@
   "health": {
     "ok": "המערכת פעילה",
     "unreachable": "לא ניתן להתחבר לשרת"
+  },
+  "nav": {
+    "dashboard": "ראשי",
+    "openCase": "פתיחת תיק העסקה"
+  },
+  "case": {
+    "openTitle": "פתיחת תיק העסקה",
+    "openIntro": "הזינו את פרטי המטופל, המעסיק והמטפל כדי לפתוח תיק חדש. שדות רגישים כמו דרכון וחשבון בנק יתווספו בשלב מאוחר יותר, בערוץ מאובטח.",
+    "sectionRecipient": "פרטי המטופל",
+    "sectionEmployer": "פרטי המעסיק",
+    "sectionCaregiver": "פרטי המטפל",
+    "recipientFullName": "שם המטופל",
+    "recipientCareLevel": "רמת סיעוד",
+    "recipientCity": "עיר מגורים",
+    "employerFullName": "שם המעסיק",
+    "employerRelationship": "קרבה למטופל",
+    "employerCity": "עיר",
+    "caregiverLegalName": "שם המטפל (כמופיע בדרכון)",
+    "caregiverPreferredName": "כינוי",
+    "caregiverNationality": "אזרחות",
+    "caregiverLanguage": "שפה עיקרית",
+    "startDate": "תאריך תחילת העסקה",
+    "submit": "פתיחת תיק",
+    "submitting": "פותח תיק…",
+    "openFailed": "פתיחת התיק נכשלה. הנתונים שהוזנו נשמרו — אפשר לנסות שוב.",
+    "fieldRequired": "שדה חובה",
+    "viewTitle": "תיק העסקה",
+    "statusDraft": "טיוטה",
+    "statusActive": "פעיל",
+    "caseNotFound": "התיק לא נמצא",
+    "loadFailed": "טעינת התיק נכשלה"
   }
 }

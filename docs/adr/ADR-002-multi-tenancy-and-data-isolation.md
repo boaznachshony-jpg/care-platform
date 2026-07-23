@@ -1,10 +1,14 @@
 # ADR-002: Multi-tenancy and Data Isolation
 
-- Status: **Proposed**
+- Status: **Accepted — development scope**
 - Date: 2026-07-23
 - Owners: Product, Security, Data, Engineering
-- Approved by: _(unassigned)_
-- Approved at: _(pending)_
+- Approved by: Product Owner (directed Milestone 1 identity/tenancy schema work, 2026-07-23)
+- Approved at: 2026-07-23
+- Scope note: acceptance covers development/synthetic-data environments only.
+  Production infrastructure (real tenant data, hosting region, backups)
+  remains gated on the privacy and supplier review listed under Acceptance
+  evidence.
 
 ## Context
 

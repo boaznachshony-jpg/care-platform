@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { NavLink } from 'react-router-dom';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -23,7 +24,10 @@ export function AppShell({ children }: AppShellProps) {
       <header>
         <p>{t('app.name')}</p>
       </header>
-      <nav aria-label={t('shell.primaryNavigation')} />
+      <nav aria-label={t('shell.primaryNavigation')}>
+        <NavLink to="/">{t('nav.dashboard')}</NavLink>{' '}
+        <NavLink to="/cases/new">{t('nav.openCase')}</NavLink>
+      </nav>
       <main id="main-content">{children}</main>
     </>
   );
