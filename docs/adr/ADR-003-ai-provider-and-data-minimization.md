@@ -3,6 +3,8 @@
 - Status: **Proposed**
 - Date: 2026-07-23
 - Owners: Product, Privacy, Security, Engineering
+- Approved by: _(unassigned)_
+- Approved at: _(pending)_
 
 ## Context
 
@@ -33,6 +35,17 @@ Every future request passes through:
 Passport images, full identity numbers, bank details, medical documents, and
 raw case exports are prohibited from external prompts.
 
+## Alternatives considered
+
+- **Direct integration with a single provider from day one**: rejected —
+  skips the abstraction this decision exists to provide, and forecloses
+  using `MockAIProvider` safely during early development with synthetic or
+  no data.
+- **Delaying all AI-feature work until a provider is chosen and the privacy
+  assessment is complete**: rejected — blocks UI/UX and escalation-flow
+  development unnecessarily; `MockAIProvider` lets those be built and tested
+  now, behind the same port a real provider will later implement.
+
 ## Consequences
 
 - The provider can be changed without rewriting product modules.
@@ -49,6 +62,16 @@ raw case exports are prohibited from external prompts.
 - Hebrew quality and structured-output evaluation.
 - Verified provider retention and training terms.
 - Kill switch and safe fallback demonstrated.
+
+## Migration impact
+
+None yet — no existing AI integration; all prior repository branches were
+confirmed empty during the branch audit. Enabling a real provider requires,
+in order: (1) a completed and approved AI Privacy Impact Assessment, (2) a
+signed DPA with the chosen vendor, (3) the minimization pipeline implemented
+and tested against `MockAIProvider` parity, (4) an explicit environment-level
+flag so pilot/production and any lower environment holding synthetic-only
+data can be independently toggled.
 
 ## References
 

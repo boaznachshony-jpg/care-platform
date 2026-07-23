@@ -1,7 +1,9 @@
 # CareDesk Design System & Component Catalog
 
-Status: **MVP authority v1.0**
+Status: **Draft v1.0 — pending Product Owner approval**
 Design principles: calm, action-first, mobile-first, Hebrew RTL, accessible
+Approved by: _(unassigned)_
+Approved at: _(pending)_
 Last updated: 2026-07-23
 
 ## 1. Experience principles

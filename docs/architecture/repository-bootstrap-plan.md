@@ -30,13 +30,16 @@ apps/
   api/
 packages/
   ui/
+  design-tokens/
   domain/
   application/
   schemas/
   rules/
   workflows/
+  i18n/
   infrastructure/
   testing/
+  config/
 docs/
 database/
   migrations/
@@ -46,6 +49,20 @@ scripts/
   workflows/
 ```
 
+This extends the Constitution §4 baseline (`ui`, `design-tokens`, `domain`,
+`rules`, `schemas`, `i18n`, `testing`, `config`) rather than replacing it —
+`design-tokens`, `i18n`, and `config` are restored here after an earlier draft
+of this plan dropped them without justification. Three packages are added
+beyond the §4 list: `application`, `workflows`, and `infrastructure`. These
+are not a deviation from the Constitution but a direct implementation of its
+own §5 layered architecture (Presentation / Application / Domain /
+Infrastructure) and of the Rules & Workflow Engine's requirement that
+workflow contracts be versionable and isolated from UI — §4's list predates
+that layering being split into explicit packages, so this plan makes the
+mapping concrete: `application` = the Application layer, `infrastructure` =
+the Infrastructure layer, `workflows` = the workflow-engine contracts that
+§21 requires to be explicit and server-validated.
+
 Package boundaries:
 
 - `domain`: entities, value objects, domain errors; no framework/provider code;
@@ -54,8 +71,17 @@ Package boundaries:
 - `rules`: deterministic rule types/evaluator shell, no legal values;
 - `workflows`: workflow contracts/state-machine shell;
 - `ui`: domain-neutral design-system components;
+- `design-tokens`: color, typography, spacing, radius, border, shadow,
+  z-index, motion, and breakpoint tokens consumed by `ui` and both apps —
+  required by Constitution §10 so no app hardcodes a one-off value;
+- `i18n`: translation resources and locale-aware formatting helpers — the
+  shared home for the Hebrew-default translation infrastructure M0.2
+  delivers, so strings stay out of components per Constitution §8;
 - `infrastructure`: adapters for auth, storage, database, audit, timeline, AI;
-- `testing`: synthetic fixtures, contract-test helpers.
+- `testing`: synthetic fixtures, contract-test helpers;
+- `config`: shared environment/config schema and typed accessors used by both
+  apps, so environment validation (§4 technical baseline, below) has one
+  source of truth instead of being duplicated per app.
 
 ## 4. Technical baseline
 
@@ -104,8 +130,8 @@ Deliver:
 
 - AppShell with `lang="he"` and RTL;
 - responsive navigation placeholders;
-- translation infrastructure with Hebrew default;
-- design tokens and a small primitive set: Button, StatusBadge, Alert,
+- `packages/i18n` translation infrastructure with Hebrew default;
+- `packages/design-tokens` and a small primitive set in `packages/ui`: Button, StatusBadge, Alert,
   EmptyState, ErrorState, Skeleton;
 - health/demo page using synthetic content.
 

@@ -1,6 +1,8 @@
 # CareDesk User Stories & Acceptance Criteria
 
-Status: **MVP baseline v1.0**
+Status: **Draft v1.0 — pending Product Owner approval**
+Approved by: _(unassigned)_
+Approved at: _(pending)_
 Last updated: 2026-07-23
 
 ## How to use this document

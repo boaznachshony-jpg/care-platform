@@ -1,6 +1,8 @@
 # CareDesk Synchronization Matrix
 
-Status: **Active control document**
+Status: **Draft — pending Product Owner approval**
+Approved by: _(unassigned)_
+Approved at: _(pending)_
 Last updated: 2026-07-23
 
 This matrix prevents product, database, UI, rules, workflows, API contracts,

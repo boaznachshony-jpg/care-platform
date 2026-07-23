@@ -1,7 +1,9 @@
 # CareDesk Database Blueprint
 
-Status: **Canonical data model v1.0**
+Status: **Draft v1.0 — pending Product Owner approval**
 Owner: Data and Domain Architecture
+Approved by: _(unassigned)_
+Approved at: _(pending)_
 Last reconciled: 2026-07-23
 
 ## 1. Purpose

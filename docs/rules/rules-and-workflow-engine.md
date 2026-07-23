@@ -1,7 +1,9 @@
 # CareDesk Rules & Workflow Engine
 
-Status: **Authority specification v1.0**
+Status: **Draft v1.0 — pending Product Owner approval**
 Owner: Product, Compliance, and Domain Engineering
+Approved by: _(unassigned)_
+Approved at: _(pending)_
 Last updated: 2026-07-23
 
 ## 1. Boundary

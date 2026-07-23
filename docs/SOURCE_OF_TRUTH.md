@@ -1,7 +1,9 @@
 # CareDesk Source of Truth
 
-Status: **Active**
+Status: **Draft — pending Product Owner approval**
 Owner: Product Owner
+Approved by: _(unassigned)_
+Approved at: _(pending)_
 Last reconciled: 2026-07-23
 
 ## Purpose
