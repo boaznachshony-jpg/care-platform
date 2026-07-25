@@ -8,11 +8,49 @@ The schema currently lives on a managed Supabase Postgres (ADR-001/ADR-002).
 `docker-compose.yml` remains for a fully local alternative but has **not** been
 exercised — the migrations below were developed and verified against Supabase.
 
-Put the connection string in `.env.local` (gitignored, never committed):
+`.env.local` (gitignored, never committed) holds **two** connection strings,
+because the application must never carry an administrative credential:
 
 ```
-DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-1-<region>.pooler.supabase.com:5432/postgres
+# Owner. Migrations and role provisioning ONLY.
+DATABASE_ADMIN_URL=postgresql://postgres.<project-ref>:<password>@aws-1-<region>.pooler.supabase.com:5432/postgres
+
+# Application. caredesk_app is NOBYPASSRLS, so RLS applies to every query.
+DATABASE_URL=postgresql://caredesk_app.<project-ref>:<password>@aws-1-<region>.pooler.supabase.com:5432/postgres
 ```
+
+The split is the point: the owner role carries `BYPASSRLS`, so any query that
+forgot `withTenant()` would silently escape tenant isolation. Connecting as
+`caredesk_app` makes that impossible rather than merely unlikely.
+
+### Provisioning caredesk_app (once per environment)
+
+`0005_app_role.sql` creates the role as `NOLOGIN`. Give it its own password —
+never in a migration, never in git, never on a command line:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Put that in `.env.local` as `CAREDESK_APP_DB_PASSWORD`, keep `DATABASE_URL` on
+the owner for now, then:
+
+```bash
+pnpm db:migrate              # reads DATABASE_ADMIN_URL
+pnpm db:provision-app-role   # grants LOGIN, re-asserts NOBYPASSRLS
+```
+
+Only after that succeeds, repoint `DATABASE_URL` at
+`caredesk_app.<project-ref>` and delete `CAREDESK_APP_DB_PASSWORD`. Switching
+early fails closed — the role is still `NOLOGIN`, so connections are rejected
+at authentication.
+
+Note the pooler username is the role name **plus** the project-ref suffix
+(`caredesk_app.<project-ref>`), which is not obvious. Verified working against
+Supavisor session mode.
+
+`ALTER ROLE … PASSWORD` may appear in the server log if `log_statement` is
+`ddl` or `all` — check before running, and rotate afterwards if it does.
 
 Two things to know about that URL:
 

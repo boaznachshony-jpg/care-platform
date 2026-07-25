@@ -7,17 +7,29 @@ import { createPool, withTenant } from './pool.js';
  * layer, using set_config('app.tenant_id') — that tenant A can neither read
  * nor mutate tenant B's rows, and that a cross-tenant FK insert is rejected.
  *
+ * Two pools on purpose:
+ *   - `appPool` (DATABASE_URL) connects as `caredesk_app`, the least-privilege
+ *     role the application really uses. Every isolation assertion runs on it,
+ *     so the test exercises the production path rather than an approximation.
+ *   - `adminPool` (DATABASE_ADMIN_URL) connects as the owner and does only
+ *     setup and teardown. `caredesk_app` deliberately cannot insert tenants or
+ *     delete rows, so seeding and cleanup have to be somebody else's job.
+ *
  * Idempotent-ish: it inserts fresh random-UUID rows each run and cleans them
  * up at the end. Synthetic data only (Constitution §16/§25).
  */
 async function main(): Promise<void> {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    console.error('DATABASE_URL is not set. Put it in .env.local and retry.');
+  const appUrl = process.env.DATABASE_URL;
+  const adminUrl = process.env.DATABASE_ADMIN_URL;
+  if (!appUrl || !adminUrl) {
+    console.error(
+      'Both DATABASE_URL (caredesk_app) and DATABASE_ADMIN_URL (owner) must be set. See database/README.md.',
+    );
     process.exit(1);
   }
 
-  const pool = createPool(connectionString);
+  const pool = createPool(appUrl);
+  const adminPool = createPool(adminUrl);
   const tenantA = randomUUID();
   const tenantB = randomUUID();
   const recipientA = randomUUID();
@@ -30,14 +42,32 @@ async function main(): Promise<void> {
   };
 
   try {
-    // Seed two tenants + one care_recipient each. The tenant rows go in as the
-    // owner (tenant is global reference data), but each care_recipient is
-    // inserted through withTenant, so even the seeding path obeys RLS.
+    // 0. The application connection must not be able to bypass what follows.
+    //    Every assertion below is meaningless if DATABASE_URL points at a role
+    //    holding BYPASSRLS — which is exactly how the first implementation of
+    //    this schema passed inspection while isolating nothing.
+    {
+      const result = await pool.query<{ current_user: string; bypassrls: boolean }>(
+        'select current_user, (select rolbypassrls from pg_roles where rolname = current_user) as bypassrls',
+      );
+      const row = result.rows[0];
+      if (row?.current_user === 'caredesk_app' && row.bypassrls === false) {
+        pass('application connects as caredesk_app with NOBYPASSRLS');
+      } else {
+        fail(
+          `application connects as "${row?.current_user}" with bypassrls=${row?.bypassrls} — expected caredesk_app / false`,
+        );
+      }
+    }
+
+    // Seed two tenants + one care_recipient each. Tenants go in on the admin
+    // pool (caredesk_app has SELECT-only on `tenant`), but each care_recipient
+    // is inserted through withTenant on the app pool, so even seeding obeys RLS.
     for (const [tenant, recipient, name] of [
       [tenantA, recipientA, 'Synthetic Recipient A'],
       [tenantB, recipientB, 'Synthetic Recipient B'],
     ] as const) {
-      await pool.query('insert into tenant (id, data_region) values ($1, $2)', [
+      await adminPool.query('insert into tenant (id, data_region) values ($1, $2)', [
         tenant,
         'synthetic',
       ]);
@@ -140,6 +170,9 @@ async function main(): Promise<void> {
         'case_contact_role',
         'task',
         'timeline_event',
+        'audit_event',
+        'document',
+        'document_version',
       ];
       const result = await pool.query<{ relname: string; ok: boolean }>(
         `select relname, (relrowsecurity and relforcerowsecurity) as ok
@@ -165,24 +198,51 @@ async function main(): Promise<void> {
         pass('caredesk_app cannot create tables');
       }
     });
+
+    // 8. The audit trail must be append-only for the application. An audit log
+    //    the application can rewrite is not evidence of anything.
+    await withTenant(pool, tenantA, async (client) => {
+      await client.query(
+        `insert into audit_event
+           (tenant_id, actor_id, action, resource_type, resource_id, occurred_at, correlation_id)
+         values ($1, null, 'rls.probe', 'system', 'probe', now(), 'rls-check')`,
+        [tenantA],
+      );
+      const updated = await client
+        .query('update audit_event set action = $1 where tenant_id = $2', ['tampered', tenantA])
+        .then(() => 'allowed')
+        .catch(() => 'denied');
+      const deleted = await client
+        .query('delete from audit_event where tenant_id = $1', [tenantA])
+        .then(() => 'allowed')
+        .catch(() => 'denied');
+
+      if (updated === 'denied' && deleted === 'denied') {
+        pass('audit_event is append-only for caredesk_app (no update, no delete)');
+      } else {
+        fail(`audit_event is mutable by caredesk_app: update=${updated}, delete=${deleted}`);
+      }
+    });
   } finally {
-    // Cleanup runs as the owner (not caredesk_app) so it can remove every
-    // synthetic row regardless of which tenant a failed test left it under.
-    await pool.query('drop table if exists rls_probe_should_fail');
+    // Teardown runs on the admin pool: caredesk_app deliberately cannot delete
+    // rows or drop tables, which is the property assertions 7 and 8 rely on.
+    await adminPool.query('drop table if exists rls_probe_should_fail');
     for (const tenant of [tenantA, tenantB]) {
-      await pool.query('delete from timeline_event where tenant_id = $1', [tenant]);
-      await pool.query('delete from task where tenant_id = $1', [tenant]);
-      await pool.query('delete from case_contact_role where tenant_id = $1', [tenant]);
-      await pool.query('delete from contact_channel where tenant_id = $1', [tenant]);
-      await pool.query('delete from contact where tenant_id = $1', [tenant]);
-      await pool.query('delete from organization where tenant_id = $1', [tenant]);
-      await pool.query('delete from employment_case where tenant_id = $1', [tenant]);
-      await pool.query('delete from caregiver where tenant_id = $1', [tenant]);
-      await pool.query('delete from employer where tenant_id = $1', [tenant]);
-      await pool.query('delete from care_recipient where tenant_id = $1', [tenant]);
-      await pool.query('delete from tenant where id = $1', [tenant]);
+      await adminPool.query('delete from audit_event where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from timeline_event where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from task where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from case_contact_role where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from contact_channel where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from contact where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from organization where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from employment_case where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from caregiver where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from employer where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from care_recipient where tenant_id = $1', [tenant]);
+      await adminPool.query('delete from tenant where id = $1', [tenant]);
     }
     await pool.end();
+    await adminPool.end();
   }
 
   if (failures.length > 0) {
