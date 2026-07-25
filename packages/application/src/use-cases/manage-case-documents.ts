@@ -9,7 +9,8 @@ import type {
 import type { DocumentStorage } from '../ports/document-storage.js';
 import type { IdGenerator } from '../ports/id-generator.js';
 import type { TimelineService } from '../ports/timeline-service.js';
-import { AuthorizationError, type Actor } from './open-employment-case.js';
+import type { Actor } from './actor.js';
+import { authorizeOrThrow } from './authorize.js';
 
 /**
  * Signed links are short-lived by design (blueprint §4.5). 15 minutes is long
@@ -98,17 +99,12 @@ export class UploadCaseDocument {
     caseId: string,
     input: UploadDocumentInput,
   ): Promise<DocumentWithCurrentVersion> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'document',
       action: 'create',
+      caseId,
       sensitivity: input.sensitivity,
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     const now = this.deps.clock.now();
     const documentId = this.deps.ids.next();
@@ -174,19 +170,20 @@ export class UploadCaseDocument {
 }
 
 export class ListCaseDocuments {
-  constructor(private readonly deps: Pick<CaseDocumentDeps, 'authorization' | 'documents'>) {}
+  constructor(
+    private readonly deps: Pick<
+      CaseDocumentDeps,
+      'authorization' | 'documents' | 'audit' | 'clock'
+    >,
+  ) {}
 
   async execute(actor: Actor, caseId: string): Promise<DocumentWithCurrentVersion[]> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'document',
       action: 'read',
+      caseId,
+      sensitivity: 'identity_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
     return this.deps.documents.listCaseDocuments(actor.tenantId, caseId);
   }
 }
@@ -211,16 +208,13 @@ export class GetDocumentDownloadUrl {
 
   /** Returns null when the document is unknown, in another tenant, or has no file yet. */
   async execute(actor: Actor, caseId: string, documentId: string): Promise<DownloadUrl | null> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'document',
       action: 'read',
+      caseId,
+      resourceId: documentId,
+      sensitivity: 'identity_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     const found = await this.deps.documents.findCaseDocument(actor.tenantId, caseId, documentId);
     if (!found?.currentVersion) {

@@ -16,6 +16,18 @@ export interface AuditEventInput {
   occurredAt: string;
   changeSummary?: string;
   sensitivity?: SensitivityClass;
+  /**
+   * Defaults to `allowed`. A refused attempt is the more interesting audit
+   * event of the two — it is how an attempt to reach another tenant's data
+   * becomes visible at all.
+   */
+  permissionDecision?: 'allowed' | 'denied';
+  /**
+   * Why the attempt was refused, or the justification given for a privileged
+   * access. Required when `permissionDecision` is `denied` — the database
+   * enforces this, because a denial nobody can explain is not evidence.
+   */
+  reason?: string;
 }
 
 export interface AuditService {

@@ -1,13 +1,19 @@
+import type { AuditService } from '../ports/audit-service.js';
 import type { AuthorizationService } from '../ports/authorization-service.js';
 import type {
   CaseFoundationRepository,
   EmploymentCaseGraph,
 } from '../ports/case-foundation-repository.js';
-import { AuthorizationError, type Actor } from './open-employment-case.js';
+import type { Clock } from '../ports/clock.js';
+import type { Actor } from './actor.js';
+import { authorizeOrThrow } from './authorize.js';
 
 export interface GetEmploymentCaseDeps {
   authorization: AuthorizationService;
   repository: CaseFoundationRepository;
+  /** Reads authorize too, and a refused read is exactly what §19 wants recorded. */
+  audit: AuditService;
+  clock: Clock;
 }
 
 export class GetEmploymentCase {
@@ -15,16 +21,13 @@ export class GetEmploymentCase {
 
   /** Returns null for both "doesn't exist" and "exists in another tenant" — never leaks the difference. */
   async execute(actor: Actor, caseId: string): Promise<EmploymentCaseGraph | null> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'employment_case',
       action: 'read',
+      caseId,
+      resourceId: caseId,
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     return this.deps.repository.findCaseGraph(actor.tenantId, caseId);
   }
@@ -34,15 +37,11 @@ export class ListEmploymentCases {
   constructor(private readonly deps: GetEmploymentCaseDeps) {}
 
   async execute(actor: Actor): Promise<EmploymentCaseGraph[]> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'employment_case',
       action: 'read',
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     return this.deps.repository.listCaseGraphs(actor.tenantId);
   }

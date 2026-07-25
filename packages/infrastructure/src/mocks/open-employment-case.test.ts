@@ -37,7 +37,12 @@ function buildHarness() {
     clock: new FixedClock(new Date('2026-01-20T10:00:00.000Z')),
     ids: new SequentialIdGenerator(),
   });
-  const getCase = new GetEmploymentCase({ authorization, repository });
+  const getCase = new GetEmploymentCase({
+    authorization,
+    repository,
+    audit,
+    clock: new FixedClock(new Date('2026-01-20T10:00:00.000Z')),
+  });
   return { authorization, repository, audit, timeline, openCase, getCase };
 }
 

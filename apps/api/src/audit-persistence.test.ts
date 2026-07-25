@@ -110,6 +110,26 @@ describe('PgAuditService append-only contract', () => {
       EVENT.correlationId,
       EVENT.changeSummary,
       EVENT.sensitivity,
+      // Null here means "not stated", and the column defaults to 'allowed'.
+      // authorizeOrThrow sets these explicitly when recording a refusal.
+      null,
+      null,
+    ]);
+  });
+
+  it('carries the permission decision and reason when recording a refusal', async () => {
+    const { pool, queries } = stubPool();
+    await new PgAuditService(pool).record({
+      ...EVENT,
+      action: 'document.read.denied',
+      permissionDecision: 'denied',
+      reason: 'Role "family_member" lacks "document:read".',
+    });
+
+    const insert = queries.find((q) => q.text.includes('insert into audit_event'));
+    expect(insert?.values?.slice(-2)).toEqual([
+      'denied',
+      'Role "family_member" lacks "document:read".',
     ]);
   });
 });

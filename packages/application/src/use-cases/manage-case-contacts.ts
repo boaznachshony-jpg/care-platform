@@ -5,7 +5,8 @@ import type { CaseContactRepository, CaseContactRow } from '../ports/case-contac
 import type { Clock } from '../ports/clock.js';
 import type { IdGenerator } from '../ports/id-generator.js';
 import type { TimelineService } from '../ports/timeline-service.js';
-import { AuthorizationError, type Actor } from './open-employment-case.js';
+import type { Actor } from './actor.js';
+import { authorizeOrThrow } from './authorize.js';
 
 export interface AddContactInput {
   fullName: string;
@@ -40,16 +41,12 @@ export class AddContactToCase {
     caseId: string,
     input: AddContactInput,
   ): Promise<{ contactId: string }> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'case_contact',
       action: 'create',
+      caseId,
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     const contactId = this.deps.ids.next();
     const roleId = this.deps.ids.next();
@@ -106,19 +103,20 @@ export class AddContactToCase {
 }
 
 export class ListCaseContacts {
-  constructor(private readonly deps: Pick<CaseContactDeps, 'authorization' | 'repository'>) {}
+  constructor(
+    private readonly deps: Pick<
+      CaseContactDeps,
+      'authorization' | 'repository' | 'audit' | 'clock'
+    >,
+  ) {}
 
   async execute(actor: Actor, caseId: string): Promise<CaseContactRow[]> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'case_contact',
       action: 'read',
+      caseId,
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
     return this.deps.repository.listCaseContacts(actor.tenantId, caseId);
   }
 }

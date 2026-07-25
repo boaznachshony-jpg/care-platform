@@ -12,6 +12,8 @@ export * from './ports/case-foundation-repository.js';
 export * from './ports/case-contact-repository.js';
 export * from './ports/task-repository.js';
 export * from './ports/document-repository.js';
+export * from './use-cases/actor.js';
+export * from './use-cases/authorize.js';
 export * from './use-cases/open-employment-case.js';
 export * from './use-cases/get-employment-case.js';
 export * from './use-cases/manage-case-contacts.js';

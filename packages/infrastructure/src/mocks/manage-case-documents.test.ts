@@ -145,7 +145,7 @@ describe('issuing a download URL', () => {
     expect(h.audit.events.map((e) => e.action)).toContain('document.downloaded');
   });
 
-  it('issues NO download URL when authorization fails', async () => {
+  it('issues NO download URL when authorization fails, and records the refusal', async () => {
     const h = buildHarness();
     const { document } = await h.upload.execute(OWNER, CASE_ID, { ...UPLOAD });
     const auditedBefore = h.audit.events.length;
@@ -153,9 +153,19 @@ describe('issuing a download URL', () => {
     await expect(h.downloadUrl.execute(OUTSIDER, CASE_ID, document.id)).rejects.toThrow(
       AuthorizationError,
     );
-    // No link was created, and nothing was recorded as a download.
-    expect(h.audit.events).toHaveLength(auditedBefore);
+
+    // No link was created and nothing was recorded as a download...
     expect(h.audit.events.map((e) => e.action)).not.toContain('document.downloaded');
+
+    // ...but the refused attempt is itself audited (Constitution §19). An
+    // attempt to reach a file the caller may not see is exactly the event
+    // worth investigating, so it must not pass silently.
+    expect(h.audit.events).toHaveLength(auditedBefore + 1);
+    const denial = h.audit.events[auditedBefore];
+    expect(denial?.action).toBe('document.read.denied');
+    expect(denial?.permissionDecision).toBe('denied');
+    expect(denial?.reason).toBeTruthy();
+    expect(denial?.resourceId).toBe(document.id);
   });
 
   it('returns null for a document on another case rather than revealing it exists', async () => {

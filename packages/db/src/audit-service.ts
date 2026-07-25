@@ -20,11 +20,11 @@ import { withTenant } from './pool.js';
  * Every write runs inside `withTenant()` so it happens as the least-privilege
  * `caredesk_app` role with `app.tenant_id` set and RLS enforced.
  *
- * The table also carries `purpose`, `source_channel`, `permission_decision`,
- * `reason`, `rule_version` and `ai_involved` per blueprint §4.10. The
- * `AuditEventInput` port does not expose them yet, so they take their column
- * defaults; they are reachable without a further migration once the port and
- * the call sites that need them (permission denials, AI-assisted decisions,
+ * `permission_decision` and `reason` are now carried by the port, so a refused
+ * attempt is recorded as such. The table also carries `purpose`,
+ * `source_channel`, `rule_version` and `ai_involved` per blueprint §4.10;
+ * those still take their column defaults, reachable without a further
+ * migration once the call sites that need them (AI-assisted decisions,
  * rule-version changes) arrive.
  */
 export class PgAuditService implements AuditService {
@@ -35,8 +35,10 @@ export class PgAuditService implements AuditService {
       await client.query(
         `insert into audit_event
            (tenant_id, actor_id, action, resource_type, resource_id,
-            occurred_at, correlation_id, change_summary, sensitivity)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 'general'))`,
+            occurred_at, correlation_id, change_summary, sensitivity,
+            permission_decision, reason)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9, 'general'),
+                 coalesce($10, 'allowed'), $11)`,
         [
           event.tenantId,
           event.actorId,
@@ -47,6 +49,8 @@ export class PgAuditService implements AuditService {
           event.correlationId,
           event.changeSummary ?? null,
           event.sensitivity ?? null,
+          event.permissionDecision ?? null,
+          event.reason ?? null,
         ],
       );
     });

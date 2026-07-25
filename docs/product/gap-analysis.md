@@ -143,11 +143,47 @@ is synthetic).
 |---|---|---|
 | Named payroll reviewer (CPA) and legal/employment reviewer | No rule may reach `approved`/`active` without them, so no payroll figure can be presented as anything but an estimate | Not appointed |
 | Privacy and supplier assessment | Required before real data, external AI, production object storage, or cross-border processing | Not started |
-| Hosting region decision | The development project currently sits in `ap-south-1`, which was not a deliberate choice and conflicts with the EU/Israel preference recorded in ADR-002 | **Open — needs a decision** |
+| Hosting region decision | See below | **Deferred by the Product Owner, with a review trigger** |
 | Application connects as a non-administrative database role | Until then a missed `withTenant()` silently escapes RLS | In progress |
 | Persisted audit trail | Audit is mandatory (Constitution §19) but is currently in-memory and lost on restart | In progress |
 | Retention periods by data class | The model supports retention; the periods themselves are a legal decision no developer may invent | Not decided |
 | DPO appointment and database registration | Named in the Legal Validation P0 checklist with no owner or date | Not assigned |
+
+### Hosting region — deferred, 2026-07-25
+
+**Decision:** stay on the current Supabase project in `ap-south-1` (Mumbai)
+for now. **Review before any public launch or any real personal data.**
+Product Owner decision.
+
+Context for whoever picks this up:
+
+- Supabase does **not** offer an Israel region. AWS runs `il-central-1` in Tel
+  Aviv, but Supabase is not deployed there, so data residency in Israel means
+  moving the database off Supabase — which also reopens ADR-001, since
+  Supabase Auth is the chosen identity provider.
+- Among Supabase regions, `eu-central-1` (Frankfurt) is both the lowest-latency
+  option for Israeli users and the strongest position under the Israeli
+  Privacy Protection Regulations on transferring data abroad, whose permitted
+  bases include countries receiving data from EU member states. Germany
+  qualifies on that basis; India does not obviously qualify on any of them.
+- Amendment 13 to the Privacy Protection Law (in force August 2025) materially
+  raised the penalties for mishandling sensitive data — which is precisely
+  what this product holds (passport, bank, care information).
+
+**Why deferring is defensible right now:** the database contains only
+synthetic data, so no personal data is being transferred anywhere. The
+exposure is zero today.
+
+**Why the review trigger is not optional:** the migration is roughly half an
+hour while the data is synthetic (create project, run migrations, repoint
+`.env.local`). Once real families are onboarded it becomes a cross-border
+transfer of personal data with notification duties and a downtime window. The
+cost of this decision rises with every real record, and with nothing else on
+the blocking list.
+
+Whether EU hosting suffices or Israeli residency is required is a legal
+question, not an engineering one. It belongs to the privacy counsel whose
+sign-off `CareDesk_Legal_Validation_P0.docx` already requires before launch.
 
 ## Development readiness
 

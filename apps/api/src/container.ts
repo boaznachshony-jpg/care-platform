@@ -223,8 +223,10 @@ export function buildContainer(env: Env): Container {
     audit,
     pool,
     openCase: new OpenEmploymentCase(caseDeps),
-    getCase: new GetEmploymentCase({ authorization, repository }),
-    listCases: new ListEmploymentCases({ authorization, repository }),
+    // Read use cases take audit + clock too: a refused read is an audited
+    // security event, so authorization goes through the same helper as writes.
+    getCase: new GetEmploymentCase({ authorization, repository, audit, clock }),
+    listCases: new ListEmploymentCases({ authorization, repository, audit, clock }),
     addContact: new AddContactToCase({
       authorization,
       repository: contactRepository,
@@ -233,11 +235,21 @@ export function buildContainer(env: Env): Container {
       clock,
       ids,
     }),
-    listContacts: new ListCaseContacts({ authorization, repository: contactRepository }),
+    listContacts: new ListCaseContacts({
+      authorization,
+      repository: contactRepository,
+      audit,
+      clock,
+    }),
     createTask: new CreateCaseTask(taskDeps),
     completeTask: new CompleteCaseTask(taskDeps),
     listTasks: new ListCaseTasks(taskDeps),
-    listTimeline: new ListCaseTimeline({ authorization, timeline: timelineRepository }),
+    listTimeline: new ListCaseTimeline({
+      authorization,
+      timeline: timelineRepository,
+      audit,
+      clock,
+    }),
     uploadDocument: new UploadCaseDocument(documentDeps),
     listDocuments: new ListCaseDocuments(documentDeps),
     getDocumentDownloadUrl: new GetDocumentDownloadUrl(documentDeps),

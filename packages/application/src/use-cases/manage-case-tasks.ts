@@ -5,7 +5,8 @@ import type { Clock } from '../ports/clock.js';
 import type { IdGenerator } from '../ports/id-generator.js';
 import type { TaskRepository, TimelineRepository } from '../ports/task-repository.js';
 import type { TimelineService } from '../ports/timeline-service.js';
-import { AuthorizationError, type Actor } from './open-employment-case.js';
+import type { Actor } from './actor.js';
+import { authorizeOrThrow } from './authorize.js';
 
 export interface CreateTaskInput {
   title: string;
@@ -28,16 +29,12 @@ export class CreateCaseTask {
   constructor(private readonly deps: CaseTaskDeps) {}
 
   async execute(actor: Actor, caseId: string, input: CreateTaskInput): Promise<Task> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'task',
       action: 'create',
+      caseId,
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     const now = this.deps.clock.now().toISOString();
     const task = await this.deps.tasks.createTask({
@@ -82,16 +79,13 @@ export class CompleteCaseTask {
 
   /** Returns null when the task does not exist, is in another tenant, or is already complete. */
   async execute(actor: Actor, caseId: string, taskId: string): Promise<Task | null> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'task',
       action: 'update',
+      caseId,
+      resourceId: taskId,
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     const now = this.deps.clock.now().toISOString();
     const task = await this.deps.tasks.completeTask(actor.tenantId, taskId, now, actor.userId);
@@ -125,39 +119,37 @@ export class CompleteCaseTask {
 }
 
 export class ListCaseTasks {
-  constructor(private readonly deps: Pick<CaseTaskDeps, 'authorization' | 'tasks'>) {}
+  constructor(
+    private readonly deps: Pick<CaseTaskDeps, 'authorization' | 'tasks' | 'audit' | 'clock'>,
+  ) {}
 
   async execute(actor: Actor, caseId: string): Promise<Task[]> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'task',
       action: 'read',
+      caseId,
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
     return this.deps.tasks.listTasks(actor.tenantId, caseId);
   }
 }
 
 export class ListCaseTimeline {
   constructor(
-    private readonly deps: { authorization: AuthorizationService; timeline: TimelineRepository },
+    private readonly deps: {
+      authorization: AuthorizationService;
+      timeline: TimelineRepository;
+      audit: AuditService;
+      clock: Clock;
+    },
   ) {}
 
   async execute(actor: Actor, caseId: string): Promise<TimelineEvent[]> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
-      caseId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'timeline',
       action: 'read',
+      caseId,
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
     return this.deps.timeline.listTimeline(actor.tenantId, caseId);
   }
 }

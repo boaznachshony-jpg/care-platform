@@ -8,12 +8,12 @@ import type {
 import type { Clock } from '../ports/clock.js';
 import type { IdGenerator } from '../ports/id-generator.js';
 import type { TimelineService } from '../ports/timeline-service.js';
+import { type Actor } from './actor.js';
+import { authorizeOrThrow } from './authorize.js';
 
-export interface Actor {
-  userId: string;
-  tenantId: string;
-  correlationId: string;
-}
+// Re-exported so existing imports of Actor/AuthorizationError from this module
+// keep working; both now live in ./actor.js to keep authorize.js cycle-free.
+export { AuthorizationError, type Actor } from './actor.js';
 
 export interface OpenEmploymentCaseInput {
   careRecipient: { fullName: string; careLevel?: string; city?: string };
@@ -25,10 +25,6 @@ export interface OpenEmploymentCaseInput {
     primaryLanguage?: string;
   };
   startDate: string;
-}
-
-export class AuthorizationError extends Error {
-  readonly code = 'FORBIDDEN';
 }
 
 export interface OpenEmploymentCaseDeps {
@@ -49,15 +45,11 @@ export class OpenEmploymentCase {
   constructor(private readonly deps: OpenEmploymentCaseDeps) {}
 
   async execute(actor: Actor, input: OpenEmploymentCaseInput): Promise<EmploymentCase> {
-    const decision = await this.deps.authorization.check({
-      userId: actor.userId,
-      tenantId: actor.tenantId,
+    await authorizeOrThrow(this.deps, actor, {
       resourceType: 'employment_case',
       action: 'create',
+      sensitivity: 'employment_sensitive',
     });
-    if (!decision.allowed) {
-      throw new AuthorizationError(decision.reason);
-    }
 
     const now = this.deps.clock.now().toISOString();
     const graph: EmploymentCaseGraph = {

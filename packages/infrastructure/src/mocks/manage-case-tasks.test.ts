@@ -58,11 +58,11 @@ function buildHarness() {
     completeTask: new CompleteCaseTask(deps),
     listTasks: new ListCaseTasks(deps),
     listTimeline: new ListCaseTimeline({
-      authorization,
+      ...deps,
       timeline: new InMemoryTimelineRepository(timelineService),
     }),
     addContact: new AddContactToCase({ ...deps, repository: contacts }),
-    listContacts: new ListCaseContacts({ authorization, repository: contacts }),
+    listContacts: new ListCaseContacts({ ...deps, repository: contacts }),
   };
 }
 
