@@ -38,6 +38,23 @@ pnpm dev       # apps/web on http://localhost:5173
 pnpm dev:api   # apps/api on http://localhost:4000
 ```
 
+### Testing on a phone
+
+Both dev servers bind all interfaces, so with the phone on the same Wi-Fi,
+open the **Network** URL that `pnpm dev` prints (e.g.
+`http://192.168.1.50:5173`). The web app derives the API host from the page
+it was loaded from, so nothing needs configuring — pointing it at `localhost`
+would mean the phone itself.
+
+Outside production the API also accepts any private-network origin, so CORS
+does not need editing for whatever address the router assigns. Public origins
+are still refused. If the phone cannot connect, it is almost always Windows
+Firewall prompting for Node on a private network.
+
+This matters more than usual here: the product is mobile-first for users in
+their 50s and 60s, and RTL layout, tap targets and on-screen-keyboard
+behaviour are not fully exercised by a narrowed desktop viewport.
+
 `apps/web`'s Dashboard page calls `apps/api`'s `/health` endpoint — run both
 together to see it succeed. See `CONTRIBUTING.md` for the full workflow,
 branching policy, and how to add an ADR.

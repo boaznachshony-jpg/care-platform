@@ -11,7 +11,27 @@ import type {
   UploadDocumentRequest,
 } from '@caredesk/schemas';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_PORT = 4000;
+
+/**
+ * An explicit `VITE_API_BASE_URL` always wins. Otherwise the API host is
+ * derived from the page's own host rather than hardcoded to localhost:
+ * when the app is opened from a phone at http://192.168.x.x:5173, "localhost"
+ * would mean the phone itself, so a fixed value silently breaks every request
+ * on exactly the device this mobile-first product most needs testing on.
+ */
+function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) {
+    return configured;
+  }
+  if (typeof window === 'undefined') {
+    return `http://localhost:${API_PORT}`;
+  }
+  return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 /**
  * Development-only bearer token matching apps/api's synthetic dev session —

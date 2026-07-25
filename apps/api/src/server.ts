@@ -22,6 +22,48 @@ const REDACTED_PATHS = [
   'body.passportNumber',
 ];
 
+/** RFC 1918 private ranges plus loopback — the addresses a home network hands out. */
+const PRIVATE_HOST =
+  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/;
+
+/**
+ * Production uses the explicit allowlist and nothing else.
+ *
+ * Outside production it additionally accepts any private-network origin, so
+ * the app can be opened from a phone at http://192.168.x.x:5173 without
+ * hand-editing CORS_ORIGINS for whatever address the router happened to
+ * assign. The widening is deliberately scoped to private addresses: a public
+ * origin is still refused even in development.
+ */
+export function buildCorsOrigin(
+  env: Env,
+):
+  | true
+  | string[]
+  | ((origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => void) {
+  const allowlist = env.CORS_ORIGINS.split(',').map((origin) => origin.trim());
+  if (env.NODE_ENV === 'production') {
+    return allowlist;
+  }
+
+  return (origin, cb) => {
+    // No Origin header at all (curl, same-origin, server-to-server).
+    if (!origin) {
+      cb(null, true);
+      return;
+    }
+    if (allowlist.includes(origin)) {
+      cb(null, true);
+      return;
+    }
+    try {
+      cb(null, PRIVATE_HOST.test(new URL(origin).hostname));
+    } catch {
+      cb(null, false);
+    }
+  };
+}
+
 export function buildServer(env: Env, container: Container = buildContainer(env)): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -30,9 +72,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
     },
   });
 
-  void app.register(cors, {
-    origin: env.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
-  });
+  void app.register(cors, { origin: buildCorsOrigin(env) });
 
   registerCorrelationId(app, env.CORRELATION_HEADER);
   registerErrorHandler(app);
