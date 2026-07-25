@@ -58,6 +58,19 @@ permissions, and tests from drifting apart.
 | RuleVersion | `draft`, `under_review`, `approved`, `active`, `suspended`, `superseded`, `retired` |
 | NotificationRequirement | `pending`, `in_progress`, `confirmed`, `waived`, `not_applicable`, `failed` |
 
+## Canonical classification enums
+
+Not lifecycles, but still shared vocabulary — changing one requires the same
+synchronisation as a status enum. All are implemented in
+`packages/domain/src/status.ts`.
+
+| Concept | Values |
+|---|---|
+| Organization type | `nursing_office`, `licensed_bureau`, `insurer`, `payroll_office`, `legal_office`, `public_authority`, `independent_professional`, `other` |
+| Contact channel type | `phone`, `email`, `whatsapp`, `office`, `portal` |
+| Task priority | `low`, `normal`, `high`, `urgent` |
+| Task source | `manual`, `rule`, `workflow` |
+
 ## Sensitivity classes
 
 | Code | Meaning | Examples |

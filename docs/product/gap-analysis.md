@@ -55,17 +55,71 @@ constitution also existed as Markdown.
 
 ## ADR status
 
-The following ADRs are created as **Proposed**, because their technical
-direction is approved for planning but production acceptance still requires
-the stated evidence:
-
-- ADR-001: Supabase Authentication Strategy
-- ADR-002: Shared-schema Multi-tenancy with `tenant_id` and RLS
-- ADR-003: Mock-first AI Provider and Data Minimization
+- **ADR-001 (Supabase Authentication) — Proposed.** No real authentication is
+  wired. The API uses a mock session over a synthetic dev identity, seeded only
+  when `NODE_ENV !== 'production'`.
+- **ADR-002 (Shared-schema multi-tenancy with `tenant_id` and RLS) —
+  Accepted, development scope.** Implemented and verified against a live
+  Postgres. Production infrastructure remains gated on the privacy and
+  supplier review in its acceptance evidence.
+- **ADR-003 (Mock-first AI provider) — Proposed.** `MockAIProvider` is the
+  only enabled adapter; no external AI call exists.
 
 The Repository Bootstrap Plan may create interfaces and local mocks compatible
 with these ADRs. It must not treat a Proposed ADR as approval to process real
 personal data.
+
+## What has actually been built
+
+Recorded because the earlier sections of this document describe a repository
+that had no code in it, and that is no longer true.
+
+**Milestone 0 (Foundation) — complete.** pnpm monorepo; Vite/React web shell
+(Hebrew RTL, i18n-only strings); Fastify API shell (correlation ids, §14 error
+envelope, log redaction, deny-by-default guard); layered packages
+(domain/application/infrastructure) with a mock adapter behind every external
+port; design tokens with a drift test; CI with format/lint/typecheck/test/build
+plus secret scanning.
+
+**Milestone 1 (Employment Case Foundation) — partially complete.**
+
+| Capability | State |
+|---|---|
+| Open and view an employment case | Done, persisted, verified in browser |
+| Contacts and organizations on a case | Done, persisted |
+| Tasks (create, complete) | Done, persisted, completion idempotent |
+| Case timeline | Done, persisted, translation-key based |
+| Documents | In progress |
+| Family-member invitations | Not started |
+| Contact channels (editable in UI) | Modelled in schema only |
+
+**Database.** Migrations 0001–0007 applied to the development Supabase
+project. Tenant isolation is enforced by RLS and verified by a live
+two-tenant isolation check (`pnpm db:rls-test`), which also asserts that RLS
+is *forced* on every tenant-owned table and that the application role cannot
+create tables.
+
+### Defects found by verification, not by review
+
+Worth recording because each was invisible to inspection and only surfaced
+when the code was run against a real database or a real browser:
+
+1. **RLS was not enforced at all.** `ENABLE ROW LEVEL SECURITY` does not apply
+   to a table's owner, and even `FORCE` is bypassed by a role holding
+   `BYPASSRLS` — which Supabase's `postgres` role has. Policies that read
+   correctly protected nothing. Fixed in migrations 0004/0005.
+2. **Policies had no `WITH CHECK`**, so a write could be labelled with another
+   tenant's id even though reads were correctly scoped.
+3. **Date columns drifted a day.** node-postgres parsed `date` into a local
+   midnight `Date`, turning 2026-09-01 into 2026-08-31T21:00Z. On visa expiry
+   and employment start dates that is a compliance defect.
+4. **A form silently refused to submit.** An untouched `<input type="date">`
+   posts `""`, failing an optional field's regex, and the error was never
+   rendered — leaving the user with no feedback at all.
+
+The lesson recorded for later milestones: schema and validation that read
+correctly prove nothing until exercised against the real database and the real
+UI.
 
 ## Remaining open decisions
 
@@ -79,13 +133,30 @@ personal data.
    maintained Markdown edition; until then the DOCX remains authoritative.
 6. Define production hosting region and incident-response ownership.
 
+## Blocking gates before any real personal data
+
+These are not "nice to have before launch" — each one blocks the moment a real
+family's data enters the system, which has not happened yet (everything to date
+is synthetic).
+
+| Gate | Why it blocks | State |
+|---|---|---|
+| Named payroll reviewer (CPA) and legal/employment reviewer | No rule may reach `approved`/`active` without them, so no payroll figure can be presented as anything but an estimate | Not appointed |
+| Privacy and supplier assessment | Required before real data, external AI, production object storage, or cross-border processing | Not started |
+| Hosting region decision | The development project currently sits in `ap-south-1`, which was not a deliberate choice and conflicts with the EU/Israel preference recorded in ADR-002 | **Open — needs a decision** |
+| Application connects as a non-administrative database role | Until then a missed `withTenant()` silently escapes RLS | In progress |
+| Persisted audit trail | Audit is mandatory (Constitution §19) but is currently in-memory and lost on restart | In progress |
+| Retention periods by data class | The model supports retention; the periods themselves are a legal decision no developer may invent | Not decided |
+| DPO appointment and database registration | Named in the Legal Validation P0 checklist with no owner or date | Not assigned |
+
 ## Development readiness
 
-Milestone 0 documentation is now ready for review. Feature development remains
-blocked until:
+Feature development may continue on synthetic data. Each new slice must:
 
-- the authority documents are approved;
-- ADR dependencies for the planned slice are accepted or explicitly mocked;
-- repository foundation checks pass;
-- the canonical data model is used without local aliases;
-- no real personal data is introduced.
+- use the canonical data model without local aliases;
+- carry `tenant_id`, enable **and force** RLS, and add a case to
+  `pnpm db:rls-test` for every new tenant-owned table;
+- audit what Constitution §19 requires;
+- keep all user-facing strings in the i18n resources;
+- introduce no real personal data anywhere, including fixtures and commit
+  messages.

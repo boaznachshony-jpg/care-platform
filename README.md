@@ -5,15 +5,21 @@ families that directly employ a foreign live-in caregiver.
 
 ## Current status
 
-**Milestone 0 (Repository Foundation) is in progress** on branch
-`foundation/milestone-0` — a pnpm monorepo with a Vite/React web shell, a
-Fastify API shell, shared domain/application/infrastructure packages, and
-deterministic mock adapters for every external dependency (auth, AI,
-storage, audit, timeline). No product feature, no real database schema, no
-real authentication, and no live AI provider exist yet — see
-[Repository Bootstrap Plan](docs/architecture/repository-bootstrap-plan.md)
-for the full scope and Definition of Done. `caredesk_prototype.html` is a
-visual reference only and must not be used as a production code base.
+**Milestone 0 (Foundation) is complete. Milestone 1 (Employment Case
+Foundation) is in progress.**
+
+You can open an employment case, add contacts and organizations to it,
+create and complete tasks, and read a case timeline — all persisted to
+Postgres with tenant isolation enforced by Row Level Security. Documents,
+family-member invitations, and editable contact channels are still to come.
+
+Everything runs on **synthetic data only**. There is no real authentication
+(a mock session over a synthetic dev identity, never seeded in production),
+no live AI provider, and no real personal data anywhere. See
+[the gap analysis](docs/product/gap-analysis.md) for what blocks real data.
+
+`caredesk_prototype.html` is a visual reference only and must not be used as
+a production code base.
 
 ## Local development
 
@@ -35,6 +41,26 @@ pnpm dev:api   # apps/api on http://localhost:4000
 `apps/web`'s Dashboard page calls `apps/api`'s `/health` endpoint — run both
 together to see it succeed. See `CONTRIBUTING.md` for the full workflow,
 branching policy, and how to add an ADR.
+
+### Database
+
+The API runs against Postgres when a connection URL is configured and falls
+back to in-memory repositories otherwise, so the test suite and a bare
+`pnpm dev:api` work with no database at all.
+
+```bash
+pnpm db:migrate    # apply pending migrations (idempotent)
+pnpm db:rls-test   # live tenant-isolation check; exits non-zero on any leak
+```
+
+Both read the connection string from `.env.local` (gitignored). See
+[database/README.md](database/README.md) for the connection specifics — in
+particular why the Supabase **session pooler on port 5432** is required, and
+why RLS needed `FORCE` plus a dedicated non-administrative role before it
+actually isolated anything.
+
+Run `pnpm db:rls-test` after any change to a policy, a tenant-owned table, or
+`withTenant()`.
 
 ## Architecture boundaries
 
