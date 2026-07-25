@@ -3,6 +3,8 @@ import type {
   CaregiverId,
   CaseContactRoleId,
   ContactId,
+  DocumentId,
+  DocumentVersionId,
   EmployerId,
   EmploymentCaseId,
   OrganizationId,
@@ -13,6 +15,11 @@ import type {
   UserId,
 } from './ids.js';
 import type {
+  DocumentComplianceStatus,
+  DocumentOwnerType,
+  DocumentType,
+  DocumentUploadSource,
+  DocumentVersionStatus,
   EmploymentCaseStatus,
   OrganizationType,
   SensitivityClass,
@@ -156,6 +163,49 @@ export interface Task {
   dueAt: string | null;
   completedAt: string | null;
   sourceType: 'manual' | 'rule' | 'workflow';
+}
+
+/**
+ * Logical document container (blueprint §4.5). Holds no file — the bytes live
+ * in private object storage, reachable only through a short-lived signed link
+ * issued after an authorization check.
+ */
+export interface Document {
+  id: DocumentId;
+  tenantId: TenantId;
+  employmentCaseId: EmploymentCaseId;
+  documentType: DocumentType;
+  ownerType: DocumentOwnerType;
+  ownerId: string | null;
+  sensitivity: SensitivityClass;
+  complianceStatus: DocumentComplianceStatus;
+  currentVersionId: DocumentVersionId | null;
+  expiresAt: string | null;
+  status: 'active' | 'archived';
+}
+
+/**
+ * One immutable uploaded file. Replacing a file adds a version, never edits
+ * one — the database grants no update or delete on this table.
+ *
+ * `storageKey` is a private object-storage key, not a URL, and must never be
+ * logged or returned to a client (Constitution §16).
+ */
+export interface DocumentVersion {
+  id: DocumentVersionId;
+  tenantId: TenantId;
+  documentId: DocumentId;
+  versionNumber: number;
+  storageKey: string;
+  mediaType: string;
+  sizeBytes: number;
+  checksum: string | null;
+  uploadSource: DocumentUploadSource;
+  verificationStatus: DocumentVersionStatus;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  supersedesVersionId: DocumentVersionId | null;
+  createdAt: string;
 }
 
 /** User-facing case history — translation keys only, never raw sensitive values. */

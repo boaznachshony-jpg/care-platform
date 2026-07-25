@@ -8,6 +8,7 @@ import { registerErrorHandler } from './plugins/error-handler.js';
 import { denyByDefault } from './plugins/deny-by-default.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerCaseSubResourceRoutes } from './routes/case-contacts.js';
+import { registerCaseDocumentRoutes } from './routes/case-documents.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -62,6 +63,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
 
   registerCaseRoutes(app, container);
   registerCaseSubResourceRoutes(app, container);
+  registerCaseDocumentRoutes(app, container);
 
   return app;
 }

@@ -100,6 +100,48 @@
       "urgent": "Urgent"
     }
   },
+  "documents": {
+    "heading": "Documents",
+    "empty": "No documents have been uploaded to this case yet.",
+    "addHeading": "Upload a document",
+    "privacyNote": "Files are held in private storage. Viewing one uses a short-lived link created only after a permission check.",
+    "documentType": "Document type",
+    "file": "File",
+    "expiresOn": "Expiry date",
+    "expires": "Valid until",
+    "submit": "Upload document",
+    "submitting": "Uploading…",
+    "uploadFailed": "Uploading the document failed. Your input was kept — you can retry.",
+    "fileRequired": "Choose a file",
+    "fileTypeNotAllowed": "That file type is not supported. Upload a PDF, JPEG, PNG or HEIC.",
+    "fileTooLarge": "That file is too large. The maximum size is 5 MB.",
+    "open": "Open document",
+    "opening": "Opening…",
+    "downloadFailed": "Opening the document failed.",
+    "type": {
+      "passport": "Passport",
+      "visa": "Visa",
+      "employment_contract": "Employment contract",
+      "insurance_policy": "Insurance policy",
+      "medical": "Medical document",
+      "payroll": "Payslip",
+      "other": "Other"
+    },
+    "compliance": {
+      "missing": "Missing",
+      "valid": "Valid",
+      "expiring": "Expiring soon",
+      "expired": "Expired",
+      "not_applicable": "Not applicable"
+    },
+    "verification": {
+      "uploaded": "Uploaded",
+      "pending_verification": "Pending verification",
+      "verified": "Verified",
+      "rejected": "Rejected",
+      "superseded": "Superseded"
+    }
+  },
   "timeline": {
     "heading": "Timeline",
     "empty": "No events on this case yet.",
@@ -119,6 +161,11 @@
       },
       "completed": {
         "summary": "A task was marked complete"
+      }
+    },
+    "document": {
+      "uploaded": {
+        "summary": "A document was uploaded to the case"
       }
     }
   }

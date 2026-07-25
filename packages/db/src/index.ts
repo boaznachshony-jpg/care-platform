@@ -4,3 +4,4 @@ export * from './case-foundation-repository.js';
 export * from './case-contact-repository.js';
 export * from './task-repository.js';
 export * from './audit-service.js';
+export * from './document-repository.js';

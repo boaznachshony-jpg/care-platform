@@ -2,10 +2,13 @@ import type {
   AddContactRequest,
   CaseContactResponse,
   CreateTaskRequest,
+  DocumentDownloadUrlResponse,
+  DocumentResponse,
   EmploymentCaseResponse,
   OpenEmploymentCaseRequest,
   TaskResponse,
   TimelineEventResponse,
+  UploadDocumentRequest,
 } from '@caredesk/schemas';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
@@ -97,4 +100,30 @@ export function completeCaseTask(caseId: string, taskId: string): Promise<TaskRe
 
 export function listCaseTimeline(caseId: string): Promise<TimelineEventResponse[]> {
   return request(`${casePath(caseId)}/timeline`);
+}
+
+export function listCaseDocuments(caseId: string): Promise<DocumentResponse[]> {
+  return request(`${casePath(caseId)}/documents`);
+}
+
+export function uploadCaseDocument(
+  caseId: string,
+  input: UploadDocumentRequest,
+): Promise<DocumentResponse> {
+  return request(`${casePath(caseId)}/documents`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Fetches a short-lived signed link. The link is never rendered as a bare href
+ * in the list — it is requested at the moment the user asks to open the file,
+ * so an expired or unauthorized link is never sitting in the DOM.
+ */
+export function getCaseDocumentDownloadUrl(
+  caseId: string,
+  documentId: string,
+): Promise<DocumentDownloadUrlResponse> {
+  return request(`${casePath(caseId)}/documents/${encodeURIComponent(documentId)}/download-url`);
 }

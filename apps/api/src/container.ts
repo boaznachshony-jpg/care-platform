@@ -2,6 +2,7 @@ import type {
   AuditService,
   CaseContactRepository,
   CaseFoundationRepository,
+  DocumentRepository,
   TaskRepository,
   TimelineRepository,
   TimelineService,
@@ -10,18 +11,22 @@ import {
   AddContactToCase,
   CompleteCaseTask,
   CreateCaseTask,
+  GetDocumentDownloadUrl,
   GetEmploymentCase,
+  ListCaseDocuments,
   ListCaseContacts,
   ListCaseTasks,
   ListCaseTimeline,
   ListEmploymentCases,
   OpenEmploymentCase,
+  UploadCaseDocument,
 } from '@caredesk/application';
 import {
   createPool,
   PgAuditService,
   PgCaseContactRepository,
   PgCaseFoundationRepository,
+  PgDocumentRepository,
   PgTaskRepository,
   PgTimelineService,
 } from '@caredesk/db';
@@ -29,6 +34,8 @@ import {
   InMemoryAuditService,
   InMemoryCaseContactRepository,
   InMemoryCaseFoundationRepository,
+  InMemoryDocumentRepository,
+  InMemoryDocumentStorage,
   InMemoryTaskRepository,
   InMemoryTimelineRepository,
   InMemoryTimelineService,
@@ -58,8 +65,18 @@ const ROLE_PERMISSIONS = {
     'task:read',
     'task:update',
     'timeline:read',
+    'document:create',
+    'document:read',
   ],
-  family_member: ['employment_case:read', 'case_contact:read', 'task:read', 'timeline:read'],
+  family_member: [
+    'employment_case:read',
+    'case_contact:read',
+    'task:read',
+    'timeline:read',
+    // Read-only, deliberately: viewing a case never confers authority to add
+    // to it (Constitution §18).
+    'document:read',
+  ],
 } as const;
 
 /**
@@ -88,6 +105,9 @@ export interface Container {
   completeTask: CompleteCaseTask;
   listTasks: ListCaseTasks;
   listTimeline: ListCaseTimeline;
+  uploadDocument: UploadCaseDocument;
+  listDocuments: ListCaseDocuments;
+  getDocumentDownloadUrl: GetDocumentDownloadUrl;
   /** Present only when backed by Postgres; close it on shutdown. */
   pool?: Pool;
 }
@@ -108,6 +128,7 @@ export function buildContainer(env: Env): Container {
   let repository: CaseFoundationRepository;
   let contactRepository: CaseContactRepository;
   let taskRepository: TaskRepository;
+  let documentRepository: DocumentRepository;
   let timeline: TimelineService;
   let timelineRepository: TimelineRepository;
   let audit: AuditService;
@@ -116,6 +137,7 @@ export function buildContainer(env: Env): Container {
     repository = new PgCaseFoundationRepository(pool);
     contactRepository = new PgCaseContactRepository(pool);
     taskRepository = new PgTaskRepository(pool);
+    documentRepository = new PgDocumentRepository(pool);
     const pgTimeline = new PgTimelineService(pool);
     timeline = pgTimeline;
     timelineRepository = pgTimeline;
@@ -126,6 +148,7 @@ export function buildContainer(env: Env): Container {
     repository = new InMemoryCaseFoundationRepository();
     contactRepository = new InMemoryCaseContactRepository();
     taskRepository = new InMemoryTaskRepository();
+    documentRepository = new InMemoryDocumentRepository();
     const memoryTimeline = new InMemoryTimelineService();
     timeline = memoryTimeline;
     timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
@@ -178,8 +201,21 @@ export function buildContainer(env: Env): Container {
     }
   }
 
+  // Object storage is mocked for Milestone 1. Real cloud storage is a separate
+  // decision (ADR pending) — the port keeps that swap to one line.
+  const storage = new InMemoryDocumentStorage();
+
   const caseDeps = { authorization, repository, audit, timeline, clock, ids };
   const taskDeps = { authorization, tasks: taskRepository, audit, timeline, clock, ids };
+  const documentDeps = {
+    authorization,
+    documents: documentRepository,
+    storage,
+    audit,
+    timeline,
+    clock,
+    ids,
+  };
 
   return {
     auth,
@@ -202,5 +238,8 @@ export function buildContainer(env: Env): Container {
     completeTask: new CompleteCaseTask(taskDeps),
     listTasks: new ListCaseTasks(taskDeps),
     listTimeline: new ListCaseTimeline({ authorization, timeline: timelineRepository }),
+    uploadDocument: new UploadCaseDocument(documentDeps),
+    listDocuments: new ListCaseDocuments(documentDeps),
+    getDocumentDownloadUrl: new GetDocumentDownloadUrl(documentDeps),
   };
 }

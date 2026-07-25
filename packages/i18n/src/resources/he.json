@@ -100,6 +100,48 @@
       "urgent": "דחופה"
     }
   },
+  "documents": {
+    "heading": "מסמכים",
+    "empty": "עדיין לא הועלו מסמכים לתיק.",
+    "addHeading": "העלאת מסמך",
+    "privacyNote": "הקבצים נשמרים באחסון פרטי. הצפייה בהם נעשית דרך קישור זמני שנוצר רק לאחר בדיקת הרשאה.",
+    "documentType": "סוג המסמך",
+    "file": "קובץ",
+    "expiresOn": "תאריך תפוגה",
+    "expires": "תוקף עד",
+    "submit": "העלאת מסמך",
+    "submitting": "מעלה…",
+    "uploadFailed": "העלאת המסמך נכשלה. הנתונים נשמרו — אפשר לנסות שוב.",
+    "fileRequired": "יש לבחור קובץ",
+    "fileTypeNotAllowed": "סוג הקובץ אינו נתמך. אפשר להעלות PDF, JPEG, PNG או HEIC.",
+    "fileTooLarge": "הקובץ גדול מדי. הגודל המרבי הוא 5 מגה-בייט.",
+    "open": "פתיחת המסמך",
+    "opening": "פותח…",
+    "downloadFailed": "פתיחת המסמך נכשלה.",
+    "type": {
+      "passport": "דרכון",
+      "visa": "אשרה",
+      "employment_contract": "חוזה העסקה",
+      "insurance_policy": "פוליסת ביטוח",
+      "medical": "מסמך רפואי",
+      "payroll": "תלוש שכר",
+      "other": "אחר"
+    },
+    "compliance": {
+      "missing": "חסר",
+      "valid": "בתוקף",
+      "expiring": "מתקרב לתפוגה",
+      "expired": "פג תוקף",
+      "not_applicable": "לא רלוונטי"
+    },
+    "verification": {
+      "uploaded": "הועלה",
+      "pending_verification": "ממתין לאימות",
+      "verified": "מאומת",
+      "rejected": "נדחה",
+      "superseded": "הוחלף"
+    }
+  },
   "timeline": {
     "heading": "ציר זמן",
     "empty": "אין עדיין אירועים בתיק.",
@@ -119,6 +161,11 @@
       },
       "completed": {
         "summary": "משימה סומנה כהושלמה"
+      }
+    },
+    "document": {
+      "uploaded": {
+        "summary": "הועלה מסמך חדש לתיק"
       }
     }
   }
