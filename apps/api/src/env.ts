@@ -12,6 +12,13 @@ const envSchema = z.object({
   // Optional: when set, the case repository is Postgres-backed; when absent,
   // the API falls back to the in-memory repository so tests and a bare
   // `pnpm dev:api` run without any database.
+  //
+  // This must be the least-privilege `caredesk_app` login, never the owner
+  // (ADR-002): an administrative connection carries BYPASSRLS, so any query
+  // that forgets `withTenant()` would escape tenant isolation entirely. The
+  // owner connection lives in DATABASE_ADMIN_URL and is deliberately absent
+  // from this schema — migrations and provisioning read it directly, and the
+  // application process should never hold an administrative credential.
   DATABASE_URL: z.string().optional(),
   AI_PROVIDER: z.enum(['mock', 'openai', 'anthropic']).default('mock'),
 });

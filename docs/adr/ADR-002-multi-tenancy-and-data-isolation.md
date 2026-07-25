@@ -68,8 +68,33 @@ broaden, tenant access.
 - [ ] Audit events include tenant and actor context — the application records
       them, but audit is still an in-memory service, not a persisted table.
 - [ ] Backup, restore, export, and deletion procedures preserve isolation.
-- [ ] Application connects as a dedicated `caredesk_app` login rather than
-      assuming the role from an administrative connection.
+- [x] Application connects as a dedicated `caredesk_app` login rather than
+      assuming the role from an administrative connection. The connection
+      configuration is split in two: `DATABASE_URL` is the `caredesk_app`
+      login used by the running application, `DATABASE_ADMIN_URL` is the owner
+      connection used only by `pnpm db:migrate` and
+      `pnpm db:provision-app-role`. `caredesk_app` is given `LOGIN` and its own
+      password by the provisioning script rather than by a migration, so the
+      secret never enters a tracked file. The application process therefore
+      holds no administrative credential, and a query that forgets
+      `withTenant()` can no longer run with BYPASSRLS.
+
+  Still outstanding on this line:
+
+  - The `caredesk_app` password is a hand-managed value in `.env.local`; it is
+    not yet held in a managed secret store, and there is no rotation
+    procedure. Rotation today means re-running the provisioning script and
+    updating `DATABASE_URL`, with a brief window where the two disagree.
+  - `withTenant()` keeps its transaction-local `SET LOCAL ROLE caredesk_app`
+    as defence in depth against `DATABASE_URL` being repointed at an
+    administrative role. Nothing yet *asserts* that the connected role is
+    non-administrative; that assertion belongs in `db:rls-test`
+    (`select current_user`, and `rolbypassrls = false` for it).
+  - `ALTER ROLE ... PASSWORD` cannot take a bind parameter, so provisioning
+    embeds the password in the statement text via `pg.escapeLiteral`. That
+    quoting is unit-tested (`packages/db/src/sql-literal.test.ts`) but the
+    statement may still appear in the server log if `log_statement` is set to
+    `ddl` or `all`.
 
 ### What the first RLS implementation got wrong
 
