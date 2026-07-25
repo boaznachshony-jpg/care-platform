@@ -1,4 +1,5 @@
 import type {
+  AuditService,
   CaseContactRepository,
   CaseFoundationRepository,
   TaskRepository,
@@ -18,6 +19,7 @@ import {
 } from '@caredesk/application';
 import {
   createPool,
+  PgAuditService,
   PgCaseContactRepository,
   PgCaseFoundationRepository,
   PgTaskRepository,
@@ -76,7 +78,7 @@ const DEV_USER_ID = '00000000-0000-4000-8000-000000000002';
 export interface Container {
   auth: MockAuthService;
   tenantByUser: Map<string, string>;
-  audit: InMemoryAuditService;
+  audit: AuditService;
   openCase: OpenEmploymentCase;
   getCase: GetEmploymentCase;
   listCases: ListEmploymentCases;
@@ -103,6 +105,7 @@ export function buildContainer(env: Env): Container {
   let taskRepository: TaskRepository;
   let timeline: TimelineService;
   let timelineRepository: TimelineRepository;
+  let audit: AuditService;
 
   if (pool) {
     repository = new PgCaseFoundationRepository(pool);
@@ -111,6 +114,9 @@ export function buildContainer(env: Env): Container {
     const pgTimeline = new PgTimelineService(pool);
     timeline = pgTimeline;
     timelineRepository = pgTimeline;
+    // Constitution §19: audit must survive a process restart, so it goes to
+    // Postgres whenever a database is configured.
+    audit = new PgAuditService(pool);
   } else {
     repository = new InMemoryCaseFoundationRepository();
     contactRepository = new InMemoryCaseContactRepository();
@@ -118,9 +124,9 @@ export function buildContainer(env: Env): Container {
     const memoryTimeline = new InMemoryTimelineService();
     timeline = memoryTimeline;
     timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
+    audit = new InMemoryAuditService();
   }
 
-  const audit = new InMemoryAuditService();
   const clock = new SystemClock();
   const ids = new UuidIdGenerator();
   const tenantByUser = new Map<string, string>();
