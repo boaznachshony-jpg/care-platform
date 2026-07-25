@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest';
+import { createTaskRequestSchema } from './case-tasks.js';
 import { openEmploymentCaseRequestSchema } from './employment-case.js';
+
+describe('createTaskRequestSchema', () => {
+  it('treats an untouched date input ("") as no due date, not as invalid', () => {
+    // An <input type="date"> left blank submits "", which previously failed the
+    // regex and blocked the form with no visible error.
+    const result = createTaskRequestSchema.safeParse({ title: 'Renew visa', dueDate: '' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.dueDate).toBeUndefined();
+    }
+  });
+
+  it('still rejects a genuinely malformed date', () => {
+    const result = createTaskRequestSchema.safeParse({
+      title: 'Renew visa',
+      dueDate: '15/10/2026',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('defaults priority to normal', () => {
+    const result = createTaskRequestSchema.safeParse({ title: 'Renew visa' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.priority).toBe('normal');
+    }
+  });
+});
 
 const validRequest = {
   careRecipient: { fullName: 'Synthetic Care Recipient' },

@@ -122,10 +122,60 @@ async function main(): Promise<void> {
         pass('cross-tenant employment_case insert is rejected by composite FK');
       }
     });
+    // 6. Every tenant-owned table must have RLS both enabled AND forced.
+    //    A new table that forgets `force` looks protected but is not, which is
+    //    exactly the defect migrations 0004/0005 were written to fix.
+    {
+      const expected = [
+        'family_account',
+        'tenant_membership',
+        'permission_grant',
+        'care_recipient',
+        'employer',
+        'caregiver',
+        'employment_case',
+        'organization',
+        'contact',
+        'contact_channel',
+        'case_contact_role',
+        'task',
+        'timeline_event',
+      ];
+      const result = await pool.query<{ relname: string; ok: boolean }>(
+        `select relname, (relrowsecurity and relforcerowsecurity) as ok
+           from pg_class
+          where relkind = 'r' and relname = any($1)`,
+        [expected],
+      );
+      const byName = new Map(result.rows.map((row) => [row.relname, row.ok]));
+      const unprotected = expected.filter((name) => byName.get(name) !== true);
+      if (unprotected.length === 0) {
+        pass(`RLS enabled and forced on all ${expected.length} tenant-owned tables`);
+      } else {
+        fail(`RLS not enabled+forced on: ${unprotected.join(', ')}`);
+      }
+    }
+
+    // 7. The app role must not be able to reshape the schema.
+    await withTenant(pool, tenantA, async (client) => {
+      try {
+        await client.query('create table rls_probe_should_fail (id int)');
+        fail('caredesk_app was able to CREATE TABLE');
+      } catch {
+        pass('caredesk_app cannot create tables');
+      }
+    });
   } finally {
     // Cleanup runs as the owner (not caredesk_app) so it can remove every
     // synthetic row regardless of which tenant a failed test left it under.
+    await pool.query('drop table if exists rls_probe_should_fail');
     for (const tenant of [tenantA, tenantB]) {
+      await pool.query('delete from timeline_event where tenant_id = $1', [tenant]);
+      await pool.query('delete from task where tenant_id = $1', [tenant]);
+      await pool.query('delete from case_contact_role where tenant_id = $1', [tenant]);
+      await pool.query('delete from contact_channel where tenant_id = $1', [tenant]);
+      await pool.query('delete from contact where tenant_id = $1', [tenant]);
+      await pool.query('delete from organization where tenant_id = $1', [tenant]);
       await pool.query('delete from employment_case where tenant_id = $1', [tenant]);
       await pool.query('delete from caregiver where tenant_id = $1', [tenant]);
       await pool.query('delete from employer where tenant_id = $1', [tenant]);

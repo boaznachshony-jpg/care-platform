@@ -104,3 +104,26 @@ export type SensitivityClass = (typeof SENSITIVITY_CLASSES)[number];
 
 export const RACI_ROLES = ['responsible', 'accountable', 'consulted', 'informed'] as const;
 export type RaciRole = (typeof RACI_ROLES)[number];
+
+/**
+ * Organization types from database-blueprint.md §4.4. Not in SYNC_MATRIX.md's
+ * status table — it is a classification, not a lifecycle — but it is still a
+ * shared enum, so it belongs here rather than being retyped per feature.
+ */
+export const ORGANIZATION_TYPES = [
+  'nursing_office',
+  'licensed_bureau',
+  'insurer',
+  'payroll_office',
+  'legal_office',
+  'public_authority',
+  'independent_professional',
+  'other',
+] as const;
+export type OrganizationType = (typeof ORGANIZATION_TYPES)[number];
+
+export const CONTACT_CHANNEL_TYPES = ['phone', 'email', 'whatsapp', 'office', 'portal'] as const;
+export type ContactChannelType = (typeof CONTACT_CHANNEL_TYPES)[number];
+
+export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];

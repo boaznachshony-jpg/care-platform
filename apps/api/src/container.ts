@@ -1,9 +1,34 @@
-import type { CaseFoundationRepository } from '@caredesk/application';
-import { GetEmploymentCase, ListEmploymentCases, OpenEmploymentCase } from '@caredesk/application';
-import { createPool, PgCaseFoundationRepository } from '@caredesk/db';
+import type {
+  CaseContactRepository,
+  CaseFoundationRepository,
+  TaskRepository,
+  TimelineRepository,
+  TimelineService,
+} from '@caredesk/application';
+import {
+  AddContactToCase,
+  CompleteCaseTask,
+  CreateCaseTask,
+  GetEmploymentCase,
+  ListCaseContacts,
+  ListCaseTasks,
+  ListCaseTimeline,
+  ListEmploymentCases,
+  OpenEmploymentCase,
+} from '@caredesk/application';
+import {
+  createPool,
+  PgCaseContactRepository,
+  PgCaseFoundationRepository,
+  PgTaskRepository,
+  PgTimelineService,
+} from '@caredesk/db';
 import {
   InMemoryAuditService,
+  InMemoryCaseContactRepository,
   InMemoryCaseFoundationRepository,
+  InMemoryTaskRepository,
+  InMemoryTimelineRepository,
   InMemoryTimelineService,
   MembershipAuthorizationService,
   MockAuthService,
@@ -17,10 +42,22 @@ import type { Env } from './env.js';
  * Milestone 1 role→permission map. This is an interim, code-level map — the
  * canonical role vocabulary is a Milestone 1 permission-model decision still
  * to be recorded; keep it minimal until then.
+ *
+ * `family_member` is deliberately read-only: per Constitution §18 a family
+ * member views a case without gaining authority to change it.
  */
 const ROLE_PERMISSIONS = {
-  owner: ['employment_case:create', 'employment_case:read'],
-  family_member: ['employment_case:read'],
+  owner: [
+    'employment_case:create',
+    'employment_case:read',
+    'case_contact:create',
+    'case_contact:read',
+    'task:create',
+    'task:read',
+    'task:update',
+    'timeline:read',
+  ],
+  family_member: ['employment_case:read', 'case_contact:read', 'task:read', 'timeline:read'],
 } as const;
 
 /**
@@ -29,18 +66,26 @@ const ROLE_PERMISSIONS = {
  * unlocks a mock session over synthetic data.
  */
 export const DEV_TOKEN = 'dev-local-token';
-const DEV_USER_ID = 'user-synthetic-1';
-/** Fixed UUID: tenant_id is a uuid column, so this must parse as one. */
+/**
+ * Fixed UUIDs: tenant_id, and the created_by/updated_by actor columns, are all
+ * `uuid` in the schema, so the synthetic dev identity has to parse as one.
+ */
 const DEV_TENANT_ID = '00000000-0000-4000-8000-000000000001';
+const DEV_USER_ID = '00000000-0000-4000-8000-000000000002';
 
 export interface Container {
   auth: MockAuthService;
   tenantByUser: Map<string, string>;
   audit: InMemoryAuditService;
-  timeline: InMemoryTimelineService;
   openCase: OpenEmploymentCase;
   getCase: GetEmploymentCase;
   listCases: ListEmploymentCases;
+  addContact: AddContactToCase;
+  listContacts: ListCaseContacts;
+  createTask: CreateCaseTask;
+  completeTask: CompleteCaseTask;
+  listTasks: ListCaseTasks;
+  listTimeline: ListCaseTimeline;
   /** Present only when backed by Postgres; close it on shutdown. */
   pool?: Pool;
 }
@@ -52,12 +97,30 @@ export function buildContainer(env: Env): Container {
   // Postgres when DATABASE_URL is configured, in-memory otherwise — so tests
   // and a bare `pnpm dev:api` still run with no database available.
   const pool = env.DATABASE_URL ? createPool(env.DATABASE_URL) : undefined;
-  const repository: CaseFoundationRepository = pool
-    ? new PgCaseFoundationRepository(pool)
-    : new InMemoryCaseFoundationRepository();
+
+  let repository: CaseFoundationRepository;
+  let contactRepository: CaseContactRepository;
+  let taskRepository: TaskRepository;
+  let timeline: TimelineService;
+  let timelineRepository: TimelineRepository;
+
+  if (pool) {
+    repository = new PgCaseFoundationRepository(pool);
+    contactRepository = new PgCaseContactRepository(pool);
+    taskRepository = new PgTaskRepository(pool);
+    const pgTimeline = new PgTimelineService(pool);
+    timeline = pgTimeline;
+    timelineRepository = pgTimeline;
+  } else {
+    repository = new InMemoryCaseFoundationRepository();
+    contactRepository = new InMemoryCaseContactRepository();
+    taskRepository = new InMemoryTaskRepository();
+    const memoryTimeline = new InMemoryTimelineService();
+    timeline = memoryTimeline;
+    timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
+  }
 
   const audit = new InMemoryAuditService();
-  const timeline = new InMemoryTimelineService();
   const clock = new SystemClock();
   const ids = new UuidIdGenerator();
   const tenantByUser = new Map<string, string>();
@@ -89,14 +152,29 @@ export function buildContainer(env: Env): Container {
     }
   }
 
+  const caseDeps = { authorization, repository, audit, timeline, clock, ids };
+  const taskDeps = { authorization, tasks: taskRepository, audit, timeline, clock, ids };
+
   return {
     auth,
     tenantByUser,
     audit,
-    timeline,
     pool,
-    openCase: new OpenEmploymentCase({ authorization, repository, audit, timeline, clock, ids }),
+    openCase: new OpenEmploymentCase(caseDeps),
     getCase: new GetEmploymentCase({ authorization, repository }),
     listCases: new ListEmploymentCases({ authorization, repository }),
+    addContact: new AddContactToCase({
+      authorization,
+      repository: contactRepository,
+      audit,
+      timeline,
+      clock,
+      ids,
+    }),
+    listContacts: new ListCaseContacts({ authorization, repository: contactRepository }),
+    createTask: new CreateCaseTask(taskDeps),
+    completeTask: new CompleteCaseTask(taskDeps),
+    listTasks: new ListCaseTasks(taskDeps),
+    listTimeline: new ListCaseTimeline({ authorization, timeline: timelineRepository }),
   };
 }

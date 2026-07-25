@@ -43,5 +43,83 @@
     "statusActive": "פעיל",
     "caseNotFound": "התיק לא נמצא",
     "loadFailed": "טעינת התיק נכשלה"
+  },
+  "contacts": {
+    "heading": "אנשי קשר",
+    "empty": "עדיין לא נוספו אנשי קשר לתיק.",
+    "addHeading": "הוספת איש קשר",
+    "fullName": "שם מלא",
+    "roleType": "תפקיד בתיק",
+    "title": "תואר",
+    "organizationName": "שם הארגון",
+    "organizationType": "סוג הארגון",
+    "isPrimary": "איש קשר ראשי",
+    "isEmergency": "איש קשר לחירום",
+    "submit": "הוספת איש קשר",
+    "submitting": "מוסיף…",
+    "addFailed": "הוספת איש הקשר נכשלה. הנתונים נשמרו — אפשר לנסות שוב.",
+    "badgePrimary": "ראשי",
+    "badgeEmergency": "חירום",
+    "orgType": {
+      "nursing_office": "לשכת סיעוד",
+      "licensed_bureau": "תאגיד מורשה",
+      "insurer": "חברת ביטוח",
+      "payroll_office": "לשכת שכר",
+      "legal_office": "משרד עורכי דין",
+      "public_authority": "רשות ציבורית",
+      "independent_professional": "בעל מקצוע עצמאי",
+      "other": "אחר"
+    }
+  },
+  "tasks": {
+    "heading": "משימות",
+    "empty": "אין משימות פתוחות בתיק.",
+    "addHeading": "משימה חדשה",
+    "title": "כותרת המשימה",
+    "dueDate": "תאריך יעד",
+    "priority": "עדיפות",
+    "submit": "הוספת משימה",
+    "submitting": "מוסיף…",
+    "addFailed": "הוספת המשימה נכשלה. הנתונים נשמרו — אפשר לנסות שוב.",
+    "complete": "סימון כהושלם",
+    "completing": "מסמן…",
+    "completeFailed": "סימון המשימה נכשל.",
+    "due": "יעד",
+    "status": {
+      "open": "פתוחה",
+      "in_progress": "בטיפול",
+      "blocked": "חסומה",
+      "completed": "הושלמה",
+      "deferred": "נדחתה",
+      "cancelled": "בוטלה"
+    },
+    "priorityLevel": {
+      "low": "נמוכה",
+      "normal": "רגילה",
+      "high": "גבוהה",
+      "urgent": "דחופה"
+    }
+  },
+  "timeline": {
+    "heading": "ציר זמן",
+    "empty": "אין עדיין אירועים בתיק.",
+    "case": {
+      "opened": {
+        "summary": "תיק ההעסקה נפתח"
+      }
+    },
+    "contact": {
+      "added": {
+        "summary": "נוסף איש קשר לתיק"
+      }
+    },
+    "task": {
+      "created": {
+        "summary": "נוצרה משימה חדשה"
+      },
+      "completed": {
+        "summary": "משימה סומנה כהושלמה"
+      }
+    }
   }
 }

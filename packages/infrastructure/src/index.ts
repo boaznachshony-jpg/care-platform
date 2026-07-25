@@ -9,4 +9,6 @@ export * from './mocks/mock-ai-provider.js';
 export * from './mocks/in-memory-rule-repository.js';
 export * from './mocks/in-memory-workflow-repository.js';
 export * from './mocks/in-memory-case-foundation-repository.js';
+export * from './mocks/in-memory-case-contact-repository.js';
+export * from './mocks/in-memory-task-repository.js';
 export * from './mocks/membership-authorization-service.js';

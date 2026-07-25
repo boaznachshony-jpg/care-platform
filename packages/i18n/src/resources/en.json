@@ -43,5 +43,83 @@
     "statusActive": "Active",
     "caseNotFound": "Case not found",
     "loadFailed": "Failed to load the case"
+  },
+  "contacts": {
+    "heading": "Contacts",
+    "empty": "No contacts have been added to this case yet.",
+    "addHeading": "Add a contact",
+    "fullName": "Full name",
+    "roleType": "Role on the case",
+    "title": "Title",
+    "organizationName": "Organization name",
+    "organizationType": "Organization type",
+    "isPrimary": "Primary contact",
+    "isEmergency": "Emergency contact",
+    "submit": "Add contact",
+    "submitting": "Adding…",
+    "addFailed": "Adding the contact failed. Your input was kept — you can retry.",
+    "badgePrimary": "Primary",
+    "badgeEmergency": "Emergency",
+    "orgType": {
+      "nursing_office": "Nursing office",
+      "licensed_bureau": "Licensed bureau",
+      "insurer": "Insurer",
+      "payroll_office": "Payroll office",
+      "legal_office": "Legal office",
+      "public_authority": "Public authority",
+      "independent_professional": "Independent professional",
+      "other": "Other"
+    }
+  },
+  "tasks": {
+    "heading": "Tasks",
+    "empty": "No open tasks on this case.",
+    "addHeading": "New task",
+    "title": "Task title",
+    "dueDate": "Due date",
+    "priority": "Priority",
+    "submit": "Add task",
+    "submitting": "Adding…",
+    "addFailed": "Adding the task failed. Your input was kept — you can retry.",
+    "complete": "Mark complete",
+    "completing": "Marking…",
+    "completeFailed": "Marking the task complete failed.",
+    "due": "Due",
+    "status": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "blocked": "Blocked",
+      "completed": "Completed",
+      "deferred": "Deferred",
+      "cancelled": "Cancelled"
+    },
+    "priorityLevel": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "urgent": "Urgent"
+    }
+  },
+  "timeline": {
+    "heading": "Timeline",
+    "empty": "No events on this case yet.",
+    "case": {
+      "opened": {
+        "summary": "Employment case opened"
+      }
+    },
+    "contact": {
+      "added": {
+        "summary": "A contact was added to the case"
+      }
+    },
+    "task": {
+      "created": {
+        "summary": "A new task was created"
+      },
+      "completed": {
+        "summary": "A task was marked complete"
+      }
+    }
   }
 }

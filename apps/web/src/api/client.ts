@@ -1,4 +1,12 @@
-import type { EmploymentCaseResponse, OpenEmploymentCaseRequest } from '@caredesk/schemas';
+import type {
+  AddContactRequest,
+  CaseContactResponse,
+  CreateTaskRequest,
+  EmploymentCaseResponse,
+  OpenEmploymentCaseRequest,
+  TaskResponse,
+  TimelineEventResponse,
+} from '@caredesk/schemas';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
@@ -52,4 +60,41 @@ export function getEmploymentCase(caseId: string): Promise<EmploymentCaseRespons
 
 export function listEmploymentCases(): Promise<EmploymentCaseResponse[]> {
   return request('/cases');
+}
+
+const casePath = (caseId: string): string => `/cases/${encodeURIComponent(caseId)}`;
+
+export function listCaseContacts(caseId: string): Promise<CaseContactResponse[]> {
+  return request(`${casePath(caseId)}/contacts`);
+}
+
+export function addCaseContact(
+  caseId: string,
+  input: AddContactRequest,
+): Promise<{ contactId: string }> {
+  return request(`${casePath(caseId)}/contacts`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function listCaseTasks(caseId: string): Promise<TaskResponse[]> {
+  return request(`${casePath(caseId)}/tasks`);
+}
+
+export function createCaseTask(caseId: string, input: CreateTaskRequest): Promise<TaskResponse> {
+  return request(`${casePath(caseId)}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function completeCaseTask(caseId: string, taskId: string): Promise<TaskResponse> {
+  return request(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}/complete`, {
+    method: 'POST',
+  });
+}
+
+export function listCaseTimeline(caseId: string): Promise<TimelineEventResponse[]> {
+  return request(`${casePath(caseId)}/timeline`);
 }

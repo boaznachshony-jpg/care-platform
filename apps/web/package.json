@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@caredesk/design-tokens": "workspace:*",
+    "@caredesk/domain": "workspace:*",
     "@caredesk/i18n": "workspace:*",
     "@caredesk/schemas": "workspace:*",
     "@caredesk/ui": "workspace:*",

@@ -1,13 +1,24 @@
 import type {
   CareRecipientId,
   CaregiverId,
+  CaseContactRoleId,
+  ContactId,
   EmployerId,
   EmploymentCaseId,
+  OrganizationId,
+  TaskId,
   TenantId,
   TenantMembershipId,
+  TimelineEventId,
   UserId,
 } from './ids.js';
-import type { EmploymentCaseStatus } from './status.js';
+import type {
+  EmploymentCaseStatus,
+  OrganizationType,
+  SensitivityClass,
+  TaskPriority,
+  TaskStatus,
+} from './status.js';
 
 /**
  * Entity shapes below carry only the Milestone 0 fields needed to prove the
@@ -94,4 +105,67 @@ export interface EmploymentCase {
   startDate: string;
   endDate: string | null;
   status: EmploymentCaseStatus;
+}
+
+export interface Organization {
+  id: OrganizationId;
+  tenantId: TenantId;
+  name: string;
+  organizationType: OrganizationType;
+  phone: string | null;
+  email: string | null;
+  status: 'active' | 'inactive';
+}
+
+/** A person in the case ecosystem — never a system user by itself (Constitution §18). */
+export interface Contact {
+  id: ContactId;
+  tenantId: TenantId;
+  organizationId: OrganizationId | null;
+  fullName: string;
+  title: string | null;
+  preferredChannel: string | null;
+  status: 'active' | 'inactive';
+}
+
+export interface CaseContactRole {
+  id: CaseContactRoleId;
+  tenantId: TenantId;
+  employmentCaseId: EmploymentCaseId;
+  contactId: ContactId;
+  roleType: string;
+  isPrimary: boolean;
+  isBackup: boolean;
+  isEmergency: boolean;
+  status: 'active' | 'ended';
+}
+
+/**
+ * Exactly one of `title` (user-entered) or `titleKey` (workflow-generated,
+ * from Milestone 2) is set — enforced by a database check constraint.
+ */
+export interface Task {
+  id: TaskId;
+  tenantId: TenantId;
+  employmentCaseId: EmploymentCaseId;
+  title: string | null;
+  titleKey: string | null;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueAt: string | null;
+  completedAt: string | null;
+  sourceType: 'manual' | 'rule' | 'workflow';
+}
+
+/** User-facing case history — translation keys only, never raw sensitive values. */
+export interface TimelineEvent {
+  id: TimelineEventId;
+  tenantId: TenantId;
+  employmentCaseId: EmploymentCaseId;
+  eventTypeKey: string;
+  summaryKey: string;
+  occurredAt: string;
+  actorDisplay: string | null;
+  sensitivity: SensitivityClass;
 }
