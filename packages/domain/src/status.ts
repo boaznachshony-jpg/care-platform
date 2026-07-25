@@ -127,3 +127,36 @@ export type ContactChannelType = (typeof CONTACT_CHANNEL_TYPES)[number];
 
 export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+/**
+ * Document types from database-blueprint.md §4.5. Like ORGANIZATION_TYPES this
+ * is a classification rather than a lifecycle, so it is not in SYNC_MATRIX.md's
+ * status table — but it is a shared enum, so it belongs here.
+ *
+ * The lifecycle enums for documents already exist above:
+ * DOCUMENT_VERSION_STATUSES and DOCUMENT_COMPLIANCE_STATUSES.
+ */
+export const DOCUMENT_TYPES = [
+  'passport',
+  'visa',
+  'employment_contract',
+  'insurance_policy',
+  'medical',
+  'payroll',
+  'other',
+] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** Which party a document is *about*. Never an access grant (Constitution §18). */
+export const DOCUMENT_OWNER_TYPES = [
+  'employment_case',
+  'care_recipient',
+  'employer',
+  'caregiver',
+  'organization',
+  'contact',
+] as const;
+export type DocumentOwnerType = (typeof DOCUMENT_OWNER_TYPES)[number];
+
+export const DOCUMENT_UPLOAD_SOURCES = ['web_upload', 'email_ingest', 'api', 'migration'] as const;
+export type DocumentUploadSource = (typeof DOCUMENT_UPLOAD_SOURCES)[number];

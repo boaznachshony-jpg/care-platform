@@ -5,6 +5,7 @@ import type { EmploymentCaseResponse } from '@caredesk/schemas';
 import { ErrorState, Skeleton, StatusBadge } from '@caredesk/ui';
 import { ApiRequestError, getEmploymentCase } from '../api/client.js';
 import { CaseContactsSection } from './case/CaseContactsSection.js';
+import { CaseDocumentsSection } from './case/CaseDocumentsSection.js';
 import { CaseTasksSection } from './case/CaseTasksSection.js';
 import { CaseTimelineSection } from './case/CaseTimelineSection.js';
 
@@ -81,6 +82,7 @@ export function CasePage() {
       </dl>
 
       <CaseTasksSection caseId={data.id} />
+      <CaseDocumentsSection caseId={data.id} />
       <CaseContactsSection caseId={data.id} />
       <CaseTimelineSection caseId={data.id} />
     </div>

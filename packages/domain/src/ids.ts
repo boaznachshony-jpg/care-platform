@@ -24,3 +24,5 @@ export type ContactId = Branded<string, 'ContactId'>;
 export type CaseContactRoleId = Branded<string, 'CaseContactRoleId'>;
 export type TaskId = Branded<string, 'TaskId'>;
 export type TimelineEventId = Branded<string, 'TimelineEventId'>;
+export type DocumentId = Branded<string, 'DocumentId'>;
+export type DocumentVersionId = Branded<string, 'DocumentVersionId'>;
