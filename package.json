@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "pnpm --filter @caredesk/web dev",
     "dev:api": "pnpm --filter @caredesk/api dev",
+    "db:migrate": "node --env-file=.env.local --import tsx packages/db/src/cli.ts",
+    "db:rls-test": "node --env-file=.env.local --import tsx packages/db/src/rls-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
@@ -31,6 +33,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
     "prettier": "^3.4.2",
+    "tsx": "^4.23.1",
     "typescript": "^5.7.3"
   }
 }

@@ -9,8 +9,9 @@ const envSchema = z.object({
   // Comma-separated origin allowlist for CORS. Dev default is the local web
   // shell only; production values come from environment, never a wildcard.
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
-  // Deliberately not required in Milestone 0 — no production database
-  // connection in the first bootstrap commit (repository-bootstrap-plan.md §4).
+  // Optional: when set, the case repository is Postgres-backed; when absent,
+  // the API falls back to the in-memory repository so tests and a bare
+  // `pnpm dev:api` run without any database.
   DATABASE_URL: z.string().optional(),
   AI_PROVIDER: z.enum(['mock', 'openai', 'anthropic']).default('mock'),
 });

@@ -57,19 +57,50 @@ broaden, tenant access.
 
 ## Acceptance evidence
 
-- Automated cross-tenant denial tests for every repository.
-- RLS policies tested with at least two tenants and multiple roles.
-- No tenant-owned table lacks `tenant_id`.
-- Audit events include tenant and actor context.
-- Backup, restore, export, and deletion procedures preserve isolation.
+- [x] RLS policies tested with at least two tenants — `pnpm db:rls-test`,
+      passing against the live database as of 2026-07-25. It asserts that
+      tenant A cannot SELECT, UPDATE, DELETE, or INSERT-as tenant B, and that
+      a cross-tenant foreign key is rejected.
+- [x] No tenant-owned table lacks `tenant_id` (migrations 0002/0003).
+- [x] Automated cross-tenant denial tests for the case repository
+      (`open-employment-case.test.ts` at the application layer, `db:rls-test`
+      at the database layer).
+- [ ] Audit events include tenant and actor context — the application records
+      them, but audit is still an in-memory service, not a persisted table.
+- [ ] Backup, restore, export, and deletion procedures preserve isolation.
+- [ ] Application connects as a dedicated `caredesk_app` login rather than
+      assuming the role from an administrative connection.
+
+### What the first RLS implementation got wrong
+
+Recorded because the failure mode is easy to repeat and invisible without a
+live test. Migrations 0002/0003 enabled RLS and added correct-looking
+policies, and the isolation check still failed on every assertion:
+
+1. `ENABLE ROW LEVEL SECURITY` does not apply to the table **owner**.
+2. Even with `FORCE ROW LEVEL SECURITY`, any role holding **BYPASSRLS**
+   skips policies entirely — and Supabase's `postgres` role has it.
+3. Policies declared only `USING`, so INSERT was ungoverned; `WITH CHECK` is
+   required to stop a write labelled with another tenant's id.
+
+Fixed in 0004 (force + `WITH CHECK`) and 0005 (least-privilege
+`caredesk_app` role, `NOBYPASSRLS`, assumed via transaction-local
+`SET LOCAL ROLE`). The lesson for this ADR: RLS configuration that reads
+correctly in a migration proves nothing until an isolation test runs against
+the real database as the role the application actually uses.
 
 ## Migration impact
 
-None yet — no existing schema; all prior repository branches were confirmed
-empty during the branch audit. Core tenancy tables to establish in
-Milestone 0: `tenant`, `user`, `tenant_membership`, `care_recipient`,
-`employment_case`, `caregiver`, `case_membership`, `permission_grant`, per
-the Database Blueprint.
+Applied to the development Supabase project on 2026-07-25:
+`0002_identity_tenancy` (tenant, family_account, app_user, tenant_membership,
+permission_grant), `0003_care_employment_core` (care_recipient, employer,
+caregiver, employment_case with composite same-tenant foreign keys),
+`0004_force_rls_and_with_check`, and `0005_app_role`. See `database/README.md`.
+
+Remaining tables from the Database Blueprint (documents, tasks, workflows,
+payroll, rules, audit, timeline) are added in later milestones; each must
+carry `tenant_id`, enable **and force** RLS, and gain a corresponding case in
+`db:rls-test` before it holds data.
 
 ## References
 
