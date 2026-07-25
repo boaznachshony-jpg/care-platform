@@ -32,10 +32,24 @@ export function createPool(connectionString: string): Pool {
  * Both `SET LOCAL ROLE` and `set_config(..., true)` are transaction-local, so
  * neither can leak to the next borrower of this pooled connection (ADR-002).
  *
- * The role switch is not cosmetic: the connecting role (`postgres` on
- * Supabase) carries BYPASSRLS, which silently skips every policy — a live
- * isolation check caught exactly that. `caredesk_app` is NOBYPASSRLS, so the
- * policies apply. See database/migrations/0005_app_role.sql.
+ * The role switch is not cosmetic: a role carrying BYPASSRLS (Supabase's
+ * `postgres` does) silently skips every policy — a live isolation check caught
+ * exactly that. `caredesk_app` is NOBYPASSRLS, so the policies apply. See
+ * database/migrations/0005_app_role.sql.
+ *
+ * `SET LOCAL ROLE` is kept even though the pool now connects as `caredesk_app`
+ * directly (DATABASE_URL is the app login; DATABASE_ADMIN_URL is the owner and
+ * is used only by migrations and provisioning). Connecting as the role is the
+ * real control — it is what stops a query that forgets `withTenant()` from
+ * running with BYPASSRLS. This line is defence in depth for the one failure it
+ * still covers: if someone ever points DATABASE_URL back at an administrative
+ * role, every query inside `withTenant()` keeps obeying RLS instead of
+ * silently exposing every tenant. Setting the role to itself is a no-op when
+ * the configuration is correct, so it costs nothing to keep. The alternative —
+ * removing it so such a misconfiguration fails loudly — only helps if
+ * something is watching for it; nothing is, and a silent cross-tenant leak is
+ * a far worse outcome than a redundant statement. (`db:rls-test` is where an
+ * explicit "the connected role is not an admin" assertion belongs.)
  */
 export async function withTenant<T>(
   pool: Pool,

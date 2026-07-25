@@ -12,6 +12,7 @@
     "dev": "pnpm --filter @caredesk/web dev",
     "dev:api": "pnpm --filter @caredesk/api dev",
     "db:migrate": "node --env-file=.env.local --import tsx packages/db/src/cli.ts",
+    "db:provision-app-role": "node --env-file=.env.local --import tsx packages/db/src/provision-app-role.ts",
     "db:rls-test": "node --env-file=.env.local --import tsx packages/db/src/rls-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

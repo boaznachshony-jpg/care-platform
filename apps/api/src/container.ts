@@ -98,6 +98,11 @@ export function buildContainer(env: Env): Container {
 
   // Postgres when DATABASE_URL is configured, in-memory otherwise — so tests
   // and a bare `pnpm dev:api` still run with no database available.
+  //
+  // DATABASE_URL is the `caredesk_app` login (ADR-002), not the owner: the
+  // pool holds no administrative credential and cannot bypass RLS. The owner
+  // connection (DATABASE_ADMIN_URL) is used only by `pnpm db:migrate` and
+  // `pnpm db:provision-app-role`, and is never read here.
   const pool = env.DATABASE_URL ? createPool(env.DATABASE_URL) : undefined;
 
   let repository: CaseFoundationRepository;
@@ -150,11 +155,26 @@ export function buildContainer(env: Env): Container {
 
     if (pool) {
       // The dev tenant row must exist before any case can reference it.
-      void pool.query(
-        `insert into tenant (id, data_region) values ($1, 'synthetic')
+      //
+      // `tenant` is global reference data: `caredesk_app` has SELECT only, so
+      // now that the pool connects as that role this insert is expected to be
+      // denied on a properly provisioned database. Warn and continue rather
+      // than let an unhandled rejection take the process down — the row is
+      // seeded once by an operator on the owner connection.
+      void pool
+        .query(
+          `insert into tenant (id, data_region) values ($1, 'synthetic')
          on conflict (id) do nothing`,
-        [DEV_TENANT_ID],
-      );
+          [DEV_TENANT_ID],
+        )
+        .catch((error: unknown) => {
+          console.warn(
+            `[dev] could not seed the synthetic tenant row (${
+              error instanceof Error ? error.message : String(error)
+            }). Insert it once on the owner connection: ` +
+              `insert into tenant (id, data_region) values ('${DEV_TENANT_ID}', 'synthetic') on conflict do nothing;`,
+          );
+        });
     }
   }
 
