@@ -23,7 +23,7 @@ const API_PORT = 4000;
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_BASE_URL;
   if (configured) {
-    return configured;
+    return configured.replace(/\/$/, '');
   }
   if (typeof window === 'undefined') {
     return `http://localhost:${API_PORT}`;
@@ -51,10 +51,11 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const hasBody = init?.body !== undefined;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      'content-type': 'application/json',
+      ...(hasBody ? { 'content-type': 'application/json' } : {}),
       authorization: `Bearer ${DEV_TOKEN}`,
       ...init?.headers,
     },

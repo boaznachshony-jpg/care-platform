@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_TOKEN } from '../container.js';
 import { loadEnv } from '../env.js';
-import { buildServer } from '../server.js';
+import { buildServer } from '../create-server.js';
 
 const VALID_BODY = {
   careRecipient: { fullName: 'Synthetic Care Recipient' },

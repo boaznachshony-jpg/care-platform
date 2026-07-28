@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadEnv } from './env.js';
-import { buildServer } from './server.js';
+import { buildServer } from './create-server.js';
 
 describe('apps/api server', () => {
   it('GET /health returns a schema-shaped 200', async () => {

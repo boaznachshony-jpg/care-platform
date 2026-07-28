@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadEnv } from './env.js';
-import { buildCorsOrigin } from './server.js';
+import { buildCorsOrigin } from './create-server.js';
 
 function decide(env: ReturnType<typeof loadEnv>, origin: string | undefined): boolean {
   const result = buildCorsOrigin(env);

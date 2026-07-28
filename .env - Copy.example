@@ -7,7 +7,6 @@ NODE_ENV=development
 PORT=4000
 LOG_LEVEL=info
 CORRELATION_HEADER=x-correlation-id
-CORS_ORIGINS=http://localhost:5173,https://care-platform-web.vercel.app
 
 # --- database (ADR-002) ---
 # Two connections on purpose. The application must never hold an

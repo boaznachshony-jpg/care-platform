@@ -8,7 +8,7 @@ const envSchema = z.object({
   CORRELATION_HEADER: z.string().min(1).default('x-correlation-id'),
   // Comma-separated origin allowlist for CORS. Dev default is the local web
   // shell only; production values come from environment, never a wildcard.
-  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  CORS_ORIGINS: z.string().default('http://localhost:5173,https://care-platform-web.vercel.app'),
   // Optional: when set, the case repository is Postgres-backed; when absent,
   // the API falls back to the in-memory repository so tests and a bare
   // `pnpm dev:api` run without any database.
