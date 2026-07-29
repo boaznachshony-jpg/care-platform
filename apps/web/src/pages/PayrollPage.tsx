@@ -1,7 +1,15 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
-import { readMvpPayroll, saveMvpPayroll, type MvpPayrollRecord } from '../storage/mvp-storage.js';
+import {
+  readMvpEmploymentExpenses,
+  readMvpPayroll,
+  saveMvpEmploymentExpenses,
+  saveMvpPayroll,
+  type EmploymentExpenseFrequency,
+  type MvpEmploymentExpense,
+  type MvpPayrollRecord,
+} from '../storage/mvp-storage.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
@@ -14,25 +22,53 @@ function numeric(value: string): number {
 export function PayrollPage() {
   const [profile, setProfile] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
+  const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
   const [step, setStep] = useState(profile.baseSalary === null ? 0 : 1);
   const existing = records.find((record) => record.month === currentMonth);
   const [values, setValues] = useState({
     month: existing?.month ?? currentMonth,
     baseSalary: String(existing?.baseSalary ?? profile.baseSalary ?? ''),
     workDays: String(existing?.workDays ?? 0),
+    vacationDays: String(existing?.vacationDays ?? 0),
+    sickDays: String(existing?.sickDays ?? 0),
+    absenceDays: String(existing?.absenceDays ?? 0),
     paidSaturdays: String(existing?.paidSaturdays ?? 0),
+    paidHolidays: String(existing?.paidHolidays ?? 0),
     saturdayPay: String(existing?.saturdayPay ?? 0),
+    holidayPay: String(existing?.holidayPay ?? 0),
+    vacationPay: String(existing?.vacationPay ?? 0),
+    sickPay: String(existing?.sickPay ?? 0),
     pocketMoney: String(existing?.pocketMoney ?? 0),
+    employerContributions: String(existing?.employerContributions ?? 0),
     otherAddition: String(existing?.otherAddition ?? 0),
+    medicalInsuranceDeduction: String(existing?.medicalInsuranceDeduction ?? 0),
+    housingDeduction: String(existing?.housingDeduction ?? 0),
     advances: String(existing?.advances ?? 0),
     agreedDeduction: String(existing?.agreedDeduction ?? 0),
+  });
+  const [expenseDraft, setExpenseDraft] = useState({
+    category: 'ביטוח לאומי',
+    frequency: 'quarterly' as EmploymentExpenseFrequency,
+    amount: '',
+    dueDate: '',
+    note: '',
   });
   const [message, setMessage] = useState('');
 
   const calculation = useMemo(() => {
     const additions =
-      numeric(values.saturdayPay) + numeric(values.pocketMoney) + numeric(values.otherAddition);
-    const deductions = numeric(values.advances) + numeric(values.agreedDeduction);
+      numeric(values.saturdayPay) +
+      numeric(values.holidayPay) +
+      numeric(values.vacationPay) +
+      numeric(values.sickPay) +
+      numeric(values.pocketMoney) +
+      numeric(values.employerContributions) +
+      numeric(values.otherAddition);
+    const deductions =
+      numeric(values.medicalInsuranceDeduction) +
+      numeric(values.housingDeduction) +
+      numeric(values.advances) +
+      numeric(values.agreedDeduction);
     return {
       additions,
       deductions,
@@ -63,10 +99,20 @@ export function PayrollPage() {
       month: values.month,
       baseSalary: numeric(values.baseSalary),
       workDays: numeric(values.workDays),
+      vacationDays: numeric(values.vacationDays),
+      sickDays: numeric(values.sickDays),
+      absenceDays: numeric(values.absenceDays),
       paidSaturdays: numeric(values.paidSaturdays),
+      paidHolidays: numeric(values.paidHolidays),
       saturdayPay: numeric(values.saturdayPay),
+      holidayPay: numeric(values.holidayPay),
+      vacationPay: numeric(values.vacationPay),
+      sickPay: numeric(values.sickPay),
       pocketMoney: numeric(values.pocketMoney),
+      employerContributions: numeric(values.employerContributions),
       otherAddition: numeric(values.otherAddition),
+      medicalInsuranceDeduction: numeric(values.medicalInsuranceDeduction),
+      housingDeduction: numeric(values.housingDeduction),
       advances: numeric(values.advances),
       agreedDeduction: numeric(values.agreedDeduction),
       total: calculation.total,
@@ -78,6 +124,45 @@ export function PayrollPage() {
     saveMvpPayroll(next);
     setRecords(next);
     setMessage('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.');
+  }
+
+  function saveExpense(event: React.FormEvent) {
+    event.preventDefault();
+    if (!expenseDraft.category || !expenseDraft.dueDate) {
+      setMessage('יש לבחור סוג תשלום ותאריך יעד.');
+      return;
+    }
+    const saved: MvpEmploymentExpense = {
+      id: crypto.randomUUID(),
+      category: expenseDraft.category,
+      frequency: expenseDraft.frequency,
+      amount: numeric(expenseDraft.amount),
+      dueDate: expenseDraft.dueDate,
+      status: 'upcoming',
+      note: expenseDraft.note,
+      savedAt: new Date().toISOString(),
+    };
+    const next = [saved, ...expenses];
+    saveMvpEmploymentExpenses(next);
+    setExpenses(next);
+    setExpenseDraft((current) => ({ ...current, amount: '', dueDate: '', note: '' }));
+    setMessage('התשלום התקופתי נשמר בלוח עלויות ההעסקה.');
+  }
+
+  function toggleExpense(expense: MvpEmploymentExpense) {
+    const next = expenses.map((item) =>
+      item.id === expense.id
+        ? { ...item, status: item.status === 'paid' ? ('upcoming' as const) : ('paid' as const) }
+        : item,
+    );
+    saveMvpEmploymentExpenses(next);
+    setExpenses(next);
+  }
+
+  function removeExpense(id: string) {
+    const next = expenses.filter((item) => item.id !== id);
+    saveMvpEmploymentExpenses(next);
+    setExpenses(next);
   }
 
   if (step === 0) {
@@ -193,13 +278,53 @@ export function PayrollPage() {
                 />
               </label>
               <label>
-                שבתות בתשלום
+                ימי חופשה שנוצלו
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={values.vacationDays}
+                  onChange={(event) => update('vacationDays', event.target.value)}
+                />
+              </label>
+              <label>
+                ימי מחלה
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={values.sickDays}
+                  onChange={(event) => update('sickDays', event.target.value)}
+                />
+              </label>
+              <label>
+                ימי היעדרות אחרים
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={values.absenceDays}
+                  onChange={(event) => update('absenceDays', event.target.value)}
+                />
+              </label>
+              <label>
+                ימי מנוחה שעבדו
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={values.paidSaturdays}
                   onChange={(event) => update('paidSaturdays', event.target.value)}
+                />
+              </label>
+              <label>
+                ימי חג שעבדו
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={values.paidHolidays}
+                  onChange={(event) => update('paidHolidays', event.target.value)}
                 />
               </label>
               <p className="form-note">
@@ -210,13 +335,43 @@ export function PayrollPage() {
           {step === 3 ? (
             <div className="form-grid">
               <label>
-                תשלום שבתות
+                תשלום ימי מנוחה
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   value={values.saturdayPay}
                   onChange={(event) => update('saturdayPay', event.target.value)}
+                />
+              </label>
+              <label>
+                תשלום ימי חג
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.holidayPay}
+                  onChange={(event) => update('holidayPay', event.target.value)}
+                />
+              </label>
+              <label>
+                תשלום חופשה
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.vacationPay}
+                  onChange={(event) => update('vacationPay', event.target.value)}
+                />
+              </label>
+              <label>
+                תשלום מחלה
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.sickPay}
+                  onChange={(event) => update('sickPay', event.target.value)}
                 />
               </label>
               <label>
@@ -227,6 +382,16 @@ export function PayrollPage() {
                   step="0.01"
                   value={values.pocketMoney}
                   onChange={(event) => update('pocketMoney', event.target.value)}
+                />
+              </label>
+              <label>
+                הפרשות מעסיק: פנסיה ופיצויים
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.employerContributions}
+                  onChange={(event) => update('employerContributions', event.target.value)}
                 />
               </label>
               <label>
@@ -243,6 +408,26 @@ export function PayrollPage() {
           ) : null}
           {step === 4 ? (
             <div className="form-grid">
+              <label>
+                ניכוי ביטוח רפואי
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.medicalInsuranceDeduction}
+                  onChange={(event) => update('medicalInsuranceDeduction', event.target.value)}
+                />
+              </label>
+              <label>
+                ניכוי מגורים
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.housingDeduction}
+                  onChange={(event) => update('housingDeduction', event.target.value)}
+                />
+              </label>
               <label>
                 מקדמות
                 <input
@@ -318,6 +503,135 @@ export function PayrollPage() {
             )}
           </div>
         </div>
+      </section>
+      <section className="card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">מעקב עלויות</p>
+            <h2>תשלומים תקופתיים של ההעסקה</h2>
+            <p>
+              כאן מתעדים תשלומים שאינם חלק מהשכר נטו לעובד. הסכום, התדירות והמועד נקבעים לפי הנתונים
+              שהמשתמש מזין.
+            </p>
+          </div>
+        </div>
+        <form className="readable-form" onSubmit={saveExpense}>
+          <div className="form-grid">
+            <label>
+              סוג התשלום
+              <select
+                value={expenseDraft.category}
+                onChange={(event) =>
+                  setExpenseDraft((current) => ({ ...current, category: event.target.value }))
+                }
+              >
+                <option>ביטוח לאומי</option>
+                <option>אגרת רישוי או היתר העסקה</option>
+                <option>תשלום לתאגיד מורשה</option>
+                <option>ביטוח רפואי</option>
+                <option>הפרשות פנסיה ופיצויים</option>
+                <option>דמי הבראה</option>
+                <option>תשלום אחר</option>
+              </select>
+            </label>
+            <label>
+              תדירות
+              <select
+                value={expenseDraft.frequency}
+                onChange={(event) =>
+                  setExpenseDraft((current) => ({
+                    ...current,
+                    frequency: event.target.value as EmploymentExpenseFrequency,
+                  }))
+                }
+              >
+                <option value="monthly">חודשי</option>
+                <option value="quarterly">רבעוני</option>
+                <option value="annual">שנתי</option>
+                <option value="one_time">חד־פעמי</option>
+              </select>
+            </label>
+            <label>
+              סכום בש״ח
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={expenseDraft.amount}
+                onChange={(event) =>
+                  setExpenseDraft((current) => ({ ...current, amount: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              תאריך יעד
+              <input
+                type="date"
+                required
+                value={expenseDraft.dueDate}
+                onChange={(event) =>
+                  setExpenseDraft((current) => ({ ...current, dueDate: event.target.value }))
+                }
+              />
+            </label>
+            <label className="full-width">
+              הערה או אסמכתה
+              <input
+                value={expenseDraft.note}
+                onChange={(event) =>
+                  setExpenseDraft((current) => ({ ...current, note: event.target.value }))
+                }
+                placeholder="לדוגמה: רבעון 3 או מספר אסמכתה"
+              />
+            </label>
+          </div>
+          <p className="info-box">
+            המערכת אינה קובעת את שיעור התשלום או את מועדו המשפטי. יש להזין את הנתונים מהדרישה
+            שקיבלתם ולאמת אותם מול גורם מוסמך.
+          </p>
+          <button className="primary-button" type="submit">
+            הוספת תשלום למעקב
+          </button>
+        </form>
+        {expenses.length > 0 ? (
+          <div className="detail-list employment-expenses">
+            {expenses.map((expense) => (
+              <div key={expense.id}>
+                <span>
+                  <strong>{expense.category}</strong>
+                  <small>
+                    {expense.frequency === 'monthly'
+                      ? 'חודשי'
+                      : expense.frequency === 'quarterly'
+                        ? 'רבעוני'
+                        : expense.frequency === 'annual'
+                          ? 'שנתי'
+                          : 'חד־פעמי'}{' '}
+                    · יעד {expense.dueDate}
+                    {expense.note ? ` · ${expense.note}` : ''}
+                  </small>
+                </span>
+                <strong>{money.format(expense.amount)}</strong>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => toggleExpense(expense)}
+                >
+                  {expense.status === 'paid' ? 'שולם ✓' : 'סימון כשולם'}
+                </button>
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => removeExpense(expense.id)}
+                >
+                  מחיקה
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-copy">עדיין לא נשמרו תשלומים תקופתיים.</p>
+        )}
       </section>
       {records.length > 0 ? (
         <section className="card">

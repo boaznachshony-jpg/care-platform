@@ -88,18 +88,43 @@ export interface MvpPayrollRecord {
   month: string;
   baseSalary: number;
   workDays: number;
+  vacationDays?: number;
+  sickDays?: number;
+  absenceDays?: number;
   paidSaturdays: number;
+  paidHolidays?: number;
   saturdayPay: number;
+  holidayPay?: number;
+  vacationPay?: number;
+  sickPay?: number;
   pocketMoney: number;
+  employerContributions?: number;
   otherAddition: number;
+  medicalInsuranceDeduction?: number;
+  housingDeduction?: number;
   advances: number;
   agreedDeduction: number;
   total: number;
   savedAt: string;
 }
 
+export type EmploymentExpenseFrequency = 'monthly' | 'quarterly' | 'annual' | 'one_time';
+export type EmploymentExpenseStatus = 'upcoming' | 'paid';
+
+export interface MvpEmploymentExpense {
+  id: string;
+  category: string;
+  frequency: EmploymentExpenseFrequency;
+  amount: number;
+  dueDate: string;
+  status: EmploymentExpenseStatus;
+  note: string;
+  savedAt: string;
+}
+
 const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
 const PAYROLL_STORAGE_NAME = 'caredesk.mvp.payroll.v1';
+const EMPLOYMENT_EXPENSES_KEY = 'caredesk.mvp.employment-expenses.v1';
 
 function readList<T>(key: string): T[] {
   if (!isBrowser()) return [];
@@ -131,4 +156,12 @@ export function readMvpPayroll(): MvpPayrollRecord[] {
 
 export function saveMvpPayroll(records: MvpPayrollRecord[]): void {
   saveList(PAYROLL_STORAGE_NAME, records);
+}
+
+export function readMvpEmploymentExpenses(): MvpEmploymentExpense[] {
+  return readList<MvpEmploymentExpense>(EMPLOYMENT_EXPENSES_KEY);
+}
+
+export function saveMvpEmploymentExpenses(expenses: MvpEmploymentExpense[]): void {
+  saveList(EMPLOYMENT_EXPENSES_KEY, expenses);
 }

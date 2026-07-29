@@ -80,6 +80,19 @@ test('mobile controls remain readable and touch friendly', async ({ page }) => {
   expect(box?.height).toBeGreaterThanOrEqual(48);
 });
 
+test('mobile navigation keeps payroll accessible', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('navigation', { name: 'ניווט תחתון' })).toContainText('שכר');
+  await page
+    .getByRole('navigation', { name: 'ניווט תחתון' })
+    .getByRole('link', { name: '₪ שכר' })
+    .click();
+  await expect(page).toHaveURL(/\/payroll$/);
+  await expect(page.getByRole('heading', { name: 'הכנת שכר חודשי' })).toBeVisible();
+});
+
 const productRoutes = [
   ['/', 'שלום בועז בדיקה'],
   ['/tasks', 'מה צריך לבצע'],
@@ -128,6 +141,22 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'חישובים שנשמרו' })).toBeVisible();
+});
+
+test('tracks quarterly and annual employment expenses', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/payroll');
+  await expect(page.getByRole('heading', { name: 'תשלומים תקופתיים של ההעסקה' })).toBeVisible();
+  await page.getByLabel('סוג התשלום').selectOption({ label: 'ביטוח לאומי' });
+  await page.getByLabel('תדירות').selectOption('quarterly');
+  await page.getByLabel('סכום בש״ח').fill('1840');
+  await page.getByLabel('תאריך יעד').fill('2026-09-30');
+  await page.getByLabel('הערה או אסמכתה').fill('רבעון שלישי');
+  await page.getByRole('button', { name: 'הוספת תשלום למעקב' }).click();
+  await expect(page.getByText('התשלום התקופתי נשמר בלוח עלויות ההעסקה.')).toBeVisible();
+  await expect(page.getByText('רבעוני · יעד 2026-09-30 · רבעון שלישי')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('ביטוח לאומי', { exact: true })).toBeVisible();
 });
 
 test('adds, opens, edits and persists a realistic image document', async ({ page }) => {

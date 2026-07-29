@@ -16,6 +16,14 @@ const nav = [
   ['/payroll', '₪', 'שכר'],
 ] as const;
 
+const mobileNav = [
+  ['/', '⌂', 'בית'],
+  ['/tasks', '✓', 'משימות'],
+  ['/payroll', '₪', 'שכר'],
+  ['/documents', '▣', 'מסמכים'],
+  ['/settings', '•••', 'עוד'],
+] as const;
+
 export function AppShell({ children }: AppShellProps) {
   return (
     <div className="app-frame">
@@ -61,7 +69,7 @@ export function AppShell({ children }: AppShellProps) {
           {children}
         </main>
         <nav className="mobile-nav" aria-label="ניווט תחתון">
-          {nav.slice(0, 5).map(([to, icon, label]) => (
+          {mobileNav.map(([to, icon, label]) => (
             <NavLink key={to} to={to} end={to === '/'}>
               <span>{icon}</span>
               <small>{label}</small>

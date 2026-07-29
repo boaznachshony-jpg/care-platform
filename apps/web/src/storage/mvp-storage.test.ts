@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   emptyMvpProfile,
   readMvpDocuments,
+  readMvpEmploymentExpenses,
   readMvpPayroll,
   readMvpProfile,
   saveMvpDocuments,
+  saveMvpEmploymentExpenses,
   saveMvpPayroll,
   saveMvpProfile,
 } from './mvp-storage.js';
@@ -61,5 +63,25 @@ describe('MVP local storage', () => {
     ]);
     expect(readMvpDocuments()).toHaveLength(1);
     expect(readMvpPayroll()[0]?.total).toBe(7900);
+  });
+
+  it('persists periodic employment expenses', () => {
+    saveMvpEmploymentExpenses([
+      {
+        id: 'expense-1',
+        category: 'ביטוח לאומי',
+        frequency: 'quarterly',
+        amount: 1840,
+        dueDate: '2026-09-30',
+        status: 'upcoming',
+        note: 'רבעון שלישי',
+        savedAt: '2026-07-29T00:00:00.000Z',
+      },
+    ]);
+    expect(readMvpEmploymentExpenses()[0]).toMatchObject({
+      category: 'ביטוח לאומי',
+      frequency: 'quarterly',
+      amount: 1840,
+    });
   });
 });

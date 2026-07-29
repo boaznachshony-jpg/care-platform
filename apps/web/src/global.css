@@ -864,6 +864,39 @@ a {
   grid-template-columns: repeat(3, 1fr);
   gap: 15px;
 }
+.form-grid .full-width {
+  grid-column: 1 / -1;
+}
+.employment-expenses > div {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.employment-expenses span {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 260px;
+}
+.employment-expenses span strong {
+  color: #26364f;
+}
+.employment-expenses span small {
+  color: #728093;
+}
+.employment-expenses .secondary-button {
+  min-height: 44px;
+}
+.text-button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: #a33a3a;
+  font-weight: 700;
+  cursor: pointer;
+}
+.empty-copy {
+  color: #728093;
+  margin-top: 18px;
+}
 .info-box {
   background: #eef5ff;
   border-radius: 13px;
