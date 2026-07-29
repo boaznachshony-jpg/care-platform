@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "CareDesk localStorage payroll namespace is a public browser key, not a credential"
+regexTarget = "match"
+regexes = ['''caredesk\.mvp\.payroll\.v1''']
