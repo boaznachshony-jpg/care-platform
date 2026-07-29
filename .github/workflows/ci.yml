@@ -52,6 +52,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build workspace packages
+        run: pnpm build
       - name: Install Chromium
         run: pnpm --filter @caredesk/web exec playwright install --with-deps chromium
       - name: Run end-to-end tests
