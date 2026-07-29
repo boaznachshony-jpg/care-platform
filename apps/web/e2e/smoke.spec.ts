@@ -156,7 +156,7 @@ test('tracks quarterly and annual employment expenses', async ({ page }) => {
   await expect(page.getByText('התשלום התקופתי נשמר בלוח עלויות ההעסקה.')).toBeVisible();
   await expect(page.getByText('רבעוני · יעד 2026-09-30 · רבעון שלישי')).toBeVisible();
   await page.reload();
-  await expect(page.getByText('ביטוח לאומי', { exact: true })).toBeVisible();
+  await expect(page.locator('.employment-expenses strong').getByText('ביטוח לאומי')).toBeVisible();
 });
 
 test('adds, opens, edits and persists a realistic image document', async ({ page }) => {

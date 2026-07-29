@@ -124,7 +124,7 @@ export interface MvpEmploymentExpense {
 
 const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
 const PAYROLL_STORAGE_NAME = 'caredesk.mvp.payroll.v1';
-const EMPLOYMENT_EXPENSES_KEY = 'caredesk.mvp.employment-expenses.v1';
+const EMPLOYMENT_EXPENSES_STORAGE_NAME = 'caredesk.mvp.employment-expenses.v1';
 
 function readList<T>(key: string): T[] {
   if (!isBrowser()) return [];
@@ -159,9 +159,9 @@ export function saveMvpPayroll(records: MvpPayrollRecord[]): void {
 }
 
 export function readMvpEmploymentExpenses(): MvpEmploymentExpense[] {
-  return readList<MvpEmploymentExpense>(EMPLOYMENT_EXPENSES_KEY);
+  return readList<MvpEmploymentExpense>(EMPLOYMENT_EXPENSES_STORAGE_NAME);
 }
 
 export function saveMvpEmploymentExpenses(expenses: MvpEmploymentExpense[]): void {
-  saveList(EMPLOYMENT_EXPENSES_KEY, expenses);
+  saveList(EMPLOYMENT_EXPENSES_STORAGE_NAME, expenses);
 }
