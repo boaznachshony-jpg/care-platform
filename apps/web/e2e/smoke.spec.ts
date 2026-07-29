@@ -7,6 +7,27 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
+const completedProfile = {
+  employerName: 'בועז בדיקה',
+  employerPhone: '0501234567',
+  recipientName: 'מטופל בדיקה',
+  caregiverName: 'Caregiver Test',
+  employmentStartDate: '2026-01-15',
+  representativeName: 'נציג בדיקה',
+  representativePhone: '0521234567',
+  notificationsEnabled: true,
+  reminderLeadDays: 7,
+  quietHoursStart: '21:00',
+  quietHoursEnd: '08:00',
+  onboardingCompleted: true,
+};
+
+async function seedCompletedProfile(page: import('@playwright/test').Page) {
+  await page.evaluate((profile) => {
+    localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
+  }, completedProfile);
+}
+
 test('completes onboarding, persists data and updates settings', async ({ page }) => {
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -51,4 +72,60 @@ test('mobile controls remain readable and touch friendly', async ({ page }) => {
   await expect(continueButton).toBeVisible();
   const box = await continueButton.boundingBox();
   expect(box?.height).toBeGreaterThanOrEqual(48);
+});
+
+const productRoutes = [
+  ['/', 'שלום בועז בדיקה'],
+  ['/tasks', 'מה צריך לבצע'],
+  ['/employee', 'Maria Santos'],
+  ['/documents', 'כל המסמכים במקום אחד'],
+  ['/timeline', 'המועדים הבאים'],
+  ['/payroll', 'הכנת שכר חודשי'],
+  ['/settings', 'פרטים והעדפות'],
+] as const;
+
+for (const [route, heading] of productRoutes) {
+  test(`renders ${route} after onboarding`, async ({ page }) => {
+    await seedCompletedProfile(page);
+    await page.goto(route);
+    await expect(page.getByRole('main')).toContainText(heading);
+    await expect(page.getByRole('main')).toBeVisible();
+  });
+}
+
+test('marks and restores a task in the current session', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/tasks');
+  const task = page.getByRole('article').filter({ hasText: 'בדיקת ביטוח רפואי' });
+  const checkbox = task.getByRole('button').first();
+  await checkbox.click();
+  await expect(task).toHaveClass(/completed/);
+  await checkbox.click();
+  await expect(task).not.toHaveClass(/completed/);
+});
+
+test('walks through all payroll steps', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/payroll');
+  const next = page.getByRole('button', { name: 'המשך' });
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'שכר בסיס' })).toBeVisible();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'תוספות' })).toBeVisible();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'ניכויים' })).toBeVisible();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'סיכום ואישור' })).toBeVisible();
+});
+
+test('notification master switch disables reminder timing', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/settings');
+  const masterSwitch = page.getByRole('checkbox', { name: 'הפעלת כל ההתראות' });
+  const reminderSelect = page.getByLabel('כמה זמן מראש להזכיר?');
+  await masterSwitch.uncheck();
+  await expect(reminderSelect).toBeDisabled();
+  await page.getByRole('button', { name: 'שמירת השינויים' }).click();
+  await page.reload();
+  await expect(masterSwitch).not.toBeChecked();
 });
