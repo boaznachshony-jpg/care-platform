@@ -1,7 +1,9 @@
+/* eslint-disable no-restricted-syntax */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
 
 export function OnboardingPage() {
   const { t } = useTranslation();
@@ -23,6 +25,8 @@ export function OnboardingPage() {
       title: t('onboarding.employment'),
       fields: [
         ['caregiverName', t('profile.caregiverName'), 'text'],
+        ['caregiverCountry', 'ארץ מוצא', 'country'],
+        ['caregiverLanguage', 'שפה מועדפת', 'language'],
         ['employmentStartDate', t('profile.startDate'), 'date'],
       ],
     },
@@ -74,13 +78,37 @@ export function OnboardingPage() {
           {current.fields.map(([key, label, type]) => (
             <label key={key}>
               {label}
-              <input
-                type={type}
-                value={draft[key]}
-                required
-                dir={type === 'tel' || type === 'date' ? 'ltr' : undefined}
-                onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
-              />
+              {type === 'country' || type === 'language' ? (
+                <select
+                  value={draft[key]}
+                  required
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDraft({
+                      ...draft,
+                      [key]: value,
+                      ...(type === 'country' && !draft.caregiverLanguage
+                        ? { caregiverLanguage: suggestedLanguage(value) }
+                        : {}),
+                    });
+                  }}
+                >
+                  <option value="">בחירה</option>
+                  {(type === 'country' ? caregiverCountries : caregiverLanguages).map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type={type}
+                  value={draft[key]}
+                  required
+                  dir={type === 'tel' || type === 'date' ? 'ltr' : undefined}
+                  onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+                />
+              )}
             </label>
           ))}
           <div className="wizard-actions">

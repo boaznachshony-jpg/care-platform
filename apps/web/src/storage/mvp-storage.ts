@@ -5,6 +5,8 @@ export interface MvpProfile {
   employerPhone: string;
   recipientName: string;
   caregiverName: string;
+  caregiverCountry: string;
+  caregiverLanguage: string;
   employmentStartDate: string;
   representativeName: string;
   representativePhone: string;
@@ -25,6 +27,8 @@ export const emptyMvpProfile: MvpProfile = {
   employerPhone: '',
   recipientName: '',
   caregiverName: '',
+  caregiverCountry: '',
+  caregiverLanguage: '',
   employmentStartDate: '',
   representativeName: '',
   representativePhone: '',

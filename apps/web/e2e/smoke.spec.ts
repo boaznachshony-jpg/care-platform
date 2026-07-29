@@ -12,6 +12,8 @@ const completedProfile = {
   employerPhone: '0501234567',
   recipientName: 'מטופל בדיקה',
   caregiverName: 'Caregiver Test',
+  caregiverCountry: 'אוזבקיסטן',
+  caregiverLanguage: 'אוזבקית',
   employmentStartDate: '2026-01-15',
   representativeName: 'נציג בדיקה',
   representativePhone: '0521234567',
@@ -40,6 +42,8 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByRole('button', { name: 'המשך' }).click();
 
   await page.getByLabel('שם המטפל או המטפלת').fill('Caregiver Test');
+  await page.getByLabel('ארץ מוצא').selectOption('אוזבקיסטן');
+  await page.getByLabel('שפה מועדפת').selectOption('אוזבקית');
   await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
   await page.getByRole('button', { name: 'המשך' }).click();
 
@@ -79,7 +83,8 @@ test('mobile controls remain readable and touch friendly', async ({ page }) => {
 const productRoutes = [
   ['/', 'שלום בועז בדיקה'],
   ['/tasks', 'מה צריך לבצע'],
-  ['/employee', 'Maria Santos'],
+  ['/employee', 'Caregiver Test'],
+  ['/trust', 'מסרים לבניית אמון'],
   ['/documents', 'כל המסמכים במקום אחד'],
   ['/timeline', 'המועדים הבאים'],
   ['/payroll', 'הכנת שכר חודשי'],
@@ -161,6 +166,15 @@ test('requires an explicit salary source before payroll', async ({ page }) => {
   await page.goto('/payroll');
   await expect(page.getByRole('heading', { name: 'הגדרת מקור השכר' })).toBeVisible();
   await expect(page.getByText('טרם הוגדר')).toBeVisible();
+});
+
+test('saves Uzbekistan as caregiver country and shows Uzbek trust messages', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/employee');
+  await expect(page.getByText('אוזבקיסטן · תחילת העסקה 2026-01-15')).toBeVisible();
+  await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
+  await expect(page.getByText('ארץ מוצא: אוזבקיסטן · שפה שנבחרה: אוזבקית')).toBeVisible();
+  await expect(page.getByText('Rahmat. Yordamingizni qadrlayman.')).toBeVisible();
 });
 
 test('notification master switch disables reminder timing', async ({ page }) => {

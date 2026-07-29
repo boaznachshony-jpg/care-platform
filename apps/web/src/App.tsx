@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage.js';
 import { OpenCasePage } from './pages/OpenCasePage.js';
 import { CasePage } from './pages/CasePage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
+import { TrustMessagesPage } from './pages/TrustMessagesPage.js';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 
 export function App() {
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/employee" element={<EmployeePage />} />
+        <Route path="/trust" element={<TrustMessagesPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/payroll" element={<PayrollPage />} />
