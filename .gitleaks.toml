@@ -2,5 +2,8 @@
 useDefault = true
 
 [allowlist]
-description = "CareDesk localStorage payroll namespace is a public browser key, not a credential"
-commits = ["3fcc094afef059a4cffef7e799fd495a8c5ff2a4"]
+description = "CareDesk localStorage namespaces are public browser keys, not credentials"
+commits = [
+  "3fcc094afef059a4cffef7e799fd495a8c5ff2a4",
+  "34791af7ddc5b2926feed250bc5602d3c35323c5",
+]
