@@ -9,12 +9,21 @@ import { PayrollPage } from './pages/PayrollPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { OpenCasePage } from './pages/OpenCasePage.js';
 import { CasePage } from './pages/CasePage.js';
+import { OnboardingPage } from './pages/OnboardingPage.js';
+import { useMvpProfile } from './hooks/use-mvp-profile.js';
 
 export function App() {
+  const [profile] = useMvpProfile();
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
+        <Route
+          path="/"
+          element={
+            profile.onboardingCompleted ? <DashboardPage /> : <Navigate to="/onboarding" replace />
+          }
+        />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/employee" element={<EmployeePage />} />
         <Route path="/documents" element={<DocumentsPage />} />

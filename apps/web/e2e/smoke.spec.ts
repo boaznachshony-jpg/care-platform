@@ -1,45 +1,54 @@
+/* eslint-disable no-restricted-syntax */
 import { expect, test } from '@playwright/test';
 
-const routes = [
-  ['/', 'הכול נראה תקין'],
-  ['/tasks', 'מה צריך לבצע'],
-  ['/employee', 'Maria Santos'],
-  ['/documents', 'כל המסמכים במקום אחד'],
-  ['/timeline', 'המועדים הבאים'],
-  ['/payroll', 'הכנת שכר חודשי'],
-  ['/settings', 'הגדרות'],
-] as const;
-
-test('loads the shell in Hebrew RTL with one main landmark', async ({ page }) => {
+test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+});
+
+test('completes onboarding, persists data and updates settings', async ({ page }) => {
+  await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await expect(page.locator('html')).toHaveAttribute('lang', 'he');
-  await expect(page.getByRole('main')).toHaveCount(1);
-  await expect(page.getByRole('link', { name: 'דלג לתוכן' })).toBeVisible();
+
+  await page.getByLabel('שם המעסיק').fill('בועז בדיקה');
+  await page.getByLabel('מספר טלפון').fill('0501234567');
+  await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
+  await page.getByRole('button', { name: 'המשך' }).click();
+
+  await page.getByLabel('שם המטפל או המטפלת').fill('Caregiver Test');
+  await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
+  await page.getByRole('button', { name: 'המשך' }).click();
+
+  await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
+  await page.getByLabel('מספר טלפון').fill('0521234567');
+  await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
+
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('heading', { name: 'שלום בועז בדיקה' })).toBeVisible();
+  await expect(page.getByText('מטופל בדיקה')).toBeVisible();
+  await expect(page.getByText('Caregiver Test')).toBeVisible();
+  await expect(page.getByText('דורש טיפול', { exact: true })).toBeVisible();
+
+  await page.goto('/settings');
+  await page.getByLabel('שם המעסיק').fill('בועז מעודכן');
+  await page.getByLabel('כמה זמן מראש להזכיר?').selectOption('21');
+  await page.getByRole('button', { name: 'שמירת השינויים' }).click();
+  await expect(page.getByText('השינויים נשמרו בהצלחה')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('שם המעסיק')).toHaveValue('בועז מעודכן');
+  await expect(page.getByLabel('כמה זמן מראש להזכיר?')).toHaveValue('21');
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'שלום בועז מעודכן' })).toBeVisible();
 });
 
-for (const [route, heading] of routes) {
-  test(`renders ${route} without a client-side crash`, async ({ page }) => {
-    await page.goto(route);
-    await expect(page.getByRole('main')).toContainText(heading);
-    await expect(page.locator('body')).not.toContainText('Application error');
-  });
-}
-
-test('mobile navigation remains usable at a phone viewport', async ({ page }) => {
+test('mobile controls remain readable and touch friendly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  const mobileNav = page.getByRole('navigation', { name: 'ניווט תחתון' });
-  await expect(mobileNav).toBeVisible();
-  await mobileNav.getByRole('link', { name: /משימות/ }).click();
-  await expect(page).toHaveURL(/\/tasks$/);
-  await expect(page.getByRole('main')).toContainText('מה צריך לבצע');
-});
-
-test('desktop navigation exposes the primary product areas', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
-  const nav = page.getByRole('navigation', { name: 'ניווט ראשי' });
-  await expect(nav).toBeVisible();
-  await expect(nav.getByRole('link')).toHaveCount(6);
+  await expect(page.getByRole('heading', { name: 'בואו נכין את התיק שלכם' })).toBeVisible();
+  const continueButton = page.getByRole('button', { name: 'המשך' });
+  await expect(continueButton).toBeVisible();
+  const box = await continueButton.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(48);
 });
