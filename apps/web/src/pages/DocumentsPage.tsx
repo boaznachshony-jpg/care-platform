@@ -1,13 +1,19 @@
 /* eslint-disable no-restricted-syntax */
 import { useRef, useState } from 'react';
 import {
+  deleteDocumentFile,
+  readDocumentFile,
+  saveDocumentFile,
+} from '../storage/document-file-store.js';
+import {
   readMvpDocuments,
   saveMvpDocuments,
   type MvpDocument,
   type MvpDocumentStatus,
 } from '../storage/mvp-storage.js';
 
-const MAX_FILE_SIZE = 1_500_000;
+const MAX_FILE_SIZE = 10_000_000;
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
 const emptyDraft = {
   name: '',
@@ -53,53 +59,64 @@ export function DocumentsPage() {
 
   async function saveDocument(event: React.FormEvent) {
     event.preventDefault();
-    const existing = documents.find((document) => document.id === editingId);
-    if (!existing && !file) {
-      setMessage('יש לבחור קובץ לפני השמירה.');
-      return;
-    }
-    if (file && file.size > MAX_FILE_SIZE) {
-      setMessage('הקובץ גדול מדי לגרסת הבדיקות. ניתן להעלות קובץ עד 1.5MB.');
-      return;
-    }
+    try {
+      const existing = documents.find((document) => document.id === editingId);
+      if (!existing && !file) {
+        setMessage('יש לבחור קובץ לפני השמירה.');
+        return;
+      }
+      if (file && file.size > MAX_FILE_SIZE) {
+        setMessage('הקובץ גדול מדי. ניתן להעלות PDF או תמונה עד 10MB.');
+        return;
+      }
+      if (file && !ALLOWED_FILE_TYPES.includes(file.type)) {
+        setMessage('סוג הקובץ אינו נתמך. ניתן להעלות PDF, JPG או PNG.');
+        return;
+      }
 
-    const dataUrl = file
-      ? await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error('file-read-failed'));
-          reader.readAsDataURL(file);
-        })
-      : (existing?.dataUrl ?? '');
+      const id = existing?.id ?? crypto.randomUUID();
+      if (file) await saveDocumentFile(id, file);
 
-    const saved: MvpDocument = {
-      id: existing?.id ?? crypto.randomUUID(),
-      ...draft,
-      fileName: file?.name ?? existing?.fileName ?? '',
-      fileType: file?.type ?? existing?.fileType ?? '',
-      dataUrl,
-      updatedAt: new Date().toISOString(),
-    };
-    persist(
-      existing
-        ? documents.map((item) => (item.id === existing.id ? saved : item))
-        : [saved, ...documents],
-    );
-    resetForm();
-    setMessage(existing ? 'פרטי המסמך עודכנו ונשמרו.' : 'המסמך נוסף ונשמר.');
+      const saved: MvpDocument = {
+        id,
+        ...draft,
+        fileName: file?.name ?? existing?.fileName ?? '',
+        fileType: file?.type ?? existing?.fileType ?? '',
+        updatedAt: new Date().toISOString(),
+      };
+      persist(
+        existing
+          ? documents.map((item) => (item.id === existing.id ? saved : item))
+          : [saved, ...documents],
+      );
+      resetForm();
+      setMessage(existing ? 'פרטי המסמך עודכנו ונשמרו.' : 'המסמך נוסף ונשמר.');
+    } catch {
+      setMessage(
+        'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.',
+      );
+    }
   }
 
-  function openDocument(document: MvpDocument) {
+  async function openDocument(document: MvpDocument) {
+    const storedFile = await readDocumentFile(document.id);
+    const href = storedFile ? URL.createObjectURL(storedFile) : document.dataUrl;
+    if (!href) {
+      setMessage('הקובץ אינו נמצא במכשיר זה. ניתן לערוך את המסמך ולהעלות אותו מחדש.');
+      return;
+    }
     const link = window.document.createElement('a');
-    link.href = document.dataUrl;
+    link.href = href;
     link.download = document.fileName || document.name;
     link.target = '_blank';
     link.rel = 'noopener';
     link.click();
+    if (storedFile) window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
   }
 
-  function removeDocument(document: MvpDocument) {
+  async function removeDocument(document: MvpDocument) {
     if (!window.confirm(`למחוק את "${document.name}"?`)) return;
+    await deleteDocumentFile(document.id);
     persist(documents.filter((item) => item.id !== document.id));
     setMessage('המסמך נמחק.');
   }
@@ -194,7 +211,7 @@ export function DocumentsPage() {
             </label>
           </div>
           <p className="form-note">
-            PDF או תמונה עד 1.5MB. בגרסת הבדיקות הקובץ נשמר רק בדפדפן ובמכשיר הנוכחי.
+            PDF, JPG או PNG עד 10MB. בגרסת הבדיקות הקובץ נשמר רק בדפדפן ובמכשיר הנוכחי.
           </p>
           <button className="primary-button" type="submit">
             שמירת המסמך
@@ -228,7 +245,7 @@ export function DocumentsPage() {
                 <button
                   className="secondary-button"
                   type="button"
-                  onClick={() => openDocument(document)}
+                  onClick={() => void openDocument(document)}
                 >
                   פתיחה
                 </button>
@@ -242,7 +259,7 @@ export function DocumentsPage() {
                 <button
                   className="danger-button"
                   type="button"
-                  onClick={() => removeDocument(document)}
+                  onClick={() => void removeDocument(document)}
                 >
                   מחיקה
                 </button>

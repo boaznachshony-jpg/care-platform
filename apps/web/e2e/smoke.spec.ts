@@ -125,7 +125,7 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'חישובים שנשמרו' })).toBeVisible();
 });
 
-test('adds, edits and persists a document', async ({ page }) => {
+test('adds, opens, edits and persists a realistic image document', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/documents');
   await expect(page.getByText('עדיין לא נוספו מסמכים')).toBeVisible();
@@ -134,9 +134,9 @@ test('adds, edits and persists a document', async ({ page }) => {
   await page.getByLabel('סוג').selectOption('דרכון');
   await page.getByLabel('תאריך או הערה').fill('בתוקף עד 31.12.2028');
   await page.getByLabel('בחירת קובץ').setInputFiles({
-    name: 'passport.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('test document'),
+    name: 'passport.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.alloc(2_000_000, 1),
   });
   await page.getByRole('button', { name: 'שמירת המסמך' }).click();
   await expect(page.getByRole('heading', { name: 'דרכון בדיקה' })).toBeVisible();
@@ -146,6 +146,9 @@ test('adds, edits and persists a document', async ({ page }) => {
   await page.getByRole('button', { name: 'שמירת המסמך' }).click();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'דרכון מעודכן' })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'פתיחה' }).click();
+  await expect((await download).suggestedFilename()).toBe('passport.jpg');
 });
 
 test('requires an explicit salary source before payroll', async ({ page }) => {

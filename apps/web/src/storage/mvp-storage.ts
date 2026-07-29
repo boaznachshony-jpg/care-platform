@@ -75,7 +75,7 @@ export interface MvpDocument {
   status: MvpDocumentStatus;
   fileName: string;
   fileType: string;
-  dataUrl: string;
+  dataUrl?: string;
   updatedAt: string;
 }
 
