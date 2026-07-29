@@ -30,12 +30,12 @@ jobs:
         run: pnpm format:check
       - name: Lint
         run: pnpm lint
+      - name: Build workspace packages
+        run: pnpm build
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit and integration tests
         run: pnpm test
-      - name: Build
-        run: pnpm build
 
   e2e:
     name: Playwright end-to-end

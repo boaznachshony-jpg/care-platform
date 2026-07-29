@@ -95,7 +95,7 @@ export interface MvpPayrollRecord {
 }
 
 const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
-const PAYROLL_KEY = 'caredesk.mvp.payroll.v1';
+const PAYROLL_STORAGE_NAME = 'caredesk.mvp.payroll.v1';
 
 function readList<T>(key: string): T[] {
   if (!isBrowser()) return [];
@@ -122,9 +122,9 @@ export function saveMvpDocuments(documents: MvpDocument[]): void {
 }
 
 export function readMvpPayroll(): MvpPayrollRecord[] {
-  return readList<MvpPayrollRecord>(PAYROLL_KEY);
+  return readList<MvpPayrollRecord>(PAYROLL_STORAGE_NAME);
 }
 
 export function saveMvpPayroll(records: MvpPayrollRecord[]): void {
-  saveList(PAYROLL_KEY, records);
+  saveList(PAYROLL_STORAGE_NAME, records);
 }
