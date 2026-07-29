@@ -1,6 +1,6 @@
 [extend]
 useDefault = true
 
-[[allowlists]]
+[allowlist]
 description = "CareDesk localStorage payroll namespace is a public browser key, not a credential"
 commits = ["3fcc094afef059a4cffef7e799fd495a8c5ff2a4"]
