@@ -1,6 +1,7 @@
 # CareDesk build status
 
 ## Included in this delivery
+
 - Fully responsive RTL application shell for desktop, tablet and mobile.
 - Operational navigation and screens for dashboard, tasks, employee, documents, timeline, payroll and settings.
 - Accessible touch targets, readable typography, responsive grids and bottom mobile navigation.
@@ -12,6 +13,7 @@
 - API build command now builds all transitive workspace dependencies before the API.
 
 ## Production hardening still required before real personal data
+
 - Replace mock authentication with a managed identity provider and MFA.
 - Provision managed PostgreSQL, execute migrations and verify row-level security.
 - Replace in-memory document storage with encrypted object storage and signed URLs.

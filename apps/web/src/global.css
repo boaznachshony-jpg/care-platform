@@ -662,6 +662,38 @@ a {
   align-items: center;
   gap: 14px;
 }
+.document-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.danger-button {
+  min-height: 48px;
+  border: 1px solid #c74646;
+  border-radius: 12px;
+  padding: 0 16px;
+  color: #a52828;
+  background: #fff;
+  font-weight: 800;
+}
+.document-editor {
+  display: grid;
+  gap: 18px;
+}
+.form-note {
+  color: #657286;
+  font-size: 0.95rem;
+  grid-column: 1 / -1;
+}
+.empty-panel {
+  text-align: center;
+  padding: 38px 20px;
+}
+.pay-summary small {
+  display: block;
+  color: #68778a;
+  font-weight: 500;
+}
 .doc-icon {
   width: 48px;
   height: 48px;
@@ -971,7 +1003,7 @@ dd {
   .document-card {
     grid-template-columns: auto 1fr auto;
   }
-  .document-card > .secondary-button {
+  .document-card > .document-actions {
     grid-column: 2/-1;
   }
   .form-grid {

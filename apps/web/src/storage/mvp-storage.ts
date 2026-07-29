@@ -13,6 +13,8 @@ export interface MvpProfile {
   quietHoursStart: string;
   quietHoursEnd: string;
   onboardingCompleted: boolean;
+  baseSalary: number | null;
+  salaryEffectiveDate: string;
 }
 
 const STORAGE_KEY = 'caredesk.mvp.profile.v1';
@@ -31,6 +33,8 @@ export const emptyMvpProfile: MvpProfile = {
   quietHoursStart: '21:00',
   quietHoursEnd: '08:00',
   onboardingCompleted: false,
+  baseSalary: null,
+  salaryEffectiveDate: '',
 };
 
 function isBrowser(): boolean {
@@ -59,4 +63,68 @@ export function updateMvpProfile(changes: Partial<MvpProfile>): MvpProfile {
   const updated = { ...readMvpProfile(), ...changes };
   saveMvpProfile(updated);
   return updated;
+}
+
+export type MvpDocumentStatus = 'valid' | 'attention';
+
+export interface MvpDocument {
+  id: string;
+  name: string;
+  category: string;
+  dateLabel: string;
+  status: MvpDocumentStatus;
+  fileName: string;
+  fileType: string;
+  dataUrl: string;
+  updatedAt: string;
+}
+
+export interface MvpPayrollRecord {
+  id: string;
+  month: string;
+  baseSalary: number;
+  workDays: number;
+  paidSaturdays: number;
+  saturdayPay: number;
+  pocketMoney: number;
+  otherAddition: number;
+  advances: number;
+  agreedDeduction: number;
+  total: number;
+  savedAt: string;
+}
+
+const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
+const PAYROLL_KEY = 'caredesk.mvp.payroll.v1';
+
+function readList<T>(key: string): T[] {
+  if (!isBrowser()) return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown;
+    return Array.isArray(value) ? (value as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveList<T>(key: string, value: T[]): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+}
+
+export function readMvpDocuments(): MvpDocument[] {
+  return readList<MvpDocument>(DOCUMENTS_KEY);
+}
+
+export function saveMvpDocuments(documents: MvpDocument[]): void {
+  saveList(DOCUMENTS_KEY, documents);
+}
+
+export function readMvpPayroll(): MvpPayrollRecord[] {
+  return readList<MvpPayrollRecord>(PAYROLL_KEY);
+}
+
+export function saveMvpPayroll(records: MvpPayrollRecord[]): void {
+  saveList(PAYROLL_KEY, records);
 }

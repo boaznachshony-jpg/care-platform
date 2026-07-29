@@ -20,6 +20,8 @@ const completedProfile = {
   quietHoursStart: '21:00',
   quietHoursEnd: '08:00',
   onboardingCompleted: true,
+  baseSalary: 7000,
+  salaryEffectiveDate: '2026-01-15',
 };
 
 async function seedCompletedProfile(page: import('@playwright/test').Page) {
@@ -116,6 +118,46 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'ניכויים' })).toBeVisible();
   await next.click();
   await expect(page.getByRole('heading', { name: 'סיכום ואישור' })).toBeVisible();
+  await expect(page.getByText('נתוני העסקה', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'אישור ושמירה' }).click();
+  await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'חישובים שנשמרו' })).toBeVisible();
+});
+
+test('adds, edits and persists a document', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/documents');
+  await expect(page.getByText('עדיין לא נוספו מסמכים')).toBeVisible();
+  await page.getByRole('button', { name: '↑ הוספת מסמך' }).click();
+  await page.getByLabel('שם המסמך').fill('דרכון בדיקה');
+  await page.getByLabel('סוג').selectOption('דרכון');
+  await page.getByLabel('תאריך או הערה').fill('בתוקף עד 31.12.2028');
+  await page.getByLabel('בחירת קובץ').setInputFiles({
+    name: 'passport.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('test document'),
+  });
+  await page.getByRole('button', { name: 'שמירת המסמך' }).click();
+  await expect(page.getByRole('heading', { name: 'דרכון בדיקה' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'עריכה' }).click();
+  await page.getByLabel('שם המסמך').fill('דרכון מעודכן');
+  await page.getByRole('button', { name: 'שמירת המסמך' }).click();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'דרכון מעודכן' })).toBeVisible();
+});
+
+test('requires an explicit salary source before payroll', async ({ page }) => {
+  await page.evaluate((profile) => {
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({ ...profile, baseSalary: null, salaryEffectiveDate: '' }),
+    );
+  }, completedProfile);
+  await page.goto('/payroll');
+  await expect(page.getByRole('heading', { name: 'הגדרת מקור השכר' })).toBeVisible();
+  await expect(page.getByText('טרם הוגדר')).toBeVisible();
 });
 
 test('notification master switch disables reminder timing', async ({ page }) => {

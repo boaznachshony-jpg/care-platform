@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 import { useState } from 'react';
 const seed = [
   ['בדיקת ביטוח רפואי', '03.08.2026', 'מומלץ'],

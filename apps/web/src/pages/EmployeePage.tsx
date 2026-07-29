@@ -1,2 +1,104 @@
 import { Link } from 'react-router-dom';
-export function EmployeePage(){return <div className="page-stack"><header className="page-header"><div><p className="eyebrow">עובד ומסמכים</p><h1>Maria Santos</h1><p>מטפלת סיעודית · העסקה פעילה</p></div><span className="pill green">הכול בתוקף</span></header><section className="profile-card"><div className="large-avatar">MS</div><div><h2>Maria Santos</h2><p>פיליפינים · התחלת העסקה 14.01.2025</p><div className="mini-facts"><span>טלפון: 050-555-0182</span><span>שפה: אנגלית</span><span>מגורים: בבית המטופל</span></div></div><button className="secondary-button">עריכת פרטים</button></section><div className="dashboard-grid"><section className="card"><div className="section-heading"><h2>מצב ההעסקה</h2><span className="pill green">תקין</span></div><div className="detail-list"><div><span>אשרת עבודה</span><strong>בתוקף עד 12.02.2027</strong></div><div><span>ביטוח רפואי</span><strong>בתוקף עד 09.08.2026</strong></div><div><span>חוזה העסקה</span><strong>חתום ושמור</strong></div><div><span>חשבון בנק</span><strong>אומת</strong></div></div></section><section className="card"><div className="section-heading"><h2>יתרות נוכחיות</h2><span>נכון ליולי</span></div><div className="balance-grid"><div><strong>8.5</strong><span>ימי חופשה</span></div><div><strong>5</strong><span>ימי הבראה</span></div><div><strong>4</strong><span>שבתות החודש</span></div><div><strong>9</strong><span>חגים שנתיים</span></div></div></section></div><section><div className="section-title-row"><div><span>ארנק מסמכים</span><h2>מסמכים מרכזיים</h2></div><Link to="/documents">לכל המסמכים</Link></div><div className="wallet-grid"><article className="wallet-card blue"><span>דרכון</span><strong>P1234567</strong><small>בתוקף עד 18.11.2028</small></article><article className="wallet-card green"><span>אשרת עבודה</span><strong>B/1 Caregiver</strong><small>בתוקף עד 12.02.2027</small></article><article className="wallet-card purple"><span>ביטוח רפואי</span><strong>Harel Health</strong><small>חידוש ב־09.08.2026</small></article></div></section></div>}
+export function EmployeePage() {
+  return (
+    <div className="page-stack">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">עובד ומסמכים</p>
+          <h1>Maria Santos</h1>
+          <p>מטפלת סיעודית · העסקה פעילה</p>
+        </div>
+        <span className="pill green">הכול בתוקף</span>
+      </header>
+      <section className="profile-card">
+        <div className="large-avatar">MS</div>
+        <div>
+          <h2>Maria Santos</h2>
+          <p>פיליפינים · התחלת העסקה 14.01.2025</p>
+          <div className="mini-facts">
+            <span>טלפון: 050-555-0182</span>
+            <span>שפה: אנגלית</span>
+            <span>מגורים: בבית המטופל</span>
+          </div>
+        </div>
+        <button className="secondary-button">עריכת פרטים</button>
+      </section>
+      <div className="dashboard-grid">
+        <section className="card">
+          <div className="section-heading">
+            <h2>מצב ההעסקה</h2>
+            <span className="pill green">תקין</span>
+          </div>
+          <div className="detail-list">
+            <div>
+              <span>אשרת עבודה</span>
+              <strong>בתוקף עד 12.02.2027</strong>
+            </div>
+            <div>
+              <span>ביטוח רפואי</span>
+              <strong>בתוקף עד 09.08.2026</strong>
+            </div>
+            <div>
+              <span>חוזה העסקה</span>
+              <strong>חתום ושמור</strong>
+            </div>
+            <div>
+              <span>חשבון בנק</span>
+              <strong>אומת</strong>
+            </div>
+          </div>
+        </section>
+        <section className="card">
+          <div className="section-heading">
+            <h2>יתרות נוכחיות</h2>
+            <span>נכון ליולי</span>
+          </div>
+          <div className="balance-grid">
+            <div>
+              <strong>8.5</strong>
+              <span>ימי חופשה</span>
+            </div>
+            <div>
+              <strong>5</strong>
+              <span>ימי הבראה</span>
+            </div>
+            <div>
+              <strong>4</strong>
+              <span>שבתות החודש</span>
+            </div>
+            <div>
+              <strong>9</strong>
+              <span>חגים שנתיים</span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <section>
+        <div className="section-title-row">
+          <div>
+            <span>ארנק מסמכים</span>
+            <h2>מסמכים מרכזיים</h2>
+          </div>
+          <Link to="/documents">לכל המסמכים</Link>
+        </div>
+        <div className="wallet-grid">
+          <article className="wallet-card blue">
+            <span>דרכון</span>
+            <strong>P1234567</strong>
+            <small>בתוקף עד 18.11.2028</small>
+          </article>
+          <article className="wallet-card green">
+            <span>אשרת עבודה</span>
+            <strong>B/1 Caregiver</strong>
+            <small>בתוקף עד 12.02.2027</small>
+          </article>
+          <article className="wallet-card purple">
+            <span>ביטוח רפואי</span>
+            <strong>Harel Health</strong>
+            <small>חידוש ב־09.08.2026</small>
+          </article>
+        </div>
+      </section>
+    </div>
+  );
+}

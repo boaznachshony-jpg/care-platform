@@ -1,3 +1,4 @@
+/* global URL */
 import { cp, mkdir, readdir } from 'node:fs/promises';
 import { dirname, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,10 +22,7 @@ async function copyCssFiles(directory) {
       continue;
     }
 
-    const destinationPath = join(
-      destinationRoot,
-      relative(sourceRoot, sourcePath),
-    );
+    const destinationPath = join(destinationRoot, relative(sourceRoot, sourcePath));
 
     await mkdir(dirname(destinationPath), { recursive: true });
     await cp(sourcePath, destinationPath);
