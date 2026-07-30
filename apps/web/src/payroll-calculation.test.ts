@@ -52,6 +52,22 @@ describe('monthly payroll calculation', () => {
     });
   });
 
+  it('treats pocket money already paid during the month as a deduction', () => {
+    expect(
+      calculateMonthlyPayroll({
+        ...emptyInput,
+        paidSaturdays: 2,
+        saturdayRate: 439.98,
+        pocketMoney: 100,
+      }),
+    ).toMatchObject({
+      saturdayPay: 879.96,
+      additions: 879.96,
+      deductions: 100,
+      total: 7_779.96,
+    });
+  });
+
   it('never returns a negative payment', () => {
     expect(
       calculateMonthlyPayroll({

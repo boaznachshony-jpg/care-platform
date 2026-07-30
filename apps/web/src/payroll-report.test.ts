@@ -41,8 +41,9 @@ describe('annual payroll report', () => {
         payroll('jan', '2026-01', {
           saturdayPay: 500,
           employerContributions: 600,
+          pocketMoney: 100,
           advances: 100,
-          total: 8_000,
+          total: 7_900,
         }),
         payroll('feb', '2026-02', {
           holidayPay: 400,
@@ -58,9 +59,9 @@ describe('annual payroll report', () => {
     expect(report.monthsReported).toBe(2);
     expect(report.baseSalary).toBe(14_000);
     expect(report.additions).toBe(1_500);
-    expect(report.deductions).toBe(250);
+    expect(report.deductions).toBe(350);
     expect(report.employerContributions).toBe(600);
-    expect(report.totalPaid).toBe(15_250);
+    expect(report.totalPaid).toBe(15_150);
   });
 
   it('treats optional legacy payroll fields as zero', () => {

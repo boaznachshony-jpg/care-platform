@@ -424,16 +424,6 @@ export function PayrollPage() {
                 />
               </label>
               <label>
-                דמי כיס
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={values.pocketMoney}
-                  onChange={(event) => update('pocketMoney', event.target.value)}
-                />
-              </label>
-              <label>
                 הפרשות מעסיק: פנסיה ופיצויים
                 <input
                   type="number"
@@ -461,6 +451,18 @@ export function PayrollPage() {
           ) : null}
           {step === 4 ? (
             <div className="form-grid">
+              <label>
+                דמי כיס שכבר שולמו
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.pocketMoney}
+                  aria-label="דמי כיס שכבר שולמו"
+                  onChange={(event) => update('pocketMoney', event.target.value)}
+                />
+                <small>הסכום יוצג בנפרד ויקוזז מהתשלום שנותר החודש.</small>
+              </label>
               <label>
                 ניכוי ביטוח רפואי
                 <input
@@ -538,6 +540,14 @@ export function PayrollPage() {
                 </span>
                 <strong>−{money.format(calculation.deductions)}</strong>
               </div>
+              {numeric(values.pocketMoney) > 0 ? (
+                <div>
+                  <span>
+                    מתוכם דמי כיס <small>שולמו במהלך החודש</small>
+                  </span>
+                  <strong>−{money.format(numeric(values.pocketMoney))}</strong>
+                </div>
+              ) : null}
               <div className="total">
                 <span>סה״כ לתשלום</span>
                 <strong>{money.format(calculation.total)}</strong>
@@ -770,6 +780,7 @@ export function PayrollPage() {
                   <small>
                     בסיס {money.format(record.baseSalary)} · {record.paidSaturdays} שבתות ×{' '}
                     {money.format(recordSaturdayRate(record))}
+                    {record.pocketMoney ? ` · דמי כיס ${money.format(record.pocketMoney)}` : ''}
                     {record.advances ? ` · מקדמות ${money.format(record.advances)}` : ''}
                   </small>
                 </span>

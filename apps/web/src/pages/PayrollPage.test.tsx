@@ -95,6 +95,9 @@ describe('PayrollPage annual report', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('דמי כיס שכבר שולמו'), {
+      target: { value: '100' },
+    });
     fireEvent.change(screen.getByLabelText('מקדמות שכבר שולמו'), {
       target: { value: '500' },
     });
@@ -110,8 +113,9 @@ describe('PayrollPage annual report', () => {
       saturdayRate: 400,
       saturdayPay: 1_200,
       otherAddition: 250,
+      pocketMoney: 100,
       advances: 500,
-      total: 7_950,
+      total: 7_850,
     });
   });
 });

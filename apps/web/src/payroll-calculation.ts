@@ -32,10 +32,10 @@ export function calculateMonthlyPayroll(input: MonthlyPayrollInput): MonthlyPayr
     safeAmount(input.holidayPay) +
     safeAmount(input.vacationPay) +
     safeAmount(input.sickPay) +
-    safeAmount(input.pocketMoney) +
     safeAmount(input.employerContributions) +
     safeAmount(input.otherAddition);
   const deductions =
+    safeAmount(input.pocketMoney) +
     safeAmount(input.medicalInsuranceDeduction) +
     safeAmount(input.housingDeduction) +
     safeAmount(input.advances) +
