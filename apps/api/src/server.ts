@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { HealthResponse } from '@caredesk/schemas';
@@ -109,9 +110,16 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   return app;
 }
 
-// Vercel detects server.ts as the Fastify entrypoint and turns the listening
-// Fastify server into a single Vercel Function. The platform intercepts the
-// socket lifecycle, so this must call listen() rather than export the instance.
-const env = loadEnv();
-const app = buildServer(env);
-void app.listen({ port: env.PORT, host: '0.0.0.0' });
+// Vercel imports the default export as a Node.js function. Fastify must finish
+// registering its plugins before its underlying Node server handles requests.
+const app = buildServer(loadEnv());
+let ready: Promise<void> | undefined;
+
+export default async function handler(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  ready ??= app.ready();
+  await ready;
+  app.server.emit('request', request, response);
+}
