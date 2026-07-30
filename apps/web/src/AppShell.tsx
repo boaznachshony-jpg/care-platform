@@ -45,6 +45,14 @@ function readFontScale(): number {
   return fontScales.includes(saved as (typeof fontScales)[number]) ? saved : 1;
 }
 
+function currentHebrewDate(): string {
+  return new Intl.DateTimeFormat('he-IL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date());
+}
+
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const [profile] = useMvpProfile();
@@ -96,8 +104,8 @@ export function AppShell({ children }: AppShellProps) {
       <div className="app-body">
         <header className="topbar">
           <div>
-            <strong>שלום בועז</strong>
-            <span>יום שלישי, 28 ביולי</span>
+            <strong>שלום {profile.employerName || 'וברוכים הבאים'}</strong>
+            <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
             <div className="font-size-controls" role="group" aria-label="גודל טקסט">

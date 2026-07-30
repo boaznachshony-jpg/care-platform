@@ -54,4 +54,25 @@ describe('AppShell text size controls', () => {
       }),
     ).toHaveAttribute('href', '/tasks');
   });
+
+  it('shows the saved employer name and the current date instead of demo text', () => {
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({
+        employerName: 'מעסיק אמיתי',
+        onboardingCompleted: true,
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <p>תוכן בדיקה</p>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('שלום מעסיק אמיתי')).toBeVisible();
+    expect(screen.queryByText('יום שלישי, 28 ביולי')).not.toBeInTheDocument();
+  });
 });
