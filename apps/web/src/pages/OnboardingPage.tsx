@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
 
 export function OnboardingPage() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ export function OnboardingPage() {
       title: t('onboarding.people'),
       fields: [
         ['employerName', t('profile.employerName'), 'text'],
+        ['employerIdNumber', 'מספר תעודת זהות', 'israeli-id'],
         ['employerPhone', t('profile.phone'), 'tel'],
         ['recipientName', t('profile.recipientName'), 'text'],
       ],
@@ -40,7 +42,11 @@ export function OnboardingPage() {
   ] as const;
 
   const current = sections[step] ?? sections[0];
-  const isValid = current.fields.every(([key]) => draft[key].trim().length > 0);
+  const isValid = current.fields.every(
+    ([key, , type]) =>
+      draft[key].trim().length > 0 &&
+      (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
+  );
 
   function complete() {
     setProfile({ ...draft, onboardingCompleted: true });
@@ -100,6 +106,45 @@ export function OnboardingPage() {
                     </option>
                   ))}
                 </select>
+              ) : type === 'israeli-id' ? (
+                <>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={draft.employerIdNumber}
+                    required
+                    dir="ltr"
+                    aria-invalid={
+                      draft.employerIdNumber.length > 0 && !isValidIsraeliId(draft.employerIdNumber)
+                    }
+                    aria-describedby={
+                      draft.employerIdNumber.length > 0 && !isValidIsraeliId(draft.employerIdNumber)
+                        ? 'employer-id-help employer-id-error'
+                        : 'employer-id-help'
+                    }
+                    onBlur={() => {
+                      if (isValidIsraeliId(draft.employerIdNumber)) {
+                        setDraft({
+                          ...draft,
+                          employerIdNumber: normalizeIsraeliId(draft.employerIdNumber),
+                        });
+                      }
+                    }}
+                    onChange={(event) =>
+                      setDraft({ ...draft, employerIdNumber: event.target.value })
+                    }
+                  />
+                  <small id="employer-id-help">
+                    נדרש לצורך דיווח לביטוח לאומי בלבד. ניתן להזין ספרות, רווחים או מקפים.
+                  </small>
+                  {draft.employerIdNumber.length > 0 &&
+                  !isValidIsraeliId(draft.employerIdNumber) ? (
+                    <span id="employer-id-error" className="field-error" role="alert">
+                      מספר תעודת הזהות אינו תקין. יש לבדוק את 9 הספרות ואת ספרת הביקורת.
+                    </span>
+                  ) : null}
+                </>
               ) : (
                 <input
                   type={type}

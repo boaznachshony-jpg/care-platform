@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { ReminderLeadDays } from '../storage/mvp-storage.js';
+import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -10,6 +11,7 @@ export function SettingsPage() {
   const [draft, setDraft] = useState(profile);
   const [saved, setSaved] = useState(false);
   const [notificationResult, setNotificationResult] = useState('');
+  const employerIdIsValid = isValidIsraeliId(draft.employerIdNumber);
 
   async function requestNotification() {
     if (!('Notification' in window)) {
@@ -45,6 +47,7 @@ export function SettingsPage() {
         className="settings-form"
         onSubmit={(event) => {
           event.preventDefault();
+          if (!employerIdIsValid) return;
           setProfile(draft);
           setSaved(true);
         }}
@@ -58,6 +61,38 @@ export function SettingsPage() {
               required
               onChange={(event) => setDraft({ ...draft, employerName: event.target.value })}
             />
+          </label>
+          <label>
+            מספר תעודת זהות
+            <input
+              dir="ltr"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={draft.employerIdNumber}
+              required
+              aria-invalid={!employerIdIsValid}
+              aria-describedby={
+                employerIdIsValid
+                  ? 'settings-employer-id-help'
+                  : 'settings-employer-id-help settings-employer-id-error'
+              }
+              onBlur={() => {
+                if (employerIdIsValid) {
+                  setDraft({
+                    ...draft,
+                    employerIdNumber: normalizeIsraeliId(draft.employerIdNumber),
+                  });
+                }
+              }}
+              onChange={(event) => setDraft({ ...draft, employerIdNumber: event.target.value })}
+            />
+            <small id="settings-employer-id-help">נדרש לצורך דיווח לביטוח לאומי בלבד.</small>
+            {!employerIdIsValid ? (
+              <span id="settings-employer-id-error" className="field-error" role="alert">
+                מספר תעודת הזהות אינו תקין. יש לבדוק את 9 הספרות ואת ספרת הביקורת.
+              </span>
+            ) : null}
           </label>
           <label>
             {t('profile.phone')}
@@ -157,7 +192,7 @@ export function SettingsPage() {
         </section>
         <div className="save-bar">
           {saved ? <span role="status">{t('settings.saved')}</span> : <span />}
-          <button className="primary-button" type="submit">
+          <button className="primary-button" type="submit" disabled={!employerIdIsValid}>
             {t('settings.save')}
           </button>
         </div>

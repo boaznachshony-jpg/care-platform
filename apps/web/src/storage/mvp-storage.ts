@@ -2,6 +2,7 @@ export type ReminderLeadDays = 1 | 7 | 14 | 21 | 30;
 
 export interface MvpProfile {
   employerName: string;
+  employerIdNumber: string;
   employerPhone: string;
   recipientName: string;
   caregiverName: string;
@@ -24,6 +25,7 @@ export const MVP_PROFILE_CHANGED = 'caredesk:mvp-profile-changed';
 
 export const emptyMvpProfile: MvpProfile = {
   employerName: '',
+  employerIdNumber: '',
   employerPhone: '',
   recipientName: '',
   caregiverName: '',

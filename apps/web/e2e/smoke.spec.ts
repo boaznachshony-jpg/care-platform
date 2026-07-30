@@ -9,6 +9,7 @@ test.beforeEach(async ({ page }) => {
 
 const completedProfile = {
   employerName: 'בועז בדיקה',
+  employerIdNumber: '123456782',
   employerPhone: '0501234567',
   recipientName: 'מטופל בדיקה',
   caregiverName: 'Caregiver Test',
@@ -37,6 +38,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
   await page.getByLabel('שם המעסיק').fill('בועז בדיקה');
+  await page.getByLabel('מספר תעודת זהות').fill('123456782');
   await page.getByLabel('מספר טלפון').fill('0501234567');
   await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
   await page.getByRole('button', { name: 'המשך' }).click();
@@ -140,7 +142,8 @@ test('walks through all payroll steps', async ({ page }) => {
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
   await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'חישובים שנשמרו' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'סיכום שכר שנתי' })).toBeVisible();
+  await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();
 });
 
 test('tracks quarterly and annual employment expenses', async ({ page }) => {

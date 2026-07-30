@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -54,6 +55,12 @@ export function PayrollPage() {
     note: '',
   });
   const [message, setMessage] = useState('');
+  const payrollYears = useMemo(() => getPayrollYears(records), [records]);
+  const [reportYear, setReportYear] = useState(() => payrollYears[0] ?? currentMonth.slice(0, 4));
+  const annualReport = useMemo(
+    () => createAnnualPayrollReport(records, reportYear),
+    [records, reportYear],
+  );
 
   const calculation = useMemo(() => {
     const additions =
@@ -123,6 +130,7 @@ export function PayrollPage() {
       : [saved, ...records];
     saveMvpPayroll(next);
     setRecords(next);
+    setReportYear(saved.month.slice(0, 4));
     setMessage('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.');
   }
 
@@ -635,9 +643,67 @@ export function PayrollPage() {
       </section>
       {records.length > 0 ? (
         <section className="card">
-          <h2>חישובים שנשמרו</h2>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">דוח תקופתי</p>
+              <h2>סיכום שכר שנתי</h2>
+              <p>
+                הסכומים בדוח מחושבים מרשומות השכר החודשיות ששמרתם. הסכום השנתי לתשלום הוא החיבור
+                המדויק של הסכום לתשלום בכל חודש.
+              </p>
+            </div>
+            <label>
+              שנת הדוח
+              <select
+                aria-label="שנת הדוח"
+                value={reportYear}
+                onChange={(event) => setReportYear(event.target.value)}
+              >
+                {payrollYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="pay-summary" aria-live="polite">
+            <div>
+              <span>
+                חודשי שכר בדוח <small>רשומות שנשמרו</small>
+              </span>
+              <strong>{annualReport.monthsReported}</strong>
+            </div>
+            <div>
+              <span>
+                שכר בסיס מצטבר <small>סכום שכר הבסיס בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.baseSalary)}</strong>
+            </div>
+            <div>
+              <span>
+                תוספות מצטברות <small>לרבות הפרשות מעסיק שהוזנו</small>
+              </span>
+              <strong>{money.format(annualReport.additions)}</strong>
+            </div>
+            <div>
+              <span>
+                ניכויים מצטברים <small>כל הניכויים שהוזנו בחודשים</small>
+              </span>
+              <strong>−{money.format(annualReport.deductions)}</strong>
+            </div>
+            <div className="total">
+              <span>סה״כ לתשלום בשנת {reportYear}</span>
+              <strong>{money.format(annualReport.totalPaid)}</strong>
+            </div>
+            <p>
+              מקור הנתונים: חישובי השכר החודשיים שנשמרו במכשיר זה. הדוח הוא כלי תיעוד וסיכום אריתמטי
+              ואינו מחליף תלוש שכר או בדיקה מקצועית.
+            </p>
+          </div>
+          <h3>פירוט לפי חודש</h3>
           <div className="detail-list">
-            {records.map((record) => (
+            {annualReport.records.map((record) => (
               <div key={record.id}>
                 <span>{record.month}</span>
                 <strong>{money.format(record.total)}</strong>
