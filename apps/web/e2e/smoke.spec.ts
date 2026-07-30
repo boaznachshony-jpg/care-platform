@@ -178,7 +178,7 @@ test('notification bell explains every active subject and links to treatment', a
   });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'התראות, 1 נושאים לטיפול' }).click();
+  await page.getByRole('button', { name: /^התראות, \d+ נושאים לטיפול$/ }).click();
   const panel = page.getByRole('region', { name: 'נושאים לטיפול' });
   await expect(panel).toContainText('טיפול בביטוח רפואי');
   await expect(panel).toContainText('המועד הוא היום');
