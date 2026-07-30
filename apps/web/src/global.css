@@ -419,6 +419,9 @@ a {
   color: #275fc2;
   text-decoration: none;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .dashboard-grid {
   display: grid;
@@ -604,6 +607,8 @@ a {
   color: #285db5;
   font-weight: 800;
   cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
 }
 .timeline-content a {
   display: inline-flex;
@@ -643,6 +648,7 @@ a {
   gap: 8px;
 }
 .filter-row button {
+  min-height: 44px;
   border: 1px solid #dce2e9;
   background: #fff;
   border-radius: 999px;
@@ -692,8 +698,8 @@ a {
   flex-wrap: wrap;
 }
 .check {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 11px;
   border: 2px solid #cbd3dd;
   background: #fff;
@@ -705,6 +711,8 @@ a {
   border-color: #2d8a59;
 }
 .more {
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   font-weight: 800;
@@ -1657,7 +1665,7 @@ body {
   --cd-surface: #ffffff;
   --cd-canvas: #eef3f9;
   --cd-border: #d3dde9;
-  --cd-focus: #7eaeff;
+  --cd-focus: #0b4f9c;
   --cd-shadow: 0 12px 32px rgba(20, 47, 82, 0.09);
 }
 
@@ -1715,8 +1723,9 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 4px solid var(--cd-focus);
+  outline: 3px solid var(--cd-focus);
   outline-offset: 3px;
+  box-shadow: 0 0 0 2px var(--cd-surface);
 }
 
 .status-chip.attention,
