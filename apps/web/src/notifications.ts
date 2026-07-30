@@ -5,6 +5,7 @@ import type {
   MvpTask,
   ReminderLeadDays,
 } from './storage/mvp-storage.js';
+import { createQuarterlyInsuranceTask } from './quarterly-national-insurance.js';
 
 export interface CareNotification {
   id: string;
@@ -101,6 +102,7 @@ export function createCareNotifications({
 
   for (const expense of expenses) {
     if (expense.status === 'paid') continue;
+    if (expense.category === 'ביטוח לאומי' && expense.frequency === 'quarterly') continue;
     const days = daysFrom(today, expense.dueDate);
     if (days === null || days > reminderLeadDays) continue;
     items.push({
@@ -109,6 +111,35 @@ export function createCareNotifications({
       to: '/payroll',
       dueDate: expense.dueDate,
       ...timing(days),
+    });
+  }
+
+  const quarterlyInsurance = createQuarterlyInsuranceTask(today);
+  if (quarterlyInsurance.preparationOnly) {
+    items.push({
+      id: quarterlyInsurance.id,
+      title: quarterlyInsurance.title,
+      detail: 'יום הכנת הנתונים; התשלום ייפתח מחר',
+      severity: 'attention',
+      to: '/tasks',
+      dueDate: quarterlyInsurance.periodEnd,
+    });
+  } else if (quarterlyInsurance.status !== 'not_open') {
+    items.push({
+      id: quarterlyInsurance.id,
+      title: quarterlyInsurance.title,
+      detail:
+        quarterlyInsurance.status === 'overdue'
+          ? `${quarterlyInsurance.statusLabel} · ${quarterlyInsurance.deadlineLabel}`
+          : `${quarterlyInsurance.statusLabel} · ${quarterlyInsurance.paymentWindow}`,
+      severity:
+        quarterlyInsurance.status === 'overdue'
+          ? 'overdue'
+          : quarterlyInsurance.status === 'open'
+            ? 'upcoming'
+            : 'attention',
+      to: '/tasks',
+      dueDate: quarterlyInsurance.deadlineDate,
     });
   }
 

@@ -42,11 +42,7 @@ describe('care notifications', () => {
       ],
     });
 
-    expect(notifications.map((item) => item.title)).toEqual([
-      'הכנת שכר',
-      'ביטוח לאומי',
-      'תוקף דרכון',
-    ]);
+    expect(notifications.map((item) => item.title)).toEqual(['הכנת שכר', 'תוקף דרכון']);
     expect(notifications[0]).toMatchObject({
       severity: 'overdue',
       detail: 'באיחור של 1 ימים',
@@ -92,5 +88,43 @@ describe('care notifications', () => {
     });
 
     expect(notifications).toEqual([]);
+  });
+
+  it('uses the quarterly preparation task on the final day instead of a payment deadline', () => {
+    const notifications = createCareNotifications({
+      today: new Date('2026-09-30T12:00:00'),
+      reminderLeadDays: 7,
+      documents: [],
+      tasks: [],
+      expenses: [],
+    });
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        title: 'הכנת נתוני ביטוח לאומי לרבעון',
+        detail: 'יום הכנת הנתונים; התשלום ייפתח מחר',
+        dueDate: '2026-09-30',
+        to: '/tasks',
+      }),
+    ]);
+  });
+
+  it('raises the quarterly payment task during the October payment window', () => {
+    const notifications = createCareNotifications({
+      today: new Date('2026-10-10T12:00:00'),
+      reminderLeadDays: 7,
+      documents: [],
+      tasks: [],
+      expenses: [],
+    });
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        title: 'תשלום ביטוח לאומי לרבעון יולי–ספטמבר',
+        detail: 'דורש טיפול · ניתן לשלם בין 1.10 ל־15.10',
+        dueDate: '2026-10-15',
+        severity: 'attention',
+      }),
+    ]);
   });
 });

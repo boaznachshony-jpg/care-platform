@@ -136,6 +136,20 @@ test('creates, persists, completes and restores a task', async ({ page }) => {
   await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
 });
 
+test('shows the quarterly national insurance payment window and deadline', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-10T12:00:00'));
+  await seedCompletedProfile(page);
+  await page.goto('/tasks');
+
+  const card = page.getByRole('region', { name: 'משימת ביטוח לאומי רבעונית' });
+  await expect(card).toContainText('תשלום ביטוח לאומי לרבעון יולי–ספטמבר');
+  await expect(card).toContainText('תקופת דיווח: 1.7–30.9');
+  await expect(card).toContainText('ניתן לשלם בין 1.10 ל־15.10');
+  await expect(card).toContainText('מועד אחרון: 15 באוקטובר');
+  await expect(card).toContainText('דורש טיפול');
+  await expect(card).not.toContainText('מועד אחרון: 30 בספטמבר');
+});
+
 test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/');

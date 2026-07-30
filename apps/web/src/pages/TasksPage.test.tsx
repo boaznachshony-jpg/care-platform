@@ -50,4 +50,26 @@ describe('TasksPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'הושלמו' }));
     expect(screen.getByText('הגשת דיווח')).toBeVisible();
   });
+
+  it('shows preparation only on the final day of the quarter', () => {
+    render(<TasksPage today={new Date('2026-09-30T12:00:00')} />);
+
+    expect(screen.getByRole('heading', { name: 'הכנת נתוני ביטוח לאומי לרבעון' })).toBeVisible();
+    expect(screen.getByText('טרם נפתח לתשלום')).toBeVisible();
+    expect(screen.getByText(/אפשרות הדיווח והתשלום תיפתח מחר/)).toBeVisible();
+  });
+
+  it('shows the complete third-quarter payment card after payment opens', () => {
+    render(<TasksPage today={new Date('2026-10-10T12:00:00')} />);
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'תשלום ביטוח לאומי לרבעון יולי–ספטמבר',
+      }),
+    ).toBeVisible();
+    expect(screen.getByText('ניתן לשלם בין 1.10 ל־15.10')).toBeVisible();
+    expect(screen.getByText('מועד אחרון: 15 באוקטובר')).toBeVisible();
+    expect(screen.getByText('דורש טיפול')).toBeVisible();
+    expect(screen.queryByText(/30.9.*מועד אחרון/)).not.toBeInTheDocument();
+  });
 });

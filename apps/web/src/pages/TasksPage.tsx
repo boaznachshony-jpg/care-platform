@@ -6,6 +6,7 @@ import {
   type MvpTask,
   type MvpTaskPriority,
 } from '../storage/mvp-storage.js';
+import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 
 type TaskFilter = 'open' | 'week' | 'completed';
 
@@ -34,13 +35,14 @@ function displayDate(value: string): string {
   return `${day}.${month}.${year}`;
 }
 
-export function TasksPage() {
+export function TasksPage({ today }: { today?: Date } = {}) {
   const [tasks, setTasks] = useState(readMvpTasks);
   const [filter, setFilter] = useState<TaskFilter>('open');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [message, setMessage] = useState('');
+  const quarterlyInsurance = useMemo(() => createQuarterlyInsuranceTask(today), [today]);
 
   const visibleTasks = useMemo(
     () =>
@@ -173,6 +175,33 @@ export function TasksPage() {
           </button>
         </form>
       ) : null}
+
+      <section
+        className={`card quarterly-insurance-card ${quarterlyInsurance.status}`}
+        aria-label="משימת ביטוח לאומי רבעונית"
+      >
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">משימה רבעונית</p>
+            <h2>{quarterlyInsurance.title}</h2>
+          </div>
+          <span className={`pill quarterly-status ${quarterlyInsurance.status}`}>
+            {quarterlyInsurance.statusLabel}
+          </span>
+        </div>
+        <div className="quarterly-insurance-details">
+          <p>{quarterlyInsurance.periodRange}</p>
+          <p>{quarterlyInsurance.paymentWindow}</p>
+          <strong>{quarterlyInsurance.deadlineLabel}</strong>
+        </div>
+        {quarterlyInsurance.preparationOnly ? (
+          <p className="form-note">
+            היום מכינים ומרכזים את נתוני שלושת חודשי הרבעון. אפשרות הדיווח והתשלום תיפתח מחר.
+          </p>
+        ) : quarterlyInsurance.status === 'not_open' ? (
+          <p className="form-note">אפשרות הדיווח והתשלום עדיין אינה פתוחה.</p>
+        ) : null}
+      </section>
 
       <div className="filter-row" aria-label="סינון משימות">
         <button

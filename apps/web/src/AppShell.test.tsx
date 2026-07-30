@@ -48,7 +48,7 @@ describe('AppShell text size controls', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'התראות, 1 נושאים לטיפול' }));
+    fireEvent.click(screen.getByRole('button', { name: /התראות, \d+ נושאים לטיפול/ }));
     expect(screen.getByRole('region', { name: 'נושאים לטיפול' })).toBeVisible();
     expect(screen.getByRole('link', { name: /תשלום שכר חודשי/ })).toHaveAttribute('href', '/tasks');
     expect(screen.getByText('המועד הוא היום')).toBeVisible();

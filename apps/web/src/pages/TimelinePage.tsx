@@ -1,18 +1,49 @@
 /* eslint-disable no-restricted-syntax */
-const events = [
+import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
+
+const fixedEvents = [
   ['03 אוג׳', 'בדיקת ביטוח רפואי', 'פעולה מומלצת', 'amber'],
   ['09 אוג׳', 'הכנת שכר יולי', 'פעולה חודשית', 'blue'],
   ['15 אוג׳', 'יום חופשה מתוכנן', 'מידע', 'green'],
   ['31 אוג׳', 'סיכום חודש', 'בדיקה אוטומטית', 'neutral'],
-  [
-    '15 אוק׳',
-    'תשלום ביטוח לאומי',
-    'מועד טיפול פנימי עבור יולי–ספטמבר · המועד הרשמי 20.10',
-    'purple',
-  ],
 ];
 
-export function TimelinePage() {
+const shortMonths = [
+  'ינו׳',
+  'פבר׳',
+  'מרץ',
+  'אפר׳',
+  'מאי',
+  'יוני',
+  'יולי',
+  'אוג׳',
+  'ספט׳',
+  'אוק׳',
+  'נוב׳',
+  'דצמ׳',
+];
+
+function shortDate(value: string): string {
+  const [, month, day] = value.split('-').map(Number);
+  return `${day} ${shortMonths[(month ?? 1) - 1]}`;
+}
+
+export function TimelinePage({ today }: { today?: Date } = {}) {
+  const quarterlyInsurance = createQuarterlyInsuranceTask(today);
+  const events = [
+    ...fixedEvents,
+    [
+      shortDate(
+        quarterlyInsurance.preparationOnly
+          ? quarterlyInsurance.periodEnd
+          : quarterlyInsurance.deadlineDate,
+      ),
+      quarterlyInsurance.title,
+      `${quarterlyInsurance.paymentWindow} · ${quarterlyInsurance.statusLabel}`,
+      quarterlyInsurance.status === 'overdue' ? 'amber' : 'purple',
+    ],
+  ];
+
   return (
     <div className="page-stack">
       <header className="page-header">

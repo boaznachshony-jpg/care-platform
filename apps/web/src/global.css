@@ -883,6 +883,56 @@ a {
 .payroll-live-total.deduction strong {
   color: #a52f27;
 }
+
+.quarterly-insurance-card {
+  border-inline-start: 0.45rem solid #2563eb;
+  display: grid;
+  gap: 1rem;
+}
+
+.quarterly-insurance-card.attention,
+.quarterly-insurance-card.due_today {
+  border-inline-start-color: #d97706;
+}
+
+.quarterly-insurance-card.overdue {
+  border-inline-start-color: #a52f27;
+}
+
+.quarterly-insurance-card .section-heading {
+  align-items: flex-start;
+}
+
+.quarterly-insurance-details {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 1.05rem;
+}
+
+.quarterly-insurance-details p {
+  margin: 0;
+}
+
+.quarterly-insurance-details strong {
+  color: #102a56;
+  font-size: 1.15rem;
+}
+
+.quarterly-status.open {
+  background: #e6f6ec;
+  color: #146b3a;
+}
+
+.quarterly-status.attention,
+.quarterly-status.due_today {
+  background: #fff1d6;
+  color: #8a4b00;
+}
+
+.quarterly-status.overdue {
+  background: #fde8e8;
+  color: #a52f27;
+}
 .payroll-history small {
   display: block;
   margin-top: 4px;
