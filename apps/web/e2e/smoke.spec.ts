@@ -136,6 +136,20 @@ test('creates, persists, completes and restores a task', async ({ page }) => {
   await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
 });
 
+test('opens the relevant workflow from timeline details', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/timeline');
+
+  await page
+    .getByRole('article')
+    .filter({ hasText: 'בדיקת ביטוח רפואי' })
+    .getByRole('link', { name: 'פרטים' })
+    .click();
+
+  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page.getByRole('heading', { name: 'כל המסמכים במקום אחד' })).toBeVisible();
+});
+
 test('shows the quarterly national insurance payment window and deadline', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-10T12:00:00'));
   await seedCompletedProfile(page);

@@ -589,12 +589,18 @@ a {
   align-items: center;
 }
 .task-card button,
-.timeline-content button {
+.timeline-content button,
+.timeline-content a {
   border: 0;
   background: transparent;
   color: #285db5;
   font-weight: 800;
   cursor: pointer;
+}
+.timeline-content a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .date-strip {
   display: grid;
