@@ -87,7 +87,11 @@ describe('PayrollPage annual report', () => {
     const year = Number(currentMonth.slice(0, 4));
     const month = Number(currentMonth.slice(5, 7));
     const daysInMonth = new Date(year, month, 0).getDate();
-    const proratedBaseSalary = Math.round(((7_000 * (daysInMonth - 15)) / daysInMonth) * 100) / 100;
+    const baseDays = Array.from({ length: daysInMonth }, (_, index) => index + 1).filter(
+      (day) => new Date(year, month - 1, day).getDay() !== 6,
+    );
+    const paidBaseDays = baseDays.filter((day) => day >= 16).length;
+    const proratedBaseSalary = Math.round(((7_000 * paidBaseDays) / baseDays.length) * 100) / 100;
     fireEvent.change(screen.getByLabelText('תאריך תחילת עבודה בחודש, לחישוב יחסי'), {
       target: { value: prorationStartDate },
     });
@@ -119,7 +123,7 @@ describe('PayrollPage annual report', () => {
       baseSalary: proratedBaseSalary,
       contractBaseSalary: 7_000,
       prorationStartDate,
-      prorationDays: daysInMonth - 15,
+      prorationDays: paidBaseDays,
       paidSaturdays: 3,
       saturdayRate: 400,
       saturdayPay: 1_200,

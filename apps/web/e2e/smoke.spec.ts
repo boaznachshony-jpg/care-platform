@@ -182,10 +182,13 @@ test('walks through all payroll steps', async ({ page }) => {
   const payrollYear = Number(payrollMonth.slice(0, 4));
   const payrollMonthNumber = Number(payrollMonth.slice(5, 7));
   const daysInPayrollMonth = new Date(payrollYear, payrollMonthNumber, 0).getDate();
+  const baseDays = Array.from({ length: daysInPayrollMonth }, (_, index) => index + 1).filter(
+    (day) => new Date(payrollYear, payrollMonthNumber - 1, day).getDay() !== 6,
+  );
+  const paidBaseDays = baseDays.filter((day) => day >= 16).length;
   await page.getByLabel('תאריך תחילת עבודה בחודש, לחישוב יחסי').fill(`${payrollMonth}-16`);
-  await expect(
-    page.getByText(`${daysInPayrollMonth - 15} מתוך ${daysInPayrollMonth} ימים`),
-  ).toBeVisible();
+  await expect(page.getByText(`${paidBaseDays} מתוך ${baseDays.length} ימי בסיס`)).toBeVisible();
+  await expect(page.getByText(/מהמכנה הוצאו .* שבתות/)).toBeVisible();
   await page.getByLabel('מספר שבתות או ימי מנוחה שעבדו').fill('3');
   await page.getByLabel('תעריף לכל שבת או יום מנוחה').fill('400');
   await expect(page.getByText(/3 ×/)).toBeVisible();

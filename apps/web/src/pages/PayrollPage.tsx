@@ -325,7 +325,7 @@ export function PayrollPage() {
                 <input
                   type="date"
                   min={`${values.month}-01`}
-                  max={`${values.month}-${String(proratedBaseSalary.daysInMonth).padStart(2, '0')}`}
+                  max={`${values.month}-${String(proratedBaseSalary.calendarDaysInMonth).padStart(2, '0')}`}
                   value={values.prorationStartDate}
                   aria-label="תאריך תחילת עבודה בחודש, לחישוב יחסי"
                   onChange={(event) => update('prorationStartDate', event.target.value)}
@@ -337,12 +337,18 @@ export function PayrollPage() {
                   שכר בסיס לחודש הנבחר
                   <small>
                     {proratedBaseSalary.isProrated
-                      ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימים`
+                      ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימי בסיס`
                       : 'חודש מלא'}
                   </small>
                 </span>
                 <strong>{money.format(proratedBaseSalary.amount)}</strong>
               </div>
+              <p className="form-note">
+                נוסחת החישוב: שכר הבסיס {money.format(numeric(values.baseSalary))} ×{' '}
+                {proratedBaseSalary.paidDays} ימי בסיס לתשלום ÷ {proratedBaseSalary.daysInMonth} ימי
+                בסיס בחודש = {money.format(proratedBaseSalary.amount)}. מהמכנה הוצאו{' '}
+                {proratedBaseSalary.excludedSaturdays} שבתות, משום שתשלום שבתות מחושב בנפרד.
+              </p>
               <label>
                 ימי עבודה
                 <input
