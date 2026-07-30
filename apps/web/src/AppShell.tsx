@@ -49,7 +49,6 @@ export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const notifications = profile.notificationsEnabled
     ? createCareNotifications({
@@ -136,80 +135,22 @@ export function AppShell({ children }: AppShellProps) {
               </button>
             </div>
             <div className="notification-center">
-              <button
+              <Link
                 className={
                   notifications.length > 0 ? 'notification-bell active' : 'notification-bell'
                 }
-                type="button"
+                to="/tasks"
                 aria-label={
                   notifications.length > 0
-                    ? `התראות, ${notifications.length} נושאים לטיפול`
-                    : 'התראות, אין נושאים לטיפול'
+                    ? `מעבר למשימות פתוחות, ${notifications.length} נושאים לטיפול`
+                    : 'מעבר למשימות פתוחות'
                 }
-                aria-expanded={notificationsOpen}
-                aria-controls="notification-panel"
-                onClick={() => setNotificationsOpen((open) => !open)}
               >
                 <span aria-hidden="true">🔔</span>
                 {notifications.length > 0 ? (
                   <strong className="notification-count">{notifications.length}</strong>
                 ) : null}
-              </button>
-              {notificationsOpen ? (
-                <section
-                  id="notification-panel"
-                  className="notification-panel"
-                  aria-label="נושאים לטיפול"
-                >
-                  <div className="notification-panel-header">
-                    <div>
-                      <strong>נושאים לטיפול</strong>
-                      <small>
-                        {notifications.length > 0
-                          ? `${notifications.length} פריטים לפי הגדרת התזכורת`
-                          : 'אין כרגע נושאים דחופים'}
-                      </small>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="סגירת ההתראות"
-                      onClick={() => setNotificationsOpen(false)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {notifications.length > 0 ? (
-                    <div className="notification-list">
-                      {notifications.map((notification) => (
-                        <Link
-                          className={`notification-item ${notification.severity}`}
-                          to={notification.to}
-                          key={notification.id}
-                          onClick={() => setNotificationsOpen(false)}
-                        >
-                          <span className="notification-dot" aria-hidden="true" />
-                          <span>
-                            <strong>{notification.title}</strong>
-                            <small>{notification.detail}</small>
-                          </span>
-                          <span aria-hidden="true">←</span>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="notification-empty">
-                      המערכת לא מצאה משימות, מסמכים או תשלומים הדורשים טיפול בטווח שנבחר.
-                    </p>
-                  )}
-                  <Link
-                    className="notification-settings-link"
-                    to="/settings"
-                    onClick={() => setNotificationsOpen(false)}
-                  >
-                    הגדרות התראות
-                  </Link>
-                </section>
-              ) : null}
+              </Link>
             </div>
             <div className="avatar">ב</div>
           </div>

@@ -186,6 +186,14 @@ a {
 }
 .top-actions .notification-bell {
   position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: inherit;
+  background: #f3f5f7;
+  text-decoration: none;
 }
 .top-actions .notification-bell.active {
   background: #fff1d8;

@@ -28,7 +28,7 @@ describe('AppShell text size controls', () => {
     expect(screen.getByRole('button', { name: 'הגדלת טקסט' })).toBeDisabled();
   });
 
-  it('shows the real subjects that make the notification bell active', () => {
+  it('links the notification bell to the list of open tasks', () => {
     saveMvpTasks([
       {
         id: 'due-task',
@@ -48,9 +48,10 @@ describe('AppShell text size controls', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /התראות, \d+ נושאים לטיפול/ }));
-    expect(screen.getByRole('region', { name: 'נושאים לטיפול' })).toBeVisible();
-    expect(screen.getByRole('link', { name: /תשלום שכר חודשי/ })).toHaveAttribute('href', '/tasks');
-    expect(screen.getByText('המועד הוא היום')).toBeVisible();
+    expect(
+      screen.getByRole('link', {
+        name: /מעבר למשימות פתוחות, \d+ נושאים לטיפול/,
+      }),
+    ).toHaveAttribute('href', '/tasks');
   });
 });

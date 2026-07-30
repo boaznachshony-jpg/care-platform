@@ -254,7 +254,7 @@ test('enlarges text globally and preserves the preference after reload', async (
   await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
 });
 
-test('notification bell explains every active subject and links to treatment', async ({ page }) => {
+test('notification bell opens the list of open tasks', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -273,12 +273,13 @@ test('notification bell explains every active subject and links to treatment', a
   });
   await page.goto('/');
 
-  await page.getByRole('button', { name: /^התראות, \d+ נושאים לטיפול$/ }).click();
-  const panel = page.getByRole('region', { name: 'נושאים לטיפול' });
-  await expect(panel).toContainText('טיפול בביטוח רפואי');
-  await expect(panel).toContainText('המועד הוא היום');
-  await panel.getByRole('link', { name: /טיפול בביטוח רפואי/ }).click();
+  await page
+    .getByRole('link', {
+      name: /^מעבר למשימות פתוחות, \d+ נושאים לטיפול$/,
+    })
+    .click();
   await expect(page).toHaveURL(/\/tasks$/);
+  await expect(page.getByText('טיפול בביטוח רפואי')).toBeVisible();
 });
 
 test('walks through all payroll steps', async ({ page }) => {
