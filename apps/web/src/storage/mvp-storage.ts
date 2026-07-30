@@ -125,9 +125,22 @@ export interface MvpEmploymentExpense {
   savedAt: string;
 }
 
+export type MvpTaskPriority = 'normal' | 'important' | 'urgent';
+export type MvpTaskStatus = 'open' | 'completed';
+
+export interface MvpTask {
+  id: string;
+  title: string;
+  dueDate: string;
+  priority: MvpTaskPriority;
+  status: MvpTaskStatus;
+  createdAt: string;
+}
+
 const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
 const PAYROLL_STORAGE_NAME = 'caredesk.mvp.payroll.v1';
 const EMPLOYMENT_EXPENSES_STORAGE_NAME = 'caredesk.mvp.employment-expenses.v1';
+const TASKS_STORAGE_NAME = 'caredesk.mvp.tasks.v1';
 
 function readList<T>(key: string): T[] {
   if (!isBrowser()) return [];
@@ -167,4 +180,12 @@ export function readMvpEmploymentExpenses(): MvpEmploymentExpense[] {
 
 export function saveMvpEmploymentExpenses(expenses: MvpEmploymentExpense[]): void {
   saveList(EMPLOYMENT_EXPENSES_STORAGE_NAME, expenses);
+}
+
+export function readMvpTasks(): MvpTask[] {
+  return readList<MvpTask>(TASKS_STORAGE_NAME);
+}
+
+export function saveMvpTasks(tasks: MvpTask[]): void {
+  saveList(TASKS_STORAGE_NAME, tasks);
 }

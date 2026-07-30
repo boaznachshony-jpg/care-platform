@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 
 export interface AppShellProps {
@@ -24,7 +24,22 @@ const mobileNav = [
   ['/settings', '•••', 'עוד'],
 ] as const;
 
+const FONT_SCALE_KEY = 'caredesk.ui.font-scale.v1';
+const fontScales = [1, 1.15, 1.3] as const;
+
+function readFontScale(): number {
+  const saved = Number(window.localStorage.getItem(FONT_SCALE_KEY));
+  return fontScales.includes(saved as (typeof fontScales)[number]) ? saved : 1;
+}
+
 export function AppShell({ children }: AppShellProps) {
+  const [fontScale, setFontScale] = useState(readFontScale);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ui-scale', String(fontScale));
+    window.localStorage.setItem(FONT_SCALE_KEY, String(fontScale));
+  }, [fontScale]);
+
   return (
     <div className="app-frame">
       <a href="#main-content" className="cd-skip-link">
@@ -61,6 +76,41 @@ export function AppShell({ children }: AppShellProps) {
             <span>יום שלישי, 28 ביולי</span>
           </div>
           <div className="top-actions">
+            <div className="font-size-controls" role="group" aria-label="גודל טקסט">
+              <button
+                type="button"
+                aria-label="הקטנת טקסט"
+                disabled={fontScale === fontScales[0]}
+                onClick={() =>
+                  setFontScale(
+                    (current) =>
+                      fontScales[
+                        Math.max(0, fontScales.indexOf(current as 1 | 1.15 | 1.3) - 1)
+                      ] ?? current,
+                  )
+                }
+              >
+                א−
+              </button>
+              <button
+                type="button"
+                aria-label="הגדלת טקסט"
+                disabled={fontScale === fontScales[fontScales.length - 1]}
+                onClick={() =>
+                  setFontScale(
+                    (current) =>
+                      fontScales[
+                        Math.min(
+                          fontScales.length - 1,
+                          fontScales.indexOf(current as 1 | 1.15 | 1.3) + 1,
+                        )
+                      ] ?? current,
+                  )
+                }
+              >
+                א+
+              </button>
+            </div>
             <button aria-label="התראות">🔔</button>
             <div className="avatar">ב</div>
           </div>

@@ -1,6 +1,9 @@
 * {
   box-sizing: border-box;
 }
+:root {
+  --ui-scale: 1;
+}
 html,
 body,
 #root {
@@ -38,6 +41,7 @@ a {
   min-height: 100vh;
   display: flex;
   direction: rtl;
+  zoom: var(--ui-scale);
 }
 .sidebar {
   position: fixed;
@@ -152,6 +156,30 @@ a {
   display: flex;
   align-items: center;
   gap: 13px;
+}
+.font-size-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #b7c8df;
+  border-radius: 14px;
+  padding: 3px;
+  background: #fff;
+}
+.top-actions .font-size-controls button {
+  width: 48px;
+  height: 48px;
+  color: #0b57d0;
+  background: transparent;
+  font-weight: 900;
+}
+.top-actions .font-size-controls button:hover:not(:disabled),
+.top-actions .font-size-controls button:focus-visible {
+  background: #e8f0ff;
+}
+.top-actions .font-size-controls button:disabled {
+  color: #8b98aa;
+  opacity: 0.65;
 }
 .top-actions button {
   border: 0;
@@ -525,6 +553,15 @@ a {
 .list-task p {
   font-size: 14px;
   color: #7b8593;
+}
+.task-editor {
+  display: grid;
+  gap: 18px;
+}
+.task-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .check {
   width: 34px;

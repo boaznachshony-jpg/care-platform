@@ -115,15 +115,34 @@ for (const [route, heading] of productRoutes) {
   });
 }
 
-test('marks and restores a task in the current session', async ({ page }) => {
+test('creates, persists, completes and restores a task', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/tasks');
+  await page.getByRole('button', { name: /משימה חדשה/ }).click();
+  await page.getByLabel('מה צריך לבצע?').fill('בדיקת ביטוח רפואי');
+  await page.getByLabel('מועד יעד').fill('2026-08-03');
+  await page.getByLabel('עדיפות').selectOption('important');
+  await page.getByRole('button', { name: 'שמירת המשימה' }).click();
+  await page.reload();
+
   const task = page.getByRole('article').filter({ hasText: 'בדיקת ביטוח רפואי' });
-  const checkbox = task.getByRole('button').first();
+  const checkbox = task.getByRole('button', { name: 'השלמת בדיקת ביטוח רפואי' });
   await checkbox.click();
-  await expect(task).toHaveClass(/completed/);
-  await checkbox.click();
-  await expect(task).not.toHaveClass(/completed/);
+  await expect(task).not.toBeVisible();
+  await page.getByRole('button', { name: 'הושלמו' }).click();
+  await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
+  await page.getByRole('button', { name: 'החזרת בדיקת ביטוח רפואי' }).click();
+  await page.getByRole('button', { name: 'פתוחות' }).click();
+  await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
+});
+
+test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
+  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+  await page.reload();
+  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
 });
 
 test('walks through all payroll steps', async ({ page }) => {
