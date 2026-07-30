@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { HealthResponse } from '@caredesk/schemas';
 import { buildContainer, type Container } from './container.js';
+import { loadEnv } from './env.js';
 import type { Env } from './env.js';
 import { registerCorrelationId } from './plugins/correlation-id.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
@@ -107,3 +108,8 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
 
   return app;
 }
+
+// Vercel detects server.ts as the Fastify entrypoint and imports its default
+// export. Keep the instance at module scope so warm invocations can reuse it.
+const app = buildServer(loadEnv());
+export default app;
