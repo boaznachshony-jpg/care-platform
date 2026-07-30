@@ -109,7 +109,9 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   return app;
 }
 
-// Vercel detects server.ts as the Fastify entrypoint and imports its default
-// export. Keep the instance at module scope so warm invocations can reuse it.
-const app = buildServer(loadEnv());
-export default app;
+// Vercel detects server.ts as the Fastify entrypoint and turns the listening
+// Fastify server into a single Vercel Function. The platform intercepts the
+// socket lifecycle, so this must call listen() rather than export the instance.
+const env = loadEnv();
+const app = buildServer(env);
+void app.listen({ port: env.PORT, host: '0.0.0.0' });
