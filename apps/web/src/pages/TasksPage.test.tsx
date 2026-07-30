@@ -71,5 +71,8 @@ describe('TasksPage', () => {
     expect(screen.getByText('מועד אחרון: 15 באוקטובר')).toBeVisible();
     expect(screen.getByText('דורש טיפול')).toBeVisible();
     expect(screen.queryByText(/30.9.*מועד אחרון/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'מעבר לאתר הביטוח הלאומי לדיווח ולתשלום' }),
+    ).toHaveAttribute('href', 'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx');
   });
 });

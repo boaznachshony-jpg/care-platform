@@ -10,6 +10,9 @@ import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js
 
 type TaskFilter = 'open' | 'week' | 'completed';
 
+const NATIONAL_INSURANCE_PAYMENT_URL =
+  'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx';
+
 const emptyDraft = {
   title: '',
   dueDate: '',
@@ -201,6 +204,14 @@ export function TasksPage({ today }: { today?: Date } = {}) {
         ) : quarterlyInsurance.status === 'not_open' ? (
           <p className="form-note">אפשרות הדיווח והתשלום עדיין אינה פתוחה.</p>
         ) : null}
+        <a
+          className="secondary-button national-insurance-link"
+          href={NATIONAL_INSURANCE_PAYMENT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          מעבר לאתר הביטוח הלאומי לדיווח ולתשלום
+        </a>
       </section>
 
       <div className="filter-row" aria-label="סינון משימות">

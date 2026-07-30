@@ -162,6 +162,9 @@ test('shows the quarterly national insurance payment window and deadline', async
   await expect(card).toContainText('מועד אחרון: 15 באוקטובר');
   await expect(card).toContainText('דורש טיפול');
   await expect(card).not.toContainText('מועד אחרון: 30 בספטמבר');
+  await expect(
+    card.getByRole('link', { name: 'מעבר לאתר הביטוח הלאומי לדיווח ולתשלום' }),
+  ).toHaveAttribute('href', 'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx');
 });
 
 test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
