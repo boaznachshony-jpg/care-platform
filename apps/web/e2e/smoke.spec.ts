@@ -215,11 +215,11 @@ test('tracks quarterly and annual employment expenses', async ({ page }) => {
   await page.getByLabel('סוג התשלום').selectOption({ label: 'ביטוח לאומי' });
   await page.getByLabel('תדירות').selectOption('quarterly');
   await page.getByLabel('סכום בש״ח').fill('1840');
-  await page.getByLabel('תאריך יעד').fill('2026-09-30');
+  await page.getByLabel('תאריך יעד').fill('2026-10-20');
   await page.getByLabel('הערה או אסמכתה').fill('רבעון שלישי');
   await page.getByRole('button', { name: 'הוספת תשלום למעקב' }).click();
   await expect(page.getByText('התשלום התקופתי נשמר בלוח עלויות ההעסקה.')).toBeVisible();
-  await expect(page.getByText('רבעוני · יעד 2026-09-30 · רבעון שלישי')).toBeVisible();
+  await expect(page.getByText('רבעוני · יעד 2026-10-20 · רבעון שלישי')).toBeVisible();
   await page.reload();
   await expect(page.locator('.employment-expenses strong').getByText('ביטוח לאומי')).toBeVisible();
 });

@@ -72,7 +72,7 @@ describe('MVP local storage', () => {
         category: 'ביטוח לאומי',
         frequency: 'quarterly',
         amount: 1840,
-        dueDate: '2026-09-30',
+        dueDate: '2026-10-20',
         status: 'upcoming',
         note: 'רבעון שלישי',
         savedAt: '2026-07-29T00:00:00.000Z',
