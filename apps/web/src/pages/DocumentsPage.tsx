@@ -15,6 +15,21 @@ import {
 const MAX_FILE_SIZE = 10_000_000;
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
+function toDateInputValue(dateLabel: string): string {
+  const isoMatch = dateLabel.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  const displayMatch = dateLabel.match(/\b(\d{2})[./](\d{2})[./](\d{4})\b/);
+  if (displayMatch) return `${displayMatch[3]}-${displayMatch[2]}-${displayMatch[1]}`;
+
+  return '';
+}
+
+function formatExpiryDate(value: string): string {
+  const [year, month, day] = value.split('-');
+  return `בתוקף עד ${day}.${month}.${year}`;
+}
+
 const emptyDraft = {
   name: '',
   category: 'מסמך אחר',
@@ -40,7 +55,7 @@ export function DocumentsPage() {
     setDraft({
       name: document.name,
       category: document.category,
-      dateLabel: document.dateLabel,
+      dateLabel: toDateInputValue(document.dateLabel),
       status: document.status,
     });
     setEditingId(document.id);
@@ -79,7 +94,10 @@ export function DocumentsPage() {
 
       const saved: MvpDocument = {
         id,
-        ...draft,
+        name: draft.name,
+        category: draft.category,
+        dateLabel: formatExpiryDate(draft.dateLabel),
+        status: draft.status,
         fileName: file?.name ?? existing?.fileName ?? '',
         fileType: file?.type ?? existing?.fileType ?? '',
         updatedAt: new Date().toISOString(),
@@ -180,13 +198,19 @@ export function DocumentsPage() {
               </select>
             </label>
             <label>
-              תאריך או הערה
+              תוקף המסמך
               <input
                 required
+                type="date"
+                className="document-date-input"
+                lang="he"
+                dir="ltr"
                 value={draft.dateLabel}
-                placeholder="לדוגמה: בתוקף עד 31.12.2027"
+                aria-label="תוקף המסמך"
+                aria-describedby="document-expiry-help"
                 onChange={(event) => setDraft({ ...draft, dateLabel: event.target.value })}
               />
+              <small id="document-expiry-help">לחצו על סמל לוח השנה לבחירת תאריך.</small>
             </label>
             <label>
               מצב

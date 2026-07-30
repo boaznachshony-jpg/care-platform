@@ -680,6 +680,17 @@ a {
   display: grid;
   gap: 18px;
 }
+.document-date-input {
+  color-scheme: light;
+  cursor: pointer;
+  text-align: center;
+}
+.document-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  width: 1.75rem;
+  height: 1.75rem;
+  opacity: 1;
+}
 .form-note {
   color: #657286;
   font-size: 0.95rem;
