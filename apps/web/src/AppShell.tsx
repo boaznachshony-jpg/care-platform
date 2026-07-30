@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 import { createCareNotifications } from './notifications.js';
 import {
@@ -28,7 +28,13 @@ const mobileNav = [
   ['/tasks', '✓', 'משימות'],
   ['/payroll', '₪', 'שכר'],
   ['/documents', '▣', 'מסמכים'],
-  ['/settings', '•••', 'עוד'],
+] as const;
+
+const mobileMoreNav = [
+  ['/employee', '♙', 'פרטי המטפל'],
+  ['/trust', '♥', 'מסרים לבניית אמון'],
+  ['/timeline', '◷', 'ציר זמן'],
+  ['/settings', '⚙', 'הגדרות'],
 ] as const;
 
 const FONT_SCALE_KEY = 'caredesk.ui.font-scale.v1';
@@ -40,9 +46,11 @@ function readFontScale(): number {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const location = useLocation();
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const notifications = profile.notificationsEnabled
     ? createCareNotifications({
         tasks: readMvpTasks(),
@@ -211,12 +219,32 @@ export function AppShell({ children }: AppShellProps) {
         </main>
         <nav className="mobile-nav" aria-label="ניווט תחתון">
           {mobileNav.map(([to, icon, label]) => (
-            <NavLink key={to} to={to} end={to === '/'}>
+            <NavLink key={to} to={to} end={to === '/'} onClick={() => setMobileMoreOpen(false)}>
               <span>{icon}</span>
               <small>{label}</small>
             </NavLink>
           ))}
+          <button
+            className={mobileMoreNav.some(([to]) => to === location.pathname) ? 'active' : ''}
+            type="button"
+            aria-expanded={mobileMoreOpen}
+            aria-controls="mobile-more-menu"
+            onClick={() => setMobileMoreOpen((open) => !open)}
+          >
+            <span aria-hidden="true">•••</span>
+            <small>עוד</small>
+          </button>
         </nav>
+        {mobileMoreOpen ? (
+          <nav id="mobile-more-menu" className="mobile-more-menu" aria-label="ניווט נוסף">
+            {mobileMoreNav.map(([to, icon, label]) => (
+              <NavLink key={to} to={to} onClick={() => setMobileMoreOpen(false)}>
+                <span aria-hidden="true">{icon}</span>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        ) : null}
       </div>
     </div>
   );

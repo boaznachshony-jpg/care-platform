@@ -115,6 +115,71 @@ for (const [route, heading] of productRoutes) {
   });
 }
 
+test('connects every primary screen through visible navigation and action links', async ({
+  page,
+}, testInfo) => {
+  await seedCompletedProfile(page);
+  await page.goto('/');
+
+  if (testInfo.project.name === 'mobile-chromium') {
+    const directConnections = [
+      ['משימות', '/tasks', 'מה צריך לבצע'],
+      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
+    ] as const;
+    for (const [linkName, route, expectedText] of directConnections) {
+      await page.goto('/');
+      await page
+        .getByRole('navigation', { name: 'ניווט תחתון' })
+        .getByRole('link', { name: new RegExp(linkName) })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
+      await expect(page.getByRole('main')).toContainText(expectedText);
+    }
+
+    const moreConnections = [
+      ['פרטי המטפל', '/employee', 'Caregiver Test'],
+      ['מסרים לבניית אמון', '/trust', 'מסרים לבניית אמון'],
+      ['ציר זמן', '/timeline', 'המועדים הבאים'],
+      ['הגדרות', '/settings', 'פרטים והעדפות'],
+    ] as const;
+    for (const [linkName, route, expectedText] of moreConnections) {
+      await page.goto('/');
+      await page.getByRole('button', { name: 'עוד' }).click();
+      await page
+        .getByRole('navigation', { name: 'ניווט נוסף' })
+        .getByRole('link', { name: new RegExp(linkName) })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
+      await expect(page.getByRole('main')).toContainText(expectedText);
+    }
+  } else {
+    const connections = [
+      ['משימות', '/tasks', 'מה צריך לבצע'],
+      ['עובד', '/employee', 'Caregiver Test'],
+      ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
+      ['ציר זמן', '/timeline', 'המועדים הבאים'],
+      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['הגדרות', '/settings', 'פרטים והעדפות'],
+    ] as const;
+    for (const [linkName, route, expectedText] of connections) {
+      await page.goto('/');
+      await page
+        .getByRole('complementary', { name: 'ניווט ראשי' })
+        .getByRole('link', { name: new RegExp(linkName) })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
+      await expect(page.getByRole('main')).toContainText(expectedText);
+    }
+  }
+
+  await page.goto('/employee');
+  await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
+  await expect(page).toHaveURL(/\/trust$/);
+  await page.getByRole('link', { name: 'לפרטי המטפל' }).click();
+  await expect(page).toHaveURL(/\/employee$/);
+});
+
 test('creates, persists, completes and restores a task', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/tasks');
