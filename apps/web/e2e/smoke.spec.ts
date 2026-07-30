@@ -145,6 +145,33 @@ test('enlarges text globally and preserves the preference after reload', async (
   await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
 });
 
+test('notification bell explains every active subject and links to treatment', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'caredesk.mvp.tasks.v1',
+      JSON.stringify([
+        {
+          id: 'notification-task',
+          title: 'טיפול בביטוח רפואי',
+          dueDate: new Date().toISOString().slice(0, 10),
+          priority: 'urgent',
+          status: 'open',
+          createdAt: new Date().toISOString(),
+        },
+      ]),
+    );
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'התראות, 1 נושאים לטיפול' }).click();
+  const panel = page.getByRole('region', { name: 'נושאים לטיפול' });
+  await expect(panel).toContainText('טיפול בביטוח רפואי');
+  await expect(panel).toContainText('המועד הוא היום');
+  await panel.getByRole('link', { name: /טיפול בביטוח רפואי/ }).click();
+  await expect(page).toHaveURL(/\/tasks$/);
+});
+
 test('walks through all payroll steps', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/payroll');

@@ -1,6 +1,13 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
+import { useMvpProfile } from './hooks/use-mvp-profile.js';
+import { createCareNotifications } from './notifications.js';
+import {
+  readMvpDocuments,
+  readMvpEmploymentExpenses,
+  readMvpTasks,
+} from './storage/mvp-storage.js';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -33,7 +40,17 @@ function readFontScale(): number {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notifications = profile.notificationsEnabled
+    ? createCareNotifications({
+        tasks: readMvpTasks(),
+        documents: readMvpDocuments(),
+        expenses: readMvpEmploymentExpenses(),
+        reminderLeadDays: profile.reminderLeadDays,
+      })
+    : [];
 
   useEffect(() => {
     document.documentElement.style.setProperty('--ui-scale', String(fontScale));
@@ -84,9 +101,8 @@ export function AppShell({ children }: AppShellProps) {
                 onClick={() =>
                   setFontScale(
                     (current) =>
-                      fontScales[
-                        Math.max(0, fontScales.indexOf(current as 1 | 1.15 | 1.3) - 1)
-                      ] ?? current,
+                      fontScales[Math.max(0, fontScales.indexOf(current as 1 | 1.15 | 1.3) - 1)] ??
+                      current,
                   )
                 }
               >
@@ -111,7 +127,82 @@ export function AppShell({ children }: AppShellProps) {
                 א+
               </button>
             </div>
-            <button aria-label="התראות">🔔</button>
+            <div className="notification-center">
+              <button
+                className={
+                  notifications.length > 0 ? 'notification-bell active' : 'notification-bell'
+                }
+                type="button"
+                aria-label={
+                  notifications.length > 0
+                    ? `התראות, ${notifications.length} נושאים לטיפול`
+                    : 'התראות, אין נושאים לטיפול'
+                }
+                aria-expanded={notificationsOpen}
+                aria-controls="notification-panel"
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
+                <span aria-hidden="true">🔔</span>
+                {notifications.length > 0 ? (
+                  <strong className="notification-count">{notifications.length}</strong>
+                ) : null}
+              </button>
+              {notificationsOpen ? (
+                <section
+                  id="notification-panel"
+                  className="notification-panel"
+                  aria-label="נושאים לטיפול"
+                >
+                  <div className="notification-panel-header">
+                    <div>
+                      <strong>נושאים לטיפול</strong>
+                      <small>
+                        {notifications.length > 0
+                          ? `${notifications.length} פריטים לפי הגדרת התזכורת`
+                          : 'אין כרגע נושאים דחופים'}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="סגירת ההתראות"
+                      onClick={() => setNotificationsOpen(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {notifications.length > 0 ? (
+                    <div className="notification-list">
+                      {notifications.map((notification) => (
+                        <Link
+                          className={`notification-item ${notification.severity}`}
+                          to={notification.to}
+                          key={notification.id}
+                          onClick={() => setNotificationsOpen(false)}
+                        >
+                          <span className="notification-dot" aria-hidden="true" />
+                          <span>
+                            <strong>{notification.title}</strong>
+                            <small>{notification.detail}</small>
+                          </span>
+                          <span aria-hidden="true">←</span>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="notification-empty">
+                      המערכת לא מצאה משימות, מסמכים או תשלומים הדורשים טיפול בטווח שנבחר.
+                    </p>
+                  )}
+                  <Link
+                    className="notification-settings-link"
+                    to="/settings"
+                    onClick={() => setNotificationsOpen(false)}
+                  >
+                    הגדרות התראות
+                  </Link>
+                </section>
+              ) : null}
+            </div>
             <div className="avatar">ב</div>
           </div>
         </header>
