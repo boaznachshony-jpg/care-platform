@@ -16,6 +16,17 @@ export function EmployeePage() {
     .slice(0, 2)
     .toUpperCase();
 
+  function startEditing() {
+    setDraft(profile);
+    setSaved(false);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setDraft(profile);
+    setEditing(false);
+  }
+
   return (
     <div className="page-stack">
       <header className="page-header">
@@ -41,7 +52,7 @@ export function EmployeePage() {
             <span>שפה מועדפת: {profile.caregiverLanguage || 'טרם הוגדרה'}</span>
           </div>
         </div>
-        <button className="secondary-button" type="button" onClick={() => setEditing(true)}>
+        <button className="secondary-button" type="button" onClick={startEditing}>
           עריכת פרטים
         </button>
       </section>
@@ -102,7 +113,7 @@ export function EmployeePage() {
             <button className="primary-button" type="submit">
               שמירת הפרטים
             </button>
-            <button className="secondary-button" type="button" onClick={() => setEditing(false)}>
+            <button className="secondary-button" type="button" onClick={cancelEditing}>
               ביטול
             </button>
           </div>

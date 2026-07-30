@@ -134,6 +134,19 @@ test('creates, persists, completes and restores a task', async ({ page }) => {
   await page.getByRole('button', { name: 'החזרת בדיקת ביטוח רפואי' }).click();
   await page.getByRole('button', { name: 'פתוחות' }).click();
   await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
+
+  await task.getByRole('button', { name: 'עריכה' }).click();
+  await page.getByLabel('מה צריך לבצע?').fill('בדיקת ביטוח רפואי מעודכנת');
+  await page.getByRole('button', { name: 'שמירת המשימה' }).click();
+  await page.reload();
+  const updatedTask = page.getByRole('article').filter({ hasText: 'בדיקת ביטוח רפואי מעודכנת' });
+  await expect(updatedTask).toBeVisible();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await updatedTask.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(updatedTask).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await updatedTask.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(updatedTask).not.toBeVisible();
 });
 
 test('opens the relevant workflow from timeline details', async ({ page }) => {
@@ -253,6 +266,22 @@ test('tracks quarterly and annual employment expenses', async ({ page }) => {
   await expect(page.getByText('רבעוני · יעד 2026-10-20 · רבעון שלישי')).toBeVisible();
   await page.reload();
   await expect(page.locator('.employment-expenses strong').getByText('ביטוח לאומי')).toBeVisible();
+  const expense = page.locator('.employment-expenses > div').filter({ hasText: 'ביטוח לאומי' });
+  await expense.getByRole('button', { name: 'סימון כשולם' }).click();
+  await page.reload();
+  await expect(
+    page
+      .locator('.employment-expenses > div')
+      .filter({ hasText: 'ביטוח לאומי' })
+      .getByRole('button', { name: 'שולם ✓' }),
+  ).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await expense.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(expense).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await expense.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(expense).not.toBeVisible();
 });
 
 test('adds, opens, edits and persists a realistic image document', async ({ page }) => {
@@ -279,6 +308,13 @@ test('adds, opens, edits and persists a realistic image document', async ({ page
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'פתיחה' }).click();
   await expect((await download).suggestedFilename()).toBe('passport.jpg');
+
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(page.getByRole('heading', { name: 'דרכון מעודכן' })).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(page.getByText('עדיין לא נוספו מסמכים')).toBeVisible();
 });
 
 test('requires an explicit salary source before payroll', async ({ page }) => {

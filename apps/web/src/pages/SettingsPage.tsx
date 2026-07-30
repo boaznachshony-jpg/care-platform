@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
@@ -12,6 +12,10 @@ export function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [notificationResult, setNotificationResult] = useState('');
   const employerIdIsValid = isValidIsraeliId(draft.employerIdNumber);
+
+  useEffect(() => {
+    setSaved(false);
+  }, [draft]);
 
   async function requestNotification() {
     if (!('Notification' in window)) {

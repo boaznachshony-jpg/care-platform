@@ -201,10 +201,12 @@ export function PayrollPage() {
     setExpenses(next);
   }
 
-  function removeExpense(id: string) {
-    const next = expenses.filter((item) => item.id !== id);
+  function removeExpense(expense: MvpEmploymentExpense) {
+    if (!window.confirm(`למחוק את התשלום "${expense.category}"?`)) return;
+    const next = expenses.filter((item) => item.id !== expense.id);
     saveMvpEmploymentExpenses(next);
     setExpenses(next);
+    setMessage('התשלום התקופתי נמחק.');
   }
 
   if (step === 0) {
@@ -742,7 +744,7 @@ export function PayrollPage() {
                 <button
                   className="text-button"
                   type="button"
-                  onClick={() => removeExpense(expense.id)}
+                  onClick={() => removeExpense(expense)}
                 >
                   מחיקה
                 </button>

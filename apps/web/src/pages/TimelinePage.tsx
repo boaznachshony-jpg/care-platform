@@ -2,7 +2,15 @@
 import { Link } from 'react-router-dom';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 
-const fixedEvents = [
+type TimelineEvent = [
+  date: string,
+  title: string,
+  description: string,
+  tone: string,
+  detailsPath: string,
+];
+
+const fixedEvents: TimelineEvent[] = [
   ['03 אוג׳', 'בדיקת ביטוח רפואי', 'פעולה מומלצת', 'amber', '/documents'],
   ['09 אוג׳', 'הכנת שכר יולי', 'פעולה חודשית', 'blue', '/payroll'],
   ['15 אוג׳', 'יום חופשה מתוכנן', 'מידע', 'green', '/tasks'],
@@ -31,7 +39,7 @@ function shortDate(value: string): string {
 
 export function TimelinePage({ today }: { today?: Date } = {}) {
   const quarterlyInsurance = createQuarterlyInsuranceTask(today);
-  const events = [
+  const events: TimelineEvent[] = [
     ...fixedEvents,
     [
       shortDate(

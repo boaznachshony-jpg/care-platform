@@ -170,3 +170,26 @@ test('shows Uzbekistan context and Uzbek trust-building messages', async ({ page
     page.getByText('Biz bilishimiz yoki yordam berishimiz kerak bo‘lgan biror narsa bormi?'),
   ).toBeVisible();
 });
+
+test('discarded caregiver edits do not reappear when editing again', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/employee');
+
+  await page.getByRole('button', { name: 'עריכת פרטים' }).click();
+  await page.getByLabel('שם המטפל או המטפלת').fill('שם שלא נשמר');
+  await page.getByRole('button', { name: 'ביטול' }).click();
+  await page.getByRole('button', { name: 'עריכת פרטים' }).click();
+
+  await expect(page.getByLabel('שם המטפל או המטפלת')).toHaveValue('Dilnoza');
+});
+
+test('settings saved confirmation clears after a new unsaved edit', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/settings');
+
+  await page.getByRole('button', { name: 'שמירת השינויים' }).click();
+  await expect(page.getByText('השינויים נשמרו בהצלחה')).toBeVisible();
+  await page.getByLabel('שם המעסיק').fill('שינוי שטרם נשמר');
+
+  await expect(page.getByText('השינויים נשמרו בהצלחה')).not.toBeVisible();
+});
