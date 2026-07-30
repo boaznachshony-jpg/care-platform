@@ -705,6 +705,38 @@ a {
   color: #68778a;
   font-weight: 500;
 }
+.payroll-live-total {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 76px;
+  border: 2px solid #b8d2ff;
+  border-radius: 18px;
+  padding: 14px 18px;
+  background: #f1f6ff;
+}
+.payroll-live-total span,
+.payroll-live-total small {
+  display: block;
+}
+.payroll-live-total strong {
+  color: #0b57d0;
+  font-size: 1.35rem;
+}
+.payroll-live-total.deduction {
+  border-color: #f2c7c2;
+  background: #fff5f3;
+}
+.payroll-live-total.deduction strong {
+  color: #a52f27;
+}
+.payroll-history small {
+  display: block;
+  margin-top: 4px;
+  color: #657286;
+}
 .trust-preview,
 .attention-panel {
   display: flex;

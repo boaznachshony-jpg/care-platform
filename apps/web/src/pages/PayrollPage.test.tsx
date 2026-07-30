@@ -1,6 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { emptyMvpProfile, saveMvpPayroll, saveMvpProfile } from '../storage/mvp-storage.js';
+import {
+  emptyMvpProfile,
+  readMvpPayroll,
+  saveMvpPayroll,
+  saveMvpProfile,
+} from '../storage/mvp-storage.js';
 import { PayrollPage } from './PayrollPage.js';
 
 describe('PayrollPage annual report', () => {
@@ -60,7 +65,7 @@ describe('PayrollPage annual report', () => {
   it('shows a reconciled report and changes the monthly detail with the selected year', () => {
     render(<PayrollPage />);
 
-    expect(screen.getByRole('heading', { name: 'סיכום שכר שנתי' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeInTheDocument();
     expect(screen.getByText('סה״כ לתשלום בשנת 2026')).toBeInTheDocument();
     expect(screen.getByText(/14,650\.00/)).toBeInTheDocument();
     expect(screen.getByText('2026-01')).toBeInTheDocument();
@@ -71,5 +76,42 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByText('סה״כ לתשלום בשנת 2025')).toBeInTheDocument();
     expect(screen.getByText('2025-12')).toBeInTheDocument();
     expect(screen.queryByText('2026-01')).not.toBeInTheDocument();
+  });
+
+  it('calculates Saturdays, additions and advances and saves the month cumulatively', () => {
+    render(<PayrollPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '400' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תוספת אחרת, אם קיימת'), {
+      target: { value: '250' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('מקדמות שכבר שולמו'), {
+      target: { value: '500' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'אישור ושמירה' }));
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const saved = readMvpPayroll().find((record) => record.month === currentMonth);
+    expect(saved).toMatchObject({
+      baseSalary: 7_000,
+      paidSaturdays: 3,
+      saturdayRate: 400,
+      saturdayPay: 1_200,
+      otherAddition: 250,
+      advances: 500,
+      total: 7_950,
+    });
   });
 });

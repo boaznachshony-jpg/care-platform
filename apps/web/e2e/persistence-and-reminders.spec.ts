@@ -101,7 +101,7 @@ test.describe('document validation and persistence', () => {
     await page.goto('/documents');
     await page.getByRole('button', { name: /הוספת מסמך/ }).click();
     await page.getByLabel('שם המסמך').fill('אשרת עבודה');
-    await page.getByLabel('תאריך או הערה').fill('בתוקף עד 31.12.2028');
+    await page.getByLabel('תוקף המסמך').fill('2028-12-31');
   });
 
   test('rejects a missing file and an unsupported file type', async ({ page }) => {
@@ -144,7 +144,7 @@ test.describe('document validation and persistence', () => {
 
     await documentCard.getByRole('button', { name: 'עריכה' }).click();
     await page.getByLabel('שם המסמך').fill('אשרת עבודה מעודכנת');
-    await page.getByLabel('תאריך או הערה').fill('בתוקף עד 31.12.2029');
+    await page.getByLabel('תוקף המסמך').fill('2029-12-31');
     await page.getByLabel('מצב').selectOption('valid');
     await page.getByRole('button', { name: 'שמירת המסמך' }).click();
     await expect(page.getByRole('status')).toContainText('פרטי המסמך עודכנו ונשמרו');

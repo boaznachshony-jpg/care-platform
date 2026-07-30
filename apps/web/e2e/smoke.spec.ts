@@ -131,18 +131,23 @@ test('walks through all payroll steps', async ({ page }) => {
   await page.goto('/payroll');
   const next = page.getByRole('button', { name: 'המשך' });
   await next.click();
-  await expect(page.getByRole('heading', { name: 'שכר בסיס' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'שכר בסיס ושבתות' })).toBeVisible();
+  await page.getByLabel('מספר שבתות או ימי מנוחה שעבדו').fill('3');
+  await page.getByLabel('תעריף לכל שבת או יום מנוחה').fill('400');
+  await expect(page.getByText(/3 ×/)).toBeVisible();
   await next.click();
-  await expect(page.getByRole('heading', { name: 'תוספות' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'תוספות נוספות' })).toBeVisible();
+  await page.getByLabel('תוספת אחרת, אם קיימת').fill('250');
   await next.click();
-  await expect(page.getByRole('heading', { name: 'ניכויים' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מקדמות וקיזוזים' })).toBeVisible();
+  await page.getByLabel('מקדמות שכבר שולמו').fill('500');
   await next.click();
   await expect(page.getByRole('heading', { name: 'סיכום ואישור' })).toBeVisible();
   await expect(page.getByText('נתוני העסקה', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
   await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'סיכום שכר שנתי' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
   await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();
 });
 
@@ -169,7 +174,7 @@ test('adds, opens, edits and persists a realistic image document', async ({ page
   await page.getByRole('button', { name: '↑ הוספת מסמך' }).click();
   await page.getByLabel('שם המסמך').fill('דרכון בדיקה');
   await page.getByLabel('סוג').selectOption('דרכון');
-  await page.getByLabel('תאריך או הערה').fill('בתוקף עד 31.12.2028');
+  await page.getByLabel('תוקף המסמך').fill('2028-12-31');
   await page.getByLabel('בחירת קובץ').setInputFiles({
     name: 'passport.jpg',
     mimeType: 'image/jpeg',

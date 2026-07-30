@@ -94,6 +94,7 @@ export interface MvpPayrollRecord {
   sickDays?: number;
   absenceDays?: number;
   paidSaturdays: number;
+  saturdayRate?: number;
   paidHolidays?: number;
   saturdayPay: number;
   holidayPay?: number;

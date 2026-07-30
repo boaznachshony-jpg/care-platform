@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import { calculateMonthlyPayroll } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
 import {
   readMvpEmploymentExpenses,
@@ -20,33 +21,48 @@ function numeric(value: string): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function payrollValues(record: MvpPayrollRecord | undefined, baseSalary: number | null) {
+  const saturdayRate =
+    record?.saturdayRate ??
+    (record?.paidSaturdays ? (record.saturdayPay ?? 0) / record.paidSaturdays : 0);
+
+  return {
+    month: record?.month ?? currentMonth,
+    baseSalary: String(record?.baseSalary ?? baseSalary ?? ''),
+    workDays: String(record?.workDays ?? 0),
+    vacationDays: String(record?.vacationDays ?? 0),
+    sickDays: String(record?.sickDays ?? 0),
+    absenceDays: String(record?.absenceDays ?? 0),
+    paidSaturdays: String(record?.paidSaturdays ?? 0),
+    saturdayRate: String(saturdayRate),
+    paidHolidays: String(record?.paidHolidays ?? 0),
+    holidayPay: String(record?.holidayPay ?? 0),
+    vacationPay: String(record?.vacationPay ?? 0),
+    sickPay: String(record?.sickPay ?? 0),
+    pocketMoney: String(record?.pocketMoney ?? 0),
+    employerContributions: String(record?.employerContributions ?? 0),
+    otherAddition: String(record?.otherAddition ?? 0),
+    medicalInsuranceDeduction: String(record?.medicalInsuranceDeduction ?? 0),
+    housingDeduction: String(record?.housingDeduction ?? 0),
+    advances: String(record?.advances ?? 0),
+    agreedDeduction: String(record?.agreedDeduction ?? 0),
+  };
+}
+
+function recordSaturdayRate(record: MvpPayrollRecord): number {
+  return (
+    record.saturdayRate ??
+    (record.paidSaturdays ? (record.saturdayPay ?? 0) / record.paidSaturdays : 0)
+  );
+}
+
 export function PayrollPage() {
   const [profile, setProfile] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
   const [step, setStep] = useState(profile.baseSalary === null ? 0 : 1);
-  const existing = records.find((record) => record.month === currentMonth);
-  const [values, setValues] = useState({
-    month: existing?.month ?? currentMonth,
-    baseSalary: String(existing?.baseSalary ?? profile.baseSalary ?? ''),
-    workDays: String(existing?.workDays ?? 0),
-    vacationDays: String(existing?.vacationDays ?? 0),
-    sickDays: String(existing?.sickDays ?? 0),
-    absenceDays: String(existing?.absenceDays ?? 0),
-    paidSaturdays: String(existing?.paidSaturdays ?? 0),
-    paidHolidays: String(existing?.paidHolidays ?? 0),
-    saturdayPay: String(existing?.saturdayPay ?? 0),
-    holidayPay: String(existing?.holidayPay ?? 0),
-    vacationPay: String(existing?.vacationPay ?? 0),
-    sickPay: String(existing?.sickPay ?? 0),
-    pocketMoney: String(existing?.pocketMoney ?? 0),
-    employerContributions: String(existing?.employerContributions ?? 0),
-    otherAddition: String(existing?.otherAddition ?? 0),
-    medicalInsuranceDeduction: String(existing?.medicalInsuranceDeduction ?? 0),
-    housingDeduction: String(existing?.housingDeduction ?? 0),
-    advances: String(existing?.advances ?? 0),
-    agreedDeduction: String(existing?.agreedDeduction ?? 0),
-  });
+  const initialRecord = records.find((record) => record.month === currentMonth);
+  const [values, setValues] = useState(() => payrollValues(initialRecord, profile.baseSalary));
   const [expenseDraft, setExpenseDraft] = useState({
     category: 'ביטוח לאומי',
     frequency: 'quarterly' as EmploymentExpenseFrequency,
@@ -63,29 +79,32 @@ export function PayrollPage() {
   );
 
   const calculation = useMemo(() => {
-    const additions =
-      numeric(values.saturdayPay) +
-      numeric(values.holidayPay) +
-      numeric(values.vacationPay) +
-      numeric(values.sickPay) +
-      numeric(values.pocketMoney) +
-      numeric(values.employerContributions) +
-      numeric(values.otherAddition);
-    const deductions =
-      numeric(values.medicalInsuranceDeduction) +
-      numeric(values.housingDeduction) +
-      numeric(values.advances) +
-      numeric(values.agreedDeduction);
-    return {
-      additions,
-      deductions,
-      total: Math.max(0, numeric(values.baseSalary) + additions - deductions),
-    };
+    return calculateMonthlyPayroll({
+      baseSalary: numeric(values.baseSalary),
+      paidSaturdays: numeric(values.paidSaturdays),
+      saturdayRate: numeric(values.saturdayRate),
+      holidayPay: numeric(values.holidayPay),
+      vacationPay: numeric(values.vacationPay),
+      sickPay: numeric(values.sickPay),
+      pocketMoney: numeric(values.pocketMoney),
+      employerContributions: numeric(values.employerContributions),
+      otherAddition: numeric(values.otherAddition),
+      medicalInsuranceDeduction: numeric(values.medicalInsuranceDeduction),
+      housingDeduction: numeric(values.housingDeduction),
+      advances: numeric(values.advances),
+      agreedDeduction: numeric(values.agreedDeduction),
+    });
   }, [values]);
 
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
     setMessage('');
+  }
+
+  function loadMonth(month: string) {
+    const record = records.find((item) => item.month === month);
+    setValues({ ...payrollValues(record, profile.baseSalary), month });
+    setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');
   }
 
   function saveSalarySettings(event: React.FormEvent) {
@@ -101,6 +120,7 @@ export function PayrollPage() {
   }
 
   function savePayroll() {
+    const existing = records.find((record) => record.month === values.month);
     const saved: MvpPayrollRecord = {
       id: existing?.id ?? crypto.randomUUID(),
       month: values.month,
@@ -110,8 +130,9 @@ export function PayrollPage() {
       sickDays: numeric(values.sickDays),
       absenceDays: numeric(values.absenceDays),
       paidSaturdays: numeric(values.paidSaturdays),
+      saturdayRate: numeric(values.saturdayRate),
       paidHolidays: numeric(values.paidHolidays),
-      saturdayPay: numeric(values.saturdayPay),
+      saturdayPay: calculation.saturdayPay,
       holidayPay: numeric(values.holidayPay),
       vacationPay: numeric(values.vacationPay),
       sickPay: numeric(values.sickPay),
@@ -224,7 +245,13 @@ export function PayrollPage() {
     );
   }
 
-  const headings = ['בחירת חודש', 'שכר בסיס', 'תוספות', 'ניכויים', 'סיכום ואישור'];
+  const headings = [
+    'בחירת חודש',
+    'שכר בסיס ושבתות',
+    'תוספות נוספות',
+    'מקדמות וקיזוזים',
+    'סיכום ואישור',
+  ];
   return (
     <div className="page-stack">
       <header className="page-header">
@@ -244,7 +271,7 @@ export function PayrollPage() {
       ) : null}
       <section className="wizard-card">
         <div className="steps">
-          {['חודש', 'שכר בסיס', 'תוספות', 'ניכויים', 'סיכום'].map((label, index) => (
+          {['חודש', 'בסיס ושבתות', 'תוספות', 'קיזוזים', 'סיכום'].map((label, index) => (
             <div className={step >= index + 1 ? 'active' : ''} key={label}>
               <span>{step > index + 1 ? '✓' : index + 1}</span>
               <small>{label}</small>
@@ -259,8 +286,13 @@ export function PayrollPage() {
               <input
                 type="month"
                 value={values.month}
-                onChange={(event) => update('month', event.target.value)}
+                onChange={(event) => loadMonth(event.target.value)}
               />
+              {records.some((record) => record.month === values.month) ? (
+                <small>קיים חישוב שמור לחודש זה. המשך התהליך יעדכן אותו.</small>
+              ) : (
+                <small>עדיין לא נשמר חישוב לחודש זה.</small>
+              )}
             </label>
           ) : null}
           {step === 2 ? (
@@ -316,7 +348,7 @@ export function PayrollPage() {
                 />
               </label>
               <label>
-                ימי מנוחה שעבדו
+                מספר שבתות או ימי מנוחה שעבדו
                 <input
                   type="number"
                   min="0"
@@ -325,6 +357,25 @@ export function PayrollPage() {
                   onChange={(event) => update('paidSaturdays', event.target.value)}
                 />
               </label>
+              <label>
+                תעריף לכל שבת או יום מנוחה
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={values.saturdayRate}
+                  onChange={(event) => update('saturdayRate', event.target.value)}
+                />
+              </label>
+              <div className="payroll-live-total" aria-live="polite">
+                <span>
+                  תוספת שבתות
+                  <small>
+                    {numeric(values.paidSaturdays)} × {money.format(numeric(values.saturdayRate))}
+                  </small>
+                </span>
+                <strong>{money.format(calculation.saturdayPay)}</strong>
+              </div>
               <label>
                 ימי חג שעבדו
                 <input
@@ -342,16 +393,6 @@ export function PayrollPage() {
           ) : null}
           {step === 3 ? (
             <div className="form-grid">
-              <label>
-                תשלום ימי מנוחה
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={values.saturdayPay}
-                  onChange={(event) => update('saturdayPay', event.target.value)}
-                />
-              </label>
               <label>
                 תשלום ימי חג
                 <input
@@ -403,7 +444,7 @@ export function PayrollPage() {
                 />
               </label>
               <label>
-                תוספת אחרת
+                תוספת אחרת, אם קיימת
                 <input
                   type="number"
                   min="0"
@@ -412,6 +453,10 @@ export function PayrollPage() {
                   onChange={(event) => update('otherAddition', event.target.value)}
                 />
               </label>
+              <div className="payroll-live-total" aria-live="polite">
+                <span>כל התוספות לחודש, כולל שבתות</span>
+                <strong>{money.format(calculation.additions)}</strong>
+              </div>
             </div>
           ) : null}
           {step === 4 ? (
@@ -437,14 +482,16 @@ export function PayrollPage() {
                 />
               </label>
               <label>
-                מקדמות
+                מקדמות שכבר שולמו
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   value={values.advances}
+                  aria-label="מקדמות שכבר שולמו"
                   onChange={(event) => update('advances', event.target.value)}
                 />
+                <small>הסכום יקוזז מהתשלום הנותר החודש.</small>
               </label>
               <label>
                 ניכוי מוסכם
@@ -456,6 +503,10 @@ export function PayrollPage() {
                   onChange={(event) => update('agreedDeduction', event.target.value)}
                 />
               </label>
+              <div className="payroll-live-total deduction" aria-live="polite">
+                <span>סה״כ מקדמות וקיזוזים</span>
+                <strong>−{money.format(calculation.deductions)}</strong>
+              </div>
             </div>
           ) : null}
           {step === 5 ? (
@@ -468,13 +519,22 @@ export function PayrollPage() {
               </div>
               <div>
                 <span>
-                  תוספות <small>הזנה חודשית</small>
+                  שבתות וימי מנוחה
+                  <small>
+                    {numeric(values.paidSaturdays)} × {money.format(numeric(values.saturdayRate))}
+                  </small>
+                </span>
+                <strong>{money.format(calculation.saturdayPay)}</strong>
+              </div>
+              <div>
+                <span>
+                  כלל התוספות <small>כולל שבתות ותוספות אחרות</small>
                 </span>
                 <strong>{money.format(calculation.additions)}</strong>
               </div>
               <div>
                 <span>
-                  ניכויים <small>הזנה חודשית</small>
+                  מקדמות וקיזוזים <small>כל הסכומים שהוזנו החודש</small>
                 </span>
                 <strong>−{money.format(calculation.deductions)}</strong>
               </div>
@@ -646,7 +706,7 @@ export function PayrollPage() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">דוח תקופתי</p>
-              <h2>סיכום שכר שנתי</h2>
+              <h2>שכר מצטבר והיסטוריה שנתית</h2>
               <p>
                 הסכומים בדוח מחושבים מרשומות השכר החודשיות ששמרתם. הסכום השנתי לתשלום הוא החיבור
                 המדויק של הסכום לתשלום בכל חודש.
@@ -702,11 +762,28 @@ export function PayrollPage() {
             </p>
           </div>
           <h3>פירוט לפי חודש</h3>
-          <div className="detail-list">
+          <div className="detail-list payroll-history">
             {annualReport.records.map((record) => (
               <div key={record.id}>
-                <span>{record.month}</span>
+                <span>
+                  <strong>{record.month}</strong>
+                  <small>
+                    בסיס {money.format(record.baseSalary)} · {record.paidSaturdays} שבתות ×{' '}
+                    {money.format(recordSaturdayRate(record))}
+                    {record.advances ? ` · מקדמות ${money.format(record.advances)}` : ''}
+                  </small>
+                </span>
                 <strong>{money.format(record.total)}</strong>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    loadMonth(record.month);
+                    setStep(1);
+                  }}
+                >
+                  עריכת החודש
+                </button>
               </div>
             ))}
           </div>
