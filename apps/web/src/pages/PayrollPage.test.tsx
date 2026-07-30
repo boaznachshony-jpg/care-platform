@@ -82,6 +82,15 @@ describe('PayrollPage annual report', () => {
     render(<PayrollPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const prorationStartDate = `${currentMonth}-16`;
+    const year = Number(currentMonth.slice(0, 4));
+    const month = Number(currentMonth.slice(5, 7));
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const proratedBaseSalary = Math.round(((7_000 * (daysInMonth - 15)) / daysInMonth) * 100) / 100;
+    fireEvent.change(screen.getByLabelText('תאריך תחילת עבודה בחודש, לחישוב יחסי'), {
+      target: { value: prorationStartDate },
+    });
     fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
       target: { value: '3' },
     });
@@ -105,17 +114,19 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     fireEvent.click(screen.getByRole('button', { name: 'אישור ושמירה' }));
 
-    const currentMonth = new Date().toISOString().slice(0, 7);
     const saved = readMvpPayroll().find((record) => record.month === currentMonth);
     expect(saved).toMatchObject({
-      baseSalary: 7_000,
+      baseSalary: proratedBaseSalary,
+      contractBaseSalary: 7_000,
+      prorationStartDate,
+      prorationDays: daysInMonth - 15,
       paidSaturdays: 3,
       saturdayRate: 400,
       saturdayPay: 1_200,
       otherAddition: 250,
       pocketMoney: 100,
       advances: 500,
-      total: 7_850,
+      total: proratedBaseSalary + 850,
     });
   });
 });

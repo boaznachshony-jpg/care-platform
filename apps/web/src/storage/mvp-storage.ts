@@ -89,6 +89,9 @@ export interface MvpPayrollRecord {
   id: string;
   month: string;
   baseSalary: number;
+  contractBaseSalary?: number;
+  prorationStartDate?: string;
+  prorationDays?: number;
   workDays: number;
   vacationDays?: number;
   sickDays?: number;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateMonthlyPayroll } from './payroll-calculation.js';
+import { calculateMonthlyPayroll, calculateProratedBaseSalary } from './payroll-calculation.js';
 
 const emptyInput = {
   baseSalary: 7_000,
@@ -18,6 +18,24 @@ const emptyInput = {
 };
 
 describe('monthly payroll calculation', () => {
+  it('prorates the base salary from the selected date through the end of the month', () => {
+    expect(calculateProratedBaseSalary(6_400, '2026-07', '2026-07-16')).toEqual({
+      amount: 3_303.23,
+      paidDays: 16,
+      daysInMonth: 31,
+      isProrated: true,
+    });
+  });
+
+  it('keeps the full base salary when no partial-month date is selected', () => {
+    expect(calculateProratedBaseSalary(6_400, '2026-07', '')).toEqual({
+      amount: 6_400,
+      paidDays: 31,
+      daysInMonth: 31,
+      isProrated: false,
+    });
+  });
+
   it('calculates flexible Saturday pay from count and rate', () => {
     expect(
       calculateMonthlyPayroll({

@@ -176,8 +176,16 @@ test('walks through all payroll steps', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/payroll');
   const next = page.getByRole('button', { name: 'המשך' });
+  const payrollMonth = await page.getByLabel('חודש שכר').inputValue();
   await next.click();
   await expect(page.getByRole('heading', { name: 'שכר בסיס ושבתות' })).toBeVisible();
+  const payrollYear = Number(payrollMonth.slice(0, 4));
+  const payrollMonthNumber = Number(payrollMonth.slice(5, 7));
+  const daysInPayrollMonth = new Date(payrollYear, payrollMonthNumber, 0).getDate();
+  await page.getByLabel('תאריך תחילת עבודה בחודש, לחישוב יחסי').fill(`${payrollMonth}-16`);
+  await expect(
+    page.getByText(`${daysInPayrollMonth - 15} מתוך ${daysInPayrollMonth} ימים`),
+  ).toBeVisible();
   await page.getByLabel('מספר שבתות או ימי מנוחה שעבדו').fill('3');
   await page.getByLabel('תעריף לכל שבת או יום מנוחה').fill('400');
   await expect(page.getByText(/3 ×/)).toBeVisible();

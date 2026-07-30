@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
-import { calculateMonthlyPayroll } from '../payroll-calculation.js';
+import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
 import {
   readMvpEmploymentExpenses,
@@ -28,7 +28,8 @@ function payrollValues(record: MvpPayrollRecord | undefined, baseSalary: number 
 
   return {
     month: record?.month ?? currentMonth,
-    baseSalary: String(record?.baseSalary ?? baseSalary ?? ''),
+    baseSalary: String(record?.contractBaseSalary ?? record?.baseSalary ?? baseSalary ?? ''),
+    prorationStartDate: record?.prorationStartDate ?? '',
     workDays: String(record?.workDays ?? 0),
     vacationDays: String(record?.vacationDays ?? 0),
     sickDays: String(record?.sickDays ?? 0),
@@ -77,10 +78,19 @@ export function PayrollPage() {
     () => createAnnualPayrollReport(records, reportYear),
     [records, reportYear],
   );
+  const proratedBaseSalary = useMemo(
+    () =>
+      calculateProratedBaseSalary(
+        numeric(values.baseSalary),
+        values.month,
+        values.prorationStartDate,
+      ),
+    [values.baseSalary, values.month, values.prorationStartDate],
+  );
 
   const calculation = useMemo(() => {
     return calculateMonthlyPayroll({
-      baseSalary: numeric(values.baseSalary),
+      baseSalary: proratedBaseSalary.amount,
       paidSaturdays: numeric(values.paidSaturdays),
       saturdayRate: numeric(values.saturdayRate),
       holidayPay: numeric(values.holidayPay),
@@ -94,7 +104,7 @@ export function PayrollPage() {
       advances: numeric(values.advances),
       agreedDeduction: numeric(values.agreedDeduction),
     });
-  }, [values]);
+  }, [proratedBaseSalary.amount, values]);
 
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -124,7 +134,10 @@ export function PayrollPage() {
     const saved: MvpPayrollRecord = {
       id: existing?.id ?? crypto.randomUUID(),
       month: values.month,
-      baseSalary: numeric(values.baseSalary),
+      baseSalary: proratedBaseSalary.amount,
+      contractBaseSalary: numeric(values.baseSalary),
+      prorationStartDate: values.prorationStartDate || undefined,
+      prorationDays: proratedBaseSalary.paidDays,
       workDays: numeric(values.workDays),
       vacationDays: numeric(values.vacationDays),
       sickDays: numeric(values.sickDays),
@@ -307,6 +320,29 @@ export function PayrollPage() {
                   onChange={(event) => update('baseSalary', event.target.value)}
                 />
               </label>
+              <label>
+                תאריך תחילת עבודה בחודש, לחישוב יחסי
+                <input
+                  type="date"
+                  min={`${values.month}-01`}
+                  max={`${values.month}-${String(proratedBaseSalary.daysInMonth).padStart(2, '0')}`}
+                  value={values.prorationStartDate}
+                  aria-label="תאריך תחילת עבודה בחודש, לחישוב יחסי"
+                  onChange={(event) => update('prorationStartDate', event.target.value)}
+                />
+                <small>השאירו ריק כאשר העובד הועסק במשך כל החודש.</small>
+              </label>
+              <div className="payroll-live-total" aria-live="polite">
+                <span>
+                  שכר בסיס לחודש הנבחר
+                  <small>
+                    {proratedBaseSalary.isProrated
+                      ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימים`
+                      : 'חודש מלא'}
+                  </small>
+                </span>
+                <strong>{money.format(proratedBaseSalary.amount)}</strong>
+              </div>
               <label>
                 ימי עבודה
                 <input
@@ -517,7 +553,7 @@ export function PayrollPage() {
                 <span>
                   שכר בסיס <small>נתוני העסקה</small>
                 </span>
-                <strong>{money.format(numeric(values.baseSalary))}</strong>
+                <strong>{money.format(proratedBaseSalary.amount)}</strong>
               </div>
               <div>
                 <span>
@@ -782,6 +818,9 @@ export function PayrollPage() {
                     {money.format(recordSaturdayRate(record))}
                     {record.pocketMoney ? ` · דמי כיס ${money.format(record.pocketMoney)}` : ''}
                     {record.advances ? ` · מקדמות ${money.format(record.advances)}` : ''}
+                    {record.prorationStartDate
+                      ? ` · שכר יחסי מ־${record.prorationStartDate} (${record.prorationDays ?? 0} ימים)`
+                      : ''}
                   </small>
                 </span>
                 <strong>{money.format(record.total)}</strong>
