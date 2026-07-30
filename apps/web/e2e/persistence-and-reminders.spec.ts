@@ -95,6 +95,50 @@ test.describe('persistent profile and reminder preferences', () => {
   });
 });
 
+test.describe('task management', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedCompletedProfile(page);
+    await page.goto('/tasks');
+  });
+
+  test('creates, edits, completes and persists a task after reload', async ({ page }) => {
+    await page.getByRole('button', { name: /משימה חדשה/ }).click();
+    await page.getByLabel('מה צריך לבצע?').fill('חידוש ביטוח רפואי');
+    await page.getByLabel('מועד יעד').fill('2026-08-18');
+    await page.getByLabel('עדיפות').selectOption('important');
+    await page.getByRole('button', { name: 'שמירת המשימה' }).click();
+
+    await expect(page.getByRole('status')).toContainText('המשימה נוספה ונשמרה');
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי' })).toBeVisible();
+    await expect(page.getByText('מועד יעד: 18.08.2026')).toBeVisible();
+    await expect(page.getByText('חשוב', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'עריכה' }).click();
+    await page.getByLabel('מה צריך לבצע?').fill('חידוש ביטוח רפואי מעודכן');
+    await page.getByLabel('מועד יעד').fill('2026-08-25');
+    await page.getByLabel('עדיפות').selectOption('urgent');
+    await page.getByRole('button', { name: 'שמירת המשימה' }).click();
+
+    await expect(page.getByRole('status')).toContainText('המשימה עודכנה ונשמרה');
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי מעודכן' })).toBeVisible();
+    await expect(page.getByText('מועד יעד: 25.08.2026')).toBeVisible();
+    await expect(page.getByText('דחוף', { exact: true })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי מעודכן' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'השלמת חידוש ביטוח רפואי מעודכן' }).click();
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי מעודכן' })).not.toBeVisible();
+
+    await page.getByRole('button', { name: 'הושלמו' }).click();
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי מעודכן' })).toBeVisible();
+
+    await page.reload();
+    await page.getByRole('button', { name: 'הושלמו' }).click();
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי מעודכן' })).toBeVisible();
+  });
+});
+
 test.describe('document validation and persistence', () => {
   test.beforeEach(async ({ page }) => {
     await seedCompletedProfile(page);

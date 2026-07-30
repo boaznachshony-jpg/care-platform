@@ -51,6 +51,41 @@ describe('TasksPage', () => {
     expect(screen.getByText('הגשת דיווח')).toBeVisible();
   });
 
+  it('edits a task and persists the updated fields', () => {
+    render(<TasksPage />);
+    fireEvent.click(screen.getByRole('button', { name: /משימה חדשה/ }));
+    fireEvent.change(screen.getByLabelText('מה צריך לבצע?'), {
+      target: { value: 'חידוש היתר' },
+    });
+    fireEvent.change(screen.getByLabelText('מועד יעד'), {
+      target: { value: '2026-08-20' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת המשימה' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'עריכה' }));
+    fireEvent.change(screen.getByLabelText('מה צריך לבצע?'), {
+      target: { value: 'חידוש היתר מעודכן' },
+    });
+    fireEvent.change(screen.getByLabelText('מועד יעד'), {
+      target: { value: '2026-08-25' },
+    });
+    fireEvent.change(screen.getByLabelText('עדיפות'), {
+      target: { value: 'urgent' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת המשימה' }));
+
+    expect(screen.getByText('חידוש היתר מעודכן')).toBeVisible();
+    expect(screen.getByText('מועד יעד: 25.08.2026')).toBeVisible();
+    expect(readMvpTasks()).toEqual([
+      expect.objectContaining({
+        title: 'חידוש היתר מעודכן',
+        dueDate: '2026-08-25',
+        priority: 'urgent',
+        status: 'open',
+      }),
+    ]);
+  });
+
   it('shows preparation only on the final day of the quarter', () => {
     render(<TasksPage today={new Date('2026-09-30T12:00:00')} />);
 
