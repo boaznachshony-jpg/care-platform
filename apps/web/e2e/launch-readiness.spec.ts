@@ -318,4 +318,13 @@ test.describe('launch readiness interactions', () => {
       await expect(page).toHaveURL(new RegExp(`${expected === '/' ? '/$' : `${expected}$`}`));
     }
   });
+
+  test('unfinished internal API routes cannot expose a broken screen', async ({ page }) => {
+    await seedCompletedProfile(page);
+
+    await page.goto('/cases/new');
+    await expect(page).toHaveURL('/');
+    await page.goto('/cases/not-a-public-route');
+    await expect(page).toHaveURL('/');
+  });
 });
