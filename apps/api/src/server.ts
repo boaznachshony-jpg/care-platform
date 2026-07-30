@@ -113,7 +113,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
 // Vercel imports the default export as a Node.js function. Fastify must finish
 // registering its plugins before its underlying Node server handles requests.
 const app = buildServer(loadEnv());
-let ready: Promise<void> | undefined;
+let ready: ReturnType<typeof app.ready> | undefined;
 
 export default async function handler(
   request: IncomingMessage,
