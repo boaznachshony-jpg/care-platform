@@ -1,6 +1,7 @@
 # CareDesk deployment
 
 ## Web project
+
 - Root Directory: `apps/web`
 - Framework: Vite
 - Install: `pnpm install --frozen-lockfile`
@@ -9,6 +10,7 @@
 - Environment: `VITE_API_BASE_URL=https://care-platform-api.vercel.app`
 
 ## API project
+
 - Root Directory: `apps/api`
 - Framework: Fastify
 - Install: `pnpm install --frozen-lockfile`

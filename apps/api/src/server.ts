@@ -1,7 +1,9 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { HealthResponse } from '@caredesk/schemas';
 import { buildContainer, type Container } from './container.js';
+import { loadEnv } from './env.js';
 import type { Env } from './env.js';
 import { registerCorrelationId } from './plugins/correlation-id.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
@@ -106,4 +108,18 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseDocumentRoutes(app, container);
 
   return app;
+}
+
+// Vercel imports the default export as a Node.js function. Fastify must finish
+// registering its plugins before its underlying Node server handles requests.
+const app = buildServer(loadEnv());
+let ready: ReturnType<typeof app.ready> | undefined;
+
+export default async function handler(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  ready ??= app.ready();
+  await ready;
+  app.server.emit('request', request, response);
 }

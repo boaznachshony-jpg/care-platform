@@ -1,38 +1,199 @@
-import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+/* eslint-disable no-restricted-syntax */
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useMvpProfile } from './hooks/use-mvp-profile.js';
+import { createCareNotifications } from './notifications.js';
+import {
+  readMvpDocuments,
+  readMvpEmploymentExpenses,
+  readMvpTasks,
+} from './storage/mvp-storage.js';
 
-export interface AppShellProps { children: ReactNode }
+export interface AppShellProps {
+  children: ReactNode;
+}
 
 const nav = [
   ['/', '⌂', 'ראשי'],
   ['/tasks', '✓', 'משימות'],
   ['/employee', '♙', 'עובד'],
+  ['/trust', '♥', 'אמון'],
   ['/documents', '▣', 'מסמכים'],
   ['/timeline', '◷', 'ציר זמן'],
   ['/payroll', '₪', 'שכר'],
 ] as const;
 
+const mobileNav = [
+  ['/', '⌂', 'בית'],
+  ['/tasks', '✓', 'משימות'],
+  ['/payroll', '₪', 'שכר'],
+  ['/documents', '▣', 'מסמכים'],
+] as const;
+
+const mobileMoreNav = [
+  ['/employee', '♙', 'פרטי המטפל'],
+  ['/trust', '♥', 'מסרים לבניית אמון'],
+  ['/timeline', '◷', 'ציר זמן'],
+  ['/settings', '⚙', 'הגדרות'],
+] as const;
+
+const FONT_SCALE_KEY = 'caredesk.ui.font-scale.v1';
+const fontScales = [1, 1.15, 1.3] as const;
+
+function readFontScale(): number {
+  const saved = Number(window.localStorage.getItem(FONT_SCALE_KEY));
+  return fontScales.includes(saved as (typeof fontScales)[number]) ? saved : 1;
+}
+
+function currentHebrewDate(): string {
+  return new Intl.DateTimeFormat('he-IL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date());
+}
+
 export function AppShell({ children }: AppShellProps) {
+  const location = useLocation();
+  const [profile] = useMvpProfile();
+  const [fontScale, setFontScale] = useState(readFontScale);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const notifications = profile.notificationsEnabled
+    ? createCareNotifications({
+        tasks: readMvpTasks(),
+        documents: readMvpDocuments(),
+        expenses: readMvpEmploymentExpenses(),
+        reminderLeadDays: profile.reminderLeadDays,
+      })
+    : [];
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ui-scale', String(fontScale));
+    window.localStorage.setItem(FONT_SCALE_KEY, String(fontScale));
+  }, [fontScale]);
+
   return (
     <div className="app-frame">
-      <a href="#main-content" className="cd-skip-link">דלג לתוכן</a>
+      <a href="#main-content" className="cd-skip-link">
+        דלג לתוכן
+      </a>
       <aside className="sidebar" aria-label="ניווט ראשי">
-        <div className="brand"><span className="brand-mark">C</span><div><strong>CareDesk</strong><small>ניהול העסקה ישירה</small></div></div>
+        <div className="brand">
+          <span className="brand-mark">C</span>
+          <div>
+            <strong>CareDesk</strong>
+            <small>ניהול העסקה ישירה</small>
+          </div>
+        </div>
         <nav className="desktop-nav">
-          {nav.map(([to, icon, label]) => <NavLink key={to} to={to} end={to === '/'}><span>{icon}</span>{label}</NavLink>)}
+          {nav.map(([to, icon, label]) => (
+            <NavLink key={to} to={to} end={to === '/'}>
+              <span>{icon}</span>
+              {label}
+            </NavLink>
+          ))}
         </nav>
-        <div className="sidebar-help"><strong>הכול בשליטה</strong><span>המערכת מסכמת עבורך מה דורש טיפול.</span></div>
-        <NavLink className="settings-link" to="/settings">⚙ הגדרות</NavLink>
+        <div className="sidebar-help">
+          <strong>הכול בשליטה</strong>
+          <span>המערכת מסכמת עבורך מה דורש טיפול.</span>
+        </div>
+        <NavLink className="settings-link" to="/settings">
+          ⚙ הגדרות
+        </NavLink>
       </aside>
       <div className="app-body">
         <header className="topbar">
-          <div><strong>שלום בועז</strong><span>יום שלישי, 28 ביולי</span></div>
-          <div className="top-actions"><button aria-label="התראות">🔔</button><div className="avatar">ב</div></div>
+          <div>
+            <strong>שלום {profile.employerName || 'וברוכים הבאים'}</strong>
+            <span>{currentHebrewDate()}</span>
+          </div>
+          <div className="top-actions">
+            <div className="font-size-controls" role="group" aria-label="גודל טקסט">
+              <button
+                type="button"
+                aria-label="הקטנת טקסט"
+                disabled={fontScale === fontScales[0]}
+                onClick={() =>
+                  setFontScale(
+                    (current) =>
+                      fontScales[Math.max(0, fontScales.indexOf(current as 1 | 1.15 | 1.3) - 1)] ??
+                      current,
+                  )
+                }
+              >
+                א−
+              </button>
+              <button
+                type="button"
+                aria-label="הגדלת טקסט"
+                disabled={fontScale === fontScales[fontScales.length - 1]}
+                onClick={() =>
+                  setFontScale(
+                    (current) =>
+                      fontScales[
+                        Math.min(
+                          fontScales.length - 1,
+                          fontScales.indexOf(current as 1 | 1.15 | 1.3) + 1,
+                        )
+                      ] ?? current,
+                  )
+                }
+              >
+                א+
+              </button>
+            </div>
+            <div className="notification-center">
+              <Link
+                className={
+                  notifications.length > 0 ? 'notification-bell active' : 'notification-bell'
+                }
+                to="/tasks"
+                aria-label={
+                  notifications.length > 0
+                    ? `מעבר למשימות פתוחות, ${notifications.length} נושאים לטיפול`
+                    : 'מעבר למשימות פתוחות'
+                }
+              >
+                <span aria-hidden="true">🔔</span>
+                {notifications.length > 0 ? (
+                  <strong className="notification-count">{notifications.length}</strong>
+                ) : null}
+              </Link>
+            </div>
+            <div className="avatar">ב</div>
+          </div>
         </header>
-        <main id="main-content" className="main-content">{children}</main>
+        <main id="main-content" className="main-content">
+          {children}
+        </main>
         <nav className="mobile-nav" aria-label="ניווט תחתון">
-          {nav.slice(0, 5).map(([to, icon, label]) => <NavLink key={to} to={to} end={to === '/'}><span>{icon}</span><small>{label}</small></NavLink>)}
+          {mobileNav.map(([to, icon, label]) => (
+            <NavLink key={to} to={to} end={to === '/'} onClick={() => setMobileMoreOpen(false)}>
+              <span>{icon}</span>
+              <small>{label}</small>
+            </NavLink>
+          ))}
+          <button
+            className={mobileMoreNav.some(([to]) => to === location.pathname) ? 'active' : ''}
+            type="button"
+            aria-expanded={mobileMoreOpen}
+            aria-controls="mobile-more-menu"
+            onClick={() => setMobileMoreOpen((open) => !open)}
+          >
+            <span aria-hidden="true">•••</span>
+            <small>עוד</small>
+          </button>
         </nav>
+        {mobileMoreOpen ? (
+          <nav id="mobile-more-menu" className="mobile-more-menu" aria-label="ניווט נוסף">
+            {mobileMoreNav.map(([to, icon, label]) => (
+              <NavLink key={to} to={to} onClick={() => setMobileMoreOpen(false)}>
+                <span aria-hidden="true">{icon}</span>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        ) : null}
       </div>
     </div>
   );

@@ -1,2 +1,140 @@
+/* eslint-disable no-restricted-syntax */
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-export function EmployeePage(){return <div className="page-stack"><header className="page-header"><div><p className="eyebrow">עובד ומסמכים</p><h1>Maria Santos</h1><p>מטפלת סיעודית · העסקה פעילה</p></div><span className="pill green">הכול בתוקף</span></header><section className="profile-card"><div className="large-avatar">MS</div><div><h2>Maria Santos</h2><p>פיליפינים · התחלת העסקה 14.01.2025</p><div className="mini-facts"><span>טלפון: 050-555-0182</span><span>שפה: אנגלית</span><span>מגורים: בבית המטופל</span></div></div><button className="secondary-button">עריכת פרטים</button></section><div className="dashboard-grid"><section className="card"><div className="section-heading"><h2>מצב ההעסקה</h2><span className="pill green">תקין</span></div><div className="detail-list"><div><span>אשרת עבודה</span><strong>בתוקף עד 12.02.2027</strong></div><div><span>ביטוח רפואי</span><strong>בתוקף עד 09.08.2026</strong></div><div><span>חוזה העסקה</span><strong>חתום ושמור</strong></div><div><span>חשבון בנק</span><strong>אומת</strong></div></div></section><section className="card"><div className="section-heading"><h2>יתרות נוכחיות</h2><span>נכון ליולי</span></div><div className="balance-grid"><div><strong>8.5</strong><span>ימי חופשה</span></div><div><strong>5</strong><span>ימי הבראה</span></div><div><strong>4</strong><span>שבתות החודש</span></div><div><strong>9</strong><span>חגים שנתיים</span></div></div></section></div><section><div className="section-title-row"><div><span>ארנק מסמכים</span><h2>מסמכים מרכזיים</h2></div><Link to="/documents">לכל המסמכים</Link></div><div className="wallet-grid"><article className="wallet-card blue"><span>דרכון</span><strong>P1234567</strong><small>בתוקף עד 18.11.2028</small></article><article className="wallet-card green"><span>אשרת עבודה</span><strong>B/1 Caregiver</strong><small>בתוקף עד 12.02.2027</small></article><article className="wallet-card purple"><span>ביטוח רפואי</span><strong>Harel Health</strong><small>חידוש ב־09.08.2026</small></article></div></section></div>}
+import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+
+export function EmployeePage() {
+  const [profile, setProfile] = useMvpProfile();
+  const [draft, setDraft] = useState(profile);
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const initials = profile.caregiverName
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  function startEditing() {
+    setDraft(profile);
+    setSaved(false);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setDraft(profile);
+    setEditing(false);
+  }
+
+  return (
+    <div className="page-stack">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">מטפל או מטפלת</p>
+          <h1>{profile.caregiverName || 'טרם הוזן שם'}</h1>
+          <p>פרטי ההעסקה והתקשורת שנשמרו במכשיר זה.</p>
+        </div>
+        <Link className="primary-button" to="/trust">
+          מסרים לבניית אמון
+        </Link>
+      </header>
+
+      <section className="profile-card">
+        <div className="large-avatar">{initials || '–'}</div>
+        <div>
+          <h2>{profile.caregiverName || 'טרם הוזן'}</h2>
+          <p>
+            {profile.caregiverCountry || 'ארץ מוצא טרם הוגדרה'} · תחילת העסקה{' '}
+            {profile.employmentStartDate || 'טרם הוגדרה'}
+          </p>
+          <div className="mini-facts">
+            <span>שפה מועדפת: {profile.caregiverLanguage || 'טרם הוגדרה'}</span>
+          </div>
+        </div>
+        <button className="secondary-button" type="button" onClick={startEditing}>
+          עריכת פרטים
+        </button>
+      </section>
+
+      {editing ? (
+        <form
+          className="card readable-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setProfile(draft);
+            setEditing(false);
+            setSaved(true);
+          }}
+        >
+          <h2>עריכת פרטי המטפל</h2>
+          <label>
+            שם המטפל או המטפלת
+            <input
+              required
+              value={draft.caregiverName}
+              onChange={(event) => setDraft({ ...draft, caregiverName: event.target.value })}
+            />
+          </label>
+          <label>
+            ארץ מוצא
+            <select
+              required
+              value={draft.caregiverCountry}
+              onChange={(event) => {
+                const country = event.target.value;
+                setDraft({
+                  ...draft,
+                  caregiverCountry: country,
+                  caregiverLanguage: suggestedLanguage(country) || draft.caregiverLanguage,
+                });
+              }}
+            >
+              <option value="">בחירה</option>
+              {caregiverCountries.map((country) => (
+                <option key={country}>{country}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            שפה מועדפת
+            <select
+              required
+              value={draft.caregiverLanguage}
+              onChange={(event) => setDraft({ ...draft, caregiverLanguage: event.target.value })}
+            >
+              <option value="">בחירה</option>
+              {caregiverLanguages.map((language) => (
+                <option key={language}>{language}</option>
+              ))}
+            </select>
+          </label>
+          <div className="button-row">
+            <button className="primary-button" type="submit">
+              שמירת הפרטים
+            </button>
+            <button className="secondary-button" type="button" onClick={cancelEditing}>
+              ביטול
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {saved ? (
+        <p className="info-box" role="status">
+          פרטי המטפל נשמרו.
+        </p>
+      ) : null}
+
+      <section className="card trust-preview">
+        <div>
+          <p className="eyebrow">קשר ותקשורת</p>
+          <h2>שיחה קטנה יכולה לבנות אמון גדול</h2>
+          <p>מסרים קצרים ומכבדים בשפה המועדפת של המטפל מסייעים בתיאום ציפיות ובתחושת שותפות.</p>
+        </div>
+        <Link className="secondary-button" to="/trust">
+          לפתיחת המסרים
+        </Link>
+      </section>
+    </div>
+  );
+}

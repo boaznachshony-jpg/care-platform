@@ -1,45 +1,417 @@
+/* eslint-disable no-restricted-syntax */
 import { expect, test } from '@playwright/test';
 
-const routes = [
-  ['/', 'הכול נראה תקין'],
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+});
+
+const completedProfile = {
+  employerName: 'בועז בדיקה',
+  employerIdNumber: '123456782',
+  employerPhone: '0501234567',
+  recipientName: 'מטופל בדיקה',
+  caregiverName: 'Caregiver Test',
+  caregiverCountry: 'אוזבקיסטן',
+  caregiverLanguage: 'אוזבקית',
+  employmentStartDate: '2026-01-15',
+  representativeName: 'נציג בדיקה',
+  representativePhone: '0521234567',
+  notificationsEnabled: true,
+  reminderLeadDays: 7,
+  quietHoursStart: '21:00',
+  quietHoursEnd: '08:00',
+  onboardingCompleted: true,
+  baseSalary: 7000,
+  salaryEffectiveDate: '2026-01-15',
+};
+
+async function seedCompletedProfile(page: import('@playwright/test').Page) {
+  await page.evaluate((profile) => {
+    localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
+  }, completedProfile);
+}
+
+test('completes onboarding, persists data and updates settings', async ({ page }) => {
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+  await page.getByLabel('שם המעסיק').fill('בועז בדיקה');
+  await page.getByLabel('מספר תעודת זהות').fill('123456782');
+  await page.getByLabel('מספר טלפון').fill('0501234567');
+  await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
+  await page.getByRole('button', { name: 'המשך' }).click();
+
+  await page.getByLabel('שם המטפל או המטפלת').fill('Caregiver Test');
+  await page.getByLabel('ארץ מוצא').selectOption('אוזבקיסטן');
+  await page.getByLabel('שפה מועדפת').selectOption('אוזבקית');
+  await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
+  await page.getByRole('button', { name: 'המשך' }).click();
+
+  await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
+  await page.getByLabel('מספר טלפון').fill('0521234567');
+  await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
+
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('heading', { name: 'שלום בועז בדיקה' })).toBeVisible();
+  await expect(page.getByText('מטופל בדיקה')).toBeVisible();
+  await expect(page.getByText('Caregiver Test')).toBeVisible();
+  await expect(page.getByText('דורש טיפול', { exact: true })).toBeVisible();
+
+  await page.goto('/settings');
+  await page.getByLabel('שם המעסיק').fill('בועז מעודכן');
+  await page.getByLabel('כמה זמן מראש להזכיר?').selectOption('21');
+  await page.getByRole('button', { name: 'שמירת השינויים' }).click();
+  await expect(page.getByText('השינויים נשמרו בהצלחה')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('שם המעסיק')).toHaveValue('בועז מעודכן');
+  await expect(page.getByLabel('כמה זמן מראש להזכיר?')).toHaveValue('21');
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'שלום בועז מעודכן' })).toBeVisible();
+});
+
+test('mobile controls remain readable and touch friendly', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('heading', { name: 'בואו נכין את התיק שלכם' })).toBeVisible();
+  const continueButton = page.getByRole('button', { name: 'המשך' });
+  await expect(continueButton).toBeVisible();
+  const box = await continueButton.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(48);
+});
+
+test('mobile navigation keeps payroll accessible', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('navigation', { name: 'ניווט תחתון' })).toContainText('שכר');
+  await page
+    .getByRole('navigation', { name: 'ניווט תחתון' })
+    .getByRole('link', { name: '₪ שכר' })
+    .click();
+  await expect(page).toHaveURL(/\/payroll$/);
+  await expect(page.getByRole('heading', { name: 'הכנת שכר חודשי' })).toBeVisible();
+});
+
+const productRoutes = [
+  ['/', 'שלום בועז בדיקה'],
   ['/tasks', 'מה צריך לבצע'],
-  ['/employee', 'Maria Santos'],
+  ['/employee', 'Caregiver Test'],
+  ['/trust', 'מסרים לבניית אמון'],
   ['/documents', 'כל המסמכים במקום אחד'],
   ['/timeline', 'המועדים הבאים'],
   ['/payroll', 'הכנת שכר חודשי'],
-  ['/settings', 'הגדרות'],
+  ['/settings', 'פרטים והעדפות'],
 ] as const;
 
-test('loads the shell in Hebrew RTL with one main landmark', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await expect(page.locator('html')).toHaveAttribute('lang', 'he');
-  await expect(page.getByRole('main')).toHaveCount(1);
-  await expect(page.getByRole('link', { name: 'דלג לתוכן' })).toBeVisible();
-});
-
-for (const [route, heading] of routes) {
-  test(`renders ${route} without a client-side crash`, async ({ page }) => {
+for (const [route, heading] of productRoutes) {
+  test(`renders ${route} after onboarding`, async ({ page }) => {
+    await seedCompletedProfile(page);
     await page.goto(route);
     await expect(page.getByRole('main')).toContainText(heading);
-    await expect(page.locator('body')).not.toContainText('Application error');
+    await expect(page.getByRole('main')).toBeVisible();
   });
 }
 
-test('mobile navigation remains usable at a phone viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test('connects every primary screen through visible navigation and action links', async ({
+  page,
+}, testInfo) => {
+  await seedCompletedProfile(page);
   await page.goto('/');
-  const mobileNav = page.getByRole('navigation', { name: 'ניווט תחתון' });
-  await expect(mobileNav).toBeVisible();
-  await mobileNav.getByRole('link', { name: /משימות/ }).click();
-  await expect(page).toHaveURL(/\/tasks$/);
-  await expect(page.getByRole('main')).toContainText('מה צריך לבצע');
+
+  if (testInfo.project.name === 'mobile-chromium') {
+    const directConnections = [
+      ['משימות', '/tasks', 'מה צריך לבצע'],
+      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
+    ] as const;
+    for (const [linkName, route, expectedText] of directConnections) {
+      await page.goto('/');
+      await page
+        .getByRole('navigation', { name: 'ניווט תחתון' })
+        .getByRole('link', { name: new RegExp(linkName) })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
+      await expect(page.getByRole('main')).toContainText(expectedText);
+    }
+
+    const moreConnections = [
+      ['פרטי המטפל', '/employee', 'Caregiver Test'],
+      ['מסרים לבניית אמון', '/trust', 'מסרים לבניית אמון'],
+      ['ציר זמן', '/timeline', 'המועדים הבאים'],
+      ['הגדרות', '/settings', 'פרטים והעדפות'],
+    ] as const;
+    for (const [linkName, route, expectedText] of moreConnections) {
+      await page.goto('/');
+      await page.getByRole('button', { name: 'עוד' }).click();
+      await page
+        .getByRole('navigation', { name: 'ניווט נוסף' })
+        .getByRole('link', { name: new RegExp(linkName) })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
+      await expect(page.getByRole('main')).toContainText(expectedText);
+    }
+  } else {
+    const connections = [
+      ['משימות', '/tasks', 'מה צריך לבצע'],
+      ['עובד', '/employee', 'Caregiver Test'],
+      ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
+      ['ציר זמן', '/timeline', 'המועדים הבאים'],
+      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['הגדרות', '/settings', 'פרטים והעדפות'],
+    ] as const;
+    for (const [linkName, route, expectedText] of connections) {
+      await page.goto('/');
+      await page
+        .getByRole('complementary', { name: 'ניווט ראשי' })
+        .getByRole('link', { name: new RegExp(linkName) })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
+      await expect(page.getByRole('main')).toContainText(expectedText);
+    }
+  }
+
+  await page.goto('/employee');
+  await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
+  await expect(page).toHaveURL(/\/trust$/);
+  await page.getByRole('link', { name: 'לפרטי המטפל' }).click();
+  await expect(page).toHaveURL(/\/employee$/);
 });
 
-test('desktop navigation exposes the primary product areas', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test('creates, persists, completes and restores a task', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/tasks');
+  await page.getByRole('button', { name: /משימה חדשה/ }).click();
+  await page.getByLabel('מה צריך לבצע?').fill('בדיקת ביטוח רפואי');
+  await page.getByLabel('מועד יעד').fill('2026-08-03');
+  await page.getByLabel('עדיפות').selectOption('important');
+  await page.getByRole('button', { name: 'שמירת המשימה' }).click();
+  await page.reload();
+
+  const task = page.getByRole('article').filter({ hasText: 'בדיקת ביטוח רפואי' });
+  const checkbox = task.getByRole('button', { name: 'השלמת בדיקת ביטוח רפואי' });
+  await checkbox.click();
+  await expect(task).not.toBeVisible();
+  await page.getByRole('button', { name: 'הושלמו' }).click();
+  await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
+  await page.getByRole('button', { name: 'החזרת בדיקת ביטוח רפואי' }).click();
+  await page.getByRole('button', { name: 'פתוחות' }).click();
+  await expect(page.getByText('בדיקת ביטוח רפואי')).toBeVisible();
+
+  await task.getByRole('button', { name: 'עריכה' }).click();
+  await page.getByLabel('מה צריך לבצע?').fill('בדיקת ביטוח רפואי מעודכנת');
+  await page.getByRole('button', { name: 'שמירת המשימה' }).click();
+  await page.reload();
+  const updatedTask = page.getByRole('article').filter({ hasText: 'בדיקת ביטוח רפואי מעודכנת' });
+  await expect(updatedTask).toBeVisible();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await updatedTask.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(updatedTask).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await updatedTask.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(updatedTask).not.toBeVisible();
+});
+
+test('opens the relevant workflow from timeline details', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/timeline');
+
+  await page
+    .getByRole('article')
+    .filter({ hasText: 'בדיקת ביטוח רפואי' })
+    .getByRole('link', { name: 'פרטים' })
+    .click();
+
+  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page.getByRole('heading', { name: 'כל המסמכים במקום אחד' })).toBeVisible();
+});
+
+test('shows the quarterly national insurance payment window and deadline', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-10T12:00:00'));
+  await seedCompletedProfile(page);
+  await page.goto('/tasks');
+
+  const card = page.getByRole('region', { name: 'משימת ביטוח לאומי רבעונית' });
+  await expect(card).toContainText('תשלום ביטוח לאומי לרבעון יולי–ספטמבר');
+  await expect(card).toContainText('תקופת דיווח: 1.7–30.9');
+  await expect(card).toContainText('ניתן לשלם בין 1.10 ל־15.10');
+  await expect(card).toContainText('מועד אחרון: 15 באוקטובר');
+  await expect(card).toContainText('דורש טיפול');
+  await expect(card).not.toContainText('מועד אחרון: 30 בספטמבר');
+  await expect(
+    card.getByRole('link', { name: 'מעבר לאתר הביטוח הלאומי לדיווח ולתשלום' }),
+  ).toHaveAttribute('href', 'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx');
+});
+
+test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
+  await seedCompletedProfile(page);
   await page.goto('/');
-  const nav = page.getByRole('navigation', { name: 'ניווט ראשי' });
-  await expect(nav).toBeVisible();
-  await expect(nav.getByRole('link')).toHaveCount(6);
+  await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
+  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+  await page.reload();
+  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+});
+
+test('notification bell opens the list of open tasks', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'caredesk.mvp.tasks.v1',
+      JSON.stringify([
+        {
+          id: 'notification-task',
+          title: 'טיפול בביטוח רפואי',
+          dueDate: new Date().toISOString().slice(0, 10),
+          priority: 'urgent',
+          status: 'open',
+          createdAt: new Date().toISOString(),
+        },
+      ]),
+    );
+  });
+  await page.goto('/');
+
+  await page
+    .getByRole('link', {
+      name: /^מעבר למשימות פתוחות, \d+ נושאים לטיפול$/,
+    })
+    .click();
+  await expect(page).toHaveURL(/\/tasks$/);
+  await expect(page.getByText('טיפול בביטוח רפואי')).toBeVisible();
+});
+
+test('walks through all payroll steps', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/payroll');
+  const next = page.getByRole('button', { name: 'המשך' });
+  const payrollMonth = await page.getByLabel('חודש שכר').inputValue();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'שכר בסיס ושבתות' })).toBeVisible();
+  const payrollYear = Number(payrollMonth.slice(0, 4));
+  const payrollMonthNumber = Number(payrollMonth.slice(5, 7));
+  const daysInPayrollMonth = new Date(payrollYear, payrollMonthNumber, 0).getDate();
+  const baseDays = Array.from({ length: daysInPayrollMonth }, (_, index) => index + 1).filter(
+    (day) => new Date(payrollYear, payrollMonthNumber - 1, day).getDay() !== 6,
+  );
+  const paidBaseDays = baseDays.filter((day) => day >= 16).length;
+  await page.getByLabel('תאריך תחילת עבודה בחודש, לחישוב יחסי').fill(`${payrollMonth}-16`);
+  await expect(page.getByText(`${paidBaseDays} מתוך ${baseDays.length} ימי בסיס`)).toBeVisible();
+  await expect(page.getByText(/מהמכנה הוצאו .* שבתות/)).toBeVisible();
+  await page.getByLabel('מספר שבתות או ימי מנוחה שעבדו').fill('3');
+  await page.getByLabel('תעריף לכל שבת או יום מנוחה').fill('400');
+  await expect(page.getByText(/3 ×/)).toBeVisible();
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'תוספות נוספות' })).toBeVisible();
+  await page.getByLabel('תוספת אחרת, אם קיימת').fill('250');
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'מקדמות וקיזוזים' })).toBeVisible();
+  await page.getByLabel('מקדמות שכבר שולמו').fill('500');
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'סיכום ואישור' })).toBeVisible();
+  await expect(page.getByText('נתוני העסקה', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'אישור ושמירה' }).click();
+  await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
+  await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();
+});
+
+test('tracks quarterly and annual employment expenses', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/payroll');
+  await expect(page.getByRole('heading', { name: 'תשלומים תקופתיים של ההעסקה' })).toBeVisible();
+  await page.getByLabel('סוג התשלום').selectOption({ label: 'ביטוח לאומי' });
+  await page.getByLabel('תדירות').selectOption('quarterly');
+  await page.getByLabel('סכום בש״ח').fill('1840');
+  await page.getByLabel('תאריך יעד').fill('2026-10-20');
+  await page.getByLabel('הערה או אסמכתה').fill('רבעון שלישי');
+  await page.getByRole('button', { name: 'הוספת תשלום למעקב' }).click();
+  await expect(page.getByText('התשלום התקופתי נשמר בלוח עלויות ההעסקה.')).toBeVisible();
+  await expect(page.getByText('רבעוני · יעד 2026-10-20 · רבעון שלישי')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.employment-expenses strong').getByText('ביטוח לאומי')).toBeVisible();
+  const expense = page.locator('.employment-expenses > div').filter({ hasText: 'ביטוח לאומי' });
+  await expense.getByRole('button', { name: 'סימון כשולם' }).click();
+  await page.reload();
+  await expect(
+    page
+      .locator('.employment-expenses > div')
+      .filter({ hasText: 'ביטוח לאומי' })
+      .getByRole('button', { name: 'שולם ✓' }),
+  ).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await expense.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(expense).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await expense.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(expense).not.toBeVisible();
+});
+
+test('adds, opens, edits and persists a realistic image document', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/documents');
+  await expect(page.getByText('עדיין לא נוספו מסמכים')).toBeVisible();
+  await page.getByRole('button', { name: '↑ הוספת מסמך' }).click();
+  await page.getByLabel('שם המסמך').fill('דרכון בדיקה');
+  await page.getByLabel('סוג').selectOption('דרכון');
+  await page.getByLabel('תוקף המסמך').fill('2028-12-31');
+  await page.getByLabel('בחירת קובץ').setInputFiles({
+    name: 'passport.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.alloc(2_000_000, 1),
+  });
+  await page.getByRole('button', { name: 'שמירת המסמך' }).click();
+  await expect(page.getByRole('heading', { name: 'דרכון בדיקה' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'עריכה' }).click();
+  await page.getByLabel('שם המסמך').fill('דרכון מעודכן');
+  await page.getByRole('button', { name: 'שמירת המסמך' }).click();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'דרכון מעודכן' })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'פתיחה' }).click();
+  await expect((await download).suggestedFilename()).toBe('passport.jpg');
+
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(page.getByRole('heading', { name: 'דרכון מעודכן' })).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'מחיקה' }).click();
+  await expect(page.getByText('עדיין לא נוספו מסמכים')).toBeVisible();
+});
+
+test('requires an explicit salary source before payroll', async ({ page }) => {
+  await page.evaluate((profile) => {
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({ ...profile, baseSalary: null, salaryEffectiveDate: '' }),
+    );
+  }, completedProfile);
+  await page.goto('/payroll');
+  await expect(page.getByRole('heading', { name: 'הגדרת מקור השכר' })).toBeVisible();
+  await expect(page.getByText('טרם הוגדר')).toBeVisible();
+});
+
+test('saves Uzbekistan as caregiver country and shows Uzbek trust messages', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/employee');
+  await expect(page.getByText('אוזבקיסטן · תחילת העסקה 2026-01-15')).toBeVisible();
+  await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
+  await expect(page.getByText('ארץ מוצא: אוזבקיסטן · שפה שנבחרה: אוזבקית')).toBeVisible();
+  await expect(page.getByText('Rahmat. Yordamingizni qadrlayman.')).toBeVisible();
+});
+
+test('notification master switch disables reminder timing', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/settings');
+  const masterSwitch = page.getByRole('checkbox', { name: 'הפעלת כל ההתראות' });
+  const reminderSelect = page.getByLabel('כמה זמן מראש להזכיר?');
+  await masterSwitch.uncheck();
+  await expect(reminderSelect).toBeDisabled();
+  await page.getByRole('button', { name: 'שמירת השינויים' }).click();
+  await page.reload();
+  await expect(masterSwitch).not.toBeChecked();
 });
