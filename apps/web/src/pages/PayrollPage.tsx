@@ -76,6 +76,7 @@ export function PayrollPage() {
   });
   const [message, setMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [payrollSaved, setPayrollSaved] = useState(false);
 
   const validationTerms: Partial<Record<keyof typeof values, string[]>> = {
     month: ['חודש שכר'],
@@ -155,11 +156,27 @@ export function PayrollPage() {
       agreedDeduction: numeric(values.agreedDeduction),
     });
   }, [proratedBaseSalary.amount, values]);
+  const otherAdditions = Math.max(0, calculation.additions - calculation.saturdayPay);
+  const beforeDeductions = proratedBaseSalary.amount + calculation.additions;
+  const deductionBreakdown = [
+    numeric(values.pocketMoney) > 0 ? `דמי כיס ${money.format(numeric(values.pocketMoney))}` : '',
+    numeric(values.medicalInsuranceDeduction) > 0
+      ? `ביטוח רפואי ${money.format(numeric(values.medicalInsuranceDeduction))}`
+      : '',
+    numeric(values.housingDeduction) > 0
+      ? `מגורים ${money.format(numeric(values.housingDeduction))}`
+      : '',
+    numeric(values.advances) > 0 ? `מקדמות ${money.format(numeric(values.advances))}` : '',
+    numeric(values.agreedDeduction) > 0
+      ? `ניכוי מוסכם ${money.format(numeric(values.agreedDeduction))}`
+      : '',
+  ].filter(Boolean);
 
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
     setMessage('');
     setValidationErrors([]);
+    setPayrollSaved(false);
   }
 
   function validateStep(stepToValidate: number): string[] {
@@ -257,6 +274,7 @@ export function PayrollPage() {
     const record = records.find((item) => item.month === month);
     setValues({ ...payrollValues(record, profile.baseSalary), month });
     setValidationErrors([]);
+    setPayrollSaved(false);
     setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');
   }
 
@@ -273,10 +291,20 @@ export function PayrollPage() {
   }
 
   function savePayroll() {
-    const errors = [1, 2, 3, 4].flatMap(validateStep);
+    const errorsByStep = [1, 2, 3, 4].map((stepNumber) => ({
+      stepNumber,
+      errors: validateStep(stepNumber),
+    }));
+    const errors = errorsByStep.flatMap(({ errors: stepErrors }) => stepErrors);
     setValidationErrors(errors);
     if (errors.length > 0) {
-      setStep(2);
+      setPayrollSaved(false);
+      setStep(
+        errorsByStep.find(({ errors: stepErrors }) => stepErrors.length > 0)?.stepNumber ?? 1,
+      );
+      window.setTimeout(() => {
+        document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      }, 0);
       return;
     }
     const existing = records.find((record) => record.month === values.month);
@@ -315,6 +343,7 @@ export function PayrollPage() {
     setRecords(next);
     setReportYear(saved.month.slice(0, 4));
     setMessage('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.');
+    setPayrollSaved(true);
   }
 
   function saveExpense(event: React.FormEvent) {
@@ -772,24 +801,25 @@ export function PayrollPage() {
               </div>
               <div>
                 <span>
-                  כלל התוספות <small>כולל שבתות ותוספות אחרות</small>
+                  תוספות אחרות <small>לא כולל שבתות, המוצגות בשורה נפרדת</small>
                 </span>
-                <strong>{money.format(calculation.additions)}</strong>
+                <strong>{money.format(otherAdditions)}</strong>
+              </div>
+              <div className="payroll-subtotal">
+                <span>סכום לפני קיזוזים</span>
+                <strong>{money.format(beforeDeductions)}</strong>
               </div>
               <div>
                 <span>
-                  מקדמות וקיזוזים <small>כל הסכומים שהוזנו החודש</small>
+                  מקדמות וקיזוזים
+                  <small>
+                    {deductionBreakdown.length > 0
+                      ? deductionBreakdown.join(' · ')
+                      : 'לא הוזנו קיזוזים החודש'}
+                  </small>
                 </span>
                 <strong>−{money.format(calculation.deductions)}</strong>
               </div>
-              {numeric(values.pocketMoney) > 0 ? (
-                <div>
-                  <span>
-                    מתוכם דמי כיס <small>שולמו במהלך החודש</small>
-                  </span>
-                  <strong>−{money.format(numeric(values.pocketMoney))}</strong>
-                </div>
-              ) : null}
               <div className="total">
                 <span>סה״כ לתשלום</span>
                 <strong>{money.format(calculation.total)}</strong>
@@ -797,6 +827,12 @@ export function PayrollPage() {
               <p>
                 זהו כלי תיעוד וחישוב אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול גורם מקצועי.
               </p>
+            </div>
+          ) : null}
+          {step === 5 && payrollSaved ? (
+            <div className="success-box payroll-save-confirmation" role="status">
+              <strong>השכר נשמר בהצלחה</strong>
+              <span>החישוב לחודש {values.month} נוסף לדוח השנתי וניתן לערוך אותו בהמשך.</span>
             </div>
           ) : null}
           <div className="wizard-actions">
@@ -810,7 +846,7 @@ export function PayrollPage() {
             </button>
             {step === 5 ? (
               <button className="primary-button" type="button" onClick={savePayroll}>
-                אישור ושמירה
+                {payrollSaved ? 'שמירה מחדש' : 'אישור ושמירה'}
               </button>
             ) : (
               <button className="primary-button" type="button" onClick={goForward}>

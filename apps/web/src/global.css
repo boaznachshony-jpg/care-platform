@@ -1190,11 +1190,27 @@ a {
   border: 0;
   font-size: 21px;
 }
+.pay-summary .payroll-subtotal {
+  background: #f5f8fc;
+  border: 1px solid #dce5f0;
+  border-radius: 12px;
+  font-weight: 750;
+}
 .pay-summary p {
   background: #fff7df;
   padding: 14px;
   border-radius: 13px;
   color: #755d22;
+}
+.payroll-save-confirmation {
+  display: grid;
+  gap: 4px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 2px solid #2e8b57;
+  border-radius: 14px;
+  background: #effaf3;
+  color: #175c37;
 }
 .settings-list {
   padding: 0;

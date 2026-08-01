@@ -312,6 +312,8 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'סיכום ואישור' })).toBeVisible();
   await expect(page.getByText('נתוני העסקה', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
+  await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
   await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();

@@ -118,6 +118,9 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     fireEvent.click(screen.getByRole('button', { name: 'אישור ושמירה' }));
 
+    expect(screen.getByText('השכר נשמר בהצלחה')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'שמירה מחדש' })).toBeInTheDocument();
+
     const saved = readMvpPayroll().find((record) => record.month === currentMonth);
     expect(saved).toMatchObject({
       baseSalary: proratedBaseSalary,
@@ -241,6 +244,10 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
 
     expect(screen.getByRole('heading', { name: 'סיכום ואישור' })).toBeInTheDocument();
+    expect(screen.getByText('תוספות אחרות')).toBeInTheDocument();
+    expect(screen.getByText('סכום לפני קיזוזים')).toBeInTheDocument();
+    expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
+    expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();
     expect(screen.getByText(/8,150\.00/)).toBeInTheDocument();
   });
 });
