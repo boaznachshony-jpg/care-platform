@@ -15,6 +15,9 @@ import {
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
+const MAX_PAYROLL_AMOUNT = 10_000_000;
+const MAX_PAID_SATURDAYS = 6;
+const MAX_PAID_HOLIDAYS = 10;
 
 function numeric(value: string): number {
   const parsed = Number(value);
@@ -72,6 +75,7 @@ export function PayrollPage() {
     note: '',
   });
   const [message, setMessage] = useState('');
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const payrollYears = useMemo(() => getPayrollYears(records), [records]);
   const [reportYear, setReportYear] = useState(() => payrollYears[0] ?? currentMonth.slice(0, 4));
   const annualReport = useMemo(
@@ -109,11 +113,100 @@ export function PayrollPage() {
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
     setMessage('');
+    setValidationErrors([]);
+  }
+
+  function validateStep(stepToValidate: number): string[] {
+    const errors: string[] = [];
+    const validateAmount = (value: string, label: string, positive = false) => {
+      const parsed = Number(value);
+      if (
+        value.trim() === '' ||
+        !Number.isFinite(parsed) ||
+        parsed < (positive ? Number.EPSILON : 0) ||
+        parsed > MAX_PAYROLL_AMOUNT
+      ) {
+        errors.push(
+          positive
+            ? `${label}: יש להזין סכום גדול מאפס ועד ${MAX_PAYROLL_AMOUNT.toLocaleString('he-IL')}.`
+            : `${label}: יש להזין סכום בין 0 ל־${MAX_PAYROLL_AMOUNT.toLocaleString('he-IL')}.`,
+        );
+      }
+    };
+    const validateDays = (value: string, label: string, maximum: number, increment: number) => {
+      const parsed = Number(value);
+      const isValidIncrement =
+        Number.isFinite(parsed) &&
+        Math.abs(parsed / increment - Math.round(parsed / increment)) < 1e-9;
+      if (
+        value.trim() === '' ||
+        !Number.isFinite(parsed) ||
+        parsed < 0 ||
+        parsed > maximum ||
+        !isValidIncrement
+      ) {
+        errors.push(`${label}: יש להזין ערך בין 0 ל־${maximum} בקפיצות של ${increment}.`);
+      }
+    };
+
+    if (stepToValidate === 1 && !/^\d{4}-\d{2}$/.test(values.month)) {
+      errors.push('יש לבחור חודש שכר תקין.');
+    }
+    if (stepToValidate === 2) {
+      const daysInMonth = proratedBaseSalary.calendarDaysInMonth || 31;
+      validateAmount(values.baseSalary, 'שכר בסיס', true);
+      validateDays(values.workDays, 'ימי עבודה', daysInMonth, 1);
+      validateDays(values.vacationDays, 'ימי חופשה', daysInMonth, 0.5);
+      validateDays(values.sickDays, 'ימי מחלה', daysInMonth, 0.5);
+      validateDays(values.absenceDays, 'ימי היעדרות', daysInMonth, 0.5);
+      validateDays(values.paidSaturdays, 'שבתות בתשלום', MAX_PAID_SATURDAYS, 1);
+      validateAmount(values.saturdayRate, 'תעריף שבת');
+      validateDays(values.paidHolidays, 'ימי חג', MAX_PAID_HOLIDAYS, 1);
+      if (
+        values.prorationStartDate &&
+        (values.prorationStartDate < `${values.month}-01` ||
+          values.prorationStartDate > `${values.month}-${String(daysInMonth).padStart(2, '0')}`)
+      ) {
+        errors.push('תאריך תחילת העבודה חייב להיות בתוך חודש השכר.');
+      }
+    }
+    if (stepToValidate === 3) {
+      (
+        [
+          ['holidayPay', 'תשלום ימי חג'],
+          ['vacationPay', 'תשלום חופשה'],
+          ['sickPay', 'תשלום מחלה'],
+          ['employerContributions', 'הפרשות מעסיק'],
+          ['otherAddition', 'תוספת אחרת'],
+        ] as const
+      ).forEach(([key, label]) => validateAmount(values[key as keyof typeof values], label));
+    }
+    if (stepToValidate === 4) {
+      (
+        [
+          ['pocketMoney', 'דמי כיס'],
+          ['medicalInsuranceDeduction', 'ניכוי ביטוח רפואי'],
+          ['housingDeduction', 'ניכוי מגורים'],
+          ['advances', 'מקדמות'],
+          ['agreedDeduction', 'ניכוי מוסכם'],
+        ] as const
+      ).forEach(([key, label]) => validateAmount(values[key as keyof typeof values], label));
+    }
+    return errors;
+  }
+
+  function goForward() {
+    const errors = validateStep(step);
+    setValidationErrors(errors);
+    if (errors.length === 0) {
+      setStep((value) => Math.min(5, value + 1));
+    }
   }
 
   function loadMonth(month: string) {
     const record = records.find((item) => item.month === month);
     setValues({ ...payrollValues(record, profile.baseSalary), month });
+    setValidationErrors([]);
     setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');
   }
 
@@ -130,6 +223,12 @@ export function PayrollPage() {
   }
 
   function savePayroll() {
+    const errors = [1, 2, 3, 4].flatMap(validateStep);
+    setValidationErrors(errors);
+    if (errors.length > 0) {
+      setStep(2);
+      return;
+    }
     const existing = records.find((record) => record.month === values.month);
     const saved: MvpPayrollRecord = {
       id: existing?.id ?? crypto.randomUUID(),
@@ -283,6 +382,16 @@ export function PayrollPage() {
         <p className="info-box" role="status">
           {message}
         </p>
+      ) : null}
+      {validationErrors.length > 0 ? (
+        <div className="info-box" role="alert" aria-live="assertive">
+          <strong>יש לתקן את הנתונים לפני המשך התהליך:</strong>
+          <ul>
+            {validationErrors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       <section className="wizard-card">
         <div className="steps">
@@ -615,11 +724,7 @@ export function PayrollPage() {
                 אישור ושמירה
               </button>
             ) : (
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => setStep((value) => Math.min(5, value + 1))}
-              >
+              <button className="primary-button" type="button" onClick={goForward}>
                 המשך
               </button>
             )}

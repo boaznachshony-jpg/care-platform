@@ -133,4 +133,77 @@ describe('PayrollPage annual report', () => {
       total: proratedBaseSalary + 850,
     });
   });
+
+  it('blocks negative, non-numeric and unreasonable base payroll values', () => {
+    render(<PayrollPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('שכר בסיס'), {
+      target: { value: '-1' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי עבודה'), {
+      target: { value: '9999' },
+    });
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '7' },
+    });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '10000001' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByRole('heading', { name: 'שכר בסיס ושבתות' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('שכר בסיס');
+    expect(screen.getByRole('alert')).toHaveTextContent('ימי עבודה');
+    expect(screen.getByRole('alert')).toHaveTextContent('שבתות בתשלום');
+    expect(screen.getByRole('alert')).toHaveTextContent('תעריף שבת');
+  });
+
+  it('blocks text and extreme values in additions and deductions', () => {
+    render(<PayrollPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תשלום ימי חג'), {
+      target: { value: 'not-a-number' },
+    });
+    fireEvent.change(screen.getByLabelText('תוספת אחרת, אם קיימת'), {
+      target: { value: '10000001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByRole('heading', { name: 'תוספות נוספות' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('תשלום ימי חג');
+    expect(screen.getByRole('alert')).toHaveTextContent('תוספת אחרת');
+  });
+
+  it('keeps values across back and forward navigation and calculates the summary from them', () => {
+    render(<PayrollPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '500' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תוספת אחרת, אם קיימת'), {
+      target: { value: '250' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('מקדמות שכבר שולמו'), {
+      target: { value: '100' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    expect(screen.getByLabelText('תוספת אחרת, אם קיימת')).toHaveValue(250);
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText('מקדמות שכבר שולמו')).toHaveValue(100);
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByRole('heading', { name: 'סיכום ואישור' })).toBeInTheDocument();
+    expect(screen.getByText(/8,150\.00/)).toBeInTheDocument();
+  });
 });
