@@ -76,6 +76,52 @@ export function PayrollPage() {
   });
   const [message, setMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  const validationTerms: Partial<Record<keyof typeof values, string[]>> = {
+    month: ['חודש שכר'],
+    baseSalary: ['שכר בסיס'],
+    prorationStartDate: ['תאריך תחילת'],
+    workDays: ['ימי עבודה'],
+    vacationDays: ['ימי חופשה'],
+    sickDays: ['ימי מחלה'],
+    absenceDays: ['ימי היעדרות'],
+    paidSaturdays: ['שבתות בתשלום'],
+    saturdayRate: ['תעריף שבת'],
+    paidHolidays: ['ימי חג'],
+    holidayPay: ['תשלום ימי חג'],
+    vacationPay: ['תשלום חופשה'],
+    sickPay: ['תשלום מחלה'],
+    employerContributions: ['הפרשות מעסיק'],
+    otherAddition: ['תוספת אחרת'],
+    pocketMoney: ['דמי כיס'],
+    medicalInsuranceDeduction: ['ניכוי ביטוח רפואי'],
+    housingDeduction: ['ניכוי מגורים'],
+    advances: ['מקדמות'],
+    agreedDeduction: ['ניכוי מוסכם'],
+  };
+
+  function validationErrorFor(key: keyof typeof values): string | undefined {
+    const terms = validationTerms[key] ?? [];
+    return validationErrors.find((error) => terms.some((term) => error.includes(term)));
+  }
+
+  function invalidFieldProps(key: keyof typeof values) {
+    const error = validationErrorFor(key);
+    return {
+      'aria-invalid': error ? true : undefined,
+      'aria-describedby': error ? `payroll-${key}-error` : undefined,
+      className: error ? 'field-input-error' : undefined,
+    };
+  }
+
+  function fieldErrorMessage(key: keyof typeof values) {
+    const error = validationErrorFor(key);
+    return error ? (
+      <small className="field-error-message" id={`payroll-${key}-error`}>
+        {error}
+      </small>
+    ) : null;
+  }
   const payrollYears = useMemo(() => getPayrollYears(records), [records]);
   const [reportYear, setReportYear] = useState(() => payrollYears[0] ?? currentMonth.slice(0, 4));
   const annualReport = useMemo(
@@ -200,7 +246,11 @@ export function PayrollPage() {
     setValidationErrors(errors);
     if (errors.length === 0) {
       setStep((value) => Math.min(5, value + 1));
+      return;
     }
+    window.setTimeout(() => {
+      document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    }, 0);
   }
 
   function loadMonth(month: string) {
@@ -409,6 +459,7 @@ export function PayrollPage() {
               חודש שכר
               <input
                 type="month"
+                aria-label="חודש שכר"
                 value={values.month}
                 onChange={(event) => loadMonth(event.target.value)}
               />
@@ -428,8 +479,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.baseSalary}
+                  {...invalidFieldProps('baseSalary')}
                   onChange={(event) => update('baseSalary', event.target.value)}
                 />
+                {fieldErrorMessage('baseSalary')}
               </label>
               <label>
                 תאריך תחילת עבודה בחודש, לחישוב יחסי
@@ -439,8 +492,10 @@ export function PayrollPage() {
                   max={`${values.month}-${String(proratedBaseSalary.calendarDaysInMonth).padStart(2, '0')}`}
                   value={values.prorationStartDate}
                   aria-label="תאריך תחילת עבודה בחודש, לחישוב יחסי"
+                  {...invalidFieldProps('prorationStartDate')}
                   onChange={(event) => update('prorationStartDate', event.target.value)}
                 />
+                {fieldErrorMessage('prorationStartDate')}
                 <small>השאירו ריק כאשר העובד הועסק במשך כל החודש.</small>
               </label>
               <div className="payroll-live-total" aria-live="polite">
@@ -467,8 +522,10 @@ export function PayrollPage() {
                   min="0"
                   step="1"
                   value={values.workDays}
+                  {...invalidFieldProps('workDays')}
                   onChange={(event) => update('workDays', event.target.value)}
                 />
+                {fieldErrorMessage('workDays')}
               </label>
               <label>
                 ימי חופשה שנוצלו
@@ -477,8 +534,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.5"
                   value={values.vacationDays}
+                  {...invalidFieldProps('vacationDays')}
                   onChange={(event) => update('vacationDays', event.target.value)}
                 />
+                {fieldErrorMessage('vacationDays')}
               </label>
               <label>
                 ימי מחלה
@@ -487,8 +546,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.5"
                   value={values.sickDays}
+                  {...invalidFieldProps('sickDays')}
                   onChange={(event) => update('sickDays', event.target.value)}
                 />
+                {fieldErrorMessage('sickDays')}
               </label>
               <label>
                 ימי היעדרות אחרים
@@ -497,8 +558,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.5"
                   value={values.absenceDays}
+                  {...invalidFieldProps('absenceDays')}
                   onChange={(event) => update('absenceDays', event.target.value)}
                 />
+                {fieldErrorMessage('absenceDays')}
               </label>
               <label>
                 מספר שבתות או ימי מנוחה שעבדו
@@ -507,8 +570,10 @@ export function PayrollPage() {
                   min="0"
                   step="1"
                   value={values.paidSaturdays}
+                  {...invalidFieldProps('paidSaturdays')}
                   onChange={(event) => update('paidSaturdays', event.target.value)}
                 />
+                {fieldErrorMessage('paidSaturdays')}
               </label>
               <label>
                 תעריף לכל שבת או יום מנוחה
@@ -517,8 +582,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.saturdayRate}
+                  {...invalidFieldProps('saturdayRate')}
                   onChange={(event) => update('saturdayRate', event.target.value)}
                 />
+                {fieldErrorMessage('saturdayRate')}
               </label>
               <div className="payroll-live-total" aria-live="polite">
                 <span>
@@ -536,8 +603,10 @@ export function PayrollPage() {
                   min="0"
                   step="1"
                   value={values.paidHolidays}
+                  {...invalidFieldProps('paidHolidays')}
                   onChange={(event) => update('paidHolidays', event.target.value)}
                 />
+                {fieldErrorMessage('paidHolidays')}
               </label>
               <p className="form-note">
                 מקור שכר הבסיס: נתוני ההעסקה, בתוקף מ־{profile.salaryEffectiveDate}.
@@ -553,8 +622,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.holidayPay}
+                  {...invalidFieldProps('holidayPay')}
                   onChange={(event) => update('holidayPay', event.target.value)}
                 />
+                {fieldErrorMessage('holidayPay')}
               </label>
               <label>
                 תשלום חופשה
@@ -563,8 +634,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.vacationPay}
+                  {...invalidFieldProps('vacationPay')}
                   onChange={(event) => update('vacationPay', event.target.value)}
                 />
+                {fieldErrorMessage('vacationPay')}
               </label>
               <label>
                 תשלום מחלה
@@ -573,8 +646,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.sickPay}
+                  {...invalidFieldProps('sickPay')}
                   onChange={(event) => update('sickPay', event.target.value)}
                 />
+                {fieldErrorMessage('sickPay')}
               </label>
               <label>
                 הפרשות מעסיק: פנסיה ופיצויים
@@ -583,8 +658,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.employerContributions}
+                  {...invalidFieldProps('employerContributions')}
                   onChange={(event) => update('employerContributions', event.target.value)}
                 />
+                {fieldErrorMessage('employerContributions')}
               </label>
               <label>
                 תוספת אחרת, אם קיימת
@@ -593,8 +670,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.otherAddition}
+                  {...invalidFieldProps('otherAddition')}
                   onChange={(event) => update('otherAddition', event.target.value)}
                 />
+                {fieldErrorMessage('otherAddition')}
               </label>
               <div className="payroll-live-total" aria-live="polite">
                 <span>כל התוספות לחודש, כולל שבתות</span>
@@ -612,8 +691,10 @@ export function PayrollPage() {
                   step="0.01"
                   value={values.pocketMoney}
                   aria-label="דמי כיס שכבר שולמו"
+                  {...invalidFieldProps('pocketMoney')}
                   onChange={(event) => update('pocketMoney', event.target.value)}
                 />
+                {fieldErrorMessage('pocketMoney')}
                 <small>הסכום יוצג בנפרד ויקוזז מהתשלום שנותר החודש.</small>
               </label>
               <label>
@@ -623,8 +704,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.medicalInsuranceDeduction}
+                  {...invalidFieldProps('medicalInsuranceDeduction')}
                   onChange={(event) => update('medicalInsuranceDeduction', event.target.value)}
                 />
+                {fieldErrorMessage('medicalInsuranceDeduction')}
               </label>
               <label>
                 ניכוי מגורים
@@ -633,8 +716,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.housingDeduction}
+                  {...invalidFieldProps('housingDeduction')}
                   onChange={(event) => update('housingDeduction', event.target.value)}
                 />
+                {fieldErrorMessage('housingDeduction')}
               </label>
               <label>
                 מקדמות שכבר שולמו
@@ -644,8 +729,10 @@ export function PayrollPage() {
                   step="0.01"
                   value={values.advances}
                   aria-label="מקדמות שכבר שולמו"
+                  {...invalidFieldProps('advances')}
                   onChange={(event) => update('advances', event.target.value)}
                 />
+                {fieldErrorMessage('advances')}
                 <small>הסכום יקוזז מהתשלום הנותר החודש.</small>
               </label>
               <label>
@@ -655,8 +742,10 @@ export function PayrollPage() {
                   min="0"
                   step="0.01"
                   value={values.agreedDeduction}
+                  {...invalidFieldProps('agreedDeduction')}
                   onChange={(event) => update('agreedDeduction', event.target.value)}
                 />
+                {fieldErrorMessage('agreedDeduction')}
               </label>
               <div className="payroll-live-total deduction" aria-live="polite">
                 <span>סה״כ מקדמות וקיזוזים</span>

@@ -158,6 +158,43 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('ימי עבודה');
     expect(screen.getByRole('alert')).toHaveTextContent('שבתות בתשלום');
     expect(screen.getByRole('alert')).toHaveTextContent('תעריף שבת');
+    expect(document.querySelector('[aria-describedby="payroll-baseSalary-error"]')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(document.querySelector('[aria-describedby="payroll-baseSalary-error"]')).toHaveClass(
+      'field-input-error',
+    );
+    expect(document.querySelector('[aria-describedby="payroll-workDays-error"]')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(
+      screen.getByText(/שכר בסיס: יש להזין סכום/, { selector: '.field-error-message' }),
+    ).toBeInTheDocument();
+  });
+
+  it('advances for the exact July payroll values and counts four Saturdays', () => {
+    render(<PayrollPage />);
+
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-07' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תאריך תחילת עבודה בחודש, לחישוב יחסי'), {
+      target: { value: '2026-07-12' },
+    });
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+
+    expect(screen.getByText('18 מתוך 27 ימי בסיס')).toBeInTheDocument();
+    expect(screen.getByText(/מהמכנה הוצאו 4 שבתות/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByRole('heading', { name: 'תוספות נוספות' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('blocks text and extreme values in additions and deductions', () => {

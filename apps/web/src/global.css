@@ -1765,6 +1765,30 @@ select:focus-visible {
   border-color: var(--cd-primary);
 }
 
+.readable-form .field-input-error,
+.wizard-content .field-input-error,
+.field-input-error {
+  border: 3px solid #c62828;
+  background: #fff5f5;
+  box-shadow: 0 0 0 3px rgb(198 40 40 / 12%);
+}
+
+.readable-form .field-input-error:focus,
+.wizard-content .field-input-error:focus,
+.field-input-error:focus {
+  border-color: #a31515;
+  outline: 4px solid rgb(198 40 40 / 24%);
+}
+
+.field-error-message {
+  display: block;
+  margin-top: 8px;
+  color: #a31515;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .info-box {
   background: var(--cd-primary-soft);
   color: #244d83;
