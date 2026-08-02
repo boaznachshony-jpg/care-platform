@@ -279,9 +279,10 @@ test.describe('launch readiness interactions', () => {
     }
     await page.getByRole('button', { name: 'המשך' }).click();
 
-    await expect(page.getByText('תוספות אחרות')).toBeVisible();
-    await expect(page.getByText('סכום לפני קיזוזים')).toBeVisible();
-    await expect(page.getByText(/דמי כיס .*100\.00/)).toBeVisible();
+    const visiblePayrollSummary = page.locator('.wizard-content .pay-summary');
+    await expect(visiblePayrollSummary.getByText('תוספות אחרות')).toBeVisible();
+    await expect(visiblePayrollSummary.getByText('סכום לפני קיזוזים')).toBeVisible();
+    await expect(visiblePayrollSummary.getByText(/דמי כיס .*100\.00/)).toBeVisible();
     await expect(page.getByText('מתוכם דמי כיס')).toHaveCount(0);
     await page.getByRole('button', { name: 'חזרה' }).click();
     await expect(page.getByLabel('דמי כיס שכבר שולמו')).toHaveValue('100');
