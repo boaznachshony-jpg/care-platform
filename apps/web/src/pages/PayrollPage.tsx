@@ -171,6 +171,21 @@ export function PayrollPage() {
       ? `ניכוי מוסכם ${money.format(numeric(values.agreedDeduction))}`
       : '',
   ].filter(Boolean);
+  const deductionBreakdownEnglish = [
+    numeric(values.pocketMoney) > 0
+      ? `Pocket money ${money.format(numeric(values.pocketMoney))}`
+      : '',
+    numeric(values.medicalInsuranceDeduction) > 0
+      ? `Medical insurance ${money.format(numeric(values.medicalInsuranceDeduction))}`
+      : '',
+    numeric(values.housingDeduction) > 0
+      ? `Housing ${money.format(numeric(values.housingDeduction))}`
+      : '',
+    numeric(values.advances) > 0 ? `Advances ${money.format(numeric(values.advances))}` : '',
+    numeric(values.agreedDeduction) > 0
+      ? `Agreed deduction ${money.format(numeric(values.agreedDeduction))}`
+      : '',
+  ].filter(Boolean);
 
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -834,52 +849,55 @@ export function PayrollPage() {
                 <header>
                   <div>
                     <strong>CareDesk</strong>
-                    <h1>ריכוז חישוב שכר חודשי</h1>
+                    <h1>ריכוז חישוב שכר חודשי / Monthly pay summary</h1>
                   </div>
-                  <span>חודש שכר: {values.month}</span>
+                  <span>חודש שכר / Pay month: {values.month}</span>
                 </header>
                 <p className="payroll-print-disclaimer">
                   מסמך תיעוד שהופק מהנתונים שהמשתמש הזין. אינו תלוש שכר רשמי ואינו מחליף בדיקה
                   מקצועית.
+                  <br />
+                  This record was generated from information entered by the user. It is not an
+                  official payslip and does not replace professional review.
                 </p>
                 <div className="payroll-print-details">
                   <div>
-                    <span>שם המעסיק</span>
-                    <strong>{profile.employerName || 'לא הוזן'}</strong>
+                    <span>שם המעסיק / Employer name</span>
+                    <strong>{profile.employerName || 'לא הוזן / Not provided'}</strong>
                   </div>
                   <div>
-                    <span>מספר זהות מעסיק</span>
-                    <strong>{profile.employerIdNumber || 'לא הוזן'}</strong>
+                    <span>מספר זהות מעסיק / Employer ID</span>
+                    <strong>{profile.employerIdNumber || 'לא הוזן / Not provided'}</strong>
                   </div>
                   <div>
-                    <span>שם המטופל/ת</span>
-                    <strong>{profile.recipientName || 'לא הוזן'}</strong>
+                    <span>שם המטופל/ת / Care recipient</span>
+                    <strong>{profile.recipientName || 'לא הוזן / Not provided'}</strong>
                   </div>
                   <div>
-                    <span>שם העובד/ת</span>
-                    <strong>{profile.caregiverName || 'לא הוזן'}</strong>
+                    <span>שם העובד/ת / Caregiver</span>
+                    <strong>{profile.caregiverName || 'לא הוזן / Not provided'}</strong>
                   </div>
                 </div>
                 <table>
                   <thead>
                     <tr>
-                      <th>רכיב</th>
-                      <th>פירוט</th>
-                      <th>סכום</th>
+                      <th>רכיב / Component</th>
+                      <th>פירוט / Details</th>
+                      <th>סכום / Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td>שכר בסיס</td>
+                      <td>שכר בסיס / Base salary</td>
                       <td>
                         {proratedBaseSalary.isProrated
-                          ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימי בסיס`
-                          : 'חודש מלא'}
+                          ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימי בסיס / ${proratedBaseSalary.paidDays} of ${proratedBaseSalary.daysInMonth} base days`
+                          : 'חודש מלא / Full month'}
                       </td>
                       <td>{money.format(proratedBaseSalary.amount)}</td>
                     </tr>
                     <tr>
-                      <td>שבתות וימי מנוחה</td>
+                      <td>שבתות וימי מנוחה / Saturdays and rest days</td>
                       <td>
                         {numeric(values.paidSaturdays)} ×{' '}
                         {money.format(numeric(values.saturdayRate))}
@@ -887,46 +905,54 @@ export function PayrollPage() {
                       <td>{money.format(calculation.saturdayPay)}</td>
                     </tr>
                     <tr>
-                      <td>תוספות אחרות</td>
-                      <td>חג, חופשה, מחלה ותוספות שהוזנו</td>
+                      <td>תוספות אחרות / Other additions</td>
+                      <td>
+                        חג, חופשה, מחלה ותוספות שהוזנו / Holiday, vacation, sick pay and additions
+                      </td>
                       <td>{money.format(otherAdditions)}</td>
                     </tr>
                     <tr className="subtotal">
-                      <td colSpan={2}>סכום לפני קיזוזים</td>
+                      <td colSpan={2}>סכום לפני קיזוזים / Total before deductions</td>
                       <td>{money.format(beforeDeductions)}</td>
                     </tr>
                     <tr>
-                      <td>מקדמות וקיזוזים</td>
+                      <td>מקדמות וקיזוזים / Advances and deductions</td>
                       <td>
                         {deductionBreakdown.length > 0
                           ? deductionBreakdown.join(' · ')
                           : 'לא הוזנו קיזוזים'}
+                        <br />
+                        <span dir="ltr">
+                          {deductionBreakdownEnglish.length > 0
+                            ? deductionBreakdownEnglish.join(' · ')
+                            : 'No deductions entered'}
+                        </span>
                       </td>
                       <td>−{money.format(calculation.deductions)}</td>
                     </tr>
                     <tr className="total">
-                      <td colSpan={2}>סה״כ לתשלום</td>
+                      <td colSpan={2}>סה״כ לתשלום / Net amount payable</td>
                       <td>{money.format(calculation.total)}</td>
                     </tr>
                   </tbody>
                 </table>
                 <div className="payroll-print-attendance">
-                  <span>ימי עבודה: {values.workDays}</span>
-                  <span>ימי חופשה: {values.vacationDays}</span>
-                  <span>ימי מחלה: {values.sickDays}</span>
-                  <span>ימי היעדרות: {values.absenceDays}</span>
+                  <span>ימי עבודה / Work days: {values.workDays}</span>
+                  <span>ימי חופשה / Vacation days: {values.vacationDays}</span>
+                  <span>ימי מחלה / Sick days: {values.sickDays}</span>
+                  <span>ימי היעדרות / Absence days: {values.absenceDays}</span>
                 </div>
                 <div className="payroll-print-signatures">
                   <div>
-                    <span>חתימת העובד/ת</span>
+                    <span>חתימת העובד/ת / Caregiver signature</span>
                     <i />
                   </div>
                   <div>
-                    <span>חתימת המעסיק/ה</span>
+                    <span>חתימת המעסיק/ה / Employer signature</span>
                     <i />
                   </div>
                   <div>
-                    <span>תאריך</span>
+                    <span>תאריך / Date</span>
                     <i />
                   </div>
                 </div>

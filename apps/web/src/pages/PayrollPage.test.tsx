@@ -248,9 +248,14 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }));
     expect(printSpy).toHaveBeenCalledOnce();
     printSpy.mockRestore();
-    expect(screen.getByLabelText('ריכוז חישוב שכר להדפסה')).toHaveTextContent('חתימת העובד/ת');
-    expect(screen.getAllByText('תוספות אחרות')).toHaveLength(2);
-    expect(screen.getAllByText('סכום לפני קיזוזים')).toHaveLength(2);
+    const printableSummary = screen.getByLabelText('ריכוז חישוב שכר להדפסה');
+    expect(printableSummary).toHaveTextContent('חתימת העובד/ת / Caregiver signature');
+    expect(printableSummary).toHaveTextContent('Monthly pay summary');
+    expect(printableSummary).toHaveTextContent('Base salary');
+    expect(printableSummary).toHaveTextContent('Net amount payable');
+    expect(printableSummary).toHaveTextContent('Advances');
+    expect(screen.getByText('תוספות אחרות / Other additions')).toBeInTheDocument();
+    expect(screen.getByText('סכום לפני קיזוזים / Total before deductions')).toBeInTheDocument();
     expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
     expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();
     expect(screen.getAllByText(/8,150\.00/)).toHaveLength(2);
