@@ -836,14 +836,19 @@ export function PayrollPage() {
             </div>
           ) : null}
           <div className="wizard-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={step === 1}
-              onClick={() => setStep((value) => Math.max(1, value - 1))}
-            >
-              חזרה
-            </button>
+            {step === 1 ? (
+              <a className="secondary-button" href="/">
+                חזרה לדף הבית
+              </a>
+            ) : (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setStep((value) => Math.max(1, value - 1))}
+              >
+                חזרה
+              </button>
+            )}
             {step === 5 ? (
               <button className="primary-button" type="button" onClick={savePayroll}>
                 {payrollSaved ? 'שמירה מחדש' : 'אישור ושמירה'}

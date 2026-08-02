@@ -320,6 +320,16 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();
 });
 
+test('returns from the first payroll step to the dashboard', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/payroll');
+
+  await page.getByRole('link', { name: 'חזרה לדף הבית' }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: /שלום/ })).toBeVisible();
+});
+
 test('tracks quarterly and annual employment expenses', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/payroll');
