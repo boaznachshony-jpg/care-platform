@@ -566,6 +566,11 @@ a {
   padding-inline: 26px;
   font-size: 18px;
 }
+.clients-hero-actions {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
 .clients-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
@@ -700,6 +705,10 @@ a {
   }
   .clients-add-button {
     width: 100%;
+  }
+  .clients-hero-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
   .local-data-notice {
     align-items: flex-start;
