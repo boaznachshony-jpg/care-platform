@@ -77,6 +77,7 @@ export function PayrollPage() {
   const [message, setMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
 
   const validationTerms: Partial<Record<keyof typeof values, string[]>> = {
     month: ['חודש שכר'],
@@ -845,7 +846,25 @@ export function PayrollPage() {
                   מקצועי.
                 </p>
               </div>
-              <section className="payroll-print-slip" aria-label="ריכוז חישוב שכר להדפסה">
+              {printPreviewOpen ? (
+                <div className="payroll-preview-heading" role="status">
+                  <div>
+                    <strong>תצוגה מקדימה לפני הדפסה</strong>
+                    <span>זהו המסמך הדו־לשוני שיודפס או יישמר כ־PDF.</span>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setPrintPreviewOpen(false)}
+                  >
+                    סגירת תצוגה מקדימה
+                  </button>
+                </div>
+              ) : null}
+              <section
+                className={`payroll-print-slip${printPreviewOpen ? ' payroll-print-preview' : ''}`}
+                aria-label="ריכוז חישוב שכר להדפסה"
+              >
                 <header>
                   <div>
                     <strong>CareDesk</strong>
@@ -981,9 +1000,19 @@ export function PayrollPage() {
             )}
             {step === 5 ? (
               <div className="wizard-primary-actions">
-                <button className="secondary-button" type="button" onClick={() => window.print()}>
-                  הדפסה / שמירה כ־PDF
+                <button
+                  className="secondary-button"
+                  type="button"
+                  aria-expanded={printPreviewOpen}
+                  onClick={() => setPrintPreviewOpen((open) => !open)}
+                >
+                  {printPreviewOpen ? 'הסתרת תצוגה מקדימה' : 'תצוגה מקדימה להדפסה'}
                 </button>
+                {printPreviewOpen ? (
+                  <button className="secondary-button" type="button" onClick={() => window.print()}>
+                    הדפסה / שמירה כ־PDF
+                  </button>
+                ) : null}
                 <button className="primary-button" type="button" onClick={savePayroll}>
                   {payrollSaved ? 'שמירה מחדש' : 'אישור ושמירה'}
                 </button>

@@ -1182,6 +1182,126 @@ a {
 .payroll-print-slip {
   display: none;
 }
+.payroll-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 24px;
+  padding: 16px 18px;
+  border: 1px solid #b8c9df;
+  border-radius: 14px;
+  background: #eef5ff;
+}
+.payroll-preview-heading > div {
+  display: grid;
+  gap: 4px;
+}
+.payroll-print-slip.payroll-print-preview {
+  display: block;
+  box-sizing: border-box;
+  width: min(100%, 210mm);
+  margin: 18px auto 28px;
+  padding: clamp(16px, 3vw, 32px);
+  overflow-wrap: anywhere;
+  direction: rtl;
+  border: 1px solid #aebdce;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 34px rgb(28 52 82 / 12%);
+  color: #111827;
+  font-family: Arial, sans-serif;
+}
+.payroll-print-preview header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 14px;
+  border-bottom: 3px solid #1f5fbf;
+}
+.payroll-print-preview h1 {
+  margin: 5px 0 0;
+  font-size: clamp(22px, 3vw, 32px);
+}
+.payroll-print-preview header > span {
+  padding: 9px 12px;
+  border: 1px solid #9db9df;
+  border-radius: 8px;
+  font-weight: 700;
+}
+.payroll-print-preview .payroll-print-disclaimer {
+  margin: 12px 0;
+  padding: 9px 12px;
+  border: 1px solid #d6b754;
+  background: #fff8df;
+}
+.payroll-print-preview .payroll-print-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 14px 0;
+  border: 1px solid #b9c5d4;
+  background: #b9c5d4;
+}
+.payroll-print-preview .payroll-print-details > div {
+  display: grid;
+  gap: 4px;
+  padding: 9px 12px;
+  background: #fff;
+}
+.payroll-print-preview table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.payroll-print-preview th,
+.payroll-print-preview td {
+  padding: 9px 10px;
+  border: 1px solid #b9c5d4;
+  text-align: right;
+  vertical-align: top;
+}
+.payroll-print-preview th {
+  background: #eaf2fd;
+}
+.payroll-print-preview td:last-child,
+.payroll-print-preview th:last-child {
+  width: 24%;
+  direction: ltr;
+  text-align: left;
+  font-weight: 700;
+}
+.payroll-print-preview tr.subtotal td {
+  background: #f4f7fb;
+  font-weight: 700;
+}
+.payroll-print-preview tr.total td {
+  border-top: 3px solid #1f5fbf;
+  background: #eaf2fd;
+  font-weight: 800;
+}
+.payroll-print-preview .payroll-print-attendance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 10px;
+  border: 1px solid #b9c5d4;
+}
+.payroll-print-preview .payroll-print-signatures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 42px;
+}
+.payroll-print-preview .payroll-print-signatures > div {
+  display: grid;
+  gap: 28px;
+}
+.payroll-print-preview .payroll-print-signatures i {
+  border-bottom: 1px solid #111827;
+}
 .pay-summary {
   display: grid;
   gap: 12px;
@@ -1237,10 +1357,16 @@ a {
   }
 
   .payroll-print-slip {
-    position: absolute;
-    inset: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
     display: block;
+    box-sizing: border-box;
     width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
     direction: rtl;
     color: #111827;
     background: #fff;
@@ -1300,6 +1426,7 @@ a {
 
   .payroll-print-slip table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
   }
 
@@ -1308,6 +1435,8 @@ a {
     padding: 9px 10px;
     border: 1px solid #b9c5d4;
     text-align: right;
+    overflow-wrap: anywhere;
+    vertical-align: top;
   }
 
   .payroll-print-slip th {
@@ -1317,6 +1446,7 @@ a {
   .payroll-print-slip td:last-child,
   .payroll-print-slip th:last-child {
     width: 24%;
+    direction: ltr;
     text-align: left;
     font-weight: 700;
   }
@@ -1357,6 +1487,22 @@ a {
   .payroll-print-signatures i {
     display: block;
     border-bottom: 1px solid #111827;
+  }
+}
+@media (max-width: 720px) {
+  .payroll-preview-heading,
+  .payroll-print-preview header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .payroll-print-preview .payroll-print-details,
+  .payroll-print-preview .payroll-print-signatures {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-print-preview {
+    font-size: 14px;
   }
 }
 .settings-list {

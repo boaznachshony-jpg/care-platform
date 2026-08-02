@@ -245,6 +245,9 @@ describe('PayrollPage annual report', () => {
 
     expect(screen.getByRole('heading', { name: 'סיכום ואישור' })).toBeInTheDocument();
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    expect(screen.queryByRole('button', { name: 'הדפסה / שמירה כ־PDF' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'תצוגה מקדימה להדפסה' }));
+    expect(screen.getByText('תצוגה מקדימה לפני הדפסה')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }));
     expect(printSpy).toHaveBeenCalledOnce();
     printSpy.mockRestore();

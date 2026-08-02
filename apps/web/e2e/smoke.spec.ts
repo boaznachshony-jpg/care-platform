@@ -316,6 +316,10 @@ test('walks through all payroll steps', async ({ page }) => {
       document.body.dataset.printInvoked = 'true';
     };
   });
+  await expect(page.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'תצוגה מקדימה להדפסה' }).click();
+  await expect(page.getByText('תצוגה מקדימה לפני הדפסה')).toBeVisible();
+  await expect(page.getByText('Monthly pay summary')).toBeVisible();
   await page.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-print-invoked', 'true');
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
