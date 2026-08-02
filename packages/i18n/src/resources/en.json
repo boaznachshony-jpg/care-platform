@@ -2,6 +2,10 @@
   "app": {
     "name": "CareDesk"
   },
+  "environment": {
+    "staging": "Rehearsal environment — do not use production data",
+    "local": "Local development environment"
+  },
   "shell": {
     "loading": "Loading…",
     "skipToContent": "Skip to main content",

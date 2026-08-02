@@ -2,6 +2,10 @@
   "app": {
     "name": "CareDesk"
   },
+  "environment": {
+    "staging": "סביבת תרגול — הנתונים אינם נתוני ייצור",
+    "local": "סביבת פיתוח מקומית"
+  },
   "shell": {
     "loading": "טוען…",
     "skipToContent": "דלג לתוכן הראשי",

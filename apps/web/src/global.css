@@ -17,6 +17,25 @@ body {
   font-size: 17px;
   line-height: 1.55;
 }
+.environment-banner {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 1000;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 5px 16px;
+  background: #7c3aed;
+  color: white;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: center;
+}
+.environment-banner + .app-frame,
+.environment-banner + .clients-page {
+  padding-top: 34px;
+}
 button,
 input,
 select {
