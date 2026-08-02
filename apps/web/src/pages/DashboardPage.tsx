@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 
 export function DashboardPage() {
+  const path = useClientPath();
   const { t } = useTranslation();
   const [profile] = useMvpProfile();
   const required = [
@@ -40,7 +42,7 @@ export function DashboardPage() {
           </h2>
           <p>{status === 'missing' ? t('dashboard.missingBody') : t('dashboard.attentionBody')}</p>
         </div>
-        <Link className="text-link" to="/settings">
+        <Link className="text-link" to={path('/settings')}>
           {t('dashboard.reviewDetails')}
         </Link>
       </section>
@@ -69,7 +71,7 @@ export function DashboardPage() {
             <h2>{t('dashboard.nextAction')}</h2>
           </div>
           <p>{t('dashboard.nextActionBody')}</p>
-          <Link className="primary-button" to="/documents">
+          <Link className="primary-button" to={path('/documents')}>
             {t('dashboard.openDocuments')}
           </Link>
         </section>

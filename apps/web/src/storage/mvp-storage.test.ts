@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  createMvpClient,
   emptyMvpProfile,
   readMvpDocuments,
+  readMvpClients,
   readMvpEmploymentExpenses,
   readMvpPayroll,
   readMvpProfile,
@@ -12,7 +14,11 @@ import {
 } from './mvp-storage.js';
 
 describe('MVP local storage', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    history.replaceState({}, '', '/');
+  });
+  afterEach(() => history.replaceState({}, '', '/'));
 
   it('merges newly added profile fields into older saved profiles', () => {
     localStorage.setItem(
@@ -83,5 +89,48 @@ describe('MVP local storage', () => {
       frequency: 'quarterly',
       amount: 1840,
     });
+  });
+
+  it('keeps profiles and lists isolated between clients', () => {
+    const first = createMvpClient();
+    const second = createMvpClient();
+
+    history.replaceState({}, '', `/clients/${first.id}`);
+    saveMvpProfile({ ...emptyMvpProfile, employerName: 'מעסיק ראשון' });
+    saveMvpDocuments([
+      {
+        id: 'first-document',
+        name: 'מסמך ראשון',
+        category: 'אחר',
+        dateLabel: 'בתוקף',
+        status: 'valid',
+        fileName: 'first.pdf',
+        fileType: 'application/pdf',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      },
+    ]);
+
+    history.replaceState({}, '', `/clients/${second.id}`);
+    saveMvpProfile({ ...emptyMvpProfile, employerName: 'מעסיק שני' });
+
+    expect(readMvpProfile().employerName).toBe('מעסיק שני');
+    expect(readMvpDocuments()).toHaveLength(0);
+    history.replaceState({}, '', `/clients/${first.id}`);
+    expect(readMvpProfile().employerName).toBe('מעסיק ראשון');
+    expect(readMvpDocuments()[0]?.id).toBe('first-document');
+  });
+
+  it('migrates legacy data into a client without deleting the original copy', () => {
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({ ...emptyMvpProfile, employerName: 'מעסיק ותיק', onboardingCompleted: true }),
+    );
+
+    const [migrated] = readMvpClients();
+
+    expect(migrated?.employerName).toBe('מעסיק ותיק');
+    expect(localStorage.getItem('caredesk.mvp.profile.v1')).not.toBeNull();
+    history.replaceState({}, '', `/clients/${migrated?.id}`);
+    expect(readMvpProfile().employerName).toBe('מעסיק ותיק');
   });
 });

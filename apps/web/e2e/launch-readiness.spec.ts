@@ -34,6 +34,7 @@ test.describe('launch readiness interactions', () => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
 
     await expect(page.getByRole('button', { name: 'חזרה' })).toBeDisabled();
     await page.getByLabel('שם המעסיק').fill('מעסיק חדש');
@@ -55,7 +56,7 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('שם הנציג המורשה').fill('נציג חדש');
     await page.getByLabel('מספר טלפון').fill('0521111111');
     await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/clients\/[^/]+$/);
     await expect(page.getByRole('heading', { name: 'שלום מעסיק חדש' })).toBeVisible();
   });
 
@@ -309,19 +310,25 @@ test.describe('launch readiness interactions', () => {
   test('all dashboard and timeline shortcuts lead to their intended screens', async ({ page }) => {
     await seedCompletedProfile(page);
     await page.goto('/');
+    await expect(page).toHaveURL(/\/clients\/[^/]+$/);
+    const clientHome = page.url();
 
     await page.getByRole('link', { name: 'בדיקת הפרטים' }).click();
     await expect(page).toHaveURL(/\/settings$/);
-    await page.goto('/');
+    await page.goto(clientHome);
     await page.getByRole('link', { name: 'פתיחת המסמכים' }).click();
     await expect(page).toHaveURL(/\/documents$/);
 
     const timelineTargets = ['/documents', '/payroll', '/tasks', '/', '/tasks'];
     for (let index = 0; index < timelineTargets.length; index += 1) {
-      await page.goto('/timeline');
+      await page.goto(`${clientHome}/timeline`);
       await page.getByRole('link', { name: 'פרטים' }).nth(index).click();
       const expected = timelineTargets[index];
-      await expect(page).toHaveURL(new RegExp(`${expected === '/' ? '/$' : `${expected}$`}`));
+      if (expected === '/') {
+        await expect(page).toHaveURL(clientHome);
+      } else {
+        await expect(page).toHaveURL(new RegExp(`${expected}$`));
+      }
     }
   });
 
@@ -329,7 +336,7 @@ test.describe('launch readiness interactions', () => {
     await seedCompletedProfile(page);
 
     await page.goto('/cases/new');
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/clients\/[^/]+$/);
     await page.goto('/cases/not-a-public-route');
     await expect(page).toHaveURL('/');
   });

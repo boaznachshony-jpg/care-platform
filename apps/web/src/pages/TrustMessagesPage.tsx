@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 
 interface TrustMessage {
@@ -49,6 +50,7 @@ function translatedMessage(message: TrustMessage, language: string): string {
 }
 
 export function TrustMessagesPage() {
+  const path = useClientPath();
   const [profile] = useMvpProfile();
   const [copied, setCopied] = useState('');
   const language = profile.caregiverLanguage || 'אנגלית';
@@ -74,7 +76,7 @@ export function TrustMessagesPage() {
             התאימו תמיד את הניסוח לאדם ולהעדפותיו.
           </p>
         </div>
-        <Link className="secondary-button" to="/employee">
+        <Link className="secondary-button" to={path('/employee')}>
           לפרטי המטפל
         </Link>
       </header>
@@ -82,7 +84,7 @@ export function TrustMessagesPage() {
       {!profile.caregiverCountry || !profile.caregiverLanguage ? (
         <section className="card attention-panel">
           <h2>כדי להתאים את המסרים, השלימו ארץ מוצא ושפה מועדפת</h2>
-          <Link className="primary-button" to="/employee">
+          <Link className="primary-button" to={path('/employee')}>
             השלמת הפרטים
           </Link>
         </section>

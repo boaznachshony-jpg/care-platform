@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { ReminderLeadDays } from '../storage/mvp-storage.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
 
 export function SettingsPage() {
+  const path = useClientPath();
   const { t } = useTranslation();
   const [profile, setProfile] = useMvpProfile();
   const [draft, setDraft] = useState(profile);
@@ -43,7 +45,7 @@ export function SettingsPage() {
           <h1>{t('settings.title')}</h1>
           <p>{t('settings.intro')}</p>
         </div>
-        <Link className="secondary-button" to="/onboarding">
+        <Link className="secondary-button" to={path('/onboarding')}>
           {t('settings.reopenOnboarding')}
         </Link>
       </header>

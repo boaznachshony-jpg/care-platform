@@ -33,8 +33,55 @@ async function seedCompletedProfile(page: import('@playwright/test').Page) {
   }, completedProfile);
 }
 
+async function completeClientOnboarding(
+  page: import('@playwright/test').Page,
+  employerName: string,
+  recipientName: string,
+  caregiverName: string,
+) {
+  await page.getByLabel('שם המעסיק').fill(employerName);
+  await page.getByLabel('מספר תעודת זהות').fill('123456782');
+  await page.getByLabel('מספר טלפון').fill('0501234567');
+  await page.getByLabel('שם המטופל').fill(recipientName);
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('שם המטפל או המטפלת').fill(caregiverName);
+  await page.getByLabel('ארץ מוצא').selectOption('אוזבקיסטן');
+  await page.getByLabel('שפה מועדפת').selectOption('אוזבקית');
+  await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
+  await page.getByLabel('מספר טלפון').fill('0521234567');
+  await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
+}
+
+test('creates and switches between two isolated client records', async ({ page }) => {
+  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+  await completeClientOnboarding(page, 'מעסיק ראשון', 'מטופל ראשון', 'Caregiver One');
+  const firstClientUrl = page.url();
+  await page.locator('a.top-client-switch').click();
+  await expect(page.getByRole('heading', { name: 'הלקוחות שלי' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
+
+  await page.getByRole('button', { name: '＋ הוספת לקוח חדש' }).click();
+  await completeClientOnboarding(page, 'מעסיק שני', 'מטופל שני', 'Caregiver Two');
+  const secondClientUrl = page.url();
+  expect(secondClientUrl).not.toBe(firstClientUrl);
+
+  await page.locator('a.top-client-switch').click();
+  await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מטופל שני' })).toBeVisible();
+  await page.goto(firstClientUrl);
+  await expect(page.getByRole('heading', { name: 'שלום מעסיק ראשון' })).toBeVisible();
+  await expect(page.getByText('Caregiver One')).toBeVisible();
+  await page.goto(secondClientUrl);
+  await expect(page.getByRole('heading', { name: 'שלום מעסיק שני' })).toBeVisible();
+  await expect(page.getByText('Caregiver Two')).toBeVisible();
+});
+
 test('completes onboarding, persists data and updates settings', async ({ page }) => {
+  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
+  const clientBase = page.url().replace(/\/onboarding$/, '');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
   await page.getByLabel('שם המעסיק').fill('בועז בדיקה');
@@ -53,13 +100,13 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
 
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL(clientBase);
   await expect(page.getByRole('heading', { name: 'שלום בועז בדיקה' })).toBeVisible();
   await expect(page.getByText('מטופל בדיקה')).toBeVisible();
   await expect(page.getByText('Caregiver Test')).toBeVisible();
   await expect(page.getByText('דורש טיפול', { exact: true })).toBeVisible();
 
-  await page.goto('/settings');
+  await page.goto(`${clientBase}/settings`);
   await page.getByLabel('שם המעסיק').fill('בועז מעודכן');
   await page.getByLabel('כמה זמן מראש להזכיר?').selectOption('21');
   await page.getByRole('button', { name: 'שמירת השינויים' }).click();
@@ -69,12 +116,13 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await expect(page.getByLabel('שם המעסיק')).toHaveValue('בועז מעודכן');
   await expect(page.getByLabel('כמה זמן מראש להזכיר?')).toHaveValue('21');
 
-  await page.goto('/');
+  await page.goto(clientBase);
   await expect(page.getByRole('heading', { name: 'שלום בועז מעודכן' })).toBeVisible();
 });
 
 test('mobile controls remain readable and touch friendly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
   await expect(page.getByRole('heading', { name: 'בואו נכין את התיק שלכם' })).toBeVisible();
   const continueButton = page.getByRole('button', { name: 'המשך' });
   await expect(continueButton).toBeVisible();
@@ -120,6 +168,8 @@ test('connects every primary screen through visible navigation and action links'
 }, testInfo) => {
   await seedCompletedProfile(page);
   await page.goto('/');
+  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
+  const clientHome = page.url();
 
   if (testInfo.project.name === 'mobile-chromium') {
     const directConnections = [
@@ -128,7 +178,7 @@ test('connects every primary screen through visible navigation and action links'
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
     ] as const;
     for (const [linkName, route, expectedText] of directConnections) {
-      await page.goto('/');
+      await page.goto(clientHome);
       await page
         .getByRole('navigation', { name: 'ניווט תחתון' })
         .getByRole('link', { name: new RegExp(linkName) })
@@ -144,7 +194,7 @@ test('connects every primary screen through visible navigation and action links'
       ['הגדרות', '/settings', 'פרטים והעדפות'],
     ] as const;
     for (const [linkName, route, expectedText] of moreConnections) {
-      await page.goto('/');
+      await page.goto(clientHome);
       await page.getByRole('button', { name: 'עוד' }).click();
       await page
         .getByRole('navigation', { name: 'ניווט נוסף' })
@@ -163,7 +213,7 @@ test('connects every primary screen through visible navigation and action links'
       ['הגדרות', '/settings', 'פרטים והעדפות'],
     ] as const;
     for (const [linkName, route, expectedText] of connections) {
-      await page.goto('/');
+      await page.goto(clientHome);
       await page
         .getByRole('complementary', { name: 'ניווט ראשי' })
         .getByRole('link', { name: new RegExp(linkName) })
@@ -173,7 +223,7 @@ test('connects every primary screen through visible navigation and action links'
     }
   }
 
-  await page.goto('/employee');
+  await page.goto(`${clientHome}/employee`);
   await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
   await expect(page).toHaveURL(/\/trust$/);
   await page.getByRole('link', { name: 'לפרטי המטפל' }).click();
@@ -337,7 +387,7 @@ test('returns from the first payroll step to the dashboard', async ({ page }) =>
 
   await page.getByRole('link', { name: 'חזרה לדף הבית' }).click();
 
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
   await expect(page.getByRole('heading', { name: /שלום/ })).toBeVisible();
 });
 

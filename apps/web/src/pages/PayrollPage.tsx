@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import { useClientPath } from '../hooks/use-client-path.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
 import {
@@ -61,6 +62,7 @@ function recordSaturdayRate(record: MvpPayrollRecord): number {
 }
 
 export function PayrollPage() {
+  const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
@@ -986,7 +988,7 @@ export function PayrollPage() {
           ) : null}
           <div className="wizard-actions">
             {step === 1 ? (
-              <a className="secondary-button" href="/">
+              <a className="secondary-button" href={path('/')}>
                 חזרה לדף הבית
               </a>
             ) : (

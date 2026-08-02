@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { Link } from 'react-router-dom';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
+import { useClientPath } from '../hooks/use-client-path.js';
 
 type TimelineEvent = [
   date: string,
@@ -38,6 +39,7 @@ function shortDate(value: string): string {
 }
 
 export function TimelinePage({ today }: { today?: Date } = {}) {
+  const path = useClientPath();
   const quarterlyInsurance = createQuarterlyInsuranceTask(today);
   const events: TimelineEvent[] = [
     ...fixedEvents,
@@ -71,7 +73,7 @@ export function TimelinePage({ today }: { today?: Date } = {}) {
             <div className="timeline-content">
               <h3>{title}</h3>
               <p>{description}</p>
-              <Link to={detailsPath}>פרטים</Link>
+              <Link to={path(detailsPath)}>פרטים</Link>
             </div>
           </article>
         ))}

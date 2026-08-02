@@ -3,11 +3,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 import { createCareNotifications } from './notifications.js';
+import { useClientPath } from './hooks/use-client-path.js';
 import {
   readMvpDocuments,
   readMvpEmploymentExpenses,
   readMvpTasks,
 } from './storage/mvp-storage.js';
+import { RELEASE_LABEL } from './release.js';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -55,6 +57,7 @@ function currentHebrewDate(): string {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
+  const path = useClientPath();
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -82,12 +85,13 @@ export function AppShell({ children }: AppShellProps) {
           <span className="brand-mark">C</span>
           <div>
             <strong>CareDesk</strong>
+            <small>{RELEASE_LABEL}</small>
             <small>ניהול העסקה ישירה</small>
           </div>
         </div>
         <nav className="desktop-nav">
           {nav.map(([to, icon, label]) => (
-            <NavLink key={to} to={to} end={to === '/'}>
+            <NavLink key={to} to={path(to)} end={to === '/'}>
               <span>{icon}</span>
               {label}
             </NavLink>
@@ -97,8 +101,11 @@ export function AppShell({ children }: AppShellProps) {
           <strong>הכול בשליטה</strong>
           <span>המערכת מסכמת עבורך מה דורש טיפול.</span>
         </div>
-        <NavLink className="settings-link" to="/settings">
+        <NavLink className="settings-link" to={path('/settings')}>
           ⚙ הגדרות
+        </NavLink>
+        <NavLink className="settings-link client-switch-link" to="/">
+          ⇄ החלפת לקוח
         </NavLink>
       </aside>
       <div className="app-body">
@@ -108,6 +115,9 @@ export function AppShell({ children }: AppShellProps) {
             <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
+            <Link className="top-client-switch" to="/" aria-label="החלפת לקוח">
+              ⇄
+            </Link>
             <div className="font-size-controls" role="group" aria-label="גודל טקסט">
               <button
                 type="button"
@@ -147,7 +157,7 @@ export function AppShell({ children }: AppShellProps) {
                 className={
                   notifications.length > 0 ? 'notification-bell active' : 'notification-bell'
                 }
-                to="/tasks"
+                to={path('/tasks')}
                 aria-label={
                   notifications.length > 0
                     ? `מעבר למשימות פתוחות, ${notifications.length} נושאים לטיפול`
@@ -168,13 +178,18 @@ export function AppShell({ children }: AppShellProps) {
         </main>
         <nav className="mobile-nav" aria-label="ניווט תחתון">
           {mobileNav.map(([to, icon, label]) => (
-            <NavLink key={to} to={to} end={to === '/'} onClick={() => setMobileMoreOpen(false)}>
+            <NavLink
+              key={to}
+              to={path(to)}
+              end={to === '/'}
+              onClick={() => setMobileMoreOpen(false)}
+            >
               <span>{icon}</span>
               <small>{label}</small>
             </NavLink>
           ))}
           <button
-            className={mobileMoreNav.some(([to]) => to === location.pathname) ? 'active' : ''}
+            className={mobileMoreNav.some(([to]) => path(to) === location.pathname) ? 'active' : ''}
             type="button"
             aria-expanded={mobileMoreOpen}
             aria-controls="mobile-more-menu"
@@ -187,11 +202,15 @@ export function AppShell({ children }: AppShellProps) {
         {mobileMoreOpen ? (
           <nav id="mobile-more-menu" className="mobile-more-menu" aria-label="ניווט נוסף">
             {mobileMoreNav.map(([to, icon, label]) => (
-              <NavLink key={to} to={to} onClick={() => setMobileMoreOpen(false)}>
+              <NavLink key={to} to={path(to)} onClick={() => setMobileMoreOpen(false)}>
                 <span aria-hidden="true">{icon}</span>
                 {label}
               </NavLink>
             ))}
+            <Link to="/" onClick={() => setMobileMoreOpen(false)}>
+              <span aria-hidden="true">⇄</span>
+              החלפת לקוח
+            </Link>
           </nav>
         ) : null}
       </div>

@@ -1,10 +1,12 @@
 /* eslint-disable no-restricted-syntax */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useClientPath } from '../hooks/use-client-path.js';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 
 export function EmployeePage() {
+  const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
   const [draft, setDraft] = useState(profile);
   const [editing, setEditing] = useState(false);
@@ -35,7 +37,7 @@ export function EmployeePage() {
           <h1>{profile.caregiverName || 'טרם הוזן שם'}</h1>
           <p>פרטי ההעסקה והתקשורת שנשמרו במכשיר זה.</p>
         </div>
-        <Link className="primary-button" to="/trust">
+        <Link className="primary-button" to={path('/trust')}>
           מסרים לבניית אמון
         </Link>
       </header>
@@ -131,7 +133,7 @@ export function EmployeePage() {
           <h2>שיחה קטנה יכולה לבנות אמון גדול</h2>
           <p>מסרים קצרים ומכבדים בשפה המועדפת של המטפל מסייעים בתיאום ציפיות ובתחושת שותפות.</p>
         </div>
-        <Link className="secondary-button" to="/trust">
+        <Link className="secondary-button" to={path('/trust')}>
           לפתיחת המסרים
         </Link>
       </section>

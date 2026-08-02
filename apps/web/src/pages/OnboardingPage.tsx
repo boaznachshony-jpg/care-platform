@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
@@ -9,6 +10,7 @@ import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.j
 export function OnboardingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
   const [draft, setDraft] = useState(profile);
   const [step, setStep] = useState(0);
@@ -50,7 +52,7 @@ export function OnboardingPage() {
 
   function complete() {
     setProfile({ ...draft, onboardingCompleted: true });
-    navigate('/');
+    navigate(path('/'));
   }
 
   return (
