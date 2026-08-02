@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   emptyMvpProfile,
   readMvpPayroll,
@@ -244,10 +244,15 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
 
     expect(screen.getByRole('heading', { name: 'סיכום ואישור' })).toBeInTheDocument();
-    expect(screen.getByText('תוספות אחרות')).toBeInTheDocument();
-    expect(screen.getByText('סכום לפני קיזוזים')).toBeInTheDocument();
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }));
+    expect(printSpy).toHaveBeenCalledOnce();
+    printSpy.mockRestore();
+    expect(screen.getByLabelText('ריכוז חישוב שכר להדפסה')).toHaveTextContent('חתימת העובד/ת');
+    expect(screen.getAllByText('תוספות אחרות')).toHaveLength(2);
+    expect(screen.getAllByText('סכום לפני קיזוזים')).toHaveLength(2);
     expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
     expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();
-    expect(screen.getByText(/8,150\.00/)).toBeInTheDocument();
+    expect(screen.getAllByText(/8,150\.00/)).toHaveLength(2);
   });
 });

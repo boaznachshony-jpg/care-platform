@@ -783,51 +783,155 @@ export function PayrollPage() {
             </div>
           ) : null}
           {step === 5 ? (
-            <div className="pay-summary">
-              <div>
-                <span>
-                  שכר בסיס <small>נתוני העסקה</small>
-                </span>
-                <strong>{money.format(proratedBaseSalary.amount)}</strong>
+            <>
+              <div className="pay-summary">
+                <div>
+                  <span>
+                    שכר בסיס <small>נתוני העסקה</small>
+                  </span>
+                  <strong>{money.format(proratedBaseSalary.amount)}</strong>
+                </div>
+                <div>
+                  <span>
+                    שבתות וימי מנוחה
+                    <small>
+                      {numeric(values.paidSaturdays)} × {money.format(numeric(values.saturdayRate))}
+                    </small>
+                  </span>
+                  <strong>{money.format(calculation.saturdayPay)}</strong>
+                </div>
+                <div>
+                  <span>
+                    תוספות אחרות <small>לא כולל שבתות, המוצגות בשורה נפרדת</small>
+                  </span>
+                  <strong>{money.format(otherAdditions)}</strong>
+                </div>
+                <div className="payroll-subtotal">
+                  <span>סכום לפני קיזוזים</span>
+                  <strong>{money.format(beforeDeductions)}</strong>
+                </div>
+                <div>
+                  <span>
+                    מקדמות וקיזוזים
+                    <small>
+                      {deductionBreakdown.length > 0
+                        ? deductionBreakdown.join(' · ')
+                        : 'לא הוזנו קיזוזים החודש'}
+                    </small>
+                  </span>
+                  <strong>−{money.format(calculation.deductions)}</strong>
+                </div>
+                <div className="total">
+                  <span>סה״כ לתשלום</span>
+                  <strong>{money.format(calculation.total)}</strong>
+                </div>
+                <p>
+                  זהו כלי תיעוד וחישוב אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול גורם
+                  מקצועי.
+                </p>
               </div>
-              <div>
-                <span>
-                  שבתות וימי מנוחה
-                  <small>
-                    {numeric(values.paidSaturdays)} × {money.format(numeric(values.saturdayRate))}
-                  </small>
-                </span>
-                <strong>{money.format(calculation.saturdayPay)}</strong>
-              </div>
-              <div>
-                <span>
-                  תוספות אחרות <small>לא כולל שבתות, המוצגות בשורה נפרדת</small>
-                </span>
-                <strong>{money.format(otherAdditions)}</strong>
-              </div>
-              <div className="payroll-subtotal">
-                <span>סכום לפני קיזוזים</span>
-                <strong>{money.format(beforeDeductions)}</strong>
-              </div>
-              <div>
-                <span>
-                  מקדמות וקיזוזים
-                  <small>
-                    {deductionBreakdown.length > 0
-                      ? deductionBreakdown.join(' · ')
-                      : 'לא הוזנו קיזוזים החודש'}
-                  </small>
-                </span>
-                <strong>−{money.format(calculation.deductions)}</strong>
-              </div>
-              <div className="total">
-                <span>סה״כ לתשלום</span>
-                <strong>{money.format(calculation.total)}</strong>
-              </div>
-              <p>
-                זהו כלי תיעוד וחישוב אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול גורם מקצועי.
-              </p>
-            </div>
+              <section className="payroll-print-slip" aria-label="ריכוז חישוב שכר להדפסה">
+                <header>
+                  <div>
+                    <strong>CareDesk</strong>
+                    <h1>ריכוז חישוב שכר חודשי</h1>
+                  </div>
+                  <span>חודש שכר: {values.month}</span>
+                </header>
+                <p className="payroll-print-disclaimer">
+                  מסמך תיעוד שהופק מהנתונים שהמשתמש הזין. אינו תלוש שכר רשמי ואינו מחליף בדיקה
+                  מקצועית.
+                </p>
+                <div className="payroll-print-details">
+                  <div>
+                    <span>שם המעסיק</span>
+                    <strong>{profile.employerName || 'לא הוזן'}</strong>
+                  </div>
+                  <div>
+                    <span>מספר זהות מעסיק</span>
+                    <strong>{profile.employerIdNumber || 'לא הוזן'}</strong>
+                  </div>
+                  <div>
+                    <span>שם המטופל/ת</span>
+                    <strong>{profile.recipientName || 'לא הוזן'}</strong>
+                  </div>
+                  <div>
+                    <span>שם העובד/ת</span>
+                    <strong>{profile.caregiverName || 'לא הוזן'}</strong>
+                  </div>
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>רכיב</th>
+                      <th>פירוט</th>
+                      <th>סכום</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>שכר בסיס</td>
+                      <td>
+                        {proratedBaseSalary.isProrated
+                          ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימי בסיס`
+                          : 'חודש מלא'}
+                      </td>
+                      <td>{money.format(proratedBaseSalary.amount)}</td>
+                    </tr>
+                    <tr>
+                      <td>שבתות וימי מנוחה</td>
+                      <td>
+                        {numeric(values.paidSaturdays)} ×{' '}
+                        {money.format(numeric(values.saturdayRate))}
+                      </td>
+                      <td>{money.format(calculation.saturdayPay)}</td>
+                    </tr>
+                    <tr>
+                      <td>תוספות אחרות</td>
+                      <td>חג, חופשה, מחלה ותוספות שהוזנו</td>
+                      <td>{money.format(otherAdditions)}</td>
+                    </tr>
+                    <tr className="subtotal">
+                      <td colSpan={2}>סכום לפני קיזוזים</td>
+                      <td>{money.format(beforeDeductions)}</td>
+                    </tr>
+                    <tr>
+                      <td>מקדמות וקיזוזים</td>
+                      <td>
+                        {deductionBreakdown.length > 0
+                          ? deductionBreakdown.join(' · ')
+                          : 'לא הוזנו קיזוזים'}
+                      </td>
+                      <td>−{money.format(calculation.deductions)}</td>
+                    </tr>
+                    <tr className="total">
+                      <td colSpan={2}>סה״כ לתשלום</td>
+                      <td>{money.format(calculation.total)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="payroll-print-attendance">
+                  <span>ימי עבודה: {values.workDays}</span>
+                  <span>ימי חופשה: {values.vacationDays}</span>
+                  <span>ימי מחלה: {values.sickDays}</span>
+                  <span>ימי היעדרות: {values.absenceDays}</span>
+                </div>
+                <div className="payroll-print-signatures">
+                  <div>
+                    <span>חתימת העובד/ת</span>
+                    <i />
+                  </div>
+                  <div>
+                    <span>חתימת המעסיק/ה</span>
+                    <i />
+                  </div>
+                  <div>
+                    <span>תאריך</span>
+                    <i />
+                  </div>
+                </div>
+              </section>
+            </>
           ) : null}
           {step === 5 && payrollSaved ? (
             <div className="success-box payroll-save-confirmation" role="status">
@@ -850,9 +954,14 @@ export function PayrollPage() {
               </button>
             )}
             {step === 5 ? (
-              <button className="primary-button" type="button" onClick={savePayroll}>
-                {payrollSaved ? 'שמירה מחדש' : 'אישור ושמירה'}
-              </button>
+              <div className="wizard-primary-actions">
+                <button className="secondary-button" type="button" onClick={() => window.print()}>
+                  הדפסה / שמירה כ־PDF
+                </button>
+                <button className="primary-button" type="button" onClick={savePayroll}>
+                  {payrollSaved ? 'שמירה מחדש' : 'אישור ושמירה'}
+                </button>
+              </div>
             ) : (
               <button className="primary-button" type="button" onClick={goForward}>
                 המשך

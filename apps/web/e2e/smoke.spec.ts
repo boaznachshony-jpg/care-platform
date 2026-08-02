@@ -311,6 +311,13 @@ test('walks through all payroll steps', async ({ page }) => {
   await next.click();
   await expect(page.getByRole('heading', { name: 'סיכום ואישור' })).toBeVisible();
   await expect(page.getByText('נתוני העסקה', { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    window.print = () => {
+      document.body.dataset.printInvoked = 'true';
+    };
+  });
+  await page.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-print-invoked', 'true');
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
   await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
   await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
