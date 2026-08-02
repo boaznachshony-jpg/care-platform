@@ -3,9 +3,10 @@ export type DeploymentEnvironment = 'production' | 'staging' | 'local';
 export function getDeploymentEnvironment(
   hostname = window.location.hostname,
 ): DeploymentEnvironment {
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return 'local';
   if (hostname === 'care-platform-web.vercel.app') return 'production';
   if (hostname.endsWith('.vercel.app')) return 'staging';
-  return 'local';
+  return 'production';
 }
 
 export function getEnvironmentTranslationKey(

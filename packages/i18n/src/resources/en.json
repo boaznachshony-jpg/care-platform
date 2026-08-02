@@ -6,6 +6,20 @@
     "staging": "Rehearsal environment — do not use production data",
     "local": "Local development environment"
   },
+  "auth": {
+    "loginTitle": "Secure sign in",
+    "loginIntro": "Enter the email address and password provided by the administrator.",
+    "email": "Email address",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signingIn": "Signing in…",
+    "invalidCredentials": "The sign-in details are incorrect. Check the email and password and try again.",
+    "closedAccess": "Access is limited to pre-approved users.",
+    "checkingSession": "Checking the secure session…",
+    "configurationRequiredTitle": "Secure access is not configured yet",
+    "configurationRequiredBody": "The application is locked until the authentication provider is configured. No data can be viewed."
+  },
   "shell": {
     "loading": "Loading…",
     "skipToContent": "Skip to main content",

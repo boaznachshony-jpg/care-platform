@@ -36,6 +36,71 @@ body {
 .environment-banner + .clients-page {
   padding-top: 34px;
 }
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 64px 20px 32px;
+  background: radial-gradient(circle at top right, #dceaff, transparent 42%), #f4f7fb;
+}
+.auth-card {
+  width: min(100%, 520px);
+  display: grid;
+  gap: 16px;
+  padding: clamp(28px, 6vw, 48px);
+  border: 1px solid #dce4ef;
+  border-radius: 28px;
+  background: white;
+  box-shadow: 0 24px 70px rgba(26, 49, 83, 0.13);
+}
+.auth-card h1,
+.auth-card p {
+  margin: 0;
+}
+.auth-brand {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: #17243b;
+  color: white;
+  font-size: 32px;
+  font-weight: 900;
+}
+.auth-card form {
+  display: grid;
+  gap: 12px;
+}
+.auth-card input {
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 2px solid #c9d5e5;
+  border-radius: 15px;
+  font: inherit;
+}
+.auth-card input:focus {
+  border-color: #2867d8;
+  outline: 3px solid #dceaff;
+}
+.auth-error {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff0f0;
+  color: #a51d25;
+  font-weight: 800;
+}
+.sign-out-button {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: white;
+  color: #334155;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
 button,
 input,
 select {

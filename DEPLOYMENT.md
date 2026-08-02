@@ -19,6 +19,10 @@ The current RC stores client data in the tester's browser. Staging is therefore 
 - Output Directory: `dist`
 - Environment variable:
   - `VITE_API_BASE_URL=https://care-platform-api.vercel.app`
+  - `VITE_SUPABASE_URL=https://<project-ref>.supabase.co`
+  - `VITE_SUPABASE_PUBLISHABLE_KEY=<browser-safe publishable key>`
+
+Both authentication variables are required in Preview and Production. A hosted build without either value fails closed and displays only the configuration-required screen. Never expose `SUPABASE_SERVICE_ROLE_KEY` through a `VITE_` variable.
 
 ## Vercel API project
 

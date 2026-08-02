@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 import { createCareNotifications } from './notifications.js';
 import { useClientPath } from './hooks/use-client-path.js';
@@ -10,6 +11,7 @@ import {
   readMvpTasks,
 } from './storage/mvp-storage.js';
 import { RELEASE_LABEL } from './release.js';
+import { useAuth } from './auth/auth-context.js';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -56,8 +58,10 @@ function currentHebrewDate(): string {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const { t } = useTranslation();
   const location = useLocation();
   const path = useClientPath();
+  const auth = useAuth();
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -115,6 +119,11 @@ export function AppShell({ children }: AppShellProps) {
             <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
+            {auth.enabled ? (
+              <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
+                {t('auth.signOut')}
+              </button>
+            ) : null}
             <Link className="top-client-switch" to="/" aria-label="החלפת לקוח">
               ⇄
             </Link>
