@@ -130,6 +130,50 @@ test('mobile controls remain readable and touch friendly', async ({ page }) => {
   expect(box?.height).toBeGreaterThanOrEqual(48);
 });
 
+test('mobile layouts stay symmetrical at the largest text size', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => localStorage.setItem('caredesk.ui.font-scale.v1', '1.3'));
+  await page.goto('/');
+  const clientHome = page.url();
+  const routes = [
+    '',
+    '/tasks',
+    '/employee',
+    '/trust',
+    '/documents',
+    '/timeline',
+    '/payroll',
+    '/settings',
+  ];
+
+  for (const route of routes) {
+    await page.goto(`${clientHome}${route}`);
+    const layout = await page.evaluate(() => {
+      const controls = Array.from(
+        document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+          "input:not([type='checkbox']):not([type='radio']):not([type='file']), select",
+        ),
+      ).map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { height: Math.round(rect.height), left: rect.left, right: rect.right };
+      });
+      return {
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        controls,
+      };
+    });
+
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
+    for (const control of layout.controls) {
+      expect(control.height).toBe(60);
+      expect(control.left).toBeGreaterThanOrEqual(0);
+      expect(control.right).toBeLessThanOrEqual(layout.clientWidth);
+    }
+  }
+});
+
 test('mobile navigation keeps payroll accessible', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -299,9 +343,9 @@ test('enlarges text globally and preserves the preference after reload', async (
   await seedCompletedProfile(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
-  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+  await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
   await page.reload();
-  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+  await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
 });
 
 test('notification bell opens the list of open tasks', async ({ page }) => {

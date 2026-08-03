@@ -162,9 +162,9 @@ test.describe('launch readiness interactions', () => {
       '#main-content',
     );
     await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
-    await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+    await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
     await page.getByRole('button', { name: 'הקטנת טקסט' }).click();
-    await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1');
+    await expect(page.locator('html')).toHaveCSS('--ui-scale', '1');
     await page.getByRole('link', { name: /מעבר למשימות פתוחות/ }).click();
     await expect(page).toHaveURL(/\/tasks$/);
   });
