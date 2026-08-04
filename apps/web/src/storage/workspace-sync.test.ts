@@ -1,12 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  getWorkspace: vi.fn(),
-  saveWorkspace: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class MockApiRequestError extends Error {
+    constructor(
+      readonly status: number,
+      readonly code: string,
+    ) {
+      super(code);
+    }
+  }
+  return {
+    ApiRequestError: MockApiRequestError,
+    getWorkspace: vi.fn(),
+    saveWorkspace: vi.fn(),
+  };
+});
 
 vi.mock('../api/client.js', () => ({
-  ApiRequestError: class extends Error {},
+  ApiRequestError: mocks.ApiRequestError,
   getWorkspace: mocks.getWorkspace,
   saveWorkspace: mocks.saveWorkspace,
 }));
@@ -28,7 +39,11 @@ describe('workspace sync', () => {
       },
       updatedAt: new Date().toISOString(),
     });
-    mocks.saveWorkspace.mockResolvedValue({ version: 5, snapshot: {}, updatedAt: '' });
+    mocks.saveWorkspace.mockImplementation(async ({ snapshot }) => ({
+      version: 5,
+      snapshot,
+      updatedAt: '',
+    }));
   });
 
   afterEach(() => {
@@ -64,5 +79,51 @@ describe('workspace sync', () => {
         }),
       }),
     );
+  });
+
+  it('recovers a deployment-time version conflict when the remote content is unchanged', async () => {
+    await startWorkspaceSync();
+    mocks.saveWorkspace
+      .mockRejectedValueOnce(new mocks.ApiRequestError(409, 'VERSION_CONFLICT'))
+      .mockImplementationOnce(async ({ snapshot }) => ({
+        version: 6,
+        snapshot,
+        updatedAt: '',
+      }));
+    mocks.getWorkspace.mockResolvedValueOnce({
+      version: 5,
+      snapshot: {
+        schemaVersion: 1,
+        entries: { 'caredesk.mvp.clients.v1': '[{"id":"remote"}]' },
+      },
+      updatedAt: '',
+    });
+
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(mocks.saveWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedVersion: 5 }),
+    );
+  });
+
+  it('does not overwrite a real remote edit after a version conflict', async () => {
+    await startWorkspaceSync();
+    mocks.saveWorkspace.mockRejectedValueOnce(new mocks.ApiRequestError(409, 'VERSION_CONFLICT'));
+    mocks.getWorkspace.mockResolvedValueOnce({
+      version: 5,
+      snapshot: {
+        schemaVersion: 1,
+        entries: { 'caredesk.mvp.clients.v1': '[{"id":"changed-elsewhere"}]' },
+      },
+      updatedAt: '',
+    });
+
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(mocks.saveWorkspace).toHaveBeenCalledTimes(1);
   });
 });
