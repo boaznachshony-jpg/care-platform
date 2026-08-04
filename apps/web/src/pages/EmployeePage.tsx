@@ -35,7 +35,7 @@ export function EmployeePage() {
         <div>
           <p className="eyebrow">מטפל או מטפלת</p>
           <h1>{profile.caregiverName || 'טרם הוזן שם'}</h1>
-          <p>פרטי ההעסקה והתקשורת שנשמרו במכשיר זה.</p>
+          <p>פרטי ההעסקה והתקשורת שנשמרו במערכת.</p>
         </div>
         <Link className="primary-button" to={path('/trust')}>
           מסרים לבניית אמון

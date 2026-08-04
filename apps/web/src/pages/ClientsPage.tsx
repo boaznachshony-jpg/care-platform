@@ -70,7 +70,11 @@ export function ClientsPage() {
         <div>
           <p className="eyebrow">סביבת ייצור סגורה לתרגול</p>
           <h1>הלקוחות שלי</h1>
-          <p>כל לקוח נשמר בנפרד ורק בדפדפן הזה. בחרו רשומה קיימת או התחילו חדשה.</p>
+          <p>
+            {auth.enabled
+              ? 'כל לקוח נשמר בנפרד בחשבון ומסתנכרן בין המכשירים המורשים.'
+              : 'כל לקוח נשמר בנפרד ורק בדפדפן הזה. בחרו רשומה קיימת או התחילו חדשה.'}
+          </p>
         </div>
         <div className="clients-hero-actions">
           <button className="secondary-button" type="button" onClick={() => navigate('/family')}>
@@ -159,8 +163,17 @@ export function ClientsPage() {
         </section>
       )}
       <aside className="local-data-notice">
-        <strong>המידע נשמר במכשיר זה בלבד</strong>
-        <span>מומלץ להוריד גיבוי לפני ניקוי נתוני הדפדפן או מעבר למכשיר אחר.</span>
+        {auth.enabled ? (
+          <>
+            <strong>המידע נשמר בחשבון המאובטח ומסתנכרן לענן</strong>
+            <span>נשמר גם עותק עבודה מקומי. אפשר להוריד גיבוי אישי בכל עת.</span>
+          </>
+        ) : (
+          <>
+            <strong>המידע נשמר במכשיר זה בלבד</strong>
+            <span>מומלץ להוריד גיבוי לפני ניקוי נתוני הדפדפן או מעבר למכשיר אחר.</span>
+          </>
+        )}
       </aside>
     </main>
   );

@@ -84,7 +84,14 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
     },
   );
 
-  void app.register(cors, { origin: buildCorsOrigin(env) });
+  void app.register(cors, {
+    origin: buildCorsOrigin(env),
+    // @fastify/cors defaults to GET, HEAD and POST. CareDesk also persists
+    // workspaces, files, family roles and billing state through mutating
+    // browser requests, so those methods must be present in the preflight
+    // response or the browser blocks them before Fastify sees the request.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
 
   registerCorrelationId(app, env.CORRELATION_HEADER);
   registerErrorHandler(app);
