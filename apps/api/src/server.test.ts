@@ -48,6 +48,26 @@ describe('apps/api server', () => {
     expect(response.json()).toMatchObject({ code: 'AUTHORIZATION_NOT_CONFIGURED' });
   });
 
+  it('allows production browser preflights for every mutating API method', async () => {
+    const origin = 'https://care-platform-web.vercel.app';
+    const app = buildServer(loadEnv({ NODE_ENV: 'production', CORS_ORIGINS: origin }));
+
+    for (const method of ['PUT', 'PATCH', 'DELETE']) {
+      const response = await app.inject({
+        method: 'OPTIONS',
+        url: '/workspace',
+        headers: {
+          origin,
+          'access-control-request-method': method,
+          'access-control-request-headers': 'authorization,content-type',
+        },
+      });
+      expect(response.statusCode).toBe(204);
+      expect(response.headers['access-control-allow-origin']).toBe(origin);
+      expect(response.headers['access-control-allow-methods']).toContain(method);
+    }
+  });
+
   it('an unknown route returns the standard error envelope, never a raw 404 page', async () => {
     const app = buildServer(loadEnv({}));
     const response = await app.inject({ method: 'GET', url: '/does-not-exist' });

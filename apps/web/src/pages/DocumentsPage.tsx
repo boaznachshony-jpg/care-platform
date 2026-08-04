@@ -152,7 +152,7 @@ export function DocumentsPage() {
         <div>
           <p className="eyebrow">מרכז מסמכים</p>
           <h1>כל המסמכים במקום אחד</h1>
-          <p>הוספה, פתיחה, עדכון ומעקב אחר מסמכים שנשמרו במכשיר זה.</p>
+          <p>הוספה, פתיחה, עדכון ומעקב אחר מסמכים שנשמרו במערכת.</p>
         </div>
         <button className="primary-button" type="button" onClick={() => setShowForm(true)}>
           ↑ הוספת מסמך
