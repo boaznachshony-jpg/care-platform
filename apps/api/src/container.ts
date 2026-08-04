@@ -477,11 +477,11 @@ export function buildContainer(env: Env): Container {
             billing_table: string | null;
           }>(
             `select
-               to_regprocedure('resolve_caredesk_actor(text)')::text as actor_resolver,
-               to_regclass('tenant_workspace')::text as workspace_table,
-               to_regclass('workspace_file')::text as workspace_file_table,
-               to_regprocedure('list_caredesk_family_members(uuid)')::text as family_members_function,
-               to_regclass('product_subscription')::text as billing_table`,
+               to_regprocedure('public.resolve_caredesk_actor(text)')::text as actor_resolver,
+               to_regclass('public.tenant_workspace')::text as workspace_table,
+               to_regclass('public.workspace_file')::text as workspace_file_table,
+               to_regprocedure('public.list_caredesk_family_members(uuid)')::text as family_members_function,
+               to_regclass('public.product_subscription')::text as billing_table`,
           );
           const row = result.rows[0];
           if (

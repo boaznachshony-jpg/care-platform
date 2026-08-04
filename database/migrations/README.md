@@ -14,7 +14,7 @@ full business schema — starting with the identity/tenancy tables from
 created until ADR-002 is Accepted.
 
 The closed-pilot sequence currently runs through
-`0016_restore_actor_resolution_grant.sql`.
+`0017_restore_missing_pilot_workspace.sql`.
 Applied files are immutable; every later change receives the next number.
 
 ## Running locally
