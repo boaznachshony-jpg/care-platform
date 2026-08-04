@@ -81,6 +81,14 @@ async function main(): Promise<void> {
 
     // 1. Tenant A sees exactly its own recipient, not B's.
     await withTenant(pool, tenantA, async (client) => {
+      const tenants = await client.query<{ id: string }>('select id from tenant');
+      const tenantIds = tenants.rows.map((row) => row.id);
+      if (tenantIds.length === 1 && tenantIds[0] === tenantA) {
+        pass('tenant A sees only its own tenant reference row');
+      } else {
+        fail(`tenant A tenant reference SELECT leaked rows: ${JSON.stringify(tenantIds)}`);
+      }
+
       const rows = await client.query<{ id: string }>('select id from care_recipient');
       const ids = rows.rows.map((r) => r.id);
       if (ids.includes(recipientA) && !ids.includes(recipientB)) {
@@ -175,6 +183,9 @@ async function main(): Promise<void> {
         'document_version',
         'tenant_workspace',
         'workspace_file',
+        'product_subscription',
+        'billing_setup_intent',
+        'product_billing_charge',
       ];
       const result = await pool.query<{ relname: string; ok: boolean }>(
         `select relname, (relrowsecurity and relforcerowsecurity) as ok
@@ -225,6 +236,53 @@ async function main(): Promise<void> {
         fail(`audit_event is mutable by caredesk_app: update=${updated}, delete=${deleted}`);
       }
     });
+
+    // 9. Supabase's browser-facing roles must not have direct access to the
+    //    public schema. Authentication uses Supabase, but all CareDesk data
+    //    access goes through the API and its caredesk_app role.
+    {
+      const tableGrants = await pool.query<{ object_name: string; grantee: string }>(
+        `select table_name as object_name, grantee
+           from information_schema.role_table_grants
+          where table_schema = 'public'
+            and grantee in ('anon', 'authenticated')`,
+      );
+      const routineGrants = await pool.query<{ object_name: string; grantee: string }>(
+        `select routine_name as object_name, grantee
+           from information_schema.role_routine_grants
+          where specific_schema = 'public'
+            and grantee in ('anon', 'authenticated', 'PUBLIC')`,
+      );
+      if (tableGrants.rowCount === 0 && routineGrants.rowCount === 0) {
+        pass('Supabase anon/authenticated roles have no public table or function grants');
+      } else {
+        fail(
+          `browser-facing grants remain: ${JSON.stringify({
+            tables: tableGrants.rows,
+            routines: routineGrants.rows,
+          })}`,
+        );
+      }
+    }
+
+    // 10. Global/control tables are also protected even though the API reaches
+    //     them only through narrow SECURITY DEFINER functions.
+    {
+      const expected = ['tenant', 'app_user', 'schema_migrations'];
+      const result = await pool.query<{ relname: string; ok: boolean }>(
+        `select relname, (relrowsecurity and relforcerowsecurity) as ok
+           from pg_class
+          where relkind = 'r' and relname = any($1)`,
+        [expected],
+      );
+      const byName = new Map(result.rows.map((row) => [row.relname, row.ok]));
+      const unprotected = expected.filter((name) => byName.get(name) !== true);
+      if (unprotected.length === 0) {
+        pass('RLS enabled and forced on all global/control tables');
+      } else {
+        fail(`global/control tables without forced RLS: ${unprotected.join(', ')}`);
+      }
+    }
   } finally {
     // Teardown runs on the admin pool: caredesk_app deliberately cannot delete
     // rows or drop tables, which is the property assertions 7 and 8 rely on.
