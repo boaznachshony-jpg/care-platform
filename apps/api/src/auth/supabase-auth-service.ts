@@ -11,8 +11,12 @@ interface JwtClaims {
   aal?: unknown;
 }
 
-type FetchLike = typeof globalThis.fetch;
-type FetchResponse = Awaited<ReturnType<FetchLike>>;
+interface FetchResponseLike {
+  readonly ok: boolean;
+  json(): Promise<unknown>;
+}
+
+type FetchLike = (input: string, init?: Record<string, unknown>) => Promise<FetchResponseLike>;
 
 function readClaims(token: string): JwtClaims {
   try {
@@ -39,13 +43,13 @@ export class SupabaseAuthService implements AuthService {
   constructor(
     private readonly supabaseUrl: string,
     private readonly publishableKey: string,
-    private readonly fetchImpl: FetchLike = globalThis.fetch,
+    private readonly fetchImpl: FetchLike = globalThis.fetch as unknown as FetchLike,
   ) {}
 
   async verifySession(token: string): Promise<AuthSession | null> {
     if (!token) return null;
 
-    let response: FetchResponse;
+    let response: FetchResponseLike;
     try {
       response = await this.fetchImpl(`${this.supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
         method: 'GET',

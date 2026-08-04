@@ -1,6 +1,12 @@
 import type { DocumentStorage, PutObjectInput } from '@caredesk/application';
 
-type FetchLike = typeof globalThis.fetch;
+interface FetchResponseLike {
+  readonly ok: boolean;
+  readonly status: number;
+  json(): Promise<unknown>;
+}
+
+type FetchLike = (input: string, init?: Record<string, unknown>) => Promise<FetchResponseLike>;
 
 function encodePath(path: string): string {
   return path
@@ -15,7 +21,7 @@ export class SupabaseDocumentStorage implements DocumentStorage {
     private readonly supabaseUrl: string,
     private readonly serviceRoleKey: string,
     private readonly bucket: string,
-    private readonly fetchImpl: FetchLike = globalThis.fetch,
+    private readonly fetchImpl: FetchLike = globalThis.fetch as unknown as FetchLike,
   ) {}
 
   private headers(contentType?: string): Record<string, string> {
