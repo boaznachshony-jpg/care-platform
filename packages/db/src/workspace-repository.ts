@@ -42,28 +42,35 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
 
   async save(input: SaveWorkspaceRecord): Promise<WorkspaceRecord | null> {
     return withTenant(this.pool, input.tenantId, async (client) => {
-      const result = await client.query<WorkspaceRow>(
-        `insert into tenant_workspace
-           (tenant_id, schema_version, payload, version, updated_by, updated_at)
-         select $1, $2, $3::jsonb, 1, $5, $6::timestamptz
-          where $4 = 0
-         on conflict (tenant_id) do update
-           set schema_version = excluded.schema_version,
-               payload = excluded.payload,
-               version = tenant_workspace.version + 1,
-               updated_by = excluded.updated_by,
-               updated_at = excluded.updated_at
-         where tenant_workspace.version = $4
-         returning tenant_id, schema_version, payload, version, updated_at`,
-        [
-          input.tenantId,
-          input.schemaVersion,
-          JSON.stringify(input.payload),
-          input.expectedVersion,
-          input.updatedBy,
-          input.updatedAt,
-        ],
-      );
+      const values = [
+        input.tenantId,
+        input.schemaVersion,
+        JSON.stringify(input.payload),
+        input.expectedVersion,
+        input.updatedBy,
+        input.updatedAt,
+      ];
+      const result =
+        input.expectedVersion === 0
+          ? await client.query<WorkspaceRow>(
+              `insert into tenant_workspace
+                 (tenant_id, schema_version, payload, version, updated_by, updated_at)
+               values ($1, $2, $3::jsonb, 1, $5, $6::timestamptz)
+               on conflict (tenant_id) do nothing
+               returning tenant_id, schema_version, payload, version, updated_at`,
+              values,
+            )
+          : await client.query<WorkspaceRow>(
+              `update tenant_workspace
+                  set schema_version = $2,
+                      payload = $3::jsonb,
+                      version = version + 1,
+                      updated_by = $5,
+                      updated_at = $6::timestamptz
+                where tenant_id = $1 and version = $4
+               returning tenant_id, schema_version, payload, version, updated_at`,
+              values,
+            );
       const row = result.rows[0];
       return row ? toRecord(row) : null;
     });
