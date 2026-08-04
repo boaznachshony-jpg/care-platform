@@ -12,6 +12,7 @@ interface JwtClaims {
 }
 
 type FetchLike = typeof globalThis.fetch;
+type FetchResponse = Awaited<ReturnType<FetchLike>>;
 
 function readClaims(token: string): JwtClaims {
   try {
@@ -44,7 +45,7 @@ export class SupabaseAuthService implements AuthService {
   async verifySession(token: string): Promise<AuthSession | null> {
     if (!token) return null;
 
-    let response: Response;
+    let response: FetchResponse;
     try {
       response = await this.fetchImpl(`${this.supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
         method: 'GET',
