@@ -9,7 +9,12 @@ import type {
   TaskResponse,
   TimelineEventResponse,
   UploadDocumentRequest,
+  SaveWorkspaceRequest,
+  WorkspaceResponse,
+  UploadWorkspaceFileRequest,
+  WorkspaceFileUrlResponse,
 } from '@caredesk/schemas';
+import { getBrowserAuthClient } from '../auth/client.js';
 
 const API_PORT = 4000;
 
@@ -52,11 +57,18 @@ export class ApiRequestError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const hasBody = init?.body !== undefined;
+  const authClient = getBrowserAuthClient();
+  const accessToken = authClient
+    ? (await authClient.auth.getSession()).data.session?.access_token
+    : DEV_TOKEN;
+  if (!accessToken) {
+    throw new ApiRequestError(401, 'UNAUTHENTICATED');
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       ...(hasBody ? { 'content-type': 'application/json' } : {}),
-      authorization: `Bearer ${DEV_TOKEN}`,
+      authorization: `Bearer ${accessToken}`,
       ...init?.headers,
     },
   });
@@ -68,6 +80,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     };
     throw new ApiRequestError(response.status, body.code ?? 'REQUEST_ERROR', body.fieldErrors);
   }
+
+  if (response.status === 204) return undefined as T;
 
   return (await response.json()) as T;
 }
@@ -147,4 +161,37 @@ export function getCaseDocumentDownloadUrl(
   documentId: string,
 ): Promise<DocumentDownloadUrlResponse> {
   return request(`${casePath(caseId)}/documents/${encodeURIComponent(documentId)}/download-url`);
+}
+
+export function getWorkspace(): Promise<WorkspaceResponse> {
+  return request('/workspace');
+}
+
+export function saveWorkspace(input: SaveWorkspaceRequest): Promise<WorkspaceResponse> {
+  return request('/workspace', { method: 'PUT', body: JSON.stringify(input) });
+}
+
+const workspaceFilePath = (clientId: string, documentId: string) =>
+  `/workspace/files/${encodeURIComponent(clientId)}/${encodeURIComponent(documentId)}`;
+
+export function uploadWorkspaceFile(
+  clientId: string,
+  documentId: string,
+  input: UploadWorkspaceFileRequest,
+): Promise<{ version: number; sizeBytes: number }> {
+  return request(workspaceFilePath(clientId, documentId), {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function getWorkspaceFileUrl(
+  clientId: string,
+  documentId: string,
+): Promise<WorkspaceFileUrlResponse> {
+  return request(workspaceFilePath(clientId, documentId));
+}
+
+export function deleteWorkspaceFile(clientId: string, documentId: string): Promise<void> {
+  return request(workspaceFilePath(clientId, documentId), { method: 'DELETE' });
 }

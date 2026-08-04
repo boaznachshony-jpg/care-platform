@@ -15,10 +15,25 @@
     "signOut": "Sign out",
     "signingIn": "Signing in…",
     "invalidCredentials": "The sign-in details are incorrect. Check the email and password and try again.",
+    "forgotPassword": "Forgot your password?",
+    "sendingReset": "Sending reset link…",
+    "resetSent": "If this address is approved, a secure reset link has been sent.",
+    "resetError": "Enter your approved email address and try again.",
+    "choosePasswordTitle": "Choose a new password",
+    "choosePasswordIntro": "Use at least 12 characters. Do not reuse a password from another service.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "updatePassword": "Save new password",
+    "updatingPassword": "Saving…",
+    "passwordUpdateError": "The passwords must match and contain at least 12 characters. Try the recovery link again if it has expired.",
     "closedAccess": "Access is limited to pre-approved users.",
     "checkingSession": "Checking the secure session…",
+    "privatePageTitle": "CareDesk | Sign in to your account",
     "configurationRequiredTitle": "Secure access is not configured yet",
-    "configurationRequiredBody": "The application is locked until the authentication provider is configured. No data can be viewed."
+    "configurationRequiredBody": "The application is locked until the authentication provider is configured. No data can be viewed.",
+    "storageUnavailableTitle": "Secure data could not be loaded",
+    "storageUnavailableBody": "The data service is currently unavailable. The application remains locked to prevent work on a partial or stale copy.",
+    "retry": "Try again"
   },
   "shell": {
     "loading": "Loading…",
@@ -230,6 +245,108 @@
         "details": "An additional representative can be saved when more than one person assists the employer. Their responsibilities should be clearly divided to prevent duplicated or missed tasks.",
         "note": "The additional representative is also a contact only unless separate, explicit authorization has been granted outside the application."
       }
+    }
+  },
+  "public": {
+    "meta": {
+      "homeTitle": "CareDesk | Direct caregiver employment management",
+      "homeDescription": "A simple, accessible system for managing caregiver employment: documents, reminders, tasks, payroll and periodic tracking in one place.",
+      "guideTitle": "Direct caregiver employment — management guide | CareDesk",
+      "guideDescription": "What to manage when directly employing a caregiver: documents and expiry dates, medical insurance, payroll, National Insurance and reminders."
+    },
+    "common": {
+      "skip": "Skip to content",
+      "brandAria": "CareDesk — home",
+      "navAria": "Public page navigation",
+      "capabilities": "What the system brings together",
+      "guide": "Direct employment guide",
+      "questions": "Frequently asked questions",
+      "login": "Sign in",
+      "footerTagline": "A control center for directly employing a caregiver",
+      "footerDisclaimer": "Information in the system is an organizational aid, not legal or accounting advice or a substitute for checking with the relevant authorities."
+    },
+    "hero": {
+      "kicker": "Calmer management for the employing family",
+      "title": "Direct caregiver employment, with greater peace of mind",
+      "body": "CareDesk brings details, documents, tasks, expiry reminders and payroll calculations into one clear process, with an accessible interface that also works on mobile.",
+      "signup": "Request an account",
+      "pilot": "Join the pilot",
+      "guide": "Read the direct employment guide",
+      "trustLabel": "Main benefits",
+      "trust1": "Clear Hebrew interface",
+      "trust2": "Configurable reminders",
+      "trust3": "Separate customer accounts"
+    },
+    "visual": {
+      "aria": "Control-center illustration",
+      "title": "Control center",
+      "subtitle": "Important items, in order",
+      "status": "A clear view of the employment",
+      "statusDetail": "Tasks, documents and payroll in one place",
+      "documents": "Documents",
+      "tasks": "Tasks",
+      "payroll": "Payroll",
+      "timeline": "Timeline"
+    },
+    "capabilities": {
+      "eyebrow": "Everything you need to remember",
+      "title": "Bring employer responsibilities together",
+      "body": "The system helps organize information and identify what needs attention without crowding everything onto one screen.",
+      "documentsTitle": "Licenses and documents",
+      "documentsBody": "Store document details, expiry dates and reminders before an important date.",
+      "insuranceTitle": "Medical insurance",
+      "insuranceBody": "Track a policy and coverage periods as part of the employment timeline.",
+      "payrollTitle": "Payroll calculation",
+      "payrollBody": "Base pay, rest days, additions and deductions, with a bilingual printable summary.",
+      "periodicTitle": "Periodic tracking",
+      "periodicBody": "Tasks and reminders, including quarterly National Insurance preparation and reporting."
+    },
+    "process": {
+      "eyebrow": "A simple start",
+      "title": "Three steps to an organized picture",
+      "step1Title": "Open a record",
+      "step1Body": "Enter employer, care recipient and caregiver details.",
+      "step2Title": "Complete employment details",
+      "step2Body": "Set the start date, payroll, documents and reminder preferences.",
+      "step3Title": "Work by priority",
+      "step3Body": "See current status, handle tasks and keep a continuous record."
+    },
+    "faq": {
+      "eyebrow": "Before you begin",
+      "title": "Frequently asked questions",
+      "audienceQuestion": "Who is CareDesk for?",
+      "audienceAnswer": "Families and employers who directly employ a caregiver.",
+      "mobileQuestion": "Can I use it on a phone?",
+      "mobileAnswer": "Yes. The interface is mobile-first, with large text and controls.",
+      "adviceQuestion": "Does the system replace professional advice?",
+      "adviceAnswer": "No. It is a management and documentation system. Check current rights, rates and requirements with the relevant authorities or a qualified professional."
+    },
+    "pilot": {
+      "eyebrow": "Limited commercial launch",
+      "title": "Want to join the first customer group?",
+      "body": "Accounts are currently opened by invitation and personal coordination so each account can be configured and checked properly.",
+      "signup": "Send a request to join",
+      "existing": "Sign in to an existing account"
+    },
+    "guidePage": {
+      "kicker": "A practical guide for employing families",
+      "title": "Direct caregiver employment — what should you manage?",
+      "intro": "Direct employment involves several parallel processes. An organized list, clear dates and consistent records make it easier to see what is complete and what still needs attention.",
+      "section1Title": "1. Employment details and the people involved",
+      "section1Body": "Start with employer, care recipient and caregiver details, the employment start date and an authorized contact. The rest of the system relies on this information.",
+      "section2Title": "2. License, visa and documents",
+      "section2Body": "Record each document's name, type, expiry date and current status. An early reminder helps start renewal work before expiry but does not replace checking with the relevant authority.",
+      "section3Title": "3. Continuous medical insurance",
+      "section3Body": "Record policy periods and align tracking with the employment start date. Before changes or renewals, verify coverage requirements with the insurer or another qualified source.",
+      "section4Title": "4. Monthly payroll and records",
+      "section4Body": "A clear calculation separates base pay, Saturdays or rest days, additions and deductions. Saved monthly summaries create an annual record and a clear copy for employer and caregiver.",
+      "section5Title": "5. Periodic payments and tasks",
+      "section5Body": "Organize monthly, quarterly and annual tasks by opening and deadline dates. This distinguishes tasks that are not open yet, open tasks and items that need attention.",
+      "noticeTitle": "Important",
+      "noticeBody": "Rules, rates and deadlines can change. CareDesk helps organize and document; verify information with an official source or qualified professional before financial or legal action.",
+      "ctaTitle": "Want to turn the list into a workflow?",
+      "ctaBody": "CareDesk presents information in short screens with tasks, reminders and summaries.",
+      "cta": "Sign in to CareDesk"
     }
   },
   "settings": {

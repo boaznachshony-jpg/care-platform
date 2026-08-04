@@ -22,7 +22,7 @@ const completedProfile = {
 };
 
 async function seedCompletedProfile(page: Page) {
-  await page.goto('/');
+  await page.goto('/app');
   await page.evaluate((profile) => {
     localStorage.clear();
     localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
@@ -31,7 +31,7 @@ async function seedCompletedProfile(page: Page) {
 
 test.describe('launch readiness interactions', () => {
   test('completes every onboarding field and supports backward navigation', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/app');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
@@ -155,7 +155,7 @@ test.describe('launch readiness interactions', () => {
     page,
   }) => {
     await seedCompletedProfile(page);
-    await page.goto('/');
+    await page.goto('/app');
 
     await expect(page.getByRole('link', { name: 'דלג לתוכן' })).toHaveAttribute(
       'href',
@@ -309,7 +309,7 @@ test.describe('launch readiness interactions', () => {
 
   test('all dashboard and timeline shortcuts lead to their intended screens', async ({ page }) => {
     await seedCompletedProfile(page);
-    await page.goto('/');
+    await page.goto('/app');
     await expect(page).toHaveURL(/\/clients\/[^/]+$/);
     const clientHome = page.url();
 
@@ -336,7 +336,7 @@ test.describe('launch readiness interactions', () => {
     await seedCompletedProfile(page);
 
     await page.goto('/cases/new');
-    await expect(page).toHaveURL(/\/clients\/[^/]+$/);
+    await expect(page).toHaveURL('/');
     await page.goto('/cases/not-a-public-route');
     await expect(page).toHaveURL('/');
   });

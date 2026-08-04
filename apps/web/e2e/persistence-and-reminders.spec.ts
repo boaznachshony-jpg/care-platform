@@ -22,7 +22,7 @@ const completedProfile = {
 };
 
 async function seedCompletedProfile(page: Page) {
-  await page.goto('/');
+  await page.goto('/app');
   await page.evaluate((profile) => {
     localStorage.clear();
     localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));

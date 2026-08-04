@@ -2,7 +2,7 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 });
@@ -134,7 +134,7 @@ test('mobile layouts stay symmetrical at the largest text size', async ({ page }
   await seedCompletedProfile(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => localStorage.setItem('caredesk.ui.font-scale.v1', '1.3'));
-  await page.goto('/');
+  await page.goto('/app');
   const clientHome = page.url();
   const routes = [
     '',
@@ -178,7 +178,7 @@ test('mobile layouts stay symmetrical at the largest text size', async ({ page }
 test('mobile navigation keeps payroll accessible', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page.getByRole('navigation', { name: 'ניווט תחתון' })).toContainText('שכר');
   await page
     .getByRole('navigation', { name: 'ניווט תחתון' })
@@ -189,7 +189,7 @@ test('mobile navigation keeps payroll accessible', async ({ page }) => {
 });
 
 const productRoutes = [
-  ['/', 'שלום בועז בדיקה'],
+  ['/app', 'שלום בועז בדיקה'],
   ['/tasks', 'מה צריך לבצע'],
   ['/employee', 'Caregiver Test'],
   ['/trust', 'מסרים לבניית אמון'],
@@ -213,7 +213,7 @@ test('connects every primary screen through visible navigation and action links'
   page,
 }, testInfo) => {
   await seedCompletedProfile(page);
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page).toHaveURL(/\/clients\/[^/]+$/);
   const clientHome = page.url();
 
@@ -359,7 +359,7 @@ test('shows the quarterly national insurance payment window and deadline', async
 
 test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
   await seedCompletedProfile(page);
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
   await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
   await page.reload();
@@ -383,7 +383,7 @@ test('notification bell opens the list of open tasks', async ({ page }) => {
       ]),
     );
   });
-  await page.goto('/');
+  await page.goto('/app');
 
   await page
     .getByRole('link', {

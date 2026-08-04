@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /clients/
+Disallow: /onboarding
+Disallow: /tasks
+Disallow: /employee
+Disallow: /trust
+Disallow: /glossary
+Disallow: /documents
+Disallow: /timeline
+Disallow: /payroll
+Disallow: /settings
+
+Sitemap: https://care-platform-web.vercel.app/sitemap.xml

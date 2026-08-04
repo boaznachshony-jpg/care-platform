@@ -17,4 +17,8 @@ export class InMemoryDocumentStorage implements DocumentStorage {
     const expires = Date.now() + ttlSeconds * 1000;
     return `mock://signed/${encodeURIComponent(storageKey)}?expires=${expires}`;
   }
+
+  async deleteObject(storageKey: string): Promise<void> {
+    this.objects.delete(storageKey);
+  }
 }

@@ -1,5 +1,24 @@
+import { getBrowserAuthClient } from '../auth/client.js';
+import { deleteWorkspaceFile, getWorkspaceFileUrl, uploadWorkspaceFile } from '../api/client.js';
+import { clientIdFromPath } from './mvp-storage.js';
+
 const DATABASE_NAME = 'caredesk.mvp.files.v1';
 const STORE_NAME = 'document-files';
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 32_768;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function requireClientId(): string {
+  const clientId = clientIdFromPath();
+  if (!clientId) throw new Error('workspace-client-id-required');
+  return clientId;
+}
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -16,6 +35,13 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 export async function saveDocumentFile(id: string, file: File): Promise<void> {
+  if (getBrowserAuthClient()) {
+    await uploadWorkspaceFile(requireClientId(), id, {
+      mediaType: file.type as 'application/pdf' | 'image/jpeg' | 'image/png',
+      content: toBase64(new Uint8Array(await file.arrayBuffer())),
+    });
+    return;
+  }
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -31,7 +57,10 @@ export async function saveDocumentFile(id: string, file: File): Promise<void> {
   }
 }
 
-export async function readDocumentFile(id: string): Promise<Blob | null> {
+export async function readDocumentFile(id: string): Promise<Blob | string | null> {
+  if (getBrowserAuthClient()) {
+    return (await getWorkspaceFileUrl(requireClientId(), id)).url;
+  }
   const database = await openDatabase();
   try {
     return await new Promise<Blob | null>((resolve, reject) => {
@@ -45,6 +74,10 @@ export async function readDocumentFile(id: string): Promise<Blob | null> {
 }
 
 export async function deleteDocumentFile(id: string): Promise<void> {
+  if (getBrowserAuthClient()) {
+    await deleteWorkspaceFile(requireClientId(), id);
+    return;
+  }
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -57,4 +90,14 @@ export async function deleteDocumentFile(id: string): Promise<void> {
   } finally {
     database.close();
   }
+}
+
+export async function clearLocalDocumentFileCache(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  await new Promise<void>((resolve) => {
+    const request = indexedDB.deleteDatabase(DATABASE_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
 }

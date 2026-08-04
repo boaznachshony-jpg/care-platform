@@ -25,9 +25,12 @@ describe('App', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the Hebrew app name from translation resources, not a hardcoded string', () => {
+  it('renders the public Hebrew landing page before the private workspace', () => {
     renderApp();
-    expect(screen.getByText('CareDesk')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'העסקה ישירה של מטפל סיעודי, בראש שקט' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
   });
 
   it('renders exactly one main landmark', () => {

@@ -173,6 +173,8 @@ async function main(): Promise<void> {
         'audit_event',
         'document',
         'document_version',
+        'tenant_workspace',
+        'workspace_file',
       ];
       const result = await pool.query<{ relname: string; ok: boolean }>(
         `select relname, (relrowsecurity and relforcerowsecurity) as ok

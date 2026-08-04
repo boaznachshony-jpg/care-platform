@@ -9,6 +9,8 @@ import type { SensitivityClass } from '@caredesk/domain';
 export interface AuthorizationContext {
   userId: string;
   tenantId: string;
+  /** True only when the verified identity-provider session reached AAL2. */
+  mfaSatisfied?: boolean;
   caseId?: string;
   resourceType: string;
   action: string;

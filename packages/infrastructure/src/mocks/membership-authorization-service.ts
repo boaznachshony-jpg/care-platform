@@ -9,6 +9,7 @@ export interface SeededMembership {
   tenantId: string;
   role: string;
   status: 'active' | 'revoked';
+  mfaRequired?: boolean;
 }
 
 /**
@@ -36,6 +37,10 @@ export class MembershipAuthorizationService implements AuthorizationService {
     );
     if (!membership) {
       return { allowed: false, reason: 'No active membership in this tenant.' };
+    }
+
+    if (membership.mfaRequired && !context.mfaSatisfied) {
+      return { allowed: false, reason: 'Multi-factor authentication is required.' };
     }
 
     const permission = `${context.resourceType}:${context.action}`;

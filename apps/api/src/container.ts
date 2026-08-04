@@ -1,11 +1,16 @@
 import type {
+  ActorResolver,
   AuditService,
+  AuthService,
+  AuthorizationService,
   CaseContactRepository,
   CaseFoundationRepository,
   DocumentRepository,
   TaskRepository,
   TimelineRepository,
   TimelineService,
+  WorkspaceRepository,
+  WorkspaceFileRepository,
 } from '@caredesk/application';
 import {
   AddContactToCase,
@@ -13,24 +18,34 @@ import {
   CreateCaseTask,
   GetDocumentDownloadUrl,
   GetEmploymentCase,
+  GetWorkspace,
+  GetWorkspaceFileUrl,
   ListCaseDocuments,
   ListCaseContacts,
   ListCaseTasks,
   ListCaseTimeline,
   ListEmploymentCases,
   OpenEmploymentCase,
+  SaveWorkspace,
+  PutWorkspaceFile,
+  DeleteWorkspaceFile,
   UploadCaseDocument,
 } from '@caredesk/application';
 import {
   createPool,
+  PgActorResolver,
   PgAuditService,
   PgCaseContactRepository,
   PgCaseFoundationRepository,
   PgDocumentRepository,
+  PgMembershipAuthorizationService,
   PgTaskRepository,
   PgTimelineService,
+  PgWorkspaceRepository,
+  PgWorkspaceFileRepository,
 } from '@caredesk/db';
 import {
+  InMemoryActorResolver,
   InMemoryAuditService,
   InMemoryCaseContactRepository,
   InMemoryCaseFoundationRepository,
@@ -39,6 +54,8 @@ import {
   InMemoryTaskRepository,
   InMemoryTimelineRepository,
   InMemoryTimelineService,
+  InMemoryWorkspaceRepository,
+  InMemoryWorkspaceFileRepository,
   MembershipAuthorizationService,
   MockAuthService,
   SystemClock,
@@ -46,6 +63,8 @@ import {
 } from '@caredesk/infrastructure';
 import type { Pool } from 'pg';
 import type { Env } from './env.js';
+import { SupabaseAuthService } from './auth/supabase-auth-service.js';
+import { SupabaseDocumentStorage } from './storage/supabase-document-storage.js';
 
 /**
  * Milestone 1 role→permission map. This is an interim, code-level map — the
@@ -67,6 +86,8 @@ const ROLE_PERMISSIONS = {
     'timeline:read',
     'document:create',
     'document:read',
+    'workspace:read',
+    'workspace:update',
   ],
   family_member: [
     'employment_case:read',
@@ -93,8 +114,8 @@ const DEV_TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const DEV_USER_ID = '00000000-0000-4000-8000-000000000002';
 
 export interface Container {
-  auth: MockAuthService;
-  tenantByUser: Map<string, string>;
+  auth: AuthService;
+  actorResolver: ActorResolver;
   audit: AuditService;
   openCase: OpenEmploymentCase;
   getCase: GetEmploymentCase;
@@ -108,14 +129,17 @@ export interface Container {
   uploadDocument: UploadCaseDocument;
   listDocuments: ListCaseDocuments;
   getDocumentDownloadUrl: GetDocumentDownloadUrl;
+  getWorkspace: GetWorkspace;
+  saveWorkspace: SaveWorkspace;
+  putWorkspaceFile: PutWorkspaceFile;
+  getWorkspaceFileUrl: GetWorkspaceFileUrl;
+  deleteWorkspaceFile: DeleteWorkspaceFile;
+  readiness(): Promise<{ ready: boolean; reasons: string[] }>;
   /** Present only when backed by Postgres; close it on shutdown. */
   pool?: Pool;
 }
 
 export function buildContainer(env: Env): Container {
-  const auth = new MockAuthService();
-  const authorization = new MembershipAuthorizationService(ROLE_PERMISSIONS);
-
   // Postgres when DATABASE_URL is configured, in-memory otherwise — so tests
   // and a bare `pnpm dev:api` still run with no database available.
   //
@@ -124,6 +148,20 @@ export function buildContainer(env: Env): Container {
   // connection (DATABASE_ADMIN_URL) is used only by `pnpm db:migrate` and
   // `pnpm db:provision-app-role`, and is never read here.
   const pool = env.DATABASE_URL ? createPool(env.DATABASE_URL) : undefined;
+  const hasSupabaseAuth = Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY);
+  const hasPrivateStorage = Boolean(
+    env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET,
+  );
+  const mockAuth = new MockAuthService();
+  const memoryActorResolver = new InMemoryActorResolver();
+  const auth: AuthService = hasSupabaseAuth
+    ? new SupabaseAuthService(env.SUPABASE_URL!, env.SUPABASE_PUBLISHABLE_KEY!)
+    : mockAuth;
+  const actorResolver: ActorResolver =
+    pool && hasSupabaseAuth ? new PgActorResolver(pool) : memoryActorResolver;
+  const authorization: AuthorizationService = pool
+    ? new PgMembershipAuthorizationService(pool, ROLE_PERMISSIONS)
+    : new MembershipAuthorizationService(ROLE_PERMISSIONS);
 
   let repository: CaseFoundationRepository;
   let contactRepository: CaseContactRepository;
@@ -132,6 +170,8 @@ export function buildContainer(env: Env): Container {
   let timeline: TimelineService;
   let timelineRepository: TimelineRepository;
   let audit: AuditService;
+  let workspaceRepository: WorkspaceRepository;
+  let workspaceFileRepository: WorkspaceFileRepository;
 
   if (pool) {
     repository = new PgCaseFoundationRepository(pool);
@@ -144,6 +184,8 @@ export function buildContainer(env: Env): Container {
     // Constitution §19: audit must survive a process restart, so it goes to
     // Postgres whenever a database is configured.
     audit = new PgAuditService(pool);
+    workspaceRepository = new PgWorkspaceRepository(pool);
+    workspaceFileRepository = new PgWorkspaceFileRepository(pool);
   } else {
     repository = new InMemoryCaseFoundationRepository();
     contactRepository = new InMemoryCaseContactRepository();
@@ -153,14 +195,15 @@ export function buildContainer(env: Env): Container {
     timeline = memoryTimeline;
     timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
     audit = new InMemoryAuditService();
+    workspaceRepository = new InMemoryWorkspaceRepository();
+    workspaceFileRepository = new InMemoryWorkspaceFileRepository();
   }
 
   const clock = new SystemClock();
   const ids = new UuidIdGenerator();
-  const tenantByUser = new Map<string, string>();
 
   if (env.NODE_ENV !== 'production') {
-    auth.seedSession(DEV_TOKEN, {
+    mockAuth.seedSession(DEV_TOKEN, {
       userId: DEV_USER_ID,
       authSubject: 'synthetic-auth-subject-1',
       issuedAt: new Date().toISOString(),
@@ -168,13 +211,18 @@ export function buildContainer(env: Env): Container {
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
       mfaSatisfied: false,
     });
-    authorization.seedMembership({
+    memoryActorResolver.seedActor('synthetic-auth-subject-1', {
       userId: DEV_USER_ID,
       tenantId: DEV_TENANT_ID,
-      role: 'owner',
-      status: 'active',
     });
-    tenantByUser.set(DEV_USER_ID, DEV_TENANT_ID);
+    if (authorization instanceof MembershipAuthorizationService) {
+      authorization.seedMembership({
+        userId: DEV_USER_ID,
+        tenantId: DEV_TENANT_ID,
+        role: 'owner',
+        status: 'active',
+      });
+    }
 
     if (pool) {
       // The dev tenant row must exist before any case can reference it.
@@ -203,7 +251,14 @@ export function buildContainer(env: Env): Container {
 
   // Object storage is mocked for Milestone 1. Real cloud storage is a separate
   // decision (ADR pending) — the port keeps that swap to one line.
-  const storage = new InMemoryDocumentStorage();
+  const storage =
+    env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET
+      ? new SupabaseDocumentStorage(
+          env.SUPABASE_URL,
+          env.SUPABASE_SERVICE_ROLE_KEY,
+          env.SUPABASE_STORAGE_BUCKET,
+        )
+      : new InMemoryDocumentStorage();
 
   const caseDeps = { authorization, repository, audit, timeline, clock, ids };
   const taskDeps = { authorization, tasks: taskRepository, audit, timeline, clock, ids };
@@ -216,10 +271,19 @@ export function buildContainer(env: Env): Container {
     clock,
     ids,
   };
+  const workspaceDeps = { authorization, workspaces: workspaceRepository, audit, clock };
+  const workspaceFileDeps = {
+    authorization,
+    files: workspaceFileRepository,
+    storage,
+    audit,
+    clock,
+    ids,
+  };
 
   return {
     auth,
-    tenantByUser,
+    actorResolver,
     audit,
     pool,
     openCase: new OpenEmploymentCase(caseDeps),
@@ -253,5 +317,38 @@ export function buildContainer(env: Env): Container {
     uploadDocument: new UploadCaseDocument(documentDeps),
     listDocuments: new ListCaseDocuments(documentDeps),
     getDocumentDownloadUrl: new GetDocumentDownloadUrl(documentDeps),
+    getWorkspace: new GetWorkspace(workspaceDeps),
+    saveWorkspace: new SaveWorkspace(workspaceDeps),
+    putWorkspaceFile: new PutWorkspaceFile(workspaceFileDeps),
+    getWorkspaceFileUrl: new GetWorkspaceFileUrl(workspaceFileDeps),
+    deleteWorkspaceFile: new DeleteWorkspaceFile(workspaceFileDeps),
+    async readiness() {
+      if (env.NODE_ENV !== 'production') return { ready: true, reasons: [] };
+      const reasons: string[] = [];
+      if (!pool) reasons.push('DATABASE_URL is not configured');
+      if (!hasSupabaseAuth) reasons.push('Supabase authentication is not configured');
+      if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
+      if (pool) {
+        try {
+          const result = await pool.query<{
+            actor_resolver: string | null;
+            workspace_table: string | null;
+            workspace_file_table: string | null;
+          }>(
+            `select
+               to_regprocedure('resolve_caredesk_actor(text)')::text as actor_resolver,
+               to_regclass('tenant_workspace')::text as workspace_table,
+               to_regclass('workspace_file')::text as workspace_file_table`,
+          );
+          const row = result.rows[0];
+          if (!row?.actor_resolver || !row.workspace_table || !row.workspace_file_table) {
+            reasons.push('Required pilot database migrations are missing');
+          }
+        } catch {
+          reasons.push('Database is unreachable');
+        }
+      }
+      return { ready: reasons.length === 0, reasons };
+    },
   };
 }

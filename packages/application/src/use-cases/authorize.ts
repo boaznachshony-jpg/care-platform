@@ -41,6 +41,7 @@ export async function authorizeOrThrow(
   const decision = await deps.authorization.check({
     userId: actor.userId,
     tenantId: actor.tenantId,
+    mfaSatisfied: actor.mfaSatisfied,
     caseId: request.caseId,
     resourceType: request.resourceType,
     action: request.action,

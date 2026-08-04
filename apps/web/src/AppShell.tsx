@@ -12,6 +12,11 @@ import {
 } from './storage/mvp-storage.js';
 import { RELEASE_LABEL } from './release.js';
 import { useAuth } from './auth/auth-context.js';
+import {
+  getWorkspaceSyncState,
+  WORKSPACE_SYNC_CHANGED,
+  type WorkspaceSyncState,
+} from './storage/workspace-sync.js';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -67,6 +72,7 @@ export function AppShell({ children }: AppShellProps) {
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [syncState, setSyncState] = useState<WorkspaceSyncState>(getWorkspaceSyncState);
   const notifications = profile.notificationsEnabled
     ? createCareNotifications({
         tasks: readMvpTasks(),
@@ -80,6 +86,12 @@ export function AppShell({ children }: AppShellProps) {
     document.documentElement.style.setProperty('--ui-scale', String(fontScale));
     window.localStorage.setItem(FONT_SCALE_KEY, String(fontScale));
   }, [fontScale]);
+
+  useEffect(() => {
+    const update = () => setSyncState(getWorkspaceSyncState());
+    window.addEventListener(WORKSPACE_SYNC_CHANGED, update);
+    return () => window.removeEventListener(WORKSPACE_SYNC_CHANGED, update);
+  }, []);
 
   return (
     <div className="app-frame">
@@ -110,7 +122,7 @@ export function AppShell({ children }: AppShellProps) {
         <NavLink className="settings-link" to={path('/settings')}>
           ⚙ הגדרות
         </NavLink>
-        <NavLink className="settings-link client-switch-link" to="/">
+        <NavLink className="settings-link client-switch-link" to="/app">
           ⇄ החלפת לקוח
         </NavLink>
       </aside>
@@ -121,12 +133,26 @@ export function AppShell({ children }: AppShellProps) {
             <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
+            {auth.enabled && syncState !== 'disabled' ? (
+              <span
+                className={`sync-status sync-status-${syncState}`}
+                role={syncState === 'error' ? 'alert' : 'status'}
+              >
+                {syncState === 'saving'
+                  ? 'שומר…'
+                  : syncState === 'loading'
+                    ? 'טוען…'
+                    : syncState === 'error'
+                      ? 'השמירה נכשלה — יש לרענן'
+                      : 'נשמר בענן'}
+              </span>
+            ) : null}
             {auth.enabled ? (
               <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
                 {t('auth.signOut')}
               </button>
             ) : null}
-            <Link className="top-client-switch" to="/" aria-label="החלפת לקוח">
+            <Link className="top-client-switch" to="/app" aria-label="החלפת לקוח">
               ⇄
             </Link>
             <div className="font-size-controls" role="group" aria-label="גודל טקסט">
@@ -218,7 +244,7 @@ export function AppShell({ children }: AppShellProps) {
                 {label}
               </NavLink>
             ))}
-            <Link to="/" onClick={() => setMobileMoreOpen(false)}>
+            <Link to="/app" onClick={() => setMobileMoreOpen(false)}>
               <span aria-hidden="true">⇄</span>
               החלפת לקוח
             </Link>

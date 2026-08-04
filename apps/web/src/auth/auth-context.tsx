@@ -1,11 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 import { getDeploymentEnvironment } from '../environment.js';
+import { getBrowserAuthClient } from './client.js';
+import { startWorkspaceSync, stopWorkspaceSync } from '../storage/workspace-sync.js';
 
 interface AuthContextValue {
   enabled: boolean;
   user: User | null;
   signIn(email: string, password: string): Promise<boolean>;
+  requestPasswordReset(email: string): Promise<boolean>;
+  updatePassword(password: string): Promise<boolean>;
   signOut(): Promise<void>;
 }
 
@@ -13,25 +17,15 @@ const defaultAuthContext: AuthContextValue = {
   enabled: false,
   user: null,
   signIn: async () => false,
+  requestPasswordReset: async () => false,
+  updatePassword: async () => false,
   signOut: async () => undefined,
 };
 
 const AuthContext = createContext<AuthContextValue>(defaultAuthContext);
 
-function createBrowserAuthClient(): SupabaseClient | null {
-  const url = import.meta.env.VITE_SUPABASE_URL?.trim();
-  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
-  if (!url || !publishableKey) return null;
-  return createClient(url, publishableKey, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  });
-}
-
-export type AuthGateState = 'local-bypass' | 'configuration-required' | 'loading' | 'ready';
+export type AuthGateState =
+  'local-bypass' | 'configuration-required' | 'storage-error' | 'loading' | 'ready';
 
 export function resolveAuthGateState(
   hasClient: boolean,
@@ -46,32 +40,58 @@ export function AuthProvider({
   children,
   login,
   configurationRequired,
+  storageUnavailable,
+  passwordRecovery,
   loading,
 }: {
   children: ReactNode;
   login: ReactNode;
   configurationRequired: ReactNode;
+  storageUnavailable: ReactNode;
+  passwordRecovery: ReactNode;
   loading: ReactNode;
 }) {
-  const [client] = useState(createBrowserAuthClient);
+  const [client] = useState(getBrowserAuthClient);
   const initialState = resolveAuthGateState(Boolean(client));
   const [state, setState] = useState<AuthGateState>(initialState);
   const [user, setUser] = useState<User | null>(null);
+  const [recoveringPassword, setRecoveringPassword] = useState(false);
 
   useEffect(() => {
     if (!client) return undefined;
     let active = true;
+    let hydrationId = 0;
+
+    const applySession = async (nextUser: User | null) => {
+      const requestId = ++hydrationId;
+      setState('loading');
+      if (!nextUser) {
+        stopWorkspaceSync();
+        if (!active || requestId !== hydrationId) return;
+        setUser(null);
+        setState('ready');
+        return;
+      }
+
+      try {
+        await startWorkspaceSync();
+        if (!active || requestId !== hydrationId) return;
+        setUser(nextUser);
+        setState('ready');
+      } catch {
+        if (!active || requestId !== hydrationId) return;
+        setUser(null);
+        setState('storage-error');
+      }
+    };
 
     void client.auth.getUser().then(({ data }) => {
-      if (!active) return;
-      setUser(data.user ?? null);
-      setState('ready');
+      if (active) void applySession(data.user ?? null);
     });
 
-    const { data } = client.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      setUser(session?.user ?? null);
-      setState('ready');
+    const { data } = client.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
+      if (active) void applySession(session?.user ?? null);
     });
 
     return () => {
@@ -89,15 +109,33 @@ export function AuthProvider({
         const { error } = await client.auth.signInWithPassword({ email, password });
         return !error;
       },
+      async requestPasswordReset(email) {
+        if (!client) return false;
+        const { error } = await client.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/app`,
+        });
+        return !error;
+      },
+      async updatePassword(password) {
+        if (!client) return false;
+        const { error } = await client.auth.updateUser({ password });
+        if (!error) setRecoveringPassword(false);
+        return !error;
+      },
       async signOut() {
         if (client) await client.auth.signOut();
+        stopWorkspaceSync();
       },
     }),
     [client, user],
   );
 
   if (state === 'configuration-required') return configurationRequired;
+  if (state === 'storage-error') return storageUnavailable;
   if (state === 'loading') return loading;
+  if (state === 'ready' && user && recoveringPassword) {
+    return <AuthContext.Provider value={value}>{passwordRecovery}</AuthContext.Provider>;
+  }
   if (state === 'ready' && !user) {
     return <AuthContext.Provider value={value}>{login}</AuthContext.Provider>;
   }

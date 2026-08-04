@@ -46,6 +46,6 @@ describe('TimelinePage', () => {
 
     expect(
       screen.getAllByRole('link', { name: 'פרטים' }).map((link) => link.getAttribute('href')),
-    ).toEqual(['/documents', '/payroll', '/tasks', '/', '/tasks']);
+    ).toEqual(['/documents', '/payroll', '/tasks', '/app', '/tasks']);
   });
 });
