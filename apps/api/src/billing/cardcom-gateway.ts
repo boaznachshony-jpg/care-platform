@@ -23,6 +23,14 @@ interface CardcomConfig {
   markAsRecurring: boolean;
 }
 
+interface FetchResponseLike {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
+type FetchLike = (input: string, init?: Record<string, unknown>) => Promise<FetchResponseLike>;
+
 export class CardcomGatewayError extends Error {
   constructor(
     readonly providerCode: string,
@@ -47,7 +55,7 @@ export class CardcomProductBillingGateway implements ProductBillingGateway {
 
   constructor(
     private readonly config: CardcomConfig,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: FetchLike = globalThis.fetch as unknown as FetchLike,
   ) {
     this.key = Buffer.from(config.tokenEncryptionKey, 'base64');
     if (this.key.length !== 32) throw new Error('Cardcom encryption key must contain 32 bytes.');
