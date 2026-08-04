@@ -8,6 +8,7 @@ interface AuthContextValue {
   enabled: boolean;
   user: User | null;
   signIn(email: string, password: string): Promise<boolean>;
+  requestMagicLink(email: string): Promise<boolean>;
   requestPasswordReset(email: string): Promise<boolean>;
   updatePassword(password: string): Promise<boolean>;
   signOut(): Promise<void>;
@@ -17,6 +18,7 @@ const defaultAuthContext: AuthContextValue = {
   enabled: false,
   user: null,
   signIn: async () => false,
+  requestMagicLink: async () => false,
   requestPasswordReset: async () => false,
   updatePassword: async () => false,
   signOut: async () => undefined,
@@ -107,6 +109,17 @@ export function AuthProvider({
       async signIn(email, password) {
         if (!client) return false;
         const { error } = await client.auth.signInWithPassword({ email, password });
+        return !error;
+      },
+      async requestMagicLink(email) {
+        if (!client) return false;
+        const { error } = await client.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: `${window.location.origin}/app`,
+          },
+        });
         return !error;
       },
       async requestPasswordReset(email) {

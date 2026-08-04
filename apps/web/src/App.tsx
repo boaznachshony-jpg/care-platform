@@ -26,6 +26,9 @@ import {
   StorageUnavailablePage,
 } from './pages/LoginPage.js';
 import { DirectEmploymentGuidePage, PublicLandingPage } from './pages/PublicLandingPage.js';
+import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
+import { BillingPage } from './pages/BillingPage.js';
+import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -38,6 +41,8 @@ const authenticatedEntrypoints = new Set([
   '/timeline',
   '/payroll',
   '/settings',
+  '/family',
+  '/billing',
 ]);
 
 function ClientHome() {
@@ -86,6 +91,8 @@ function AuthenticatedApp() {
     >
       <Routes>
         <Route path="/app" element={<ClientsPage />} />
+        <Route path="/family" element={<FamilyAccessPage />} />
+        <Route path="/billing" element={<BillingPage />} />
         <Route
           path="/clients/:clientId"
           element={
@@ -262,6 +269,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<PublicLandingPage />} />
         <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
+        <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
         <Route path="*" element={<ApplicationEntry />} />
       </Routes>
     </>

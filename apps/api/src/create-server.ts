@@ -10,6 +10,8 @@ import { registerCaseRoutes } from './routes/cases.js';
 import { registerCaseSubResourceRoutes } from './routes/case-contacts.js';
 import { registerCaseDocumentRoutes } from './routes/case-documents.js';
 import { registerWorkspaceRoutes } from './routes/workspace.js';
+import { registerFamilyAccessRoutes } from './routes/family-access.js';
+import { registerBillingRoutes } from './routes/billing.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -73,6 +75,15 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
     },
   });
 
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_request, body, done) => {
+      const encoded = typeof body === 'string' ? body : body.toString('utf8');
+      done(null, Object.fromEntries(new URLSearchParams(encoded)));
+    },
+  );
+
   void app.register(cors, { origin: buildCorsOrigin(env) });
 
   registerCorrelationId(app, env.CORRELATION_HEADER);
@@ -116,6 +127,8 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseSubResourceRoutes(app, container);
   registerCaseDocumentRoutes(app, container);
   registerWorkspaceRoutes(app, container);
+  registerFamilyAccessRoutes(app, container);
+  registerBillingRoutes(app, container, env);
 
   return app;
 }

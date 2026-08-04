@@ -115,6 +115,35 @@ body {
   cursor: wait;
   opacity: 0.65;
 }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #64748b;
+  font-weight: 800;
+}
+.auth-divider::before,
+.auth-divider::after {
+  height: 1px;
+  flex: 1;
+  background: #dce4ef;
+  content: '';
+}
+.auth-magic-button {
+  min-height: 56px;
+  padding: 12px 18px;
+  border: 2px solid #2867d8;
+  border-radius: 15px;
+  background: #edf4ff;
+  color: #164fae;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+.auth-magic-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .sign-out-button {
   min-height: 48px;
   padding: 0 16px;
@@ -3311,5 +3340,463 @@ input[type='number'] {
   .public-footer {
     grid-template-columns: 1fr;
     gap: 18px;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.family-access-page {
+  width: min(100% - 40px, 1240px);
+  margin: 0 auto;
+  padding: 72px 0 56px;
+}
+.environment-banner + .family-access-page {
+  padding-top: 106px;
+}
+.family-access-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.family-access-header h1,
+.family-access-header p {
+  margin-block: 0 8px;
+}
+.family-access-explainer,
+.family-ownership-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 18px 22px;
+  border: 1px solid #bfd5f7;
+  border-radius: 18px;
+  background: #edf5ff;
+  color: #173f77;
+  font-weight: 700;
+}
+.family-access-explainer p {
+  margin: 0;
+}
+.family-access-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.4fr);
+  gap: 24px;
+  align-items: start;
+}
+.family-invite-card {
+  display: grid;
+  gap: 16px;
+}
+.family-invite-card h2,
+.family-invite-card p,
+.family-members-card h2 {
+  margin: 0;
+}
+.family-invite-card label:not(.family-role-option),
+.family-member-actions label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+.family-invite-card input:not([type='radio']),
+.family-member-actions select {
+  width: 100%;
+  min-height: 56px;
+  padding: 11px 14px;
+  border: 2px solid #bccbe0;
+  border-radius: 15px;
+  background: white;
+  color: #172033;
+  font: inherit;
+}
+.family-invite-card fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.family-invite-card legend {
+  margin-bottom: 8px;
+  font-weight: 900;
+}
+.family-role-option {
+  display: flex;
+  gap: 12px;
+  min-height: 86px;
+  padding: 14px;
+  border: 1px solid #d4deeb;
+  border-radius: 16px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+.family-role-option input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.family-role-option span {
+  display: grid;
+  gap: 3px;
+}
+.family-role-option small,
+.family-member-identity small {
+  color: #66758b;
+}
+.family-members-card {
+  min-width: 0;
+}
+.family-members-list {
+  display: grid;
+  margin-top: 16px;
+}
+.family-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 0;
+  border-top: 1px solid #e2e8f0;
+}
+.family-member-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.family-member-avatar {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 17px;
+  background: #dceaff;
+  color: #1553b7;
+  font-size: 24px;
+  font-weight: 900;
+}
+.family-member-identity h3,
+.family-member-identity p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.family-member-identity .pill {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e7f7ee;
+  color: #17653a;
+  font-size: 13px;
+}
+.family-role-label {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #eef2f7;
+  white-space: nowrap;
+}
+.family-member-actions {
+  width: min(100%, 250px);
+  display: grid;
+  gap: 8px;
+}
+.family-member-actions .secondary-button,
+.family-member-actions .danger-text-button {
+  width: 100%;
+  min-height: 48px;
+}
+.action-notice {
+  margin: 24px 0;
+  padding: 16px 20px;
+  border-radius: 16px;
+  font-weight: 900;
+}
+.action-notice.success {
+  background: #eaf8f0;
+  color: #17653a;
+}
+.action-notice.error {
+  background: #fff0f0;
+  color: #a51d25;
+}
+.family-ownership-notice {
+  margin-top: 24px;
+  border-color: #ead8aa;
+  background: #fff8e5;
+  color: #6f5212;
+}
+
+@media (max-width: 820px) {
+  .family-access-page {
+    width: min(100% - 28px, 1240px);
+    padding-top: 48px;
+  }
+  .environment-banner + .family-access-page {
+    padding-top: 82px;
+  }
+  .family-access-header,
+  .family-member-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .family-access-header .button-row,
+  .family-access-header .button-row > * {
+    width: 100%;
+  }
+  .family-access-layout {
+    grid-template-columns: 1fr;
+  }
+  .family-members-card,
+  .family-invite-card {
+    padding: 22px;
+  }
+  .family-member-actions {
+    width: 100%;
+  }
+}
+
+/* Product subscription billing: separate from caregiver payroll. */
+.billing-page {
+  width: min(100% - 40px, 1160px);
+  margin: 0 auto;
+  padding: 72px 0 56px;
+}
+.environment-banner + .billing-page {
+  padding-top: 106px;
+}
+.billing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  gap: 24px;
+  align-items: start;
+}
+.billing-plan-card,
+.billing-method-card,
+.billing-setup-form {
+  display: grid;
+  gap: 18px;
+}
+.billing-plan-label {
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #e4efff;
+  color: #1455b9;
+  font-weight: 900;
+}
+.billing-price {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.billing-price strong {
+  color: #092856;
+  font-size: clamp(38px, 6vw, 64px);
+  line-height: 1;
+}
+.billing-breakdown {
+  display: grid;
+  margin: 0;
+}
+.billing-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 0;
+  border-top: 1px solid #e1e8f2;
+}
+.billing-breakdown dd {
+  margin: 0;
+  font-weight: 900;
+}
+.billing-breakdown .billing-discount-row {
+  color: #17653a;
+}
+.billing-breakdown .billing-effective-row {
+  color: #0b57c5;
+  font-size: 20px;
+  font-weight: 900;
+}
+.billing-safety-note,
+.billing-provider-notice {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #eaf8f0;
+  color: #17653a;
+}
+.billing-safety-note p,
+.billing-provider-notice {
+  margin: 5px 0 0;
+}
+.billing-safety-note.paid {
+  background: #e7f0ff;
+  color: #0b4fa6;
+}
+.billing-method-card h2,
+.billing-method-card p {
+  margin-block: 0;
+}
+.billing-setup-form > label:not(.billing-consent) {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+.billing-setup-form input:not([type='checkbox']) {
+  width: 100%;
+  min-height: 56px;
+  padding: 11px 14px;
+  border: 2px solid #bccbe0;
+  border-radius: 15px;
+  background: white;
+  color: #172033;
+  font: inherit;
+}
+.billing-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d4deeb;
+  border-radius: 15px;
+  background: #f8fafc;
+}
+.billing-consent input {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+.billing-provider-notice {
+  background: #fff7df;
+  color: #6f5212;
+}
+.saved-payment-method {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border: 2px solid #bfd5f7;
+  border-radius: 18px;
+  background: #edf5ff;
+}
+.saved-payment-method > span {
+  font-size: 34px;
+}
+.saved-payment-method div {
+  display: grid;
+  gap: 4px;
+}
+
+.public-pricing {
+  width: min(100% - 40px, 1180px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 44px;
+  align-items: center;
+  margin: 36px auto 80px;
+  padding: clamp(28px, 5vw, 60px);
+  border-radius: 30px;
+  background: #0c3267;
+  color: white;
+}
+.public-pricing h2 {
+  margin-block: 8px 12px;
+  color: white;
+  font-size: clamp(30px, 5vw, 50px);
+}
+.public-pricing ul {
+  display: grid;
+  gap: 9px;
+  padding-inline-start: 22px;
+}
+.public-price-card {
+  display: grid;
+  gap: 10px;
+  padding: 28px;
+  border-radius: 24px;
+  background: white;
+  color: #152846;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+}
+.public-price-card strong {
+  color: #1559c7;
+  font-size: 52px;
+  line-height: 1;
+}
+.public-price-card b {
+  width: fit-content;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #eaf8f0;
+  color: #17653a;
+}
+.public-price-card p {
+  margin: 0;
+}
+.public-legal-page {
+  width: min(100% - 40px, 900px);
+  margin: 0 auto;
+  padding: 86px 0;
+}
+.public-legal-page header {
+  margin-bottom: 38px;
+}
+.public-legal-page h1 {
+  font-size: clamp(36px, 6vw, 60px);
+}
+.public-legal-page article {
+  display: grid;
+  gap: 20px;
+}
+.public-legal-page article section,
+.public-legal-page article aside {
+  padding: 24px;
+  border: 1px solid #dce5f1;
+  border-radius: 20px;
+  background: white;
+}
+.public-legal-page article h2,
+.public-legal-page article p {
+  margin-block: 0 8px;
+}
+.public-legal-page article aside {
+  border-color: #ead8aa;
+  background: #fff8e5;
+  color: #6f5212;
+  font-weight: 800;
+}
+
+@media (max-width: 820px) {
+  .billing-page {
+    width: min(100% - 28px, 1160px);
+    padding-top: 48px;
+  }
+  .environment-banner + .billing-page {
+    padding-top: 82px;
+  }
+  .billing-layout,
+  .public-pricing {
+    grid-template-columns: 1fr;
+  }
+  .public-pricing {
+    width: min(100% - 28px, 1180px);
+    gap: 24px;
+    margin-bottom: 52px;
+  }
+  .billing-plan-card,
+  .billing-method-card {
+    padding: 22px;
   }
 }

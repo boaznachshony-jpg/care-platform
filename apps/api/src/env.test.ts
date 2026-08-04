@@ -28,4 +28,17 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ SUPABASE_SERVICE_ROLE_KEY: 'server-only' })).toThrow();
     expect(() => loadEnv({ SUPABASE_STORAGE_BUCKET: 'private-documents' })).toThrow();
   });
+
+  it('keeps product billing disabled and fully sponsored by default', () => {
+    const env = loadEnv({});
+    expect(env.BILLING_PROVIDER).toBe('disabled');
+    expect(env.BILLING_PRICE_AGOROT).toBe(3900);
+    expect(env.BILLING_VAT_RATE_BPS).toBe(1800);
+    expect(env.BILLING_LAUNCH_DISCOUNT_PERCENT).toBe(100);
+  });
+
+  it('requires every server-only Cardcom credential and forbids a production mock', () => {
+    expect(() => loadEnv({ BILLING_PROVIDER: 'cardcom' })).toThrow();
+    expect(() => loadEnv({ NODE_ENV: 'production', BILLING_PROVIDER: 'mock' })).toThrow();
+  });
 });

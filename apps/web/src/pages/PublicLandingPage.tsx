@@ -96,6 +96,7 @@ function PublicFooter() {
         <span>{t('public.common.footerTagline')}</span>
       </div>
       <p>{t('public.common.footerDisclaimer')}</p>
+      <Link to="/terms/subscription">{t('public.common.subscriptionTerms')}</Link>
     </footer>
   );
 }
@@ -116,6 +117,12 @@ export function PublicLandingPage() {
           inLanguage: 'he',
           description,
           url: publicSiteUrl(),
+          offers: {
+            '@type': 'Offer',
+            price: '39.00',
+            priceCurrency: 'ILS',
+            description: t('public.pricing.offerDescription'),
+          },
         },
         {
           '@type': 'FAQPage',
@@ -263,6 +270,27 @@ export function PublicLandingPage() {
           </div>
         </section>
 
+        <section className="public-pricing" id="pricing" aria-labelledby="pricing-title">
+          <div>
+            <span>{t('public.pricing.eyebrow')}</span>
+            <h2 id="pricing-title">{t('public.pricing.title')}</h2>
+            <p>{t('public.pricing.body')}</p>
+            <ul>
+              <li>{t('public.pricing.item1')}</li>
+              <li>{t('public.pricing.item2')}</li>
+              <li>{t('public.pricing.item3')}</li>
+            </ul>
+          </div>
+          <div className="public-price-card">
+            <span>{t('public.pricing.plan')}</span>
+            <strong>39 ₪</strong>
+            <small>{t('public.pricing.perMonth')}</small>
+            <b>{t('public.pricing.discount')}</b>
+            <p>{t('public.pricing.noCharge')}</p>
+            <Link to="/terms/subscription">{t('public.pricing.terms')}</Link>
+          </div>
+        </section>
+
         <section className="public-pilot" id="pilot" aria-labelledby="pilot-title">
           <div>
             <span>{t('public.pilot.eyebrow')}</span>
@@ -279,6 +307,52 @@ export function PublicLandingPage() {
             </Link>
           )}
         </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+export function PublicSubscriptionTermsPage() {
+  const { t } = useTranslation();
+  const title = t('public.subscriptionTerms.metaTitle');
+  const description = t('public.subscriptionTerms.metaDescription');
+  const structuredData = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: title,
+      description,
+      inLanguage: 'he',
+      url: `${publicSiteUrl().replace(/\/$/, '')}/terms/subscription`,
+    }),
+    [description, title],
+  );
+  usePublicMetadata({
+    title,
+    description,
+    path: '/terms/subscription',
+    structuredData,
+  });
+
+  return (
+    <div className="public-site" dir="rtl">
+      <PublicHeader />
+      <main className="public-legal-page" id="public-main">
+        <header>
+          <span className="public-kicker">{t('public.subscriptionTerms.eyebrow')}</span>
+          <h1>{t('public.subscriptionTerms.title')}</h1>
+          <p>{t('public.subscriptionTerms.updated')}</p>
+        </header>
+        <article>
+          {[1, 2, 3, 4, 5, 6].map((section) => (
+            <section key={section}>
+              <h2>{t(`public.subscriptionTerms.section${section}Title`)}</h2>
+              <p>{t(`public.subscriptionTerms.section${section}Body`)}</p>
+            </section>
+          ))}
+          <aside>{t('public.subscriptionTerms.legalNotice')}</aside>
+        </article>
       </main>
       <PublicFooter />
     </div>

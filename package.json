@@ -14,6 +14,7 @@
     "db:migrate": "node --env-file=.env.local --import tsx packages/db/src/cli.ts",
     "db:provision-app-role": "node --env-file=.env.local --import tsx packages/db/src/provision-app-role.ts",
     "pilot:provision-account": "node --env-file=.env.local --import tsx packages/db/src/provision-pilot-account.ts",
+    "billing:activate-subscription": "node --env-file=.env.local --import tsx packages/db/src/activate-product-subscription.ts",
     "db:rls-test": "node --env-file=.env.local --import tsx packages/db/src/rls-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

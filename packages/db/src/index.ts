@@ -9,3 +9,5 @@ export * from './actor-resolver.js';
 export * from './membership-authorization-service.js';
 export * from './workspace-repository.js';
 export * from './workspace-file-repository.js';
+export * from './family-membership-repository.js';
+export * from './billing-repository.js';

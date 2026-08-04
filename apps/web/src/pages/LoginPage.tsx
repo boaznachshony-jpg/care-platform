@@ -5,12 +5,13 @@ import { useAuth } from '../auth/auth-context.js';
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const { signIn, requestPasswordReset } = useAuth();
+  const { signIn, requestMagicLink, requestPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [magicStatus, setMagicStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -29,6 +30,16 @@ export function LoginPage() {
     setResetStatus('sending');
     const success = await requestPasswordReset(email.trim());
     setResetStatus(success ? 'sent' : 'error');
+  }
+
+  async function sendMagicLink() {
+    if (!email.trim()) {
+      setMagicStatus('error');
+      return;
+    }
+    setMagicStatus('sending');
+    const success = await requestMagicLink(email.trim());
+    setMagicStatus(success ? 'sent' : 'error');
   }
 
   return (
@@ -69,6 +80,27 @@ export function LoginPage() {
           <button className="primary-button" type="submit" disabled={submitting}>
             {submitting ? t('auth.signingIn') : t('auth.signIn')}
           </button>
+          <div className="auth-divider" role="separator">
+            <span>{t('auth.or')}</span>
+          </div>
+          <button
+            className="auth-magic-button"
+            type="button"
+            disabled={magicStatus === 'sending'}
+            onClick={() => void sendMagicLink()}
+          >
+            {magicStatus === 'sending' ? t('auth.sendingMagicLink') : t('auth.sendMagicLink')}
+          </button>
+          {magicStatus === 'sent' ? (
+            <p className="auth-success" role="status">
+              {t('auth.magicLinkSent')}
+            </p>
+          ) : null}
+          {magicStatus === 'error' ? (
+            <p className="auth-error" role="alert">
+              {t('auth.magicLinkError')}
+            </p>
+          ) : null}
           <button
             className="auth-secondary-button"
             type="button"

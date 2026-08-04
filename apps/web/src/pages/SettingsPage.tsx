@@ -48,6 +48,12 @@ export function SettingsPage() {
         <Link className="secondary-button" to={path('/onboarding')}>
           {t('settings.reopenOnboarding')}
         </Link>
+        <Link className="secondary-button" to="/family">
+          👥 {t('familyAccess.eyebrow')}
+        </Link>
+        <Link className="secondary-button" to="/billing">
+          💳 {t('billing.eyebrow')}
+        </Link>
       </header>
       <form
         className="settings-form"
@@ -113,7 +119,7 @@ export function SettingsPage() {
         </section>
         <section className="card readable-form">
           <h2>{t('settings.representative')}</h2>
-          <p>{t('settings.representativeDisclaimer')}</p>
+          <p>{t('familyAccess.contactDisclaimer')}</p>
           <label>
             {t('profile.representativeName')}
             <input

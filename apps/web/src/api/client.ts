@@ -13,6 +13,13 @@ import type {
   WorkspaceResponse,
   UploadWorkspaceFileRequest,
   WorkspaceFileUrlResponse,
+  FamilyAccessResponse,
+  FamilyMemberResponse,
+  InviteFamilyMemberRequest,
+  UpdateFamilyMemberRoleRequest,
+  BillingPlanResponse,
+  BillingCheckoutResponse,
+  StartBillingSetupRequest,
 } from '@caredesk/schemas';
 import { getBrowserAuthClient } from '../auth/client.js';
 
@@ -194,4 +201,45 @@ export function getWorkspaceFileUrl(
 
 export function deleteWorkspaceFile(clientId: string, documentId: string): Promise<void> {
   return request(workspaceFilePath(clientId, documentId), { method: 'DELETE' });
+}
+
+export function listFamilyMembers(): Promise<FamilyAccessResponse> {
+  return request('/family/members');
+}
+
+export function inviteFamilyMember(
+  input: InviteFamilyMemberRequest,
+): Promise<FamilyMemberResponse> {
+  return request('/family/invitations', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateFamilyMemberRole(
+  membershipId: string,
+  input: UpdateFamilyMemberRoleRequest,
+): Promise<FamilyMemberResponse> {
+  return request(`/family/members/${encodeURIComponent(membershipId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export function revokeFamilyMember(membershipId: string): Promise<void> {
+  return request(`/family/members/${encodeURIComponent(membershipId)}`, { method: 'DELETE' });
+}
+
+export function getBillingSubscription(): Promise<BillingPlanResponse> {
+  return request('/billing/subscription');
+}
+
+export function startBillingPaymentMethodSetup(
+  input: StartBillingSetupRequest,
+): Promise<BillingCheckoutResponse> {
+  return request('/billing/payment-method/setup', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function cancelBillingSubscription(): Promise<void> {
+  return request('/billing/subscription', { method: 'DELETE' });
 }

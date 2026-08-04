@@ -16,3 +16,7 @@ export * from './mocks/in-memory-document-repository.js';
 export * from './mocks/in-memory-workspace-repository.js';
 export * from './mocks/in-memory-workspace-file-repository.js';
 export * from './mocks/membership-authorization-service.js';
+export * from './mocks/in-memory-family-membership-repository.js';
+export * from './mocks/mock-identity-invitation-service.js';
+export * from './mocks/in-memory-billing-repository.js';
+export * from './mocks/mock-product-billing-gateway.js';

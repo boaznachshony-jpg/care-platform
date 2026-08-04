@@ -73,6 +73,9 @@ export function ClientsPage() {
           <p>כל לקוח נשמר בנפרד ורק בדפדפן הזה. בחרו רשומה קיימת או התחילו חדשה.</p>
         </div>
         <div className="clients-hero-actions">
+          <button className="secondary-button" type="button" onClick={() => navigate('/family')}>
+            👥 {t('familyAccess.eyebrow')}
+          </button>
           {auth.enabled ? (
             <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
               {t('auth.signOut')}

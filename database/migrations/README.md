@@ -13,6 +13,9 @@ full business schema — starting with the identity/tenancy tables from
 `docs/architecture/database-blueprint.md` §10 migration order — is not
 created until ADR-002 is Accepted.
 
+The closed-pilot sequence currently runs through `0014_product_billing.sql`.
+Applied files are immutable; every later change receives the next number.
+
 ## Running locally
 
 Requires Docker (not available in every environment — see

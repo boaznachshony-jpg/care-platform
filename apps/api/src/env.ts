@@ -27,6 +27,23 @@ const envSchema = z
     SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
+    FAMILY_INVITE_REDIRECT_URL: z.string().url().optional(),
+    BILLING_PROVIDER: z.enum(['disabled', 'cardcom', 'mock']).default('disabled'),
+    BILLING_PRICE_AGOROT: z.coerce.number().int().positive().default(3900),
+    BILLING_VAT_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(1800),
+    BILLING_LAUNCH_DISCOUNT_PERCENT: z.coerce.number().int().min(0).max(100).default(100),
+    BILLING_SUCCESS_URL: z.string().url().optional(),
+    BILLING_FAILURE_URL: z.string().url().optional(),
+    BILLING_WEBHOOK_URL: z.string().url().optional(),
+    CARDCOM_TERMINAL_NUMBER: z.coerce.number().int().positive().optional(),
+    CARDCOM_API_NAME: z.string().min(1).optional(),
+    CARDCOM_API_PASSWORD: z.string().min(1).optional(),
+    CARDCOM_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
+    CARDCOM_MARK_AS_RECURRING: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    CRON_SECRET: z.string().min(24).optional(),
     AI_PROVIDER: z.enum(['mock', 'openai', 'anthropic']).default('mock'),
   })
   .superRefine((value, context) => {
@@ -43,6 +60,47 @@ const envSchema = z
         path: ['SUPABASE_STORAGE_BUCKET'],
         message:
           'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_STORAGE_BUCKET must be configured together',
+      });
+    }
+    if (value.BILLING_PROVIDER === 'cardcom') {
+      const required = [
+        'BILLING_SUCCESS_URL',
+        'BILLING_FAILURE_URL',
+        'BILLING_WEBHOOK_URL',
+        'CARDCOM_TERMINAL_NUMBER',
+        'CARDCOM_API_NAME',
+        'CARDCOM_API_PASSWORD',
+        'CARDCOM_TOKEN_ENCRYPTION_KEY',
+        'CRON_SECRET',
+      ] as const;
+      for (const field of required) {
+        if (!value[field]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required when BILLING_PROVIDER=cardcom`,
+          });
+        }
+      }
+      if (value.CARDCOM_TOKEN_ENCRYPTION_KEY) {
+        try {
+          if (Buffer.from(value.CARDCOM_TOKEN_ENCRYPTION_KEY, 'base64').length !== 32) {
+            throw new Error('invalid length');
+          }
+        } catch {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['CARDCOM_TOKEN_ENCRYPTION_KEY'],
+            message: 'CARDCOM_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+          });
+        }
+      }
+    }
+    if (value.NODE_ENV === 'production' && value.BILLING_PROVIDER === 'mock') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BILLING_PROVIDER'],
+        message: 'The mock billing provider is forbidden in production',
       });
     }
   });

@@ -3,9 +3,13 @@ import type {
   AuditService,
   AuthService,
   AuthorizationService,
+  BillingRepository,
   CaseContactRepository,
   CaseFoundationRepository,
   DocumentRepository,
+  FamilyMembershipRepository,
+  IdentityInvitationService,
+  ProductBillingGateway,
   TaskRepository,
   TimelineRepository,
   TimelineService,
@@ -14,30 +18,41 @@ import type {
 } from '@caredesk/application';
 import {
   AddContactToCase,
+  CollectDueProductSubscriptions,
+  CancelProductSubscription,
+  CompleteProductBillingSetup,
   CompleteCaseTask,
   CreateCaseTask,
   GetDocumentDownloadUrl,
   GetEmploymentCase,
   GetWorkspace,
+  GetProductSubscription,
   GetWorkspaceFileUrl,
+  InviteFamilyMember,
   ListCaseDocuments,
   ListCaseContacts,
   ListCaseTasks,
   ListCaseTimeline,
   ListEmploymentCases,
+  ListFamilyMembers,
   OpenEmploymentCase,
   SaveWorkspace,
   PutWorkspaceFile,
+  RevokeFamilyMember,
+  StartProductBillingSetup,
   DeleteWorkspaceFile,
   UploadCaseDocument,
+  UpdateFamilyMemberRole,
 } from '@caredesk/application';
 import {
   createPool,
   PgActorResolver,
   PgAuditService,
+  PgBillingRepository,
   PgCaseContactRepository,
   PgCaseFoundationRepository,
   PgDocumentRepository,
+  PgFamilyMembershipRepository,
   PgMembershipAuthorizationService,
   PgTaskRepository,
   PgTimelineService,
@@ -47,10 +62,12 @@ import {
 import {
   InMemoryActorResolver,
   InMemoryAuditService,
+  InMemoryBillingRepository,
   InMemoryCaseContactRepository,
   InMemoryCaseFoundationRepository,
   InMemoryDocumentRepository,
   InMemoryDocumentStorage,
+  InMemoryFamilyMembershipRepository,
   InMemoryTaskRepository,
   InMemoryTimelineRepository,
   InMemoryTimelineService,
@@ -58,21 +75,22 @@ import {
   InMemoryWorkspaceFileRepository,
   MembershipAuthorizationService,
   MockAuthService,
+  MockIdentityInvitationService,
+  MockProductBillingGateway,
+  DisabledProductBillingGateway,
   SystemClock,
   UuidIdGenerator,
 } from '@caredesk/infrastructure';
 import type { Pool } from 'pg';
 import type { Env } from './env.js';
 import { SupabaseAuthService } from './auth/supabase-auth-service.js';
+import { SupabaseInvitationService } from './auth/supabase-invitation-service.js';
 import { SupabaseDocumentStorage } from './storage/supabase-document-storage.js';
+import { CardcomProductBillingGateway } from './billing/cardcom-gateway.js';
 
 /**
- * Milestone 1 role→permission map. This is an interim, code-level map — the
- * canonical role vocabulary is a Milestone 1 permission-model decision still
- * to be recorded; keep it minimal until then.
- *
- * `family_member` is deliberately read-only: per Constitution §18 a family
- * member views a case without gaining authority to change it.
+ * Closed-pilot family role-to-permission map (ADR-004). `family_member` is a
+ * backwards-compatible, read-only alias for `viewer`.
  */
 const ROLE_PERMISSIONS = {
   owner: [
@@ -88,6 +106,36 @@ const ROLE_PERMISSIONS = {
     'document:read',
     'workspace:read',
     'workspace:update',
+    'membership:read',
+    'membership:manage',
+    'billing:read',
+    'billing:manage',
+  ],
+  manager: [
+    'employment_case:create',
+    'employment_case:read',
+    'case_contact:create',
+    'case_contact:read',
+    'task:create',
+    'task:read',
+    'task:update',
+    'timeline:read',
+    'document:create',
+    'document:read',
+    'workspace:read',
+    'workspace:update',
+    'membership:read',
+    'billing:read',
+  ],
+  viewer: [
+    'employment_case:read',
+    'case_contact:read',
+    'task:read',
+    'timeline:read',
+    'document:read',
+    'workspace:read',
+    'membership:read',
+    'billing:read',
   ],
   family_member: [
     'employment_case:read',
@@ -97,6 +145,9 @@ const ROLE_PERMISSIONS = {
     // Read-only, deliberately: viewing a case never confers authority to add
     // to it (Constitution §18).
     'document:read',
+    'workspace:read',
+    'membership:read',
+    'billing:read',
   ],
 } as const;
 
@@ -134,6 +185,15 @@ export interface Container {
   putWorkspaceFile: PutWorkspaceFile;
   getWorkspaceFileUrl: GetWorkspaceFileUrl;
   deleteWorkspaceFile: DeleteWorkspaceFile;
+  listFamilyMembers: ListFamilyMembers;
+  inviteFamilyMember: InviteFamilyMember;
+  updateFamilyMemberRole: UpdateFamilyMemberRole;
+  revokeFamilyMember: RevokeFamilyMember;
+  getProductSubscription: GetProductSubscription;
+  startProductBillingSetup: StartProductBillingSetup;
+  completeProductBillingSetup: CompleteProductBillingSetup;
+  collectDueProductSubscriptions: CollectDueProductSubscriptions;
+  cancelProductSubscription: CancelProductSubscription;
   readiness(): Promise<{ ready: boolean; reasons: string[] }>;
   /** Present only when backed by Postgres; close it on shutdown. */
   pool?: Pool;
@@ -172,6 +232,8 @@ export function buildContainer(env: Env): Container {
   let audit: AuditService;
   let workspaceRepository: WorkspaceRepository;
   let workspaceFileRepository: WorkspaceFileRepository;
+  let familyMembershipRepository: FamilyMembershipRepository;
+  let billingRepository: BillingRepository;
 
   if (pool) {
     repository = new PgCaseFoundationRepository(pool);
@@ -186,6 +248,8 @@ export function buildContainer(env: Env): Container {
     audit = new PgAuditService(pool);
     workspaceRepository = new PgWorkspaceRepository(pool);
     workspaceFileRepository = new PgWorkspaceFileRepository(pool);
+    familyMembershipRepository = new PgFamilyMembershipRepository(pool);
+    billingRepository = new PgBillingRepository(pool);
   } else {
     repository = new InMemoryCaseFoundationRepository();
     contactRepository = new InMemoryCaseContactRepository();
@@ -197,6 +261,8 @@ export function buildContainer(env: Env): Container {
     audit = new InMemoryAuditService();
     workspaceRepository = new InMemoryWorkspaceRepository();
     workspaceFileRepository = new InMemoryWorkspaceFileRepository();
+    familyMembershipRepository = new InMemoryFamilyMembershipRepository();
+    billingRepository = new InMemoryBillingRepository();
   }
 
   const clock = new SystemClock();
@@ -221,6 +287,19 @@ export function buildContainer(env: Env): Container {
         tenantId: DEV_TENANT_ID,
         role: 'owner',
         status: 'active',
+      });
+    }
+    if (familyMembershipRepository instanceof InMemoryFamilyMembershipRepository) {
+      familyMembershipRepository.seed({
+        tenantId: DEV_TENANT_ID,
+        membershipId: '00000000-0000-4000-8000-000000000003',
+        userId: DEV_USER_ID,
+        displayName: 'Demo owner',
+        email: 'owner@example.test',
+        role: 'owner',
+        status: 'active',
+        invitedAt: new Date(0).toISOString(),
+        lastAuthenticatedAt: new Date().toISOString(),
       });
     }
 
@@ -260,6 +339,33 @@ export function buildContainer(env: Env): Container {
         )
       : new InMemoryDocumentStorage();
 
+  const invitationRedirect =
+    env.FAMILY_INVITE_REDIRECT_URL ?? `${env.CORS_ORIGINS.split(',')[0]?.trim()}/app`;
+  const invitations: IdentityInvitationService =
+    env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+      ? new SupabaseInvitationService(
+          env.SUPABASE_URL,
+          env.SUPABASE_SERVICE_ROLE_KEY,
+          invitationRedirect,
+        )
+      : new MockIdentityInvitationService();
+
+  const billingGateway: ProductBillingGateway =
+    env.BILLING_PROVIDER === 'cardcom'
+      ? new CardcomProductBillingGateway({
+          terminalNumber: env.CARDCOM_TERMINAL_NUMBER!,
+          apiName: env.CARDCOM_API_NAME!,
+          apiPassword: env.CARDCOM_API_PASSWORD!,
+          successUrl: env.BILLING_SUCCESS_URL!,
+          failureUrl: env.BILLING_FAILURE_URL!,
+          webhookUrl: env.BILLING_WEBHOOK_URL!,
+          tokenEncryptionKey: env.CARDCOM_TOKEN_ENCRYPTION_KEY!,
+          markAsRecurring: env.CARDCOM_MARK_AS_RECURRING,
+        })
+      : env.BILLING_PROVIDER === 'mock'
+        ? new MockProductBillingGateway()
+        : new DisabledProductBillingGateway();
+
   const caseDeps = { authorization, repository, audit, timeline, clock, ids };
   const taskDeps = { authorization, tasks: taskRepository, audit, timeline, clock, ids };
   const documentDeps = {
@@ -279,6 +385,30 @@ export function buildContainer(env: Env): Container {
     audit,
     clock,
     ids,
+  };
+  const familyAccessDeps = {
+    authorization,
+    memberships: familyMembershipRepository,
+    invitations,
+    audit,
+    clock,
+    ids,
+  };
+  const billingDeps = {
+    authorization,
+    billing: billingRepository,
+    gateway: billingGateway,
+    audit,
+    clock,
+    ids,
+    defaults: {
+      priceAgorot: env.BILLING_PRICE_AGOROT,
+      vatRateBps: env.BILLING_VAT_RATE_BPS,
+      launchDiscountPercent: env.BILLING_LAUNCH_DISCOUNT_PERCENT,
+      // No environment-wide start date: paid billing is activated explicitly
+      // per tenant by the guarded operator command.
+      chargingStartsAt: null,
+    },
   };
 
   return {
@@ -322,6 +452,15 @@ export function buildContainer(env: Env): Container {
     putWorkspaceFile: new PutWorkspaceFile(workspaceFileDeps),
     getWorkspaceFileUrl: new GetWorkspaceFileUrl(workspaceFileDeps),
     deleteWorkspaceFile: new DeleteWorkspaceFile(workspaceFileDeps),
+    listFamilyMembers: new ListFamilyMembers(familyAccessDeps),
+    inviteFamilyMember: new InviteFamilyMember(familyAccessDeps),
+    updateFamilyMemberRole: new UpdateFamilyMemberRole(familyAccessDeps),
+    revokeFamilyMember: new RevokeFamilyMember(familyAccessDeps),
+    getProductSubscription: new GetProductSubscription(billingDeps),
+    startProductBillingSetup: new StartProductBillingSetup(billingDeps),
+    completeProductBillingSetup: new CompleteProductBillingSetup(billingDeps),
+    collectDueProductSubscriptions: new CollectDueProductSubscriptions(billingDeps),
+    cancelProductSubscription: new CancelProductSubscription(billingDeps),
     async readiness() {
       if (env.NODE_ENV !== 'production') return { ready: true, reasons: [] };
       const reasons: string[] = [];
@@ -334,14 +473,24 @@ export function buildContainer(env: Env): Container {
             actor_resolver: string | null;
             workspace_table: string | null;
             workspace_file_table: string | null;
+            family_members_function: string | null;
+            billing_table: string | null;
           }>(
             `select
                to_regprocedure('resolve_caredesk_actor(text)')::text as actor_resolver,
                to_regclass('tenant_workspace')::text as workspace_table,
-               to_regclass('workspace_file')::text as workspace_file_table`,
+               to_regclass('workspace_file')::text as workspace_file_table,
+               to_regprocedure('list_caredesk_family_members(uuid)')::text as family_members_function,
+               to_regclass('product_subscription')::text as billing_table`,
           );
           const row = result.rows[0];
-          if (!row?.actor_resolver || !row.workspace_table || !row.workspace_file_table) {
+          if (
+            !row?.actor_resolver ||
+            !row.workspace_table ||
+            !row.workspace_file_table ||
+            !row.family_members_function ||
+            !row.billing_table
+          ) {
             reasons.push('Required pilot database migrations are missing');
           }
         } catch {

@@ -39,6 +39,7 @@ Both authentication variables are required in Preview and Production. A hosted b
   - `SUPABASE_PUBLISHABLE_KEY=<publishable key>`
   - `SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>`
   - `SUPABASE_STORAGE_BUCKET=caredesk-private-documents`
+  - `FAMILY_INVITE_REDIRECT_URL=https://care-platform-web.vercel.app/app`
 
 The storage bucket must be private, limited to PDF/JPEG/PNG and 10 MB per object. The service-role key belongs only in the API project. Never add it to the web project or to a `VITE_` variable.
 
@@ -56,6 +57,57 @@ executed directly outside Vercel.
    displayed.
 4. GitHub Actions must pass `check`, `e2e`, and `secret-scan`.
 5. Sign in as two different pilot users and confirm that neither account can see the other's clients or documents.
+6. In one pilot tenant, invite a manager and a viewer. Confirm that both enter
+   with their own one-time link, the manager can save, the viewer cannot save,
+   neither can manage users, and revocation blocks the next API request.
+
+The invitation redirect URL must also appear in the Supabase Auth redirect
+allowlist. Preview testing should use an explicitly approved preview URL; do
+not widen the allowlist with an unrestricted domain pattern.
+
+## Product subscription and Cardcom
+
+The CareDesk subscription is separate from caregiver payroll. The launch price
+is 39 ILS per month including VAT (3,900 agorot). During the closed pilot every
+tenant remains on a 100% discount and the effective charge is 0 ILS.
+
+API-only environment variables:
+
+- `BILLING_PROVIDER=cardcom`
+- `BILLING_PRICE_AGOROT=3900`
+- `BILLING_VAT_RATE_BPS=1800`
+- `BILLING_LAUNCH_DISCOUNT_PERCENT=100`
+- paid billing has no environment-wide start date; activate one notified tenant
+  at a time with `pnpm billing:activate-subscription`
+- `BILLING_SUCCESS_URL=https://care-platform-web.vercel.app/billing?setup=success`
+- `BILLING_FAILURE_URL=https://care-platform-web.vercel.app/billing?setup=failed`
+- `BILLING_WEBHOOK_URL=https://care-platform-api.vercel.app/billing/webhooks/cardcom`
+- Cardcom terminal, API name/password and a base64 32-byte token-encryption key
+- `CARDCOM_MARK_AS_RECURRING=true` only if Cardcom confirms that the merchant
+  terminal is configured for standing-order transactions; otherwise keep false
+- a random `CRON_SECRET` of at least 24 characters
+
+The web project receives none of the Cardcom credentials. Card entry happens on
+Cardcom's hosted page. The API verifies the returned setup server-to-server and
+stores only an encrypted token plus expiry and last four digits.
+
+Run migration `0014_product_billing.sql`, redeploy the API, and confirm `/ready`
+before exposing `/billing`. Complete one production merchant test for hosted
+setup, receipt delivery, webhook retry, idempotent collection and cancellation.
+Do not treat Cardcom sandbox success as production approval.
+
+Saving a card does not end the 100% pilot discount. To activate billing for one
+customer only after advance notice, populate the three operator-only
+`BILLING_ACTIVATION_*` values in `.env.local`, including the exact confirmation
+documented in `.env.example`, then run:
+
+```powershell
+pnpm billing:activate-subscription
+```
+
+The command refuses tenants without accepted terms and a verified payment
+method. There is no bulk activation path. Record the customer notice and the
+command result in the release log before the first collection run.
 
 ## Public website and search indexing
 
