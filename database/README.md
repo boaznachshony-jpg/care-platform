@@ -70,6 +70,12 @@ pnpm db:rls-test   # live tenant-isolation check; exits non-zero on any leak
 Both read `DATABASE_URL` from `.env.local` via `node --env-file`, so the secret
 never appears in shell history or a process listing.
 
+Before applying any migration to a remote environment, complete the database
+and private Storage backup gates in
+[`docs/operations/production-release-and-recovery.md`](../docs/operations/production-release-and-recovery.md).
+Run `pnpm db:migration-safety` in every PR; CI rejects edits to applied
+migrations and common destructive or rolling-deployment-incompatible changes.
+
 ## Migrations
 
 Named `NNNN_snake_case.sql`, applied in ascending order, each in its own

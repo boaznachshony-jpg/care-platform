@@ -12,6 +12,7 @@
     "dev": "pnpm --filter @caredesk/web dev",
     "dev:api": "pnpm --filter @caredesk/api dev",
     "db:migrate": "node --env-file=.env.local --import tsx packages/db/src/cli.ts",
+    "db:migration-safety": "node --import tsx packages/db/src/migration-safety-cli.ts",
     "db:provision-app-role": "node --env-file=.env.local --import tsx packages/db/src/provision-app-role.ts",
     "pilot:provision-account": "node --env-file=.env.local --import tsx packages/db/src/provision-pilot-account.ts",
     "billing:activate-subscription": "node --env-file=.env.local --import tsx packages/db/src/activate-product-subscription.ts",
