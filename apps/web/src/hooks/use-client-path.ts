@@ -8,5 +8,8 @@ export function clientPath(clientId: string, path = '/'): string {
 
 export function useClientPath(): (path?: string) => string {
   const { clientId = '' } = useParams<{ clientId: string }>();
-  return (path = '/') => clientPath(clientId, path);
+  return (path = '/') => {
+    if (clientId) return clientPath(clientId, path);
+    return path === '/' ? '/app' : path;
+  };
 }

@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 import { useClientPath } from '../hooks/use-client-path.js';
+import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 
 type TimelineEvent = [
   date: string,
@@ -12,7 +13,6 @@ type TimelineEvent = [
 ];
 
 const fixedEvents: TimelineEvent[] = [
-  ['03 אוג׳', 'בדיקת ביטוח רפואי', 'פעולה מומלצת', 'amber', '/documents'],
   ['09 אוג׳', 'הכנת שכר יולי', 'פעולה חודשית', 'blue', '/payroll'],
   ['15 אוג׳', 'יום חופשה מתוכנן', 'מידע', 'green', '/tasks'],
   ['31 אוג׳', 'סיכום חודש', 'בדיקה אוטומטית', 'neutral', '/'],
@@ -38,10 +38,26 @@ function shortDate(value: string): string {
   return `${day} ${shortMonths[(month ?? 1) - 1]}`;
 }
 
-export function TimelinePage({ today }: { today?: Date } = {}) {
+export function TimelinePage({
+  today,
+  employmentStartDate,
+}: { today?: Date; employmentStartDate?: string } = {}) {
   const path = useClientPath();
+  const [profile] = useMvpProfile();
+  const effectiveEmploymentStartDate = employmentStartDate ?? profile.employmentStartDate;
   const quarterlyInsurance = createQuarterlyInsuranceTask(today);
   const events: TimelineEvent[] = [
+    ...(effectiveEmploymentStartDate
+      ? ([
+          [
+            shortDate(effectiveEmploymentStartDate),
+            'בדיקת ביטוח רפואי',
+            'החל ממועד תחילת ההעסקה',
+            'amber',
+            '/documents',
+          ],
+        ] satisfies TimelineEvent[])
+      : []),
     ...fixedEvents,
     [
       shortDate(

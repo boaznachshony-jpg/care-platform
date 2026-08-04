@@ -1,5 +1,5 @@
-import { Navigate, Route, Routes, useParams } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from './AppShell.js';
 import { DashboardPage } from './pages/DashboardPage.js';
@@ -11,11 +11,39 @@ import { PayrollPage } from './pages/PayrollPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { TrustMessagesPage } from './pages/TrustMessagesPage.js';
+import { GlossaryPage } from './pages/GlossaryPage.js';
 import { ClientsPage } from './pages/ClientsPage.js';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 import { useClientPath } from './hooks/use-client-path.js';
 import { readMvpClients } from './storage/mvp-storage.js';
 import { getEnvironmentTranslationKey } from './environment.js';
+import { AuthProvider } from './auth/auth-context.js';
+import {
+  AuthConfigurationRequiredPage,
+  AuthLoadingPage,
+  LoginPage,
+  PasswordRecoveryPage,
+  StorageUnavailablePage,
+} from './pages/LoginPage.js';
+import { DirectEmploymentGuidePage, PublicLandingPage } from './pages/PublicLandingPage.js';
+import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
+import { BillingPage } from './pages/BillingPage.js';
+import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
+
+const authenticatedEntrypoints = new Set([
+  '/app',
+  '/onboarding',
+  '/tasks',
+  '/employee',
+  '/trust',
+  '/glossary',
+  '/documents',
+  '/timeline',
+  '/payroll',
+  '/settings',
+  '/family',
+  '/billing',
+]);
 
 function ClientHome() {
   const [profile] = useMvpProfile();
@@ -31,23 +59,40 @@ function ClientApp({ children }: { children: ReactNode }) {
   const { clientId } = useParams();
 
   if (clientId && !readMvpClients().some((client) => client.id === clientId)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <AppShell>{children}</AppShell>;
 }
 
-export function App() {
+function AuthenticatedApp() {
   const { t } = useTranslation();
-  const environmentTranslationKey = getEnvironmentTranslationKey();
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    const robots = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const previousRobots = robots?.content;
+    document.title = t('auth.privatePageTitle');
+    if (robots) robots.content = 'noindex, nofollow, noarchive';
+
+    return () => {
+      document.title = previousTitle;
+      if (robots && previousRobots) robots.content = previousRobots;
+    };
+  }, [t]);
 
   return (
-    <>
-      {environmentTranslationKey ? (
-        <div className="environment-banner">{t(environmentTranslationKey)}</div>
-      ) : null}
+    <AuthProvider
+      login={<LoginPage />}
+      configurationRequired={<AuthConfigurationRequiredPage />}
+      storageUnavailable={<StorageUnavailablePage />}
+      passwordRecovery={<PasswordRecoveryPage />}
+      loading={<AuthLoadingPage />}
+    >
       <Routes>
-        <Route path="/" element={<ClientsPage />} />
+        <Route path="/app" element={<ClientsPage />} />
+        <Route path="/family" element={<FamilyAccessPage />} />
+        <Route path="/billing" element={<BillingPage />} />
         <Route
           path="/clients/:clientId"
           element={
@@ -85,6 +130,14 @@ export function App() {
           element={
             <ClientApp>
               <TrustMessagesPage />
+            </ClientApp>
+          }
+        />
+        <Route
+          path="/clients/:clientId/glossary"
+          element={
+            <ClientApp>
+              <GlossaryPage />
             </ClientApp>
           }
         />
@@ -153,6 +206,14 @@ export function App() {
           }
         />
         <Route
+          path="/glossary"
+          element={
+            <ClientApp>
+              <GlossaryPage />
+            </ClientApp>
+          }
+        />
+        <Route
           path="/documents"
           element={
             <ClientApp>
@@ -184,7 +245,32 @@ export function App() {
             </ClientApp>
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/app" replace />} />
+      </Routes>
+    </AuthProvider>
+  );
+}
+
+function ApplicationEntry() {
+  const { pathname } = useLocation();
+  const isPrivatePath = pathname.startsWith('/clients/') || authenticatedEntrypoints.has(pathname);
+  return isPrivatePath ? <AuthenticatedApp /> : <Navigate to="/" replace />;
+}
+
+export function App() {
+  const { t } = useTranslation();
+  const environmentTranslationKey = getEnvironmentTranslationKey();
+
+  return (
+    <>
+      {environmentTranslationKey ? (
+        <div className="environment-banner">{t(environmentTranslationKey)}</div>
+      ) : null}
+      <Routes>
+        <Route path="/" element={<PublicLandingPage />} />
+        <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
+        <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
+        <Route path="*" element={<ApplicationEntry />} />
       </Routes>
     </>
   );

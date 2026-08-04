@@ -9,6 +9,9 @@ import { denyByDefault } from './plugins/deny-by-default.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerCaseSubResourceRoutes } from './routes/case-contacts.js';
 import { registerCaseDocumentRoutes } from './routes/case-documents.js';
+import { registerWorkspaceRoutes } from './routes/workspace.js';
+import { registerFamilyAccessRoutes } from './routes/family-access.js';
+import { registerBillingRoutes } from './routes/billing.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -72,6 +75,15 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
     },
   });
 
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_request, body, done) => {
+      const encoded = typeof body === 'string' ? body : body.toString('utf8');
+      done(null, Object.fromEntries(new URLSearchParams(encoded)));
+    },
+  );
+
   void app.register(cors, { origin: buildCorsOrigin(env) });
 
   registerCorrelationId(app, env.CORRELATION_HEADER);
@@ -86,13 +98,23 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
     return response;
   });
 
-  app.get('/ready', async () => {
+  app.get('/ready', async (_request, reply) => {
+    const readiness = await container.readiness();
+    if (!readiness.ready) {
+      reply.status(503).send({
+        status: 'not-ready',
+        service: '@caredesk/api',
+        timestamp: new Date().toISOString(),
+        reasons: readiness.reasons,
+      });
+      return;
+    }
     const response: HealthResponse = {
       status: 'ok',
       service: '@caredesk/api',
       timestamp: new Date().toISOString(),
     };
-    return response;
+    reply.send(response);
   });
 
   // Fail-closed placeholder retained for any future route added without an
@@ -104,6 +126,9 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseRoutes(app, container);
   registerCaseSubResourceRoutes(app, container);
   registerCaseDocumentRoutes(app, container);
+  registerWorkspaceRoutes(app, container);
+  registerFamilyAccessRoutes(app, container);
+  registerBillingRoutes(app, container, env);
 
   return app;
 }

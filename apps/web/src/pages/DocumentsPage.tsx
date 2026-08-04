@@ -11,6 +11,7 @@ import {
   type MvpDocument,
   type MvpDocumentStatus,
 } from '../storage/mvp-storage.js';
+import { useAuth } from '../auth/auth-context.js';
 
 const MAX_FILE_SIZE = 10_000_000;
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
@@ -38,6 +39,7 @@ const emptyDraft = {
 };
 
 export function DocumentsPage() {
+  const auth = useAuth();
   const [documents, setDocuments] = useState(readMvpDocuments);
   const [draft, setDraft] = useState(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -118,7 +120,12 @@ export function DocumentsPage() {
 
   async function openDocument(document: MvpDocument) {
     const storedFile = await readDocumentFile(document.id);
-    const href = storedFile ? URL.createObjectURL(storedFile) : document.dataUrl;
+    const href =
+      typeof storedFile === 'string'
+        ? storedFile
+        : storedFile
+          ? URL.createObjectURL(storedFile)
+          : document.dataUrl;
     if (!href) {
       setMessage('הקובץ אינו נמצא במכשיר זה. ניתן לערוך את המסמך ולהעלות אותו מחדש.');
       return;
@@ -129,7 +136,7 @@ export function DocumentsPage() {
     link.target = '_blank';
     link.rel = 'noopener';
     link.click();
-    if (storedFile) window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
+    if (storedFile instanceof Blob) window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
   }
 
   async function removeDocument(document: MvpDocument) {
@@ -235,7 +242,9 @@ export function DocumentsPage() {
             </label>
           </div>
           <p className="form-note">
-            PDF, JPG או PNG עד 10MB. בגרסת הבדיקות הקובץ נשמר רק בדפדפן ובמכשיר הנוכחי.
+            {auth.enabled
+              ? 'PDF, JPG או PNG עד 10MB. הקובץ נשמר באחסון פרטי ומוצפן ונפתח באמצעות קישור זמני בלבד.'
+              : 'PDF, JPG או PNG עד 10MB. בסביבה המקומית הקובץ נשמר רק במכשיר הנוכחי.'}
           </p>
           <button className="primary-button" type="submit">
             שמירת המסמך

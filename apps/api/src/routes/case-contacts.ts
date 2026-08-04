@@ -19,7 +19,7 @@ interface TaskParams extends CaseParams {
  * check — the route never decides access on its own.
  */
 export function registerCaseSubResourceRoutes(app: FastifyInstance, container: Container): void {
-  const authenticate = makeAuthenticate(container.auth, container.tenantByUser);
+  const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
 
   app.get<{ Params: CaseParams }>('/cases/:caseId/contacts', options, async (request, reply) => {

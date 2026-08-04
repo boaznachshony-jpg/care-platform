@@ -45,7 +45,7 @@ function toResponse(entry: DocumentWithCurrentVersion): DocumentResponse {
  * deny-by-default authorization check — the route never decides access itself.
  */
 export function registerCaseDocumentRoutes(app: FastifyInstance, container: Container): void {
-  const authenticate = makeAuthenticate(container.auth, container.tenantByUser);
+  const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
 
   /**

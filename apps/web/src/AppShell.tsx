@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 import { createCareNotifications } from './notifications.js';
 import { useClientPath } from './hooks/use-client-path.js';
@@ -10,6 +11,12 @@ import {
   readMvpTasks,
 } from './storage/mvp-storage.js';
 import { RELEASE_LABEL } from './release.js';
+import { useAuth } from './auth/auth-context.js';
+import {
+  getWorkspaceSyncState,
+  WORKSPACE_SYNC_CHANGED,
+  type WorkspaceSyncState,
+} from './storage/workspace-sync.js';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -19,7 +26,8 @@ const nav = [
   ['/', '⌂', 'ראשי'],
   ['/tasks', '✓', 'משימות'],
   ['/employee', '♙', 'עובד'],
-  ['/trust', '♥', 'אמון'],
+  ['/trust', '♥', 'טיפים'],
+  ['/glossary', 'ⓘ', 'מושגים'],
   ['/documents', '▣', 'מסמכים'],
   ['/timeline', '◷', 'ציר זמן'],
   ['/payroll', '₪', 'שכר'],
@@ -35,6 +43,7 @@ const mobileNav = [
 const mobileMoreNav = [
   ['/employee', '♙', 'פרטי המטפל'],
   ['/trust', '♥', 'מסרים לבניית אמון'],
+  ['/glossary', 'ⓘ', 'מושגים חשובים'],
   ['/timeline', '◷', 'ציר זמן'],
   ['/settings', '⚙', 'הגדרות'],
 ] as const;
@@ -56,11 +65,14 @@ function currentHebrewDate(): string {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const { t } = useTranslation();
   const location = useLocation();
   const path = useClientPath();
+  const auth = useAuth();
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [syncState, setSyncState] = useState<WorkspaceSyncState>(getWorkspaceSyncState);
   const notifications = profile.notificationsEnabled
     ? createCareNotifications({
         tasks: readMvpTasks(),
@@ -74,6 +86,12 @@ export function AppShell({ children }: AppShellProps) {
     document.documentElement.style.setProperty('--ui-scale', String(fontScale));
     window.localStorage.setItem(FONT_SCALE_KEY, String(fontScale));
   }, [fontScale]);
+
+  useEffect(() => {
+    const update = () => setSyncState(getWorkspaceSyncState());
+    window.addEventListener(WORKSPACE_SYNC_CHANGED, update);
+    return () => window.removeEventListener(WORKSPACE_SYNC_CHANGED, update);
+  }, []);
 
   return (
     <div className="app-frame">
@@ -104,7 +122,7 @@ export function AppShell({ children }: AppShellProps) {
         <NavLink className="settings-link" to={path('/settings')}>
           ⚙ הגדרות
         </NavLink>
-        <NavLink className="settings-link client-switch-link" to="/">
+        <NavLink className="settings-link client-switch-link" to="/app">
           ⇄ החלפת לקוח
         </NavLink>
       </aside>
@@ -115,7 +133,26 @@ export function AppShell({ children }: AppShellProps) {
             <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
-            <Link className="top-client-switch" to="/" aria-label="החלפת לקוח">
+            {auth.enabled && syncState !== 'disabled' ? (
+              <span
+                className={`sync-status sync-status-${syncState}`}
+                role={syncState === 'error' ? 'alert' : 'status'}
+              >
+                {syncState === 'saving'
+                  ? 'שומר…'
+                  : syncState === 'loading'
+                    ? 'טוען…'
+                    : syncState === 'error'
+                      ? 'השמירה נכשלה — יש לרענן'
+                      : 'נשמר בענן'}
+              </span>
+            ) : null}
+            {auth.enabled ? (
+              <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
+                {t('auth.signOut')}
+              </button>
+            ) : null}
+            <Link className="top-client-switch" to="/app" aria-label="החלפת לקוח">
               ⇄
             </Link>
             <div className="font-size-controls" role="group" aria-label="גודל טקסט">
@@ -207,7 +244,7 @@ export function AppShell({ children }: AppShellProps) {
                 {label}
               </NavLink>
             ))}
-            <Link to="/" onClick={() => setMobileMoreOpen(false)}>
+            <Link to="/app" onClick={() => setMobileMoreOpen(false)}>
               <span aria-hidden="true">⇄</span>
               החלפת לקוח
             </Link>

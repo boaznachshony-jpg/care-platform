@@ -55,6 +55,7 @@ permissions, and tests from drifting apart.
 | WorkflowInstance | `not_started`, `active`, `blocked`, `completed`, `cancelled` |
 | PayrollPeriod | `draft`, `review_required`, `approved`, `paid`, `locked`, `voided` |
 | PaymentRecord | `planned`, `recorded`, `confirmed`, `failed`, `cancelled`, `refunded` |
+| ProductSubscription | `sponsored`, `payment_method_pending`, `payment_method_ready`, `active`, `past_due`, `cancelled` |
 | RuleVersion | `draft`, `under_review`, `approved`, `active`, `suspended`, `superseded`, `retired` |
 | NotificationRequirement | `pending`, `in_progress`, `confirmed`, `waived`, `not_applicable`, `failed` |
 
@@ -70,6 +71,7 @@ synchronisation as a status enum. All are implemented in
 | Contact channel type | `phone`, `email`, `whatsapp`, `office`, `portal` |
 | Task priority | `low`, `normal`, `high`, `urgent` |
 | Task source | `manual`, `rule`, `workflow` |
+| Family access role | `owner`, `manager`, `viewer` (`family_member` is a legacy read-only alias) |
 
 ## Sensitivity classes
 

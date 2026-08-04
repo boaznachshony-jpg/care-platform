@@ -1,10 +1,10 @@
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
-import type { AuthService } from '@caredesk/application';
+import type { ActorResolver, AuthService } from '@caredesk/application';
 import type { ApiError } from '@caredesk/schemas';
 
 declare module 'fastify' {
   interface FastifyRequest {
-    actor?: { userId: string; tenantId: string; correlationId: string };
+    actor?: { userId: string; tenantId: string; correlationId: string; mfaSatisfied: boolean };
   }
 }
 
@@ -25,7 +25,7 @@ function unauthorized(request: FastifyRequest, reply: FastifyReply): void {
  */
 export function makeAuthenticate(
   auth: AuthService,
-  tenantByUser: ReadonlyMap<string, string>,
+  actorResolver: ActorResolver,
 ): preHandlerHookHandler {
   return async (request, reply) => {
     const header = request.headers.authorization;
@@ -40,16 +40,16 @@ export function makeAuthenticate(
       return;
     }
 
-    const tenantId = tenantByUser.get(session.userId);
-    if (!tenantId) {
+    const actor = await actorResolver.resolveActor(session);
+    if (!actor) {
       unauthorized(request, reply);
       return;
     }
 
     request.actor = {
-      userId: session.userId,
-      tenantId,
+      ...actor,
       correlationId: request.correlationId,
+      mfaSatisfied: session.mfaSatisfied,
     };
   };
 }

@@ -13,6 +13,7 @@ export default [
       '**/dist/**',
       '**/coverage/**',
       '**/node_modules/**',
+      '**/.vercel/**',
       '**/playwright-report/**',
       '**/test-results/**',
       'docs/**',

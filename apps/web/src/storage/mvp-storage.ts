@@ -26,6 +26,7 @@ const CLIENTS_KEY = 'caredesk.mvp.clients.v1';
 const MIGRATION_REDIRECT_KEY = 'caredesk.mvp.migration-redirect.v1';
 const CLIENT_KEY_SEPARATOR = '.client.';
 export const MVP_PROFILE_CHANGED = 'caredesk:mvp-profile-changed';
+const MVP_STORAGE_PREFIX = 'caredesk.mvp.';
 
 export interface MvpClient {
   id: string;
@@ -371,4 +372,36 @@ export function readMvpTasks(): MvpTask[] {
 
 export function saveMvpTasks(tasks: MvpTask[]): void {
   saveList(TASKS_STORAGE_NAME, tasks);
+}
+
+export interface MvpWorkspaceSnapshot {
+  schemaVersion: 1;
+  entries: Record<string, string>;
+}
+
+/** Captures only CareDesk business data; UI preferences remain device-local. */
+export function captureMvpWorkspace(): MvpWorkspaceSnapshot {
+  if (!isBrowser()) return { schemaVersion: 1, entries: {} };
+  const entries = Object.fromEntries(
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
+      .map((key) => [key, window.localStorage.getItem(key) ?? '']),
+  );
+  return { schemaVersion: 1, entries };
+}
+
+/** Replaces all local business data so accounts never share a browser cache. */
+export function replaceMvpWorkspace(snapshot: MvpWorkspaceSnapshot): void {
+  if (!isBrowser()) return;
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
+    .forEach((key) => window.localStorage.removeItem(key));
+  Object.entries(snapshot.entries).forEach(([key, value]) => {
+    if (key.startsWith(MVP_STORAGE_PREFIX)) window.localStorage.setItem(key, value);
+  });
+  window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+}
+
+export function clearMvpWorkspace(): void {
+  replaceMvpWorkspace({ schemaVersion: 1, entries: {} });
 }

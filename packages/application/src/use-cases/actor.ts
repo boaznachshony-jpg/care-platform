@@ -9,6 +9,8 @@ export interface Actor {
   userId: string;
   tenantId: string;
   correlationId: string;
+  /** Comes from the verified session, never from a request body or header. */
+  mfaSatisfied?: boolean;
 }
 
 export class AuthorizationError extends Error {

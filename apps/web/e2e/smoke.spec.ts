@@ -2,7 +2,7 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 });
@@ -130,10 +130,55 @@ test('mobile controls remain readable and touch friendly', async ({ page }) => {
   expect(box?.height).toBeGreaterThanOrEqual(48);
 });
 
+test('mobile layouts stay symmetrical at the largest text size', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => localStorage.setItem('caredesk.ui.font-scale.v1', '1.3'));
+  await page.goto('/app');
+  const clientHome = page.url();
+  const routes = [
+    '',
+    '/tasks',
+    '/employee',
+    '/trust',
+    '/glossary',
+    '/documents',
+    '/timeline',
+    '/payroll',
+    '/settings',
+  ];
+
+  for (const route of routes) {
+    await page.goto(`${clientHome}${route}`);
+    const layout = await page.evaluate(() => {
+      const controls = Array.from(
+        document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+          "input:not([type='checkbox']):not([type='radio']):not([type='file']), select",
+        ),
+      ).map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { height: Math.round(rect.height), left: rect.left, right: rect.right };
+      });
+      return {
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        controls,
+      };
+    });
+
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
+    for (const control of layout.controls) {
+      expect(control.height).toBe(60);
+      expect(control.left).toBeGreaterThanOrEqual(0);
+      expect(control.right).toBeLessThanOrEqual(layout.clientWidth);
+    }
+  }
+});
+
 test('mobile navigation keeps payroll accessible', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page.getByRole('navigation', { name: 'ניווט תחתון' })).toContainText('שכר');
   await page
     .getByRole('navigation', { name: 'ניווט תחתון' })
@@ -144,10 +189,11 @@ test('mobile navigation keeps payroll accessible', async ({ page }) => {
 });
 
 const productRoutes = [
-  ['/', 'שלום בועז בדיקה'],
+  ['/app', 'שלום בועז בדיקה'],
   ['/tasks', 'מה צריך לבצע'],
   ['/employee', 'Caregiver Test'],
   ['/trust', 'מסרים לבניית אמון'],
+  ['/glossary', 'מושגים חשובים'],
   ['/documents', 'כל המסמכים במקום אחד'],
   ['/timeline', 'המועדים הבאים'],
   ['/payroll', 'הכנת שכר חודשי'],
@@ -167,7 +213,7 @@ test('connects every primary screen through visible navigation and action links'
   page,
 }, testInfo) => {
   await seedCompletedProfile(page);
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page).toHaveURL(/\/clients\/[^/]+$/);
   const clientHome = page.url();
 
@@ -190,6 +236,7 @@ test('connects every primary screen through visible navigation and action links'
     const moreConnections = [
       ['פרטי המטפל', '/employee', 'Caregiver Test'],
       ['מסרים לבניית אמון', '/trust', 'מסרים לבניית אמון'],
+      ['מושגים חשובים', '/glossary', 'מושגים חשובים'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
     ] as const;
@@ -207,6 +254,7 @@ test('connects every primary screen through visible navigation and action links'
     const connections = [
       ['משימות', '/tasks', 'מה צריך לבצע'],
       ['עובד', '/employee', 'Caregiver Test'],
+      ['מושגים', '/glossary', 'מושגים חשובים'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['שכר', '/payroll', 'הכנת שכר חודשי'],
@@ -228,6 +276,20 @@ test('connects every primary screen through visible navigation and action links'
   await expect(page).toHaveURL(/\/trust$/);
   await page.getByRole('link', { name: 'לפרטי המטפל' }).click();
   await expect(page).toHaveURL(/\/employee$/);
+});
+
+test('connects trust tips and the general glossary in both directions', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/trust');
+  await page.getByRole('link', { name: 'למושגים חשובים' }).click();
+  await expect(page).toHaveURL(/\/glossary$/);
+  await expect(page.getByRole('heading', { name: 'מעסיק' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מטפל או מטפלת' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מורשה', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מורשה נוסף' })).toBeVisible();
+  await expect(page.getByText(/אינה מעניקה הרשאת כניסה/)).toBeVisible();
+  await page.getByRole('link', { name: 'לטיפים לבניית אמון' }).click();
+  await expect(page).toHaveURL(/\/trust$/);
 });
 
 test('creates, persists, completes and restores a task', async ({ page }) => {
@@ -297,11 +359,11 @@ test('shows the quarterly national insurance payment window and deadline', async
 
 test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
   await seedCompletedProfile(page);
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
-  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+  await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
   await page.reload();
-  await expect(page.locator('.app-frame')).toHaveCSS('zoom', '1.15');
+  await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
 });
 
 test('notification bell opens the list of open tasks', async ({ page }) => {
@@ -321,7 +383,7 @@ test('notification bell opens the list of open tasks', async ({ page }) => {
       ]),
     );
   });
-  await page.goto('/');
+  await page.goto('/app');
 
   await page
     .getByRole('link', {

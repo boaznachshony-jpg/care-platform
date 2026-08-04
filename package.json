@@ -13,6 +13,8 @@
     "dev:api": "pnpm --filter @caredesk/api dev",
     "db:migrate": "node --env-file=.env.local --import tsx packages/db/src/cli.ts",
     "db:provision-app-role": "node --env-file=.env.local --import tsx packages/db/src/provision-app-role.ts",
+    "pilot:provision-account": "node --env-file=.env.local --import tsx packages/db/src/provision-pilot-account.ts",
+    "billing:activate-subscription": "node --env-file=.env.local --import tsx packages/db/src/activate-product-subscription.ts",
     "db:rls-test": "node --env-file=.env.local --import tsx packages/db/src/rls-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -21,7 +23,7 @@
     "test": "pnpm -r --if-present test",
     "test:a11y": "pnpm --filter @caredesk/web test:a11y",
     "build": "pnpm -r --if-present build",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

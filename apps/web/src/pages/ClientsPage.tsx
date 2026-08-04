@@ -1,6 +1,8 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/auth-context.js';
 import { clientPath } from '../hooks/use-client-path.js';
 import {
   createMvpClient,
@@ -25,6 +27,8 @@ function downloadClient(client: MvpClient): void {
 
 export function ClientsPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const auth = useAuth();
   const [clients, setClients] = useState(readMvpClients);
   const [migrationRedirect] = useState(consumeMvpMigrationRedirect);
 
@@ -68,9 +72,19 @@ export function ClientsPage() {
           <h1>הלקוחות שלי</h1>
           <p>כל לקוח נשמר בנפרד ורק בדפדפן הזה. בחרו רשומה קיימת או התחילו חדשה.</p>
         </div>
-        <button className="primary-button clients-add-button" type="button" onClick={addClient}>
-          ＋ הוספת לקוח חדש
-        </button>
+        <div className="clients-hero-actions">
+          <button className="secondary-button" type="button" onClick={() => navigate('/family')}>
+            👥 {t('familyAccess.eyebrow')}
+          </button>
+          {auth.enabled ? (
+            <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
+              {t('auth.signOut')}
+            </button>
+          ) : null}
+          <button className="primary-button clients-add-button" type="button" onClick={addClient}>
+            ＋ הוספת לקוח חדש
+          </button>
+        </div>
       </header>
 
       {clients.length === 0 ? (

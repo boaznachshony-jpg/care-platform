@@ -16,5 +16,10 @@ describe('deployment environment', () => {
 
   it('keeps local development explicit', () => {
     expect(getDeploymentEnvironment('localhost')).toBe('local');
+    expect(getDeploymentEnvironment('127.0.0.1')).toBe('local');
+  });
+
+  it('fails unknown and future custom domains into production mode', () => {
+    expect(getDeploymentEnvironment('app.caredesk.example')).toBe('production');
   });
 });

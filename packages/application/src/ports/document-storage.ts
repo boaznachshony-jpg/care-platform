@@ -12,4 +12,5 @@ export interface PutObjectInput {
 export interface DocumentStorage {
   putObject(input: PutObjectInput): Promise<{ storageKey: string }>;
   getSignedUrl(storageKey: string, ttlSeconds: number): Promise<string>;
+  deleteObject(storageKey: string): Promise<void>;
 }

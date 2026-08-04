@@ -37,7 +37,7 @@ function toResponse(graph: EmploymentCaseGraph): EmploymentCaseResponse {
 }
 
 export function registerCaseRoutes(app: FastifyInstance, container: Container): void {
-  const authenticate = makeAuthenticate(container.auth, container.tenantByUser);
+  const authenticate = makeAuthenticate(container.auth, container.actorResolver);
 
   app.post('/cases', { preHandler: authenticate }, async (request, reply) => {
     const actor = request.actor;

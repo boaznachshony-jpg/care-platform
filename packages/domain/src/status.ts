@@ -72,6 +72,18 @@ export const PAYMENT_RECORD_STATUSES = [
 ] as const;
 export type PaymentRecordStatus = (typeof PAYMENT_RECORD_STATUSES)[number];
 
+/** Lifecycle of the CareDesk product subscription (not caregiver payroll). */
+export const PRODUCT_SUBSCRIPTION_STATUSES = [
+  'sponsored',
+  'payment_method_pending',
+  'payment_method_ready',
+  'active',
+  'past_due',
+  'cancelled',
+] as const;
+export type ProductSubscriptionStatus = (typeof PRODUCT_SUBSCRIPTION_STATUSES)[number];
+export const PRODUCT_BILLING_TERMS_VERSION = '2026-08-04';
+
 export const RULE_VERSION_STATUSES = [
   'draft',
   'under_review',
@@ -101,6 +113,9 @@ export const SENSITIVITY_CLASSES = [
   'care_sensitive',
 ] as const;
 export type SensitivityClass = (typeof SENSITIVITY_CLASSES)[number];
+
+/** Tenant-wide family access roles used by the closed pilot. */
+export type FamilyAccessRole = 'owner' | 'manager' | 'viewer';
 
 export const RACI_ROLES = ['responsible', 'accountable', 'consulted', 'informed'] as const;
 export type RaciRole = (typeof RACI_ROLES)[number];

@@ -65,6 +65,34 @@ describe('authorizeOrThrow', () => {
     expect(deps.audit.events[0]?.reason).toContain('membership');
   });
 
+  it('denies a permitted role when its membership requires an AAL2 session', async () => {
+    const authorization = new MembershipAuthorizationService(ROLE_PERMISSIONS);
+    authorization.seedMembership({
+      ...OWNER,
+      role: 'owner',
+      status: 'active',
+      mfaRequired: true,
+    });
+    const audit = new InMemoryAuditService();
+
+    await expect(
+      authorizeOrThrow(
+        { authorization, audit, clock: CLOCK },
+        { ...OWNER, mfaSatisfied: false },
+        { resourceType: 'task', action: 'create' },
+      ),
+    ).rejects.toThrow(AuthorizationError);
+    expect(audit.events[0]?.reason).toContain('Multi-factor');
+
+    await expect(
+      authorizeOrThrow(
+        { authorization, audit, clock: CLOCK },
+        { ...OWNER, mfaSatisfied: true },
+        { resourceType: 'task', action: 'create' },
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   it('names the specific resource when one is known, else falls back to the case', async () => {
     const deps = buildDeps();
 

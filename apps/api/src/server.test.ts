@@ -10,6 +10,22 @@ describe('apps/api server', () => {
     expect(response.json()).toMatchObject({ status: 'ok', service: '@caredesk/api' });
   });
 
+  it('reports development ready but fails closed for an unconfigured production deployment', async () => {
+    const development = buildServer(loadEnv({}));
+    expect((await development.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200);
+
+    const production = buildServer(loadEnv({ NODE_ENV: 'production' }));
+    const response = await production.inject({ method: 'GET', url: '/ready' });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().reasons).toEqual(
+      expect.arrayContaining([
+        'DATABASE_URL is not configured',
+        'Supabase authentication is not configured',
+        'Private document storage is not configured',
+      ]),
+    );
+  });
+
   it('echoes a client-supplied correlation id and generates one otherwise', async () => {
     const app = buildServer(loadEnv({}));
 
