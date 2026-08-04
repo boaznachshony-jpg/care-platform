@@ -76,9 +76,14 @@ export function TrustMessagesPage() {
             התאימו תמיד את הניסוח לאדם ולהעדפותיו.
           </p>
         </div>
-        <Link className="secondary-button" to={path('/employee')}>
-          לפרטי המטפל
-        </Link>
+        <div className="page-header-actions">
+          <Link className="secondary-button" to={path('/glossary')}>
+            למושגים חשובים
+          </Link>
+          <Link className="secondary-button" to={path('/employee')}>
+            לפרטי המטפל
+          </Link>
+        </div>
       </header>
 
       {!profile.caregiverCountry || !profile.caregiverLanguage ? (

@@ -21,7 +21,8 @@ const nav = [
   ['/', '⌂', 'ראשי'],
   ['/tasks', '✓', 'משימות'],
   ['/employee', '♙', 'עובד'],
-  ['/trust', '♥', 'אמון'],
+  ['/trust', '♥', 'טיפים'],
+  ['/glossary', 'ⓘ', 'מושגים'],
   ['/documents', '▣', 'מסמכים'],
   ['/timeline', '◷', 'ציר זמן'],
   ['/payroll', '₪', 'שכר'],
@@ -37,6 +38,7 @@ const mobileNav = [
 const mobileMoreNav = [
   ['/employee', '♙', 'פרטי המטפל'],
   ['/trust', '♥', 'מסרים לבניית אמון'],
+  ['/glossary', 'ⓘ', 'מושגים חשובים'],
   ['/timeline', '◷', 'ציר זמן'],
   ['/settings', '⚙', 'הגדרות'],
 ] as const;

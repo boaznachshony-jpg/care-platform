@@ -199,6 +199,39 @@
     "savedContact": "Saved contact",
     "contactDisclaimer": "The representative is a saved contact only. They do not have an account or user permissions in this version."
   },
+  "glossary": {
+    "eyebrow": "Simple, clear information",
+    "title": "Important terms",
+    "intro": "A short explanation of the people and roles that appear in the application.",
+    "toTips": "Trust-building tips",
+    "listLabel": "Glossary of terms",
+    "important": "Important",
+    "disclaimer": "These explanations are intended for orientation in the application and do not replace legal advice or a formal determination of authority.",
+    "terms": {
+      "employer": {
+        "title": "Employer",
+        "summary": "The person who employs the caregiver and is responsible for managing the employment.",
+        "details": "The employer is responsible for matters including the employment agreement, salary and rights, document retention, and required reports and payments. The employer may be the care recipient or another person managing the employment on their behalf."
+      },
+      "caregiver": {
+        "title": "Caregiver",
+        "summary": "The employee who provides assistance and care to the care recipient as part of an employment relationship.",
+        "details": "The caregiver has rights and obligations under the employment terms and applicable law. The application stores their employment details, documents, tasks, and payroll calculations."
+      },
+      "representative": {
+        "title": "Authorized representative",
+        "summary": "The main contact the employer chose to save for assistance and coordination.",
+        "details": "The representative may be a family member or another helper who receives updates or assists with ongoing management, as decided by the employer.",
+        "note": "In the current version this is a saved contact only. Saving the contact does not grant account access, signing authority, or legal authority."
+      },
+      "additionalRepresentative": {
+        "title": "Additional representative",
+        "summary": "An additional contact who can assist, act as backup, or handle a particular matter.",
+        "details": "An additional representative can be saved when more than one person assists the employer. Their responsibilities should be clearly divided to prevent duplicated or missed tasks.",
+        "note": "The additional representative is also a contact only unless separate, explicit authorization has been granted outside the application."
+      }
+    }
+  },
   "settings": {
     "eyebrow": "Settings",
     "title": "Details and preferences",

@@ -141,6 +141,7 @@ test('mobile layouts stay symmetrical at the largest text size', async ({ page }
     '/tasks',
     '/employee',
     '/trust',
+    '/glossary',
     '/documents',
     '/timeline',
     '/payroll',
@@ -192,6 +193,7 @@ const productRoutes = [
   ['/tasks', 'מה צריך לבצע'],
   ['/employee', 'Caregiver Test'],
   ['/trust', 'מסרים לבניית אמון'],
+  ['/glossary', 'מושגים חשובים'],
   ['/documents', 'כל המסמכים במקום אחד'],
   ['/timeline', 'המועדים הבאים'],
   ['/payroll', 'הכנת שכר חודשי'],
@@ -234,6 +236,7 @@ test('connects every primary screen through visible navigation and action links'
     const moreConnections = [
       ['פרטי המטפל', '/employee', 'Caregiver Test'],
       ['מסרים לבניית אמון', '/trust', 'מסרים לבניית אמון'],
+      ['מושגים חשובים', '/glossary', 'מושגים חשובים'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
     ] as const;
@@ -251,6 +254,7 @@ test('connects every primary screen through visible navigation and action links'
     const connections = [
       ['משימות', '/tasks', 'מה צריך לבצע'],
       ['עובד', '/employee', 'Caregiver Test'],
+      ['מושגים', '/glossary', 'מושגים חשובים'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['שכר', '/payroll', 'הכנת שכר חודשי'],
@@ -272,6 +276,20 @@ test('connects every primary screen through visible navigation and action links'
   await expect(page).toHaveURL(/\/trust$/);
   await page.getByRole('link', { name: 'לפרטי המטפל' }).click();
   await expect(page).toHaveURL(/\/employee$/);
+});
+
+test('connects trust tips and the general glossary in both directions', async ({ page }) => {
+  await seedCompletedProfile(page);
+  await page.goto('/trust');
+  await page.getByRole('link', { name: 'למושגים חשובים' }).click();
+  await expect(page).toHaveURL(/\/glossary$/);
+  await expect(page.getByRole('heading', { name: 'מעסיק' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מטפל או מטפלת' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מורשה', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מורשה נוסף' })).toBeVisible();
+  await expect(page.getByText(/אינה מעניקה הרשאת כניסה/)).toBeVisible();
+  await page.getByRole('link', { name: 'לטיפים לבניית אמון' }).click();
+  await expect(page).toHaveURL(/\/trust$/);
 });
 
 test('creates, persists, completes and restores a task', async ({ page }) => {

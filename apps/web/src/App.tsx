@@ -11,6 +11,7 @@ import { PayrollPage } from './pages/PayrollPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { TrustMessagesPage } from './pages/TrustMessagesPage.js';
+import { GlossaryPage } from './pages/GlossaryPage.js';
 import { ClientsPage } from './pages/ClientsPage.js';
 import { useMvpProfile } from './hooks/use-mvp-profile.js';
 import { useClientPath } from './hooks/use-client-path.js';
@@ -96,6 +97,14 @@ export function App() {
             }
           />
           <Route
+            path="/clients/:clientId/glossary"
+            element={
+              <ClientApp>
+                <GlossaryPage />
+              </ClientApp>
+            }
+          />
+          <Route
             path="/clients/:clientId/documents"
             element={
               <ClientApp>
@@ -156,6 +165,14 @@ export function App() {
             element={
               <ClientApp>
                 <TrustMessagesPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/glossary"
+            element={
+              <ClientApp>
+                <GlossaryPage />
               </ClientApp>
             }
           />
