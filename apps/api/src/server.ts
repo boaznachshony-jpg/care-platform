@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import Fastify from 'fastify';
 import { buildServer } from './create-server.js';
 import { loadEnv } from './env.js';
 
@@ -9,7 +10,7 @@ export { buildCorsOrigin, buildServer } from './create-server.js';
  * Keep it as a thin adapter around the same server factory used by local runs
  * and tests so deployed routes cannot drift from the verified application.
  */
-export const vercelApp = buildServer(loadEnv());
+export const vercelApp: ReturnType<typeof Fastify> = buildServer(loadEnv());
 let ready: ReturnType<typeof vercelApp.ready> | undefined;
 
 export default async function handler(
