@@ -37,6 +37,17 @@ describe('MVP local storage', () => {
     expect(readMvpProfile().baseSalary).toBe(7000);
   });
 
+  it('encrypts sensitive business values in the device cache', () => {
+    const employerName = 'Sensitive Employer Marker';
+    saveMvpProfile({ ...emptyMvpProfile, employerName, baseSalary: 7000 });
+
+    const stored = localStorage.getItem('caredesk.mvp.profile.v1');
+    expect(stored).toMatch(/^caredesk-encrypted-v1:/);
+    expect(stored).not.toContain(employerName);
+    expect(stored).not.toContain('7000');
+    expect(readMvpProfile()).toMatchObject({ employerName, baseSalary: 7000 });
+  });
+
   it('persists documents and payroll records', () => {
     saveMvpDocuments([
       {

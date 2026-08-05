@@ -62,15 +62,9 @@ test.describe('persistent profile and reminder preferences', () => {
     await expect(quietStart).toHaveValue('22:30');
     await expect(quietEnd).toHaveValue('07:15');
 
-    const stored = await page.evaluate(() =>
-      JSON.parse(localStorage.getItem('caredesk.mvp.profile.v1') ?? '{}'),
-    );
-    expect(stored).toMatchObject({
-      employerName: 'מעסיק מעודכן',
-      reminderLeadDays: 30,
-      quietHoursStart: '22:30',
-      quietHoursEnd: '07:15',
-    });
+    const stored = await page.evaluate(() => localStorage.getItem('caredesk.mvp.profile.v1'));
+    expect(stored).toMatch(/^caredesk-encrypted-v1:/);
+    expect(stored).not.toContain('מעסיק מעודכן');
   });
 
   test('master switch disables reminder timing and persists both states', async ({ page }) => {
