@@ -146,7 +146,6 @@ export function SettingsPage() {
             {t('profile.licensedBureauName')}
             <input
               value={draft.licensedBureauName}
-              required
               onChange={(event) => setDraft({ ...draft, licensedBureauName: event.target.value })}
             />
           </label>
@@ -155,7 +154,6 @@ export function SettingsPage() {
             <input
               dir="ltr"
               value={draft.licensedBureauRegistrationNumber}
-              required
               onChange={(event) =>
                 setDraft({ ...draft, licensedBureauRegistrationNumber: event.target.value })
               }
@@ -166,7 +164,6 @@ export function SettingsPage() {
               {t('profile.licensedBureauContactName')}
               <input
                 value={draft.licensedBureauContactName}
-                required
                 onChange={(event) =>
                   setDraft({ ...draft, licensedBureauContactName: event.target.value })
                 }
@@ -178,7 +175,6 @@ export function SettingsPage() {
                 dir="ltr"
                 type="tel"
                 value={draft.licensedBureauContactPhone}
-                required
                 onChange={(event) =>
                   setDraft({ ...draft, licensedBureauContactPhone: event.target.value })
                 }
@@ -191,7 +187,6 @@ export function SettingsPage() {
               dir="ltr"
               type="email"
               value={draft.licensedBureauContactEmail}
-              required
               onChange={(event) =>
                 setDraft({ ...draft, licensedBureauContactEmail: event.target.value })
               }
