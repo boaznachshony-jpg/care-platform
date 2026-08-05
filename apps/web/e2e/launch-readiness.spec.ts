@@ -337,17 +337,29 @@ test.describe('launch readiness interactions', () => {
     await page.getByRole('link', { name: 'פתיחת המסמכים' }).click();
     await expect(page).toHaveURL(/\/documents$/);
 
-    const timelineTargets = ['/documents', '/payroll', '/tasks', '/', '/tasks'];
-    for (let index = 0; index < timelineTargets.length; index += 1) {
+    const timelineTargets = [
+      { title: 'בדיקת ביטוח רפואי', path: '/documents' },
+      { title: 'חידוש רישיון ההעסקה', path: '/documents' },
+      { title: 'תשלום אגרת העסקה', path: '/tasks' },
+      { title: 'הכנת שכר יולי', path: '/payroll' },
+      { title: 'יום חופשה מתוכנן', path: '/tasks' },
+      { title: 'סיכום חודש', path: '/' },
+    ];
+    for (const { title, path: expected } of timelineTargets) {
       await page.goto(`${clientHome}/timeline`);
-      await page.getByRole('link', { name: 'פרטים' }).nth(index).click();
-      const expected = timelineTargets[index];
+      const eventCard = page.locator('article').filter({ hasText: title });
+      await eventCard.getByRole('link', { name: 'פרטים' }).click();
       if (expected === '/') {
         await expect(page).toHaveURL(clientHome);
       } else {
         await expect(page).toHaveURL(new RegExp(`${expected}$`));
       }
     }
+
+    await page.goto(`${clientHome}/timeline`);
+    const nationalInsuranceCard = page.locator('article').filter({ hasText: 'ביטוח לאומי' });
+    await nationalInsuranceCard.getByRole('link', { name: 'פרטים' }).click();
+    await expect(page).toHaveURL(/\/tasks$/);
   });
 
   test('unfinished internal API routes cannot expose a broken screen', async ({ page }) => {
