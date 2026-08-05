@@ -1,11 +1,42 @@
-/* eslint-disable no-restricted-syntax */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import type { MvpProfile } from '../storage/mvp-storage.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
+
+type DetailFieldKey =
+  | 'employerName'
+  | 'employerIdNumber'
+  | 'employerPhone'
+  | 'recipientName'
+  | 'caregiverName'
+  | 'caregiverCountry'
+  | 'caregiverLanguage'
+  | 'employmentStartDate'
+  | 'representativeName'
+  | 'representativePhone';
+
+type DetailFieldType = 'text' | 'tel' | 'date' | 'israeli-id' | 'country' | 'language';
+
+interface DetailField {
+  key: DetailFieldKey;
+  label: string;
+  type: DetailFieldType;
+}
+
+export function employmentSetupCompletedCount(profile: MvpProfile): number {
+  return [
+    profile.employmentAgreementConfirmed,
+    profile.medicalInsuranceConfirmed,
+    (profile.baseSalary ?? 0) > 0,
+    (profile.saturdayRate ?? 0) > 0,
+    Boolean(profile.licenseRenewalDate),
+    Boolean(profile.employmentFeeDueDate),
+  ].filter(Boolean).length;
+}
 
 export function OnboardingPage() {
   const { t } = useTranslation();
@@ -14,45 +45,57 @@ export function OnboardingPage() {
   const [profile, setProfile] = useMvpProfile();
   const [draft, setDraft] = useState(profile);
   const [step, setStep] = useState(0);
+  const isFirstRun = !profile.onboardingCompleted;
 
-  const sections = [
-    {
-      title: t('onboarding.people'),
-      fields: [
-        ['employerName', t('profile.employerName'), 'text'],
-        ['employerIdNumber', 'מספר תעודת זהות', 'israeli-id'],
-        ['employerPhone', t('profile.phone'), 'tel'],
-        ['recipientName', t('profile.recipientName'), 'text'],
-      ],
-    },
-    {
-      title: t('onboarding.employment'),
-      fields: [
-        ['caregiverName', t('profile.caregiverName'), 'text'],
-        ['caregiverCountry', 'ארץ מוצא', 'country'],
-        ['caregiverLanguage', 'שפה מועדפת', 'language'],
-        ['employmentStartDate', t('profile.startDate'), 'date'],
-      ],
-    },
-    {
-      title: t('onboarding.support'),
-      fields: [
-        ['representativeName', t('profile.representativeName'), 'text'],
-        ['representativePhone', t('profile.phone'), 'tel'],
-      ],
-    },
-  ] as const;
+  const sections = useMemo(
+    () => [
+      {
+        title: t('onboarding.people'),
+        fields: [
+          { key: 'employerName', label: t('profile.employerName'), type: 'text' },
+          { key: 'employerIdNumber', label: t('profile.employerIdNumber'), type: 'israeli-id' },
+          { key: 'employerPhone', label: t('profile.phone'), type: 'tel' },
+          { key: 'recipientName', label: t('profile.recipientName'), type: 'text' },
+        ] satisfies DetailField[],
+      },
+      {
+        title: t('onboarding.employment'),
+        fields: [
+          { key: 'caregiverName', label: t('profile.caregiverName'), type: 'text' },
+          { key: 'caregiverCountry', label: t('profile.caregiverCountry'), type: 'country' },
+          { key: 'caregiverLanguage', label: t('profile.caregiverLanguage'), type: 'language' },
+          { key: 'employmentStartDate', label: t('profile.startDate'), type: 'date' },
+        ] satisfies DetailField[],
+      },
+      {
+        title: t('onboarding.support'),
+        fields: [
+          { key: 'representativeName', label: t('profile.representativeName'), type: 'text' },
+          { key: 'representativePhone', label: t('profile.phone'), type: 'tel' },
+        ] satisfies DetailField[],
+      },
+    ],
+    [t],
+  );
 
-  const current = sections[step] ?? sections[0];
-  const isValid = current.fields.every(
-    ([key, , type]) =>
+  const checklistComplete = employmentSetupCompletedCount(draft);
+  const totalSteps = sections.length + 1;
+  const checklistStep = step === sections.length;
+  const current = sections[Math.min(step, sections.length - 1)]!;
+  const detailsValid = current.fields.every(
+    ({ key, type }) =>
       draft[key].trim().length > 0 &&
       (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
   );
+  const isValid = checklistStep ? checklistComplete === 6 : detailsValid;
 
   function complete() {
-    setProfile({ ...draft, onboardingCompleted: true });
-    navigate(path('/'));
+    setProfile({
+      ...draft,
+      salaryEffectiveDate: draft.salaryEffectiveDate || draft.employmentStartDate,
+      onboardingCompleted: true,
+    });
+    navigate(isFirstRun ? '/billing?from=onboarding' : path('/'));
   }
 
   return (
@@ -64,100 +107,201 @@ export function OnboardingPage() {
           <p>{t('onboarding.intro')}</p>
         </div>
         <span className="progress-label">
-          {t('onboarding.progress', { current: step + 1, total: sections.length })}
+          {t('onboarding.progress', { current: step + 1, total: totalSteps })}
         </span>
       </header>
+
+      <aside className="onboarding-checklist-summary" aria-live="polite">
+        <span aria-hidden="true">✓</span>
+        <div>
+          <strong>{t('onboarding.checklist')}</strong>
+          <small>
+            {t('onboarding.checklistProgress', { completed: checklistComplete, total: 6 })}
+          </small>
+        </div>
+      </aside>
+
       <section className="wizard-card" aria-labelledby="onboarding-step">
         <div className="onboarding-progress" aria-hidden="true">
-          {sections.map((section, index) => (
-            <span key={section.title} className={index <= step ? 'active' : ''} />
+          {Array.from({ length: totalSteps }, (_, index) => (
+            <span key={index} className={index <= step ? 'active' : ''} />
           ))}
         </div>
         <form
           className="wizard-content readable-form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (step === sections.length - 1) complete();
+            if (checklistStep) complete();
             else setStep((value) => value + 1);
           }}
         >
-          <h2 id="onboarding-step">{current.title}</h2>
-          <p>{t('onboarding.stepHint')}</p>
-          {current.fields.map(([key, label, type]) => (
-            <label key={key}>
-              {label}
-              {type === 'country' || type === 'language' ? (
-                <select
-                  value={draft[key]}
+          <h2 id="onboarding-step">{checklistStep ? t('onboarding.checklist') : current.title}</h2>
+          <p>{t(checklistStep ? 'onboarding.checklistIntro' : 'onboarding.stepHint')}</p>
+
+          {checklistStep ? (
+            <div className="setup-checklist">
+              <label className={draft.employmentAgreementConfirmed ? 'complete' : ''}>
+                <input
+                  type="checkbox"
+                  checked={draft.employmentAgreementConfirmed}
+                  onChange={(event) =>
+                    setDraft({ ...draft, employmentAgreementConfirmed: event.target.checked })
+                  }
+                />
+                <span>{t('onboarding.agreementConfirmed')}</span>
+              </label>
+              <label className={draft.medicalInsuranceConfirmed ? 'complete' : ''}>
+                <input
+                  type="checkbox"
+                  checked={draft.medicalInsuranceConfirmed}
+                  onChange={(event) =>
+                    setDraft({ ...draft, medicalInsuranceConfirmed: event.target.checked })
+                  }
+                />
+                <span>{t('onboarding.medicalInsuranceConfirmed')}</span>
+              </label>
+              <label>
+                {t('onboarding.baseSalary')}
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  step="0.01"
                   required
-                  onChange={(event) => {
-                    const value = event.target.value;
+                  value={draft.baseSalary ?? ''}
+                  onChange={(event) =>
                     setDraft({
                       ...draft,
-                      [key]: value,
-                      ...(type === 'country' && !draft.caregiverLanguage
-                        ? { caregiverLanguage: suggestedLanguage(value) }
-                        : {}),
-                    });
-                  }}
-                >
-                  <option value="">בחירה</option>
-                  {(type === 'country' ? caregiverCountries : caregiverLanguages).map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : type === 'israeli-id' ? (
-                <>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={draft.employerIdNumber}
-                    required
-                    dir="ltr"
-                    aria-invalid={
-                      draft.employerIdNumber.length > 0 && !isValidIsraeliId(draft.employerIdNumber)
-                    }
-                    aria-describedby={
-                      draft.employerIdNumber.length > 0 && !isValidIsraeliId(draft.employerIdNumber)
-                        ? 'employer-id-help employer-id-error'
-                        : 'employer-id-help'
-                    }
-                    onBlur={() => {
-                      if (isValidIsraeliId(draft.employerIdNumber)) {
-                        setDraft({
-                          ...draft,
-                          employerIdNumber: normalizeIsraeliId(draft.employerIdNumber),
-                        });
-                      }
-                    }}
-                    onChange={(event) =>
-                      setDraft({ ...draft, employerIdNumber: event.target.value })
-                    }
-                  />
-                  <small id="employer-id-help">
-                    נדרש לצורך דיווח לביטוח לאומי בלבד. ניתן להזין ספרות, רווחים או מקפים.
-                  </small>
-                  {draft.employerIdNumber.length > 0 &&
-                  !isValidIsraeliId(draft.employerIdNumber) ? (
-                    <span id="employer-id-error" className="field-error" role="alert">
-                      מספר תעודת הזהות אינו תקין. יש לבדוק את 9 הספרות ואת ספרת הביקורת.
-                    </span>
-                  ) : null}
-                </>
-              ) : (
-                <input
-                  type={type}
-                  value={draft[key]}
-                  required
-                  dir={type === 'tel' || type === 'date' ? 'ltr' : undefined}
-                  onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+                      baseSalary: event.target.value ? Number(event.target.value) : null,
+                    })
+                  }
                 />
-              )}
-            </label>
-          ))}
+              </label>
+              <label>
+                {t('onboarding.saturdayRate')}
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  step="0.01"
+                  required
+                  value={draft.saturdayRate ?? ''}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      saturdayRate: event.target.value ? Number(event.target.value) : null,
+                    })
+                  }
+                />
+              </label>
+              <small className="setup-checklist-note">
+                {t('onboarding.salaryEffectiveNote', { date: draft.employmentStartDate })}
+              </small>
+              <label>
+                {t('onboarding.licenseRenewalDate')}
+                <input
+                  type="date"
+                  dir="ltr"
+                  required
+                  value={draft.licenseRenewalDate}
+                  onChange={(event) =>
+                    setDraft({ ...draft, licenseRenewalDate: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t('onboarding.employmentFeeDueDate')}
+                <input
+                  type="date"
+                  dir="ltr"
+                  required
+                  value={draft.employmentFeeDueDate}
+                  onChange={(event) =>
+                    setDraft({ ...draft, employmentFeeDueDate: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+          ) : (
+            current.fields.map(({ key, label, type }) => (
+              <label key={key}>
+                {label}
+                {type === 'country' || type === 'language' ? (
+                  <select
+                    value={draft[key]}
+                    required
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setDraft({
+                        ...draft,
+                        [key]: value,
+                        ...(type === 'country' && !draft.caregiverLanguage
+                          ? { caregiverLanguage: suggestedLanguage(value) }
+                          : {}),
+                      });
+                    }}
+                  >
+                    <option value="">{t('common.select')}</option>
+                    {(type === 'country' ? caregiverCountries : caregiverLanguages).map(
+                      (option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                ) : type === 'israeli-id' ? (
+                  <>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={draft.employerIdNumber}
+                      required
+                      dir="ltr"
+                      aria-invalid={
+                        draft.employerIdNumber.length > 0 &&
+                        !isValidIsraeliId(draft.employerIdNumber)
+                      }
+                      aria-describedby={
+                        draft.employerIdNumber.length > 0 &&
+                        !isValidIsraeliId(draft.employerIdNumber)
+                          ? 'employer-id-help employer-id-error'
+                          : 'employer-id-help'
+                      }
+                      onBlur={() => {
+                        if (isValidIsraeliId(draft.employerIdNumber)) {
+                          setDraft({
+                            ...draft,
+                            employerIdNumber: normalizeIsraeliId(draft.employerIdNumber),
+                          });
+                        }
+                      }}
+                      onChange={(event) =>
+                        setDraft({ ...draft, employerIdNumber: event.target.value })
+                      }
+                    />
+                    <small id="employer-id-help">{t('profile.employerIdHelp')}</small>
+                    {draft.employerIdNumber.length > 0 &&
+                    !isValidIsraeliId(draft.employerIdNumber) ? (
+                      <span id="employer-id-error" className="field-error" role="alert">
+                        {t('profile.employerIdError')}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <input
+                    type={type}
+                    value={draft[key]}
+                    required
+                    dir={type === 'tel' || type === 'date' ? 'ltr' : undefined}
+                    onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+                  />
+                )}
+              </label>
+            ))
+          )}
+
           <div className="wizard-actions">
             <button
               className="secondary-button"
@@ -168,7 +312,7 @@ export function OnboardingPage() {
               {t('common.back')}
             </button>
             <button className="primary-button" type="submit" disabled={!isValid}>
-              {step === sections.length - 1 ? t('onboarding.finish') : t('common.continue')}
+              {checklistStep ? t('onboarding.paymentNext') : t('common.continue')}
             </button>
           </div>
         </form>

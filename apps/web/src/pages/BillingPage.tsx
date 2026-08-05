@@ -31,6 +31,11 @@ export function BillingPage() {
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [onboardingFlow] = useState(
+    () =>
+      searchParams.get('from') === 'onboarding' ||
+      window.sessionStorage.getItem('caredesk.billing-onboarding') === '1',
+  );
 
   const isSponsored = Boolean(plan && plan.effectivePriceAgorot === 0);
   const chargeDate = plan?.nextChargeOn ?? plan?.chargingStartsAt ?? null;
@@ -50,6 +55,12 @@ export function BillingPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (searchParams.get('from') === 'onboarding') {
+      window.sessionStorage.setItem('caredesk.billing-onboarding', '1');
+    }
+  }, [searchParams]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -96,6 +107,13 @@ export function BillingPage() {
           {t('billing.back')}
         </Link>
       </header>
+
+      {onboardingFlow ? (
+        <p className="billing-onboarding-step" role="status">
+          <strong>{t('billing.onboardingStep')}</strong>
+          <span>{t('billing.paymentMethodBody')}</span>
+        </p>
+      ) : null}
 
       {searchParams.get('setup') === 'success' ? (
         <p className="action-notice success" role="status">
@@ -188,6 +206,15 @@ export function BillingPage() {
                   >
                     {t('billing.cancel')}
                   </button>
+                ) : null}
+                {onboardingFlow ? (
+                  <Link
+                    className="primary-button"
+                    to="/app"
+                    onClick={() => window.sessionStorage.removeItem('caredesk.billing-onboarding')}
+                  >
+                    {t('billing.completeSetup')}
+                  </Link>
                 ) : null}
               </>
             ) : plan.canManage ? (
