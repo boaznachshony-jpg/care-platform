@@ -7,7 +7,7 @@ const USER_ID = '20000000-0000-4000-8000-000000000001';
 const UPDATED_AT = '2026-08-04T18:00:00.000Z';
 
 function fakePool(workspaceRows: Array<Record<string, unknown>>) {
-  const query = vi.fn(async (sql: string) => {
+  const query = vi.fn(async (sql: string, _values?: unknown[]) => {
     if (sql.includes('insert into tenant_workspace') || sql.includes('update tenant_workspace')) {
       return { rows: workspaceRows };
     }
@@ -45,9 +45,19 @@ describe('PgWorkspaceRepository.save', () => {
     ).resolves.toMatchObject({ tenantId: TENANT_ID, version: 1 });
 
     const saveSql = db.query.mock.calls[3]?.[0];
+    const saveValues = db.query.mock.calls[3]?.[1];
     expect(saveSql).toContain('insert into tenant_workspace');
+    expect(saveSql).toContain('values ($1, $2, $3::jsonb, 1, $4, $5::timestamptz)');
     expect(saveSql).toContain('on conflict (tenant_id) do nothing');
     expect(saveSql).not.toContain('where $4 = 0');
+    expect(saveSql).not.toContain('$6');
+    expect(saveValues).toEqual([
+      TENANT_ID,
+      1,
+      JSON.stringify({ 'caredesk.mvp.clients.v1': '[]' }),
+      USER_ID,
+      UPDATED_AT,
+    ]);
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('commit');
     expect(db.release).toHaveBeenCalledOnce();
   });

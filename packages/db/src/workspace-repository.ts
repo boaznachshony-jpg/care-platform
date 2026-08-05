@@ -42,23 +42,21 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
 
   async save(input: SaveWorkspaceRecord): Promise<WorkspaceRecord | null> {
     return withTenant(this.pool, input.tenantId, async (client) => {
-      const values = [
-        input.tenantId,
-        input.schemaVersion,
-        JSON.stringify(input.payload),
-        input.expectedVersion,
-        input.updatedBy,
-        input.updatedAt,
-      ];
       const result =
         input.expectedVersion === 0
           ? await client.query<WorkspaceRow>(
               `insert into tenant_workspace
                  (tenant_id, schema_version, payload, version, updated_by, updated_at)
-               values ($1, $2, $3::jsonb, 1, $5, $6::timestamptz)
+               values ($1, $2, $3::jsonb, 1, $4, $5::timestamptz)
                on conflict (tenant_id) do nothing
                returning tenant_id, schema_version, payload, version, updated_at`,
-              values,
+              [
+                input.tenantId,
+                input.schemaVersion,
+                JSON.stringify(input.payload),
+                input.updatedBy,
+                input.updatedAt,
+              ],
             )
           : await client.query<WorkspaceRow>(
               `update tenant_workspace
@@ -69,7 +67,14 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
                       updated_at = $6::timestamptz
                 where tenant_id = $1 and version = $4
                returning tenant_id, schema_version, payload, version, updated_at`,
-              values,
+              [
+                input.tenantId,
+                input.schemaVersion,
+                JSON.stringify(input.payload),
+                input.expectedVersion,
+                input.updatedBy,
+                input.updatedAt,
+              ],
             );
       const row = result.rows[0];
       return row ? toRecord(row) : null;
