@@ -14,7 +14,7 @@ full business schema — starting with the identity/tenancy tables from
 created until ADR-002 is Accepted.
 
 The closed-pilot sequence currently runs through
-`0018_self_service_account_bootstrap.sql`.
+`0019_backfill_self_service_accounts.sql`.
 Applied files are immutable; every later change receives the next number.
 
 ## Running locally
