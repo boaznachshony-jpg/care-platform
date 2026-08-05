@@ -22,7 +22,7 @@ vi.mock('../api/client.js', () => ({
   saveWorkspace: mocks.saveWorkspace,
 }));
 
-import { MVP_PROFILE_CHANGED } from './mvp-storage.js';
+import { captureMvpWorkspace, MVP_PROFILE_CHANGED } from './mvp-storage.js';
 import { startWorkspaceSync, stopWorkspaceSync } from './workspace-sync.js';
 
 describe('workspace sync', () => {
@@ -57,7 +57,7 @@ describe('workspace sync', () => {
 
     await startWorkspaceSync();
 
-    expect(localStorage.getItem('caredesk.mvp.clients.v1')).toBe('[{"id":"remote"}]');
+    expect(captureMvpWorkspace().entries['caredesk.mvp.clients.v1']).toBe('[{"id":"remote"}]');
     // Device-only accessibility preferences are intentionally not server data.
     expect(localStorage.getItem('caredesk.ui.font-scale.v1')).toBe('1.3');
   });

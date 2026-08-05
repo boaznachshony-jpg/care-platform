@@ -1,4 +1,9 @@
 /* eslint-disable no-restricted-syntax */
+import {
+  decryptBusinessStorageValue,
+  encryptBusinessStorageValue,
+} from './business-storage-crypto.js';
+
 export type ReminderLeadDays = 1 | 7 | 14 | 21 | 30;
 
 export interface MvpProfile {
@@ -62,6 +67,15 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
+function readBusinessItem(key: string): string | null {
+  const stored = window.localStorage.getItem(key);
+  return stored === null ? null : decryptBusinessStorageValue(stored);
+}
+
+function writeBusinessItem(key: string, value: string): void {
+  window.localStorage.setItem(key, encryptBusinessStorageValue(value));
+}
+
 export function clientIdFromPath(
   pathname = isBrowser() ? window.location.pathname : '',
 ): string | null {
@@ -76,7 +90,7 @@ function scopedKey(key: string, clientId = clientIdFromPath()): string {
 function readClientsRaw(): MvpClient[] {
   if (!isBrowser()) return [];
   try {
-    const clients = JSON.parse(window.localStorage.getItem(CLIENTS_KEY) ?? '[]') as unknown;
+    const clients = JSON.parse(readBusinessItem(CLIENTS_KEY) ?? '[]') as unknown;
     return Array.isArray(clients) ? (clients as MvpClient[]) : [];
   } catch {
     return [];
@@ -84,7 +98,7 @@ function readClientsRaw(): MvpClient[] {
 }
 
 function saveClients(clients: MvpClient[]): void {
-  window.localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+  writeBusinessItem(CLIENTS_KEY, JSON.stringify(clients));
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
@@ -103,7 +117,7 @@ export function ensureMvpClientMigration(): MvpClient[] {
       PAYROLL_STORAGE_NAME,
       EMPLOYMENT_EXPENSES_STORAGE_NAME,
       TASKS_STORAGE_NAME,
-    ].some((key) => window.localStorage.getItem(key) !== null);
+    ].some((key) => readBusinessItem(key) !== null);
   if (!hasLegacyData) return [];
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -123,17 +137,17 @@ export function ensureMvpClientMigration(): MvpClient[] {
     EMPLOYMENT_EXPENSES_STORAGE_NAME,
     TASKS_STORAGE_NAME,
   ].forEach((key) => {
-    const value = window.localStorage.getItem(key);
-    if (value !== null) window.localStorage.setItem(scopedKey(key, id), value);
+    const value = readBusinessItem(key);
+    if (value !== null) writeBusinessItem(scopedKey(key, id), value);
   });
   saveClients([client]);
-  window.localStorage.setItem(MIGRATION_REDIRECT_KEY, id);
+  writeBusinessItem(MIGRATION_REDIRECT_KEY, id);
   return [client];
 }
 
 export function consumeMvpMigrationRedirect(): string | null {
   if (!isBrowser()) return null;
-  const clientId = window.localStorage.getItem(MIGRATION_REDIRECT_KEY);
+  const clientId = readBusinessItem(MIGRATION_REDIRECT_KEY);
   if (clientId) window.localStorage.removeItem(MIGRATION_REDIRECT_KEY);
   return clientId;
 }
@@ -154,7 +168,7 @@ export function createMvpClient(): MvpClient {
     updatedAt: now,
   };
   saveClients([client, ...readClientsRaw()]);
-  window.localStorage.setItem(scopedKey(STORAGE_KEY, client.id), JSON.stringify(emptyMvpProfile));
+  writeBusinessItem(scopedKey(STORAGE_KEY, client.id), JSON.stringify(emptyMvpProfile));
   return client;
 }
 
@@ -172,7 +186,7 @@ export function resetMvpClient(clientId: string): void {
   Object.keys(window.localStorage)
     .filter((key) => key.endsWith(suffix))
     .forEach((key) => window.localStorage.removeItem(key));
-  window.localStorage.setItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(emptyMvpProfile));
+  writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(emptyMvpProfile));
   if (client) {
     saveClients(
       readClientsRaw().map((item) =>
@@ -197,7 +211,7 @@ export function exportMvpClient(clientId: string): string {
   const data = Object.fromEntries(
     Object.keys(window.localStorage)
       .filter((key) => key.endsWith(suffix))
-      .map((key) => [key.slice(0, -suffix.length), window.localStorage.getItem(key)]),
+      .map((key) => [key.slice(0, -suffix.length), readBusinessItem(key)]),
   );
   return JSON.stringify(
     { version: 1, exportedAt: new Date().toISOString(), client, data },
@@ -210,7 +224,7 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
   if (!isBrowser()) return emptyMvpProfile;
   try {
     const saved = JSON.parse(
-      window.localStorage.getItem(scopedKey(STORAGE_KEY, clientId)) ?? '{}',
+      readBusinessItem(scopedKey(STORAGE_KEY, clientId)) ?? '{}',
     ) as Partial<MvpProfile>;
     return { ...emptyMvpProfile, ...saved };
   } catch {
@@ -225,7 +239,7 @@ export function readMvpProfile(): MvpProfile {
 export function saveMvpProfile(profile: MvpProfile): void {
   if (!isBrowser()) return;
   const clientId = clientIdFromPath();
-  window.localStorage.setItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(profile));
+  writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(profile));
   if (clientId) {
     const now = new Date().toISOString();
     saveClients(
@@ -329,7 +343,7 @@ const TASKS_STORAGE_NAME = 'caredesk.mvp.tasks.v1';
 function readList<T>(key: string): T[] {
   if (!isBrowser()) return [];
   try {
-    const value = JSON.parse(window.localStorage.getItem(scopedKey(key)) ?? '[]') as unknown;
+    const value = JSON.parse(readBusinessItem(scopedKey(key)) ?? '[]') as unknown;
     return Array.isArray(value) ? (value as T[]) : [];
   } catch {
     return [];
@@ -338,7 +352,7 @@ function readList<T>(key: string): T[] {
 
 function saveList<T>(key: string, value: T[]): void {
   if (!isBrowser()) return;
-  window.localStorage.setItem(scopedKey(key), JSON.stringify(value));
+  writeBusinessItem(scopedKey(key), JSON.stringify(value));
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
@@ -385,7 +399,7 @@ export function captureMvpWorkspace(): MvpWorkspaceSnapshot {
   const entries = Object.fromEntries(
     Object.keys(window.localStorage)
       .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
-      .map((key) => [key, window.localStorage.getItem(key) ?? '']),
+      .map((key) => [key, readBusinessItem(key) ?? '']),
   );
   return { schemaVersion: 1, entries };
 }
@@ -397,7 +411,7 @@ export function replaceMvpWorkspace(snapshot: MvpWorkspaceSnapshot): void {
     .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
     .forEach((key) => window.localStorage.removeItem(key));
   Object.entries(snapshot.entries).forEach(([key, value]) => {
-    if (key.startsWith(MVP_STORAGE_PREFIX)) window.localStorage.setItem(key, value);
+    if (key.startsWith(MVP_STORAGE_PREFIX)) writeBusinessItem(key, value);
   });
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }

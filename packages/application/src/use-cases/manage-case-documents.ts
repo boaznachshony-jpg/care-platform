@@ -57,7 +57,9 @@ const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
  * writing a truncated file to storage.
  */
 export function decodeBase64(value: string): Uint8Array {
-  const clean = value.replace(/=+$/, '');
+  let contentEnd = value.length;
+  while (contentEnd > 0 && value.charCodeAt(contentEnd - 1) === 61) contentEnd -= 1;
+  const clean = value.slice(0, contentEnd);
   const bytes = new Uint8Array(Math.floor((clean.length * 3) / 4));
   let bitBuffer = 0;
   let bitCount = 0;

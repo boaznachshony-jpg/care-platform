@@ -6,6 +6,7 @@ import {
   replaceMvpWorkspace,
 } from './mvp-storage.js';
 import { clearLocalDocumentFileCache } from './document-file-store.js';
+import { clearBusinessStorageKey } from './business-storage-crypto.js';
 
 export type WorkspaceSyncState = 'disabled' | 'loading' | 'saved' | 'saving' | 'error';
 export const WORKSPACE_SYNC_CHANGED = 'caredesk:workspace-sync-changed';
@@ -120,6 +121,7 @@ export function stopWorkspaceSync(): void {
   remoteFingerprint = '';
   flushQueued = false;
   clearMvpWorkspace();
+  clearBusinessStorageKey();
   void clearLocalDocumentFileCache();
   setState('disabled');
 }
