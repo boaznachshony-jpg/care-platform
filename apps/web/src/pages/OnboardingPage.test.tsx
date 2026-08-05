@@ -3,7 +3,8 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
-import { OnboardingPage } from './OnboardingPage.js';
+import { emptyMvpProfile } from '../storage/mvp-storage.js';
+import { employmentSetupCompletedCount, OnboardingPage } from './OnboardingPage.js';
 
 function renderPage() {
   return render(
@@ -41,5 +42,22 @@ describe('OnboardingPage Israeli ID field', () => {
 
     expect(idField).toHaveValue('123456782');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('first-run employment checklist', () => {
+  it('requires all six operational setup items', () => {
+    expect(employmentSetupCompletedCount(emptyMvpProfile)).toBe(0);
+    expect(
+      employmentSetupCompletedCount({
+        ...emptyMvpProfile,
+        employmentAgreementConfirmed: true,
+        medicalInsuranceConfirmed: true,
+        baseSalary: 6_500,
+        saturdayRate: 440,
+        licenseRenewalDate: '2027-07-12',
+        employmentFeeDueDate: '2026-08-15',
+      }),
+    ).toBe(6);
   });
 });

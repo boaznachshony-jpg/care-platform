@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
 import { clientPath } from '../hooks/use-client-path.js';
 import {
@@ -29,12 +29,23 @@ export function ClientsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const auth = useAuth();
+  const [searchParams] = useSearchParams();
   const [clients, setClients] = useState(readMvpClients);
   const [migrationRedirect] = useState(consumeMvpMigrationRedirect);
 
   useEffect(() => {
     if (migrationRedirect) navigate(clientPath(migrationRedirect, '/'), { replace: true });
   }, [migrationRedirect, navigate]);
+
+  useEffect(() => {
+    if (migrationRedirect || searchParams.get('firstRun') !== '1') return;
+    if (clients.length > 0) {
+      navigate('/app', { replace: true });
+      return;
+    }
+    const client = createMvpClient();
+    navigate(clientPath(client.id, '/onboarding'), { replace: true });
+  }, [clients.length, migrationRedirect, navigate, searchParams]);
 
   function addClient() {
     const client = createMvpClient();

@@ -22,8 +22,13 @@ export interface MvpProfile {
   quietHoursStart: string;
   quietHoursEnd: string;
   onboardingCompleted: boolean;
+  employmentAgreementConfirmed: boolean;
+  medicalInsuranceConfirmed: boolean;
   baseSalary: number | null;
   salaryEffectiveDate: string;
+  saturdayRate: number | null;
+  licenseRenewalDate: string;
+  employmentFeeDueDate: string;
 }
 
 const STORAGE_KEY = 'caredesk.mvp.profile.v1';
@@ -59,8 +64,13 @@ export const emptyMvpProfile: MvpProfile = {
   quietHoursStart: '21:00',
   quietHoursEnd: '08:00',
   onboardingCompleted: false,
+  employmentAgreementConfirmed: false,
+  medicalInsuranceConfirmed: false,
   baseSalary: null,
   salaryEffectiveDate: '',
+  saturdayRate: null,
+  licenseRenewalDate: '',
+  employmentFeeDueDate: '',
 };
 
 function isBrowser(): boolean {

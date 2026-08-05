@@ -17,8 +17,13 @@ const completedProfile = {
   quietHoursStart: '21:00',
   quietHoursEnd: '08:00',
   onboardingCompleted: true,
+  employmentAgreementConfirmed: true,
+  medicalInsuranceConfirmed: true,
   baseSalary: 7000,
   salaryEffectiveDate: '2026-01-15',
+  saturdayRate: 440,
+  licenseRenewalDate: '2027-01-15',
+  employmentFeeDueDate: '2026-12-31',
 };
 
 async function seedCompletedProfile(page: Page) {
@@ -35,6 +40,7 @@ test.describe('launch readiness interactions', () => {
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+    const clientBase = page.url().replace(/\/onboarding$/, '');
 
     await expect(page.getByRole('button', { name: 'חזרה' })).toBeDisabled();
     await page.getByLabel('שם המעסיק').fill('מעסיק חדש');
@@ -55,8 +61,20 @@ test.describe('launch readiness interactions', () => {
 
     await page.getByLabel('שם הנציג המורשה').fill('נציג חדש');
     await page.getByLabel('מספר טלפון').fill('0521111111');
-    await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
-    await expect(page).toHaveURL(/\/clients\/[^/]+$/);
+    await page.getByRole('button', { name: 'המשך' }).click();
+
+    await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();
+    await page.getByLabel('נרכש ביטוח רפואי והוא בתוקף').check();
+    await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
+    await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
+    await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
+    await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+    await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
+
+    await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
+    await expect(page.getByText('שלב ההקמה האחרון: חיבור אמצעי תשלום מאובטח')).toBeVisible();
+    await page.goto(clientBase);
+    await expect(page).toHaveURL(clientBase);
     await expect(page.getByRole('heading', { name: 'שלום מעסיק חדש' })).toBeVisible();
   });
 
@@ -319,17 +337,29 @@ test.describe('launch readiness interactions', () => {
     await page.getByRole('link', { name: 'פתיחת המסמכים' }).click();
     await expect(page).toHaveURL(/\/documents$/);
 
-    const timelineTargets = ['/documents', '/payroll', '/tasks', '/', '/tasks'];
-    for (let index = 0; index < timelineTargets.length; index += 1) {
+    const timelineTargets = [
+      { title: 'בדיקת ביטוח רפואי', path: '/documents' },
+      { title: 'חידוש רישיון ההעסקה', path: '/documents' },
+      { title: 'תשלום אגרת העסקה', path: '/tasks' },
+      { title: 'הכנת שכר יולי', path: '/payroll' },
+      { title: 'יום חופשה מתוכנן', path: '/tasks' },
+      { title: 'סיכום חודש', path: '/' },
+    ];
+    for (const { title, path: expected } of timelineTargets) {
       await page.goto(`${clientHome}/timeline`);
-      await page.getByRole('link', { name: 'פרטים' }).nth(index).click();
-      const expected = timelineTargets[index];
+      const eventCard = page.locator('article').filter({ hasText: title });
+      await eventCard.getByRole('link', { name: 'פרטים' }).click();
       if (expected === '/') {
         await expect(page).toHaveURL(clientHome);
       } else {
         await expect(page).toHaveURL(new RegExp(`${expected}$`));
       }
     }
+
+    await page.goto(`${clientHome}/timeline`);
+    const nationalInsuranceCard = page.locator('article').filter({ hasText: 'ביטוח לאומי' });
+    await nationalInsuranceCard.getByRole('link', { name: 'פרטים' }).click();
+    await expect(page).toHaveURL(/\/tasks$/);
   });
 
   test('unfinished internal API routes cannot expose a broken screen', async ({ page }) => {
