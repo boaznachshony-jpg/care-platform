@@ -18,6 +18,11 @@ const completedProfile = {
   employmentStartDate: '2026-01-15',
   representativeName: 'נציג בדיקה',
   representativePhone: '0521234567',
+  licensedBureauName: 'תאגיד בדיקה',
+  licensedBureauRegistrationNumber: 'LB-1001',
+  licensedBureauContactName: 'איש קשר תאגיד',
+  licensedBureauContactPhone: '0531234567',
+  licensedBureauContactEmail: 'bureau@example.test',
   notificationsEnabled: true,
   reminderLeadDays: 7,
   quietHoursStart: '21:00',
@@ -25,6 +30,7 @@ const completedProfile = {
   onboardingCompleted: true,
   employmentAgreementConfirmed: true,
   medicalInsuranceConfirmed: true,
+  medicalInsuranceExpiryDate: '2027-06-30',
   baseSalary: 7000,
   salaryEffectiveDate: '2026-01-15',
   saturdayRate: 440,
@@ -58,8 +64,15 @@ async function completeClientOnboarding(
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('שם התאגיד המורשה').fill('תאגיד בדיקה');
+  await page.getByLabel('מספר הרישום או הרישיון של התאגיד').fill('LB-1001');
+  await page.getByLabel('שם איש הקשר בתאגיד').fill('איש קשר תאגיד');
+  await page.getByLabel('טלפון איש הקשר בתאגיד').fill('0531234567');
+  await page.getByLabel('דוא״ל איש הקשר בתאגיד').fill('bureau@example.test');
+  await page.getByRole('button', { name: 'המשך' }).click();
   await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();
   await page.getByLabel('נרכש ביטוח רפואי והוא בתוקף').check();
+  await page.getByLabel('תוקף הביטוח הרפואי עד').fill('2027-06-30');
   await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
@@ -115,8 +128,15 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('שם התאגיד המורשה').fill('תאגיד בדיקה');
+  await page.getByLabel('מספר הרישום או הרישיון של התאגיד').fill('LB-1001');
+  await page.getByLabel('שם איש הקשר בתאגיד').fill('איש קשר תאגיד');
+  await page.getByLabel('טלפון איש הקשר בתאגיד').fill('0531234567');
+  await page.getByLabel('דוא״ל איש הקשר בתאגיד').fill('bureau@example.test');
+  await page.getByRole('button', { name: 'המשך' }).click();
   await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();
   await page.getByLabel('נרכש ביטוח רפואי והוא בתוקף').check();
+  await page.getByLabel('תוקף הביטוח הרפואי עד').fill('2027-06-30');
   await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
@@ -132,6 +152,10 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await expect(page.getByText('מטופל בדיקה')).toBeVisible();
   await expect(page.getByText('Caregiver Test')).toBeVisible();
   await expect(page.getByText('דורש טיפול', { exact: true })).toBeVisible();
+  await page.goto(`${clientBase}/tasks`);
+  const insuranceTask = page.locator('.list-task').filter({ hasText: 'חידוש ביטוח רפואי' });
+  await expect(insuranceTask).toContainText('30.06.2027');
+  await expect(insuranceTask).toContainText('נוצר אוטומטית');
 
   await page.goto(`${clientBase}/settings`);
   await page.getByLabel('שם המעסיק').fill('בועז מעודכן');

@@ -12,6 +12,11 @@ const completedProfile = {
   employmentStartDate: '2026-01-15',
   representativeName: 'נציג בדיקת השקה',
   representativePhone: '0521234567',
+  licensedBureauName: 'תאגיד בדיקת השקה',
+  licensedBureauRegistrationNumber: 'LB-2001',
+  licensedBureauContactName: 'אשת קשר תאגיד',
+  licensedBureauContactPhone: '0531234567',
+  licensedBureauContactEmail: 'launch-bureau@example.test',
   notificationsEnabled: true,
   reminderLeadDays: 7,
   quietHoursStart: '21:00',
@@ -19,6 +24,7 @@ const completedProfile = {
   onboardingCompleted: true,
   employmentAgreementConfirmed: true,
   medicalInsuranceConfirmed: true,
+  medicalInsuranceExpiryDate: '2027-06-30',
   baseSalary: 7000,
   salaryEffectiveDate: '2026-01-15',
   saturdayRate: 440,
@@ -63,8 +69,16 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('מספר טלפון').fill('0521111111');
     await page.getByRole('button', { name: 'המשך' }).click();
 
+    await page.getByLabel('שם התאגיד המורשה').fill('תאגיד חדש');
+    await page.getByLabel('מספר הרישום או הרישיון של התאגיד').fill('LB-2002');
+    await page.getByLabel('שם איש הקשר בתאגיד').fill('אשת קשר חדשה');
+    await page.getByLabel('טלפון איש הקשר בתאגיד').fill('0531111111');
+    await page.getByLabel('דוא״ל איש הקשר בתאגיד').fill('bureau-new@example.test');
+    await page.getByRole('button', { name: 'המשך' }).click();
+
     await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();
     await page.getByLabel('נרכש ביטוח רפואי והוא בתוקף').check();
+    await page.getByLabel('תוקף הביטוח הרפואי עד').fill('2027-06-30');
     await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
     await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
     await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
@@ -283,6 +297,9 @@ test.describe('launch readiness interactions', () => {
       await page.getByLabel(label).fill(value);
       await expect(page.getByLabel(label)).toHaveValue(value);
     }
+    await page.getByRole('button', { name: '＋ הוספת תשלום' }).click();
+    await page.getByLabel('תיאור תשלום נוסף 1').fill('בונוס שירות');
+    await page.getByLabel('סכום תשלום נוסף 1').fill('175');
     await page.getByRole('button', { name: 'המשך' }).click();
 
     const deductionFields: Array<[string, string]> = [
@@ -300,6 +317,7 @@ test.describe('launch readiness interactions', () => {
 
     const visiblePayrollSummary = page.locator('.wizard-content .pay-summary');
     await expect(visiblePayrollSummary.getByText('תוספות אחרות')).toBeVisible();
+    await expect(visiblePayrollSummary.getByText('בונוס שירות')).toBeVisible();
     await expect(visiblePayrollSummary.getByText('סכום לפני קיזוזים')).toBeVisible();
     await expect(visiblePayrollSummary.getByText(/דמי כיס .*100\.00/)).toBeVisible();
     await expect(page.getByText('מתוכם דמי כיס')).toHaveCount(0);
@@ -339,6 +357,7 @@ test.describe('launch readiness interactions', () => {
 
     const timelineTargets = [
       { title: 'בדיקת ביטוח רפואי', path: '/documents' },
+      { title: 'חידוש ביטוח רפואי', path: '/tasks' },
       { title: 'חידוש רישיון ההעסקה', path: '/documents' },
       { title: 'תשלום אגרת העסקה', path: '/tasks' },
       { title: 'הכנת שכר יולי', path: '/payroll' },

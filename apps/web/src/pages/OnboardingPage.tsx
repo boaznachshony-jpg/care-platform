@@ -17,9 +17,14 @@ type DetailFieldKey =
   | 'caregiverLanguage'
   | 'employmentStartDate'
   | 'representativeName'
-  | 'representativePhone';
+  | 'representativePhone'
+  | 'licensedBureauName'
+  | 'licensedBureauRegistrationNumber'
+  | 'licensedBureauContactName'
+  | 'licensedBureauContactPhone'
+  | 'licensedBureauContactEmail';
 
-type DetailFieldType = 'text' | 'tel' | 'date' | 'israeli-id' | 'country' | 'language';
+type DetailFieldType = 'text' | 'tel' | 'email' | 'date' | 'israeli-id' | 'country' | 'language';
 
 interface DetailField {
   key: DetailFieldKey;
@@ -30,7 +35,7 @@ interface DetailField {
 export function employmentSetupCompletedCount(profile: MvpProfile): number {
   return [
     profile.employmentAgreementConfirmed,
-    profile.medicalInsuranceConfirmed,
+    profile.medicalInsuranceConfirmed && Boolean(profile.medicalInsuranceExpiryDate),
     (profile.baseSalary ?? 0) > 0,
     (profile.saturdayRate ?? 0) > 0,
     Boolean(profile.licenseRenewalDate),
@@ -72,6 +77,32 @@ export function OnboardingPage() {
         fields: [
           { key: 'representativeName', label: t('profile.representativeName'), type: 'text' },
           { key: 'representativePhone', label: t('profile.phone'), type: 'tel' },
+        ] satisfies DetailField[],
+      },
+      {
+        title: t('onboarding.licensedBureau'),
+        fields: [
+          { key: 'licensedBureauName', label: t('profile.licensedBureauName'), type: 'text' },
+          {
+            key: 'licensedBureauRegistrationNumber',
+            label: t('profile.licensedBureauRegistrationNumber'),
+            type: 'text',
+          },
+          {
+            key: 'licensedBureauContactName',
+            label: t('profile.licensedBureauContactName'),
+            type: 'text',
+          },
+          {
+            key: 'licensedBureauContactPhone',
+            label: t('profile.licensedBureauContactPhone'),
+            type: 'tel',
+          },
+          {
+            key: 'licensedBureauContactEmail',
+            label: t('profile.licensedBureauContactEmail'),
+            type: 'email',
+          },
         ] satisfies DetailField[],
       },
     ],
@@ -150,16 +181,43 @@ export function OnboardingPage() {
                 />
                 <span>{t('onboarding.agreementConfirmed')}</span>
               </label>
-              <label className={draft.medicalInsuranceConfirmed ? 'complete' : ''}>
+              <label
+                className={
+                  draft.medicalInsuranceConfirmed && draft.medicalInsuranceExpiryDate
+                    ? 'complete'
+                    : ''
+                }
+              >
                 <input
                   type="checkbox"
                   checked={draft.medicalInsuranceConfirmed}
                   onChange={(event) =>
-                    setDraft({ ...draft, medicalInsuranceConfirmed: event.target.checked })
+                    setDraft({
+                      ...draft,
+                      medicalInsuranceConfirmed: event.target.checked,
+                      medicalInsuranceExpiryDate: event.target.checked
+                        ? draft.medicalInsuranceExpiryDate
+                        : '',
+                    })
                   }
                 />
                 <span>{t('onboarding.medicalInsuranceConfirmed')}</span>
               </label>
+              {draft.medicalInsuranceConfirmed ? (
+                <label>
+                  {t('onboarding.medicalInsuranceExpiryDate')}
+                  <input
+                    type="date"
+                    dir="ltr"
+                    required
+                    value={draft.medicalInsuranceExpiryDate}
+                    onChange={(event) =>
+                      setDraft({ ...draft, medicalInsuranceExpiryDate: event.target.value })
+                    }
+                  />
+                  <small>{t('onboarding.medicalInsuranceExpiryHelp')}</small>
+                </label>
+              ) : null}
               <label>
                 {t('onboarding.baseSalary')}
                 <input

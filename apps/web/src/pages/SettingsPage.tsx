@@ -139,6 +139,98 @@ export function SettingsPage() {
             />
           </label>
         </section>
+        <section className="card readable-form">
+          <h2>{t('settings.licensedBureau')}</h2>
+          <p>{t('settings.licensedBureauIntro')}</p>
+          <label>
+            {t('profile.licensedBureauName')}
+            <input
+              value={draft.licensedBureauName}
+              required
+              onChange={(event) => setDraft({ ...draft, licensedBureauName: event.target.value })}
+            />
+          </label>
+          <label>
+            {t('profile.licensedBureauRegistrationNumber')}
+            <input
+              dir="ltr"
+              value={draft.licensedBureauRegistrationNumber}
+              required
+              onChange={(event) =>
+                setDraft({ ...draft, licensedBureauRegistrationNumber: event.target.value })
+              }
+            />
+          </label>
+          <div className="form-grid two-columns">
+            <label>
+              {t('profile.licensedBureauContactName')}
+              <input
+                value={draft.licensedBureauContactName}
+                required
+                onChange={(event) =>
+                  setDraft({ ...draft, licensedBureauContactName: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {t('profile.licensedBureauContactPhone')}
+              <input
+                dir="ltr"
+                type="tel"
+                value={draft.licensedBureauContactPhone}
+                required
+                onChange={(event) =>
+                  setDraft({ ...draft, licensedBureauContactPhone: event.target.value })
+                }
+              />
+            </label>
+          </div>
+          <label>
+            {t('profile.licensedBureauContactEmail')}
+            <input
+              dir="ltr"
+              type="email"
+              value={draft.licensedBureauContactEmail}
+              required
+              onChange={(event) =>
+                setDraft({ ...draft, licensedBureauContactEmail: event.target.value })
+              }
+            />
+          </label>
+        </section>
+        <section className="card readable-form">
+          <h2>{t('settings.medicalInsurance')}</h2>
+          <label className="switch-row">
+            <span>{t('onboarding.medicalInsuranceConfirmed')}</span>
+            <input
+              type="checkbox"
+              checked={draft.medicalInsuranceConfirmed}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  medicalInsuranceConfirmed: event.target.checked,
+                  medicalInsuranceExpiryDate: event.target.checked
+                    ? draft.medicalInsuranceExpiryDate
+                    : '',
+                })
+              }
+            />
+          </label>
+          <label>
+            {t('onboarding.medicalInsuranceExpiryDate')}
+            <input
+              dir="ltr"
+              type="date"
+              value={draft.medicalInsuranceExpiryDate}
+              required={draft.medicalInsuranceConfirmed}
+              disabled={!draft.medicalInsuranceConfirmed}
+              onChange={(event) =>
+                setDraft({ ...draft, medicalInsuranceExpiryDate: event.target.value })
+              }
+            />
+            <small>{t('onboarding.medicalInsuranceExpiryHelp')}</small>
+          </label>
+        </section>
         <section className="card readable-form notification-settings">
           <h2>{t('settings.notifications')}</h2>
           <label className="switch-row">
