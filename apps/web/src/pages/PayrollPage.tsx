@@ -10,6 +10,7 @@ import {
   saveMvpEmploymentExpenses,
   saveMvpPayroll,
   type EmploymentExpenseFrequency,
+  type MvpAdditionalPayment,
   type MvpEmploymentExpense,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
@@ -19,6 +20,24 @@ const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS
 const MAX_PAYROLL_AMOUNT = 10_000_000;
 const MAX_PAID_SATURDAYS = 6;
 const MAX_PAID_HOLIDAYS = 10;
+
+interface AdditionalPaymentDraft {
+  id: string;
+  description: string;
+  amount: string;
+}
+
+function newAdditionalPaymentDraft(): AdditionalPaymentDraft {
+  return { id: crypto.randomUUID(), description: '', amount: '' };
+}
+
+function additionalPaymentDrafts(record: MvpPayrollRecord | undefined): AdditionalPaymentDraft[] {
+  return (record?.additionalPayments ?? []).map((payment) => ({
+    id: payment.id,
+    description: payment.description,
+    amount: String(payment.amount),
+  }));
+}
 
 function numeric(value: string): number {
   const parsed = Number(value);
@@ -76,6 +95,9 @@ export function PayrollPage() {
   const initialRecord = records.find((record) => record.month === currentMonth);
   const [values, setValues] = useState(() =>
     payrollValues(initialRecord, profile.baseSalary, profile.saturdayRate),
+  );
+  const [additionalPayments, setAdditionalPayments] = useState<AdditionalPaymentDraft[]>(() =>
+    additionalPaymentDrafts(initialRecord),
   );
   const [expenseDraft, setExpenseDraft] = useState({
     category: 'ביטוח לאומי',
@@ -149,6 +171,10 @@ export function PayrollPage() {
       ),
     [values.baseSalary, values.month, values.prorationStartDate],
   );
+  const additionalPaymentsTotal = useMemo(
+    () => additionalPayments.reduce((total, payment) => total + numeric(payment.amount), 0),
+    [additionalPayments],
+  );
 
   const calculation = useMemo(() => {
     return calculateMonthlyPayroll({
@@ -160,14 +186,15 @@ export function PayrollPage() {
       sickPay: numeric(values.sickPay),
       pocketMoney: numeric(values.pocketMoney),
       employerContributions: numeric(values.employerContributions),
-      otherAddition: numeric(values.otherAddition),
+      otherAddition: numeric(values.otherAddition) + additionalPaymentsTotal,
       medicalInsuranceDeduction: numeric(values.medicalInsuranceDeduction),
       housingDeduction: numeric(values.housingDeduction),
       advances: numeric(values.advances),
       agreedDeduction: numeric(values.agreedDeduction),
     });
-  }, [proratedBaseSalary.amount, values]);
+  }, [additionalPaymentsTotal, proratedBaseSalary.amount, values]);
   const otherAdditions = Math.max(0, calculation.additions - calculation.saturdayPay);
+  const standardOtherAdditions = Math.max(0, otherAdditions - additionalPaymentsTotal);
   const beforeDeductions = proratedBaseSalary.amount + calculation.additions;
   const deductionBreakdown = [
     numeric(values.pocketMoney) > 0 ? `דמי כיס ${money.format(numeric(values.pocketMoney))}` : '',
@@ -201,6 +228,27 @@ export function PayrollPage() {
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
     setMessage('');
+    setValidationErrors([]);
+    setPayrollSaved(false);
+  }
+
+  function updateAdditionalPayment(id: string, field: 'description' | 'amount', value: string) {
+    setAdditionalPayments((current) =>
+      current.map((payment) => (payment.id === id ? { ...payment, [field]: value } : payment)),
+    );
+    setMessage('');
+    setValidationErrors([]);
+    setPayrollSaved(false);
+  }
+
+  function addAdditionalPayment() {
+    setAdditionalPayments((current) => [...current, newAdditionalPaymentDraft()]);
+    setValidationErrors([]);
+    setPayrollSaved(false);
+  }
+
+  function removeAdditionalPayment(id: string) {
+    setAdditionalPayments((current) => current.filter((payment) => payment.id !== id));
     setValidationErrors([]);
     setPayrollSaved(false);
   }
@@ -269,6 +317,13 @@ export function PayrollPage() {
           ['otherAddition', 'תוספת אחרת'],
         ] as const
       ).forEach(([key, label]) => validateAmount(values[key as keyof typeof values], label));
+      additionalPayments.forEach((payment, index) => {
+        const hasDescription = payment.description.trim().length > 0;
+        const hasAmount = payment.amount.trim().length > 0;
+        if (!hasDescription && !hasAmount) return;
+        if (!hasDescription) errors.push(`תשלום נוסף ${index + 1}: יש להזין תיאור.`);
+        validateAmount(payment.amount, `תשלום נוסף ${index + 1}`);
+      });
     }
     if (stepToValidate === 4) {
       (
@@ -299,6 +354,7 @@ export function PayrollPage() {
   function loadMonth(month: string) {
     const record = records.find((item) => item.month === month);
     setValues({ ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month });
+    setAdditionalPayments(additionalPaymentDrafts(record));
     setValidationErrors([]);
     setPayrollSaved(false);
     setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');
@@ -334,6 +390,13 @@ export function PayrollPage() {
       return;
     }
     const existing = records.find((record) => record.month === values.month);
+    const savedAdditionalPayments: MvpAdditionalPayment[] = additionalPayments
+      .filter((payment) => payment.description.trim() || numeric(payment.amount) > 0)
+      .map((payment) => ({
+        id: payment.id,
+        description: payment.description.trim(),
+        amount: numeric(payment.amount),
+      }));
     const saved: MvpPayrollRecord = {
       id: existing?.id ?? crypto.randomUUID(),
       month: values.month,
@@ -355,6 +418,7 @@ export function PayrollPage() {
       pocketMoney: numeric(values.pocketMoney),
       employerContributions: numeric(values.employerContributions),
       otherAddition: numeric(values.otherAddition),
+      additionalPayments: savedAdditionalPayments,
       medicalInsuranceDeduction: numeric(values.medicalInsuranceDeduction),
       housingDeduction: numeric(values.housingDeduction),
       advances: numeric(values.advances),
@@ -730,6 +794,76 @@ export function PayrollPage() {
                 />
                 {fieldErrorMessage('otherAddition')}
               </label>
+              <section
+                className="additional-payments-editor"
+                aria-labelledby="additional-payments-title"
+              >
+                <div className="section-heading">
+                  <div>
+                    <h3 id="additional-payments-title">תשלומים נוספים</h3>
+                    <p>אפשר להוסיף כמה רכיבים, עם תיאור וסכום נפרד לכל תשלום.</p>
+                  </div>
+                  <button className="secondary-button" type="button" onClick={addAdditionalPayment}>
+                    ＋ הוספת תשלום
+                  </button>
+                </div>
+                {additionalPayments.length === 0 ? (
+                  <p className="form-note">לא נוספו תשלומים נוספים לחודש זה.</p>
+                ) : (
+                  <div className="additional-payments-list">
+                    {additionalPayments.map((payment, index) => {
+                      const rowError = validationErrors.find((error) =>
+                        error.includes(`תשלום נוסף ${index + 1}`),
+                      );
+                      return (
+                        <div className="additional-payment-row" key={payment.id}>
+                          <label>
+                            תיאור תשלום נוסף {index + 1}
+                            <input
+                              value={payment.description}
+                              maxLength={100}
+                              aria-invalid={rowError ? true : undefined}
+                              onChange={(event) =>
+                                updateAdditionalPayment(
+                                  payment.id,
+                                  'description',
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            סכום תשלום נוסף {index + 1}
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={payment.amount}
+                              aria-invalid={rowError ? true : undefined}
+                              onChange={(event) =>
+                                updateAdditionalPayment(payment.id, 'amount', event.target.value)
+                              }
+                            />
+                          </label>
+                          <button
+                            className="danger-text-button"
+                            type="button"
+                            aria-label={`מחיקת תשלום נוסף ${index + 1}`}
+                            onClick={() => removeAdditionalPayment(payment.id)}
+                          >
+                            מחיקה
+                          </button>
+                          {rowError ? (
+                            <small className="field-error-message" role="alert">
+                              {rowError}
+                            </small>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
               <div className="payroll-live-total" aria-live="polite">
                 <span>כל התוספות לחודש, כולל שבתות</span>
                 <strong>{money.format(calculation.additions)}</strong>
@@ -830,8 +964,18 @@ export function PayrollPage() {
                   <span>
                     תוספות אחרות <small>לא כולל שבתות, המוצגות בשורה נפרדת</small>
                   </span>
-                  <strong>{money.format(otherAdditions)}</strong>
+                  <strong>{money.format(standardOtherAdditions)}</strong>
                 </div>
+                {additionalPayments
+                  .filter((payment) => payment.description.trim() || numeric(payment.amount) > 0)
+                  .map((payment) => (
+                    <div key={payment.id}>
+                      <span>
+                        תשלום נוסף <small>{payment.description || 'ללא תיאור'}</small>
+                      </span>
+                      <strong>{money.format(numeric(payment.amount))}</strong>
+                    </div>
+                  ))}
                 <div className="payroll-subtotal">
                   <span>סכום לפני קיזוזים</span>
                   <strong>{money.format(beforeDeductions)}</strong>
@@ -938,8 +1082,19 @@ export function PayrollPage() {
                       <td>
                         חג, חופשה, מחלה ותוספות שהוזנו / Holiday, vacation, sick pay and additions
                       </td>
-                      <td>{money.format(otherAdditions)}</td>
+                      <td>{money.format(standardOtherAdditions)}</td>
                     </tr>
+                    {additionalPayments
+                      .filter(
+                        (payment) => payment.description.trim() || numeric(payment.amount) > 0,
+                      )
+                      .map((payment) => (
+                        <tr key={payment.id}>
+                          <td>תשלום נוסף / Additional payment</td>
+                          <td>{payment.description || 'ללא תיאור / No description'}</td>
+                          <td>{money.format(numeric(payment.amount))}</td>
+                        </tr>
+                      ))}
                     <tr className="subtotal">
                       <td colSpan={2}>סכום לפני קיזוזים / Total before deductions</td>
                       <td>{money.format(beforeDeductions)}</td>

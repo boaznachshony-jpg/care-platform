@@ -13,8 +13,11 @@ export function DashboardPage() {
     !profile.caregiverName.trim(),
     !profile.employmentStartDate.trim(),
     !profile.representativeName.trim(),
+    !profile.licensedBureauName.trim(),
+    !profile.licensedBureauContactName.trim(),
+    !profile.licensedBureauContactPhone.trim(),
     !profile.employmentAgreementConfirmed,
-    !profile.medicalInsuranceConfirmed,
+    !profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate,
     (profile.baseSalary ?? 0) <= 0,
     (profile.saturdayRate ?? 0) <= 0,
     !profile.licenseRenewalDate,
@@ -89,6 +92,25 @@ export function DashboardPage() {
         <div className="contact-summary">
           <strong>{profile.representativeName}</strong>
           <span dir="ltr">{profile.representativePhone}</span>
+        </div>
+      </section>
+      <section className="card">
+        <div className="section-heading">
+          <h2>{t('settings.licensedBureau')}</h2>
+        </div>
+        <div className="detail-list">
+          <div>
+            <span>{t('profile.licensedBureauName')}</span>
+            <strong>{profile.licensedBureauName || t('common.notProvided')}</strong>
+          </div>
+          <div>
+            <span>{t('profile.licensedBureauContactName')}</span>
+            <strong>{profile.licensedBureauContactName || t('common.notProvided')}</strong>
+          </div>
+          <div>
+            <span>{t('profile.licensedBureauContactPhone')}</span>
+            <strong dir="ltr">{profile.licensedBureauContactPhone || '—'}</strong>
+          </div>
         </div>
       </section>
     </div>

@@ -37,6 +37,8 @@
     "loadError": "People could not be loaded. Try again.",
     "actionError": "The action could not be completed. Check the details and try again.",
     "duplicateError": "This email address already has access to the file.",
+    "deliveryError": "The details are valid, but the email service could not send the invitation. Try again in a few minutes.",
+    "forbiddenError": "Only the account owner can send invitations. Sign in again as the owner and retry.",
     "readOnlyNotice": "You can view permissions. Only the owner can invite people, change roles or remove access.",
     "contactDisclaimer": "An authorized contact in the employment details does not receive account access automatically. Invite that person separately here if access is required.",
     "ownershipNotice": "During the closed pilot, ownership transfer uses a verified support process to prevent accidental lockout or account takeover."
@@ -274,7 +276,12 @@
       "superseded": "Superseded"
     }
   },
-  "common": { "back": "Back", "continue": "Continue", "select": "Select" },
+  "common": {
+    "back": "Back",
+    "continue": "Continue",
+    "select": "Select",
+    "notProvided": "Not provided"
+  },
   "profile": {
     "employerIdNumber": "Employer Israeli ID number",
     "employerIdHelp": "Required for National Insurance reporting. Enter 9 digits; spaces and hyphens are allowed.",
@@ -285,14 +292,34 @@
     "recipientName": "Care recipient name",
     "caregiverName": "Caregiver name",
     "representativeName": "Authorized representative name",
+    "licensedBureauName": "Licensed bureau name",
+    "licensedBureauRegistrationNumber": "Bureau registration or license number",
+    "licensedBureauContactName": "Bureau contact name",
+    "licensedBureauContactPhone": "Bureau contact phone",
+    "licensedBureauContactEmail": "Bureau contact email",
     "phone": "Phone number",
     "startDate": "Employment start date"
+  },
+  "licensedBureau": {
+    "choose": "Choose a licensed private bureau",
+    "placeholder": "Choose from the official list",
+    "manualOption": "My bureau is not listed — enter manually",
+    "selectionHelp": "Type the beginning of the name or browse {{count}} active bureaus.",
+    "selected": "Selected from the official list",
+    "mainPhone": "Bureau main phone",
+    "manager": "Bureau manager",
+    "addresses": "Bureau addresses",
+    "autofillNote": "The details were filled automatically. You can update the direct contact if you work with someone else.",
+    "sourceNote": "Based on the Population and Immigration Authority list, updated {{date}}.",
+    "sourceLink": "Open the official source"
   },
   "onboarding": {
     "checklist": "Employment setup checklist",
     "checklistIntro": "Complete all six items before opening the case. Dates will be saved for future tracking and reminders.",
     "agreementConfirmed": "The employment agreement was signed and saved",
     "medicalInsuranceConfirmed": "Medical insurance was purchased and is active",
+    "medicalInsuranceExpiryDate": "Medical insurance valid until",
+    "medicalInsuranceExpiryHelp": "A renewal task will be added automatically to open tasks for this date.",
     "baseSalary": "Monthly base salary (ILS)",
     "saturdayRate": "Rate per Saturday or rest day (ILS)",
     "licenseRenewalDate": "Employment license renewal date",
@@ -307,6 +334,7 @@
     "people": "Who manages the employment?",
     "employment": "Employment details",
     "support": "Additional contact",
+    "licensedBureau": "Licensed bureau and contact",
     "stepHint": "Complete the fields and continue to the next step.",
     "finish": "Save and enter"
   },
@@ -506,6 +534,9 @@
     "reopenOnboarding": "Reopen setup",
     "employer": "Employer details",
     "representative": "Authorized representative",
+    "licensedBureau": "Licensed bureau",
+    "licensedBureauIntro": "These details are stored in the file for easy contact and license-date checks.",
+    "medicalInsurance": "Medical insurance and expiry",
     "representativeDisclaimer": "The representative is stored as a contact only and receives no system permissions in this version.",
     "notifications": "Notifications and reminders",
     "masterSwitch": "Enable all notifications",

@@ -16,7 +16,7 @@ vi.mock('../api/client.js', async () => {
   return { ...actual, ...mocks };
 });
 
-import { FamilyAccessPage } from './FamilyAccessPage.js';
+import { FamilyAccessPage, readableFamilyMemberName } from './FamilyAccessPage.js';
 
 const owner = {
   membershipId: '00000000-0000-4000-8000-000000000003',
@@ -78,5 +78,14 @@ describe('FamilyAccessPage', () => {
     expect(await screen.findByText('owner@example.test')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send invitation' })).not.toBeInTheDocument();
     expect(screen.getByText(/Only the owner can invite people/)).toBeInTheDocument();
+  });
+
+  it('falls back to the email when a stored display name is corrupted', () => {
+    expect(
+      readableFamilyMemberName({
+        displayName: '□×□×□×',
+        email: 'boaz.nachshony@example.test',
+      }),
+    ).toBe('boaz nachshony');
   });
 });

@@ -13,6 +13,16 @@ import { useAuth } from '../auth/auth-context.js';
 
 type EditableRole = 'manager' | 'viewer';
 
+export function readableFamilyMemberName(
+  member: Pick<FamilyMemberResponse, 'displayName' | 'email'>,
+) {
+  const candidate = member.displayName.trim();
+  const letters = candidate.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
+  const suspicious = candidate.match(/[�□×]/gu)?.length ?? 0;
+  if (candidate && letters >= 2 && suspicious === 0) return candidate;
+  return member.email.split('@')[0]?.replace(/[._-]+/g, ' ') || 'User';
+}
+
 export function FamilyAccessPage() {
   const { t, i18n } = useTranslation();
   const auth = useAuth();
@@ -23,7 +33,9 @@ export function FamilyAccessPage() {
   const [role, setRole] = useState<EditableRole>('manager');
   const [roleDrafts, setRoleDrafts] = useState<Record<string, EditableRole>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<'idle' | 'sent' | 'duplicate' | 'error'>('idle');
+  const [notice, setNotice] = useState<
+    'idle' | 'sent' | 'duplicate' | 'delivery' | 'forbidden' | 'error'
+  >('idle');
 
   async function load() {
     try {
@@ -58,11 +70,15 @@ export function FamilyAccessPage() {
       setNotice('sent');
       await load();
     } catch (error) {
-      setNotice(
-        error instanceof ApiRequestError && error.code === 'FAMILY_MEMBER_EXISTS'
-          ? 'duplicate'
-          : 'error',
-      );
+      if (error instanceof ApiRequestError && error.code === 'FAMILY_MEMBER_EXISTS') {
+        setNotice('duplicate');
+      } else if (error instanceof ApiRequestError && error.code === 'INVITATION_DELIVERY_FAILED') {
+        setNotice('delivery');
+      } else if (error instanceof ApiRequestError && error.code === 'FORBIDDEN') {
+        setNotice('forbidden');
+      } else {
+        setNotice('error');
+      }
     } finally {
       setBusyId(null);
     }
@@ -84,7 +100,10 @@ export function FamilyAccessPage() {
   }
 
   async function remove(member: FamilyMemberResponse) {
-    if (!window.confirm(t('familyAccess.confirmRemove', { name: member.displayName }))) return;
+    if (
+      !window.confirm(t('familyAccess.confirmRemove', { name: readableFamilyMemberName(member) }))
+    )
+      return;
     setBusyId(member.membershipId);
     setNotice('idle');
     try {
@@ -202,80 +221,83 @@ export function FamilyAccessPage() {
           <section className="card family-members-card" aria-labelledby="family-members-title">
             <h2 id="family-members-title">{t('familyAccess.membersTitle')}</h2>
             <div className="family-members-list">
-              {access.members.map((member) => (
-                <article className="family-member-row" key={member.membershipId}>
-                  <div className="family-member-identity">
-                    <span className="family-member-avatar" aria-hidden="true">
-                      {member.displayName.slice(0, 1)}
-                    </span>
-                    <div>
-                      <h3>
-                        {member.displayName}{' '}
-                        {member.isCurrentUser ? (
-                          <small className="pill">{t('familyAccess.currentUser')}</small>
-                        ) : null}
-                      </h3>
-                      <p dir="ltr">{member.email}</p>
-                      <small>
-                        {member.status === 'invited'
-                          ? t('familyAccess.statusInvited')
-                          : t('familyAccess.statusActive')}
-                        {' · '}
-                        {member.lastAuthenticatedAt
-                          ? t('familyAccess.lastSeen', {
-                              date: new Intl.DateTimeFormat(i18n.language, {
-                                dateStyle: 'short',
-                                timeStyle: 'short',
-                              }).format(new Date(member.lastAuthenticatedAt)),
-                            })
-                          : t('familyAccess.neverSignedIn')}
-                      </small>
+              {access.members.map((member) => {
+                const memberName = readableFamilyMemberName(member);
+                return (
+                  <article className="family-member-row" key={member.membershipId}>
+                    <div className="family-member-identity">
+                      <span className="family-member-avatar" aria-hidden="true">
+                        {memberName.slice(0, 1)}
+                      </span>
+                      <div>
+                        <h3>
+                          {memberName}{' '}
+                          {member.isCurrentUser ? (
+                            <small className="pill">{t('familyAccess.currentUser')}</small>
+                          ) : null}
+                        </h3>
+                        <p dir="ltr">{member.email}</p>
+                        <small>
+                          {member.status === 'invited'
+                            ? t('familyAccess.statusInvited')
+                            : t('familyAccess.statusActive')}
+                          {' · '}
+                          {member.lastAuthenticatedAt
+                            ? t('familyAccess.lastSeen', {
+                                date: new Intl.DateTimeFormat(i18n.language, {
+                                  dateStyle: 'short',
+                                  timeStyle: 'short',
+                                }).format(new Date(member.lastAuthenticatedAt)),
+                              })
+                            : t('familyAccess.neverSignedIn')}
+                        </small>
+                      </div>
                     </div>
-                  </div>
-                  {member.role === 'owner' || !access.canManage ? (
-                    <strong className="family-role-label">
-                      {t(`familyAccess.roles.${member.role}`)}
-                    </strong>
-                  ) : (
-                    <div className="family-member-actions">
-                      <label>
-                        <span className="sr-only">{t('familyAccess.role')}</span>
-                        <select
-                          value={roleDrafts[member.membershipId] ?? member.role}
-                          disabled={busyId !== null}
-                          onChange={(event) =>
-                            setRoleDrafts((current) => ({
-                              ...current,
-                              [member.membershipId]: event.target.value as EditableRole,
-                            }))
+                    {member.role === 'owner' || !access.canManage ? (
+                      <strong className="family-role-label">
+                        {t(`familyAccess.roles.${member.role}`)}
+                      </strong>
+                    ) : (
+                      <div className="family-member-actions">
+                        <label>
+                          <span className="sr-only">{t('familyAccess.role')}</span>
+                          <select
+                            value={roleDrafts[member.membershipId] ?? member.role}
+                            disabled={busyId !== null}
+                            onChange={(event) =>
+                              setRoleDrafts((current) => ({
+                                ...current,
+                                [member.membershipId]: event.target.value as EditableRole,
+                              }))
+                            }
+                          >
+                            <option value="manager">{t('familyAccess.roles.manager')}</option>
+                            <option value="viewer">{t('familyAccess.roles.viewer')}</option>
+                          </select>
+                        </label>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={
+                            busyId !== null || roleDrafts[member.membershipId] === member.role
                           }
+                          onClick={() => void saveRole(member)}
                         >
-                          <option value="manager">{t('familyAccess.roles.manager')}</option>
-                          <option value="viewer">{t('familyAccess.roles.viewer')}</option>
-                        </select>
-                      </label>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        disabled={
-                          busyId !== null || roleDrafts[member.membershipId] === member.role
-                        }
-                        onClick={() => void saveRole(member)}
-                      >
-                        {t('familyAccess.saveRole')}
-                      </button>
-                      <button
-                        className="danger-text-button"
-                        type="button"
-                        disabled={busyId !== null}
-                        onClick={() => void remove(member)}
-                      >
-                        {t('familyAccess.remove')}
-                      </button>
-                    </div>
-                  )}
-                </article>
-              ))}
+                          {t('familyAccess.saveRole')}
+                        </button>
+                        <button
+                          className="danger-text-button"
+                          type="button"
+                          disabled={busyId !== null}
+                          onClick={() => void remove(member)}
+                        >
+                          {t('familyAccess.remove')}
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -290,7 +312,11 @@ export function FamilyAccessPage() {
             ? t('familyAccess.inviteSent')
             : notice === 'duplicate'
               ? t('familyAccess.duplicateError')
-              : t('familyAccess.actionError')}
+              : notice === 'delivery'
+                ? t('familyAccess.deliveryError')
+                : notice === 'forbidden'
+                  ? t('familyAccess.forbiddenError')
+                  : t('familyAccess.actionError')}
         </p>
       ) : null}
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import type { MvpProfile } from '../storage/mvp-storage.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
 
@@ -17,9 +18,14 @@ type DetailFieldKey =
   | 'caregiverLanguage'
   | 'employmentStartDate'
   | 'representativeName'
-  | 'representativePhone';
+  | 'representativePhone'
+  | 'licensedBureauName'
+  | 'licensedBureauRegistrationNumber'
+  | 'licensedBureauContactName'
+  | 'licensedBureauContactPhone'
+  | 'licensedBureauContactEmail';
 
-type DetailFieldType = 'text' | 'tel' | 'date' | 'israeli-id' | 'country' | 'language';
+type DetailFieldType = 'text' | 'tel' | 'email' | 'date' | 'israeli-id' | 'country' | 'language';
 
 interface DetailField {
   key: DetailFieldKey;
@@ -30,7 +36,7 @@ interface DetailField {
 export function employmentSetupCompletedCount(profile: MvpProfile): number {
   return [
     profile.employmentAgreementConfirmed,
-    profile.medicalInsuranceConfirmed,
+    profile.medicalInsuranceConfirmed && Boolean(profile.medicalInsuranceExpiryDate),
     (profile.baseSalary ?? 0) > 0,
     (profile.saturdayRate ?? 0) > 0,
     Boolean(profile.licenseRenewalDate),
@@ -50,6 +56,7 @@ export function OnboardingPage() {
   const sections = useMemo(
     () => [
       {
+        key: 'people',
         title: t('onboarding.people'),
         fields: [
           { key: 'employerName', label: t('profile.employerName'), type: 'text' },
@@ -59,6 +66,7 @@ export function OnboardingPage() {
         ] satisfies DetailField[],
       },
       {
+        key: 'employment',
         title: t('onboarding.employment'),
         fields: [
           { key: 'caregiverName', label: t('profile.caregiverName'), type: 'text' },
@@ -68,11 +76,17 @@ export function OnboardingPage() {
         ] satisfies DetailField[],
       },
       {
+        key: 'support',
         title: t('onboarding.support'),
         fields: [
           { key: 'representativeName', label: t('profile.representativeName'), type: 'text' },
           { key: 'representativePhone', label: t('profile.phone'), type: 'tel' },
         ] satisfies DetailField[],
+      },
+      {
+        key: 'licensedBureau',
+        title: t('onboarding.licensedBureau'),
+        fields: [] satisfies DetailField[],
       },
     ],
     [t],
@@ -82,11 +96,19 @@ export function OnboardingPage() {
   const totalSteps = sections.length + 1;
   const checklistStep = step === sections.length;
   const current = sections[Math.min(step, sections.length - 1)]!;
-  const detailsValid = current.fields.every(
-    ({ key, type }) =>
-      draft[key].trim().length > 0 &&
-      (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
-  );
+  const licensedBureauStep = !checklistStep && current.key === 'licensedBureau';
+  const detailsValid = licensedBureauStep
+    ? Boolean(
+        draft.licensedBureauName.trim() &&
+        draft.licensedBureauRegistrationNumber.trim() &&
+        draft.licensedBureauContactName.trim() &&
+        draft.licensedBureauContactPhone.trim(),
+      )
+    : current.fields.every(
+        ({ key, type }) =>
+          draft[key].trim().length > 0 &&
+          (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
+      );
   const isValid = checklistStep ? checklistComplete === 6 : detailsValid;
 
   function complete() {
@@ -150,16 +172,43 @@ export function OnboardingPage() {
                 />
                 <span>{t('onboarding.agreementConfirmed')}</span>
               </label>
-              <label className={draft.medicalInsuranceConfirmed ? 'complete' : ''}>
+              <label
+                className={
+                  draft.medicalInsuranceConfirmed && draft.medicalInsuranceExpiryDate
+                    ? 'complete'
+                    : ''
+                }
+              >
                 <input
                   type="checkbox"
                   checked={draft.medicalInsuranceConfirmed}
                   onChange={(event) =>
-                    setDraft({ ...draft, medicalInsuranceConfirmed: event.target.checked })
+                    setDraft({
+                      ...draft,
+                      medicalInsuranceConfirmed: event.target.checked,
+                      medicalInsuranceExpiryDate: event.target.checked
+                        ? draft.medicalInsuranceExpiryDate
+                        : '',
+                    })
                   }
                 />
                 <span>{t('onboarding.medicalInsuranceConfirmed')}</span>
               </label>
+              {draft.medicalInsuranceConfirmed ? (
+                <label>
+                  {t('onboarding.medicalInsuranceExpiryDate')}
+                  <input
+                    type="date"
+                    dir="ltr"
+                    required
+                    value={draft.medicalInsuranceExpiryDate}
+                    onChange={(event) =>
+                      setDraft({ ...draft, medicalInsuranceExpiryDate: event.target.value })
+                    }
+                  />
+                  <small>{t('onboarding.medicalInsuranceExpiryHelp')}</small>
+                </label>
+              ) : null}
               <label>
                 {t('onboarding.baseSalary')}
                 <input
@@ -222,6 +271,8 @@ export function OnboardingPage() {
                 />
               </label>
             </div>
+          ) : licensedBureauStep ? (
+            <LicensedBureauSelector profile={draft} onChange={setDraft} required />
           ) : (
             current.fields.map(({ key, label, type }) => (
               <label key={key}>

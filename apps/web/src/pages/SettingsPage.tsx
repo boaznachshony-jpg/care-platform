@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { ReminderLeadDays } from '../storage/mvp-storage.js';
@@ -137,6 +138,44 @@ export function SettingsPage() {
               required
               onChange={(event) => setDraft({ ...draft, representativePhone: event.target.value })}
             />
+          </label>
+        </section>
+        <section className="card readable-form">
+          <h2>{t('settings.licensedBureau')}</h2>
+          <p>{t('settings.licensedBureauIntro')}</p>
+          <LicensedBureauSelector profile={draft} onChange={setDraft} />
+        </section>
+        <section className="card readable-form">
+          <h2>{t('settings.medicalInsurance')}</h2>
+          <label className="switch-row">
+            <span>{t('onboarding.medicalInsuranceConfirmed')}</span>
+            <input
+              type="checkbox"
+              checked={draft.medicalInsuranceConfirmed}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  medicalInsuranceConfirmed: event.target.checked,
+                  medicalInsuranceExpiryDate: event.target.checked
+                    ? draft.medicalInsuranceExpiryDate
+                    : '',
+                })
+              }
+            />
+          </label>
+          <label>
+            {t('onboarding.medicalInsuranceExpiryDate')}
+            <input
+              dir="ltr"
+              type="date"
+              value={draft.medicalInsuranceExpiryDate}
+              required={draft.medicalInsuranceConfirmed}
+              disabled={!draft.medicalInsuranceConfirmed}
+              onChange={(event) =>
+                setDraft({ ...draft, medicalInsuranceExpiryDate: event.target.value })
+              }
+            />
+            <small>{t('onboarding.medicalInsuranceExpiryHelp')}</small>
           </label>
         </section>
         <section className="card readable-form notification-settings">
