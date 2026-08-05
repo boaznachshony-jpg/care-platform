@@ -88,6 +88,8 @@ export function TasksPage({ today }: { today?: Date } = {}) {
       priority: draft.priority,
       status: existing?.status ?? 'open',
       createdAt: existing?.createdAt ?? new Date().toISOString(),
+      source: existing?.source,
+      sourceDate: existing?.sourceDate,
     };
     const next = existing
       ? tasks.map((task) => (task.id === existing.id ? saved : task))
@@ -263,18 +265,23 @@ export function TasksPage({ today }: { today?: Date } = {}) {
               <div>
                 <h3>{task.title}</h3>
                 <p>מועד יעד: {displayDate(task.dueDate)}</p>
+                {task.source === 'medical-insurance' ? (
+                  <small>נוצר אוטומטית מתוקף הביטוח הרפואי שנשמר בתיק.</small>
+                ) : null}
               </div>
               <span className={`pill ${task.priority === 'urgent' ? 'amber' : 'neutral'}`}>
                 {priorityLabels[task.priority]}
               </span>
-              <div className="task-actions">
-                <button className="secondary-button" type="button" onClick={() => editTask(task)}>
-                  עריכה
-                </button>
-                <button className="danger-button" type="button" onClick={() => removeTask(task)}>
-                  מחיקה
-                </button>
-              </div>
+              {task.source === 'medical-insurance' ? null : (
+                <div className="task-actions">
+                  <button className="secondary-button" type="button" onClick={() => editTask(task)}>
+                    עריכה
+                  </button>
+                  <button className="danger-button" type="button" onClick={() => removeTask(task)}>
+                    מחיקה
+                  </button>
+                </div>
+              )}
             </article>
           ))
         )}

@@ -69,6 +69,17 @@ export function TimelinePage({
           ],
         ] satisfies TimelineEvent[])
       : []),
+    ...(profile.medicalInsuranceExpiryDate
+      ? ([
+          [
+            shortDate(profile.medicalInsuranceExpiryDate),
+            'חידוש ביטוח רפואי',
+            'מועד סיום הכיסוי שהוגדר בתיק',
+            'amber',
+            '/tasks',
+          ],
+        ] satisfies TimelineEvent[])
+      : []),
     ...(profile.employmentFeeDueDate
       ? ([
           [

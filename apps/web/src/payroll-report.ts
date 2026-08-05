@@ -38,7 +38,11 @@ export function createAnnualPayrollReport(
         amount(record.vacationPay) +
         amount(record.sickPay) +
         amount(record.employerContributions) +
-        amount(record.otherAddition);
+        amount(record.otherAddition) +
+        (record.additionalPayments ?? []).reduce(
+          (total, payment) => total + amount(payment.amount),
+          0,
+        );
       report.deductions +=
         amount(record.pocketMoney) +
         amount(record.medicalInsuranceDeduction) +

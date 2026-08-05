@@ -121,7 +121,9 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByText('השכר נשמר בהצלחה')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'שמירה מחדש' })).toBeInTheDocument();
 
-    const saved = readMvpPayroll().find((record) => record.month === currentMonth);
+    const saved = readMvpPayroll().find(
+      (record) => record.month === new Date().toISOString().slice(0, 7),
+    );
     expect(saved).toMatchObject({
       baseSalary: proratedBaseSalary,
       contractBaseSalary: 7_000,
@@ -216,6 +218,42 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByRole('heading', { name: 'תוספות נוספות' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('תשלום ימי חג');
     expect(screen.getByRole('alert')).toHaveTextContent('תוספת אחרת');
+  });
+
+  it('adds multiple named additional payments to the saved calculation and print summary', () => {
+    render(<PayrollPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: '＋ הוספת תשלום' }));
+    fireEvent.change(screen.getByLabelText('תיאור תשלום נוסף 1'), {
+      target: { value: 'בונוס חד־פעמי' },
+    });
+    fireEvent.change(screen.getByLabelText('סכום תשלום נוסף 1'), {
+      target: { value: '350' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '＋ הוספת תשלום' }));
+    fireEvent.change(screen.getByLabelText('תיאור תשלום נוסף 2'), {
+      target: { value: 'החזר נסיעות' },
+    });
+    fireEvent.change(screen.getByLabelText('סכום תשלום נוסף 2'), {
+      target: { value: '150' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getAllByText('בונוס חד־פעמי')).toHaveLength(2);
+    expect(screen.getAllByText('החזר נסיעות')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'אישור ושמירה' }));
+
+    const saved = readMvpPayroll().find(
+      (record) => record.month === new Date().toISOString().slice(0, 7),
+    );
+    expect(saved?.additionalPayments).toEqual([
+      expect.objectContaining({ description: 'בונוס חד־פעמי', amount: 350 }),
+      expect.objectContaining({ description: 'החזר נסיעות', amount: 150 }),
+    ]);
+    expect(saved?.total).toBe(7_500);
   });
 
   it('keeps values across back and forward navigation and calculates the summary from them', () => {

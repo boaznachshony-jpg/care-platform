@@ -76,24 +76,38 @@ async function persistSnapshot(): Promise<void> {
   }
 }
 
-function flush(): void {
+function flush(): Promise<void> {
   if (flushInFlight) {
     flushQueued = true;
-    return;
+    return flushInFlight;
   }
   flushInFlight = persistSnapshot().finally(() => {
     flushInFlight = undefined;
     if (flushQueued && listening) {
       flushQueued = false;
-      flush();
+      void flush();
     }
   });
+  return flushInFlight;
 }
 
 function scheduleFlush(): void {
   if (!listening) return;
   if (timer) clearTimeout(timer);
-  timer = setTimeout(flush, 250);
+  timer = setTimeout(() => void flush(), 250);
+}
+
+/**
+ * Retries the current local snapshot without reloading or rehydrating it.
+ * This is deliberately separate from startWorkspaceSync(): after a transient
+ * network or deployment failure, rehydrating first could discard edits that
+ * have not reached the server yet.
+ */
+export function retryWorkspaceSync(): Promise<void> {
+  if (!listening) return Promise.resolve();
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+  return flush();
 }
 
 export async function startWorkspaceSync(): Promise<void> {

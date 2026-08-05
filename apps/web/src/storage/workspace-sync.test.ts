@@ -23,7 +23,12 @@ vi.mock('../api/client.js', () => ({
 }));
 
 import { captureMvpWorkspace, MVP_PROFILE_CHANGED } from './mvp-storage.js';
-import { startWorkspaceSync, stopWorkspaceSync } from './workspace-sync.js';
+import {
+  getWorkspaceSyncState,
+  retryWorkspaceSync,
+  startWorkspaceSync,
+  stopWorkspaceSync,
+} from './workspace-sync.js';
 
 describe('workspace sync', () => {
   beforeEach(() => {
@@ -125,5 +130,37 @@ describe('workspace sync', () => {
     await vi.advanceTimersByTimeAsync(300);
 
     expect(mocks.saveWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the current local snapshot after a transient save failure', async () => {
+    await startWorkspaceSync();
+    mocks.saveWorkspace
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+      .mockImplementationOnce(async ({ snapshot }) => ({
+        version: 5,
+        snapshot,
+        updatedAt: '',
+      }));
+
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[{"id":"unsaved"}]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(getWorkspaceSyncState()).toBe('error');
+
+    await retryWorkspaceSync();
+
+    expect(mocks.saveWorkspace).toHaveBeenCalledTimes(2);
+    expect(mocks.saveWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expectedVersion: 4,
+        snapshot: expect.objectContaining({
+          entries: expect.objectContaining({
+            'caredesk.mvp.tasks.v1.client.remote': '[{"id":"unsaved"}]',
+          }),
+        }),
+      }),
+    );
+    expect(getWorkspaceSyncState()).toBe('saved');
   });
 });

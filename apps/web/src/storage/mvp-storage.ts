@@ -17,6 +17,13 @@ export interface MvpProfile {
   employmentStartDate: string;
   representativeName: string;
   representativePhone: string;
+  licensedBureauName: string;
+  licensedBureauRegistrationNumber: string;
+  licensedBureauContactName: string;
+  licensedBureauContactPhone: string;
+  licensedBureauContactEmail: string;
+  licensedBureauMainPhone: string;
+  licensedBureauAddress: string;
   notificationsEnabled: boolean;
   reminderLeadDays: ReminderLeadDays;
   quietHoursStart: string;
@@ -24,6 +31,7 @@ export interface MvpProfile {
   onboardingCompleted: boolean;
   employmentAgreementConfirmed: boolean;
   medicalInsuranceConfirmed: boolean;
+  medicalInsuranceExpiryDate: string;
   baseSalary: number | null;
   salaryEffectiveDate: string;
   saturdayRate: number | null;
@@ -59,6 +67,13 @@ export const emptyMvpProfile: MvpProfile = {
   employmentStartDate: '',
   representativeName: '',
   representativePhone: '',
+  licensedBureauName: '',
+  licensedBureauRegistrationNumber: '',
+  licensedBureauContactName: '',
+  licensedBureauContactPhone: '',
+  licensedBureauContactEmail: '',
+  licensedBureauMainPhone: '',
+  licensedBureauAddress: '',
   notificationsEnabled: true,
   reminderLeadDays: 7,
   quietHoursStart: '21:00',
@@ -66,6 +81,7 @@ export const emptyMvpProfile: MvpProfile = {
   onboardingCompleted: false,
   employmentAgreementConfirmed: false,
   medicalInsuranceConfirmed: false,
+  medicalInsuranceExpiryDate: '',
   baseSalary: null,
   salaryEffectiveDate: '',
   saturdayRate: null,
@@ -267,6 +283,7 @@ export function saveMvpProfile(profile: MvpProfile): void {
       ),
     );
   }
+  syncMedicalInsuranceTask(profile);
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
@@ -290,6 +307,12 @@ export interface MvpDocument {
   updatedAt: string;
 }
 
+export interface MvpAdditionalPayment {
+  id: string;
+  description: string;
+  amount: number;
+}
+
 export interface MvpPayrollRecord {
   id: string;
   month: string;
@@ -311,6 +334,7 @@ export interface MvpPayrollRecord {
   pocketMoney: number;
   employerContributions?: number;
   otherAddition: number;
+  additionalPayments?: MvpAdditionalPayment[];
   medicalInsuranceDeduction?: number;
   housingDeduction?: number;
   advances: number;
@@ -343,6 +367,8 @@ export interface MvpTask {
   priority: MvpTaskPriority;
   status: MvpTaskStatus;
   createdAt: string;
+  source?: 'medical-insurance';
+  sourceDate?: string;
 }
 
 const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
@@ -364,6 +390,36 @@ function saveList<T>(key: string, value: T[]): void {
   if (!isBrowser()) return;
   writeBusinessItem(scopedKey(key), JSON.stringify(value));
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+}
+
+function syncMedicalInsuranceTask(profile: MvpProfile): void {
+  const tasks = readList<MvpTask>(TASKS_STORAGE_NAME);
+  const existing = tasks.find((task) => task.source === 'medical-insurance');
+
+  if (!profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate) {
+    if (existing) {
+      saveList(
+        TASKS_STORAGE_NAME,
+        tasks.filter((task) => task.id !== existing.id),
+      );
+    }
+    return;
+  }
+
+  const task: MvpTask = {
+    id: existing?.id ?? 'system-medical-insurance-renewal',
+    title: 'חידוש ביטוח רפואי',
+    dueDate: profile.medicalInsuranceExpiryDate,
+    priority: 'important',
+    status: existing?.sourceDate === profile.medicalInsuranceExpiryDate ? existing.status : 'open',
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    source: 'medical-insurance',
+    sourceDate: profile.medicalInsuranceExpiryDate,
+  };
+  saveList(
+    TASKS_STORAGE_NAME,
+    existing ? tasks.map((item) => (item.id === existing.id ? task : item)) : [task, ...tasks],
+  );
 }
 
 export function readMvpDocuments(): MvpDocument[] {

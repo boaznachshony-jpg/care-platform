@@ -14,6 +14,7 @@ import { RELEASE_LABEL } from './release.js';
 import { useAuth } from './auth/auth-context.js';
 import {
   getWorkspaceSyncState,
+  retryWorkspaceSync,
   WORKSPACE_SYNC_CHANGED,
   type WorkspaceSyncState,
 } from './storage/workspace-sync.js';
@@ -133,18 +134,20 @@ export function AppShell({ children }: AppShellProps) {
             <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
-            {auth.enabled && syncState !== 'disabled' ? (
-              <span
-                className={`sync-status sync-status-${syncState}`}
-                role={syncState === 'error' ? 'alert' : 'status'}
-              >
-                {syncState === 'saving'
-                  ? 'שומר…'
-                  : syncState === 'loading'
-                    ? 'טוען…'
-                    : syncState === 'error'
-                      ? 'השמירה נכשלה — יש לרענן'
-                      : 'נשמר בענן'}
+            {auth.enabled && syncState === 'error' ? (
+              <span className="sync-status sync-status-error" role="alert">
+                השמירה בענן נכשלה
+                <button
+                  className="sync-retry-button"
+                  type="button"
+                  onClick={() => void retryWorkspaceSync()}
+                >
+                  נסו שוב
+                </button>
+              </span>
+            ) : auth.enabled && syncState !== 'disabled' ? (
+              <span className={`sync-status sync-status-${syncState}`} role="status">
+                {syncState === 'saving' ? 'שומר…' : syncState === 'loading' ? 'טוען…' : 'נשמר בענן'}
               </span>
             ) : null}
             {auth.enabled ? (

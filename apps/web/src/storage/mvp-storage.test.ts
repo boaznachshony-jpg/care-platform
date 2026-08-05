@@ -7,6 +7,7 @@ import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
   readMvpProfile,
+  readMvpTasks,
   saveMvpDocuments,
   saveMvpEmploymentExpenses,
   saveMvpPayroll,
@@ -35,6 +36,31 @@ describe('MVP local storage', () => {
   it('persists employment salary settings', () => {
     saveMvpProfile({ ...emptyMvpProfile, baseSalary: 7000, salaryEffectiveDate: '2026-01-01' });
     expect(readMvpProfile().baseSalary).toBe(7000);
+  });
+
+  it('creates and updates an open medical-insurance renewal task from the saved expiry date', () => {
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      medicalInsuranceConfirmed: true,
+      medicalInsuranceExpiryDate: '2027-06-30',
+    });
+
+    expect(readMvpTasks()).toContainEqual(
+      expect.objectContaining({
+        title: 'חידוש ביטוח רפואי',
+        dueDate: '2027-06-30',
+        status: 'open',
+        source: 'medical-insurance',
+      }),
+    );
+
+    saveMvpProfile({
+      ...readMvpProfile(),
+      medicalInsuranceExpiryDate: '2027-07-31',
+    });
+    expect(readMvpTasks().filter((task) => task.source === 'medical-insurance')).toEqual([
+      expect.objectContaining({ dueDate: '2027-07-31', status: 'open' }),
+    ]);
   });
 
   it('encrypts sensitive business values in the device cache', () => {
