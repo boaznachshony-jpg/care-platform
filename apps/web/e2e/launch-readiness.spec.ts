@@ -69,11 +69,11 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('מספר טלפון').fill('0521111111');
     await page.getByRole('button', { name: 'המשך' }).click();
 
-    await page.getByLabel('שם התאגיד המורשה').fill('תאגיד חדש');
-    await page.getByLabel('מספר הרישום או הרישיון של התאגיד').fill('LB-2002');
-    await page.getByLabel('שם איש הקשר בתאגיד').fill('אשת קשר חדשה');
-    await page.getByLabel('טלפון איש הקשר בתאגיד').fill('0531111111');
-    await page.getByLabel('דוא״ל איש הקשר בתאגיד').fill('bureau-new@example.test');
+    await page.getByLabel('בחירת תאגיד או לשכה פרטית מורשית').selectOption('513986042');
+    await expect(page.getByText('א. גונן שירותי סיעוד', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('שם איש הקשר בתאגיד')).toHaveValue('יקי גרנט');
+    await expect(page.getByLabel('טלפון איש הקשר בתאגיד')).toHaveValue('050-5219099');
+    await expect(page.getByLabel('דוא״ל איש הקשר בתאגיד')).toHaveValue('gonen09@gmail.com');
     await page.getByRole('button', { name: 'המשך' }).click();
 
     await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();

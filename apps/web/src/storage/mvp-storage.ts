@@ -22,6 +22,8 @@ export interface MvpProfile {
   licensedBureauContactName: string;
   licensedBureauContactPhone: string;
   licensedBureauContactEmail: string;
+  licensedBureauMainPhone: string;
+  licensedBureauAddress: string;
   notificationsEnabled: boolean;
   reminderLeadDays: ReminderLeadDays;
   quietHoursStart: string;
@@ -70,6 +72,8 @@ export const emptyMvpProfile: MvpProfile = {
   licensedBureauContactName: '',
   licensedBureauContactPhone: '',
   licensedBureauContactEmail: '',
+  licensedBureauMainPhone: '',
+  licensedBureauAddress: '',
   notificationsEnabled: true,
   reminderLeadDays: 7,
   quietHoursStart: '21:00',

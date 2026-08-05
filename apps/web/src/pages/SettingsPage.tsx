@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { ReminderLeadDays } from '../storage/mvp-storage.js';
@@ -142,56 +143,7 @@ export function SettingsPage() {
         <section className="card readable-form">
           <h2>{t('settings.licensedBureau')}</h2>
           <p>{t('settings.licensedBureauIntro')}</p>
-          <label>
-            {t('profile.licensedBureauName')}
-            <input
-              value={draft.licensedBureauName}
-              onChange={(event) => setDraft({ ...draft, licensedBureauName: event.target.value })}
-            />
-          </label>
-          <label>
-            {t('profile.licensedBureauRegistrationNumber')}
-            <input
-              dir="ltr"
-              value={draft.licensedBureauRegistrationNumber}
-              onChange={(event) =>
-                setDraft({ ...draft, licensedBureauRegistrationNumber: event.target.value })
-              }
-            />
-          </label>
-          <div className="form-grid two-columns">
-            <label>
-              {t('profile.licensedBureauContactName')}
-              <input
-                value={draft.licensedBureauContactName}
-                onChange={(event) =>
-                  setDraft({ ...draft, licensedBureauContactName: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              {t('profile.licensedBureauContactPhone')}
-              <input
-                dir="ltr"
-                type="tel"
-                value={draft.licensedBureauContactPhone}
-                onChange={(event) =>
-                  setDraft({ ...draft, licensedBureauContactPhone: event.target.value })
-                }
-              />
-            </label>
-          </div>
-          <label>
-            {t('profile.licensedBureauContactEmail')}
-            <input
-              dir="ltr"
-              type="email"
-              value={draft.licensedBureauContactEmail}
-              onChange={(event) =>
-                setDraft({ ...draft, licensedBureauContactEmail: event.target.value })
-              }
-            />
-          </label>
+          <LicensedBureauSelector profile={draft} onChange={setDraft} />
         </section>
         <section className="card readable-form">
           <h2>{t('settings.medicalInsurance')}</h2>

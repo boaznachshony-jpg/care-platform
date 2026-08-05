@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import type { MvpProfile } from '../storage/mvp-storage.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
 
@@ -55,6 +56,7 @@ export function OnboardingPage() {
   const sections = useMemo(
     () => [
       {
+        key: 'people',
         title: t('onboarding.people'),
         fields: [
           { key: 'employerName', label: t('profile.employerName'), type: 'text' },
@@ -64,6 +66,7 @@ export function OnboardingPage() {
         ] satisfies DetailField[],
       },
       {
+        key: 'employment',
         title: t('onboarding.employment'),
         fields: [
           { key: 'caregiverName', label: t('profile.caregiverName'), type: 'text' },
@@ -73,6 +76,7 @@ export function OnboardingPage() {
         ] satisfies DetailField[],
       },
       {
+        key: 'support',
         title: t('onboarding.support'),
         fields: [
           { key: 'representativeName', label: t('profile.representativeName'), type: 'text' },
@@ -80,30 +84,9 @@ export function OnboardingPage() {
         ] satisfies DetailField[],
       },
       {
+        key: 'licensedBureau',
         title: t('onboarding.licensedBureau'),
-        fields: [
-          { key: 'licensedBureauName', label: t('profile.licensedBureauName'), type: 'text' },
-          {
-            key: 'licensedBureauRegistrationNumber',
-            label: t('profile.licensedBureauRegistrationNumber'),
-            type: 'text',
-          },
-          {
-            key: 'licensedBureauContactName',
-            label: t('profile.licensedBureauContactName'),
-            type: 'text',
-          },
-          {
-            key: 'licensedBureauContactPhone',
-            label: t('profile.licensedBureauContactPhone'),
-            type: 'tel',
-          },
-          {
-            key: 'licensedBureauContactEmail',
-            label: t('profile.licensedBureauContactEmail'),
-            type: 'email',
-          },
-        ] satisfies DetailField[],
+        fields: [] satisfies DetailField[],
       },
     ],
     [t],
@@ -113,11 +96,19 @@ export function OnboardingPage() {
   const totalSteps = sections.length + 1;
   const checklistStep = step === sections.length;
   const current = sections[Math.min(step, sections.length - 1)]!;
-  const detailsValid = current.fields.every(
-    ({ key, type }) =>
-      draft[key].trim().length > 0 &&
-      (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
-  );
+  const licensedBureauStep = !checklistStep && current.key === 'licensedBureau';
+  const detailsValid = licensedBureauStep
+    ? Boolean(
+        draft.licensedBureauName.trim() &&
+        draft.licensedBureauRegistrationNumber.trim() &&
+        draft.licensedBureauContactName.trim() &&
+        draft.licensedBureauContactPhone.trim(),
+      )
+    : current.fields.every(
+        ({ key, type }) =>
+          draft[key].trim().length > 0 &&
+          (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
+      );
   const isValid = checklistStep ? checklistComplete === 6 : detailsValid;
 
   function complete() {
@@ -280,6 +271,8 @@ export function OnboardingPage() {
                 />
               </label>
             </div>
+          ) : licensedBureauStep ? (
+            <LicensedBureauSelector profile={draft} onChange={setDraft} required />
           ) : (
             current.fields.map(({ key, label, type }) => (
               <label key={key}>

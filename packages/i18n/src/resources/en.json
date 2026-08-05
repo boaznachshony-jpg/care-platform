@@ -300,6 +300,19 @@
     "phone": "Phone number",
     "startDate": "Employment start date"
   },
+  "licensedBureau": {
+    "choose": "Choose a licensed private bureau",
+    "placeholder": "Choose from the official list",
+    "manualOption": "My bureau is not listed — enter manually",
+    "selectionHelp": "Type the beginning of the name or browse {{count}} active bureaus.",
+    "selected": "Selected from the official list",
+    "mainPhone": "Bureau main phone",
+    "manager": "Bureau manager",
+    "addresses": "Bureau addresses",
+    "autofillNote": "The details were filled automatically. You can update the direct contact if you work with someone else.",
+    "sourceNote": "Based on the Population and Immigration Authority list, updated {{date}}.",
+    "sourceLink": "Open the official source"
+  },
   "onboarding": {
     "checklist": "Employment setup checklist",
     "checklistIntro": "Complete all six items before opening the case. Dates will be saved for future tracking and reminders.",
