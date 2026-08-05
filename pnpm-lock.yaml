@@ -89,8 +89,8 @@ importers:
         specifier: ^22.10.10
         version: 22.20.1
       '@types/pg':
-        specifier: ^8.11.10
-        version: 8.20.0
+        specifier: ^8.20.3
+        version: 8.20.3
       tsx:
         specifier: ^4.19.2
         version: 4.23.1
@@ -219,8 +219,8 @@ importers:
         specifier: ^22.10.10
         version: 22.20.1
       '@types/pg':
-        specifier: ^8.11.10
-        version: 8.20.0
+        specifier: ^8.20.3
+        version: 8.20.3
       tsx:
         specifier: ^4.23.1
         version: 4.23.1
@@ -1150,8 +1150,8 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
-  '@types/pg@8.20.0':
-    resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
+  '@types/pg@8.20.3':
+    resolution: {integrity: sha512-4Tvg+HO6+oQaAkpT8GTYoSExzpGGZz532GXgbbCElWJQeQdMozBWxEKNBhJJpHFjWXsMxqPbyypvj/89FWNoSQ==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -3440,7 +3440,7 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/pg@8.20.0':
+  '@types/pg@8.20.3':
     dependencies:
       '@types/node': 22.20.1
       pg-protocol: 1.15.0
