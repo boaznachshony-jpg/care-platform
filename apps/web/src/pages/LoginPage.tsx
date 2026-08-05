@@ -3,20 +3,62 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
 
+export type RegistrationValidationError = 'email' | 'password' | 'confirmation' | null;
+
+export function validateRegistration(
+  email: string,
+  password: string,
+  confirmation: string,
+): RegistrationValidationError {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'email';
+  if (password.length < 12) return 'password';
+  if (password !== confirmation) return 'confirmation';
+  return null;
+}
+
 export function LoginPage() {
   const { t } = useTranslation();
-  const { signIn, requestMagicLink, requestPasswordReset } = useAuth();
+  const { signIn, signUp, requestMagicLink, requestPasswordReset } = useAuth();
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
+  const [registrationError, setRegistrationError] = useState<RegistrationValidationError>(null);
+  const [confirmationRequired, setConfirmationRequired] = useState(false);
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [magicStatus, setMagicStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  function changeMode(nextMode: 'login' | 'register') {
+    setMode(nextMode);
+    setError(false);
+    setRegistrationError(null);
+    setConfirmationRequired(false);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setError(false);
+    setRegistrationError(null);
+    setConfirmationRequired(false);
+
+    if (mode === 'register') {
+      const validationError = validateRegistration(email, password, confirmation);
+      if (validationError) {
+        setRegistrationError(validationError);
+        setSubmitting(false);
+        return;
+      }
+      const result = await signUp(email.trim(), password);
+      setSubmitting(false);
+      if (result === 'signed-in') window.location.assign('/app?firstRun=1');
+      else if (result === 'confirmation-required') setConfirmationRequired(true);
+      else setError(true);
+      return;
+    }
+
     const success = await signIn(email.trim(), password);
     setSubmitting(false);
     if (!success) setError(true);
@@ -49,80 +91,141 @@ export function LoginPage() {
           C
         </div>
         <p className="eyebrow">CareDesk</p>
-        <h1 id="login-title">{t('auth.loginTitle')}</h1>
-        <p>{t('auth.loginIntro')}</p>
+        <h1 id="login-title">{t(mode === 'login' ? 'auth.loginTitle' : 'auth.registerTitle')}</h1>
+        <p>{t(mode === 'login' ? 'auth.loginIntro' : 'auth.registerIntro')}</p>
+
+        <div className="auth-mode-switch" role="tablist" aria-label={t('auth.accountAccess')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'login'}
+            className={mode === 'login' ? 'active' : ''}
+            onClick={() => changeMode('login')}
+          >
+            {t('auth.existingAccount')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'register'}
+            className={mode === 'register' ? 'active' : ''}
+            onClick={() => changeMode('register')}
+          >
+            {t('auth.newAccount')}
+          </button>
+        </div>
+
         <form onSubmit={(event) => void submit(event)}>
-          <label htmlFor="auth-email">{t('auth.email')}</label>
+          <label htmlFor="auth-email">
+            {t(mode === 'register' ? 'auth.emailAsUsername' : 'auth.email')}
+          </label>
           <input
             id="auth-email"
             type="email"
-            autoComplete="email"
+            autoComplete={mode === 'register' ? 'username' : 'email'}
             inputMode="email"
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
+
           <label htmlFor="auth-password">{t('auth.password')}</label>
           <input
             id="auth-password"
             type="password"
-            autoComplete="current-password"
+            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
             required
-            minLength={8}
+            minLength={mode === 'register' ? 12 : 8}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
+
+          {mode === 'register' ? (
+            <>
+              <small className="auth-field-help">{t('auth.passwordRequirements')}</small>
+              <label htmlFor="auth-password-confirmation">{t('auth.confirmPassword')}</label>
+              <input
+                id="auth-password-confirmation"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={12}
+                value={confirmation}
+                aria-invalid={registrationError === 'confirmation' || undefined}
+                onChange={(event) => setConfirmation(event.target.value)}
+              />
+            </>
+          ) : null}
+
+          {registrationError ? (
+            <p className="auth-error" role="alert">
+              {t(`auth.registrationErrors.${registrationError}`)}
+            </p>
+          ) : null}
           {error ? (
             <p className="auth-error" role="alert">
-              {t('auth.invalidCredentials')}
+              {t(mode === 'login' ? 'auth.invalidCredentials' : 'auth.registrationFailed')}
             </p>
           ) : null}
+          {confirmationRequired ? (
+            <p className="auth-success" role="status">
+              {t('auth.registrationConfirmationRequired')}
+            </p>
+          ) : null}
+
           <button className="primary-button" type="submit" disabled={submitting}>
-            {submitting ? t('auth.signingIn') : t('auth.signIn')}
+            {submitting
+              ? t(mode === 'login' ? 'auth.signingIn' : 'auth.registering')
+              : t(mode === 'login' ? 'auth.signIn' : 'auth.createAccount')}
           </button>
-          <div className="auth-divider" role="separator">
-            <span>{t('auth.or')}</span>
-          </div>
-          <button
-            className="auth-magic-button"
-            type="button"
-            disabled={magicStatus === 'sending'}
-            onClick={() => void sendMagicLink()}
-          >
-            {magicStatus === 'sending' ? t('auth.sendingMagicLink') : t('auth.sendMagicLink')}
-          </button>
-          {magicStatus === 'sent' ? (
-            <p className="auth-success" role="status">
-              {t('auth.magicLinkSent')}
-            </p>
-          ) : null}
-          {magicStatus === 'error' ? (
-            <p className="auth-error" role="alert">
-              {t('auth.magicLinkError')}
-            </p>
-          ) : null}
-          <button
-            className="auth-secondary-button"
-            type="button"
-            disabled={resetStatus === 'sending'}
-            onClick={() => void resetPassword()}
-          >
-            {resetStatus === 'sending' ? t('auth.sendingReset') : t('auth.forgotPassword')}
-          </button>
-          {resetStatus === 'sent' ? (
-            <p className="auth-success" role="status">
-              {t('auth.resetSent')}
-            </p>
-          ) : null}
-          {resetStatus === 'error' ? (
-            <p className="auth-error" role="alert">
-              {t('auth.resetError')}
-            </p>
+
+          {mode === 'login' ? (
+            <>
+              <div className="auth-divider" role="separator">
+                <span>{t('auth.or')}</span>
+              </div>
+              <button
+                className="auth-magic-button"
+                type="button"
+                disabled={magicStatus === 'sending'}
+                onClick={() => void sendMagicLink()}
+              >
+                {magicStatus === 'sending' ? t('auth.sendingMagicLink') : t('auth.sendMagicLink')}
+              </button>
+              {magicStatus === 'sent' ? (
+                <p className="auth-success" role="status">
+                  {t('auth.magicLinkSent')}
+                </p>
+              ) : null}
+              {magicStatus === 'error' ? (
+                <p className="auth-error" role="alert">
+                  {t('auth.magicLinkError')}
+                </p>
+              ) : null}
+              <button
+                className="auth-secondary-button"
+                type="button"
+                disabled={resetStatus === 'sending'}
+                onClick={() => void resetPassword()}
+              >
+                {resetStatus === 'sending' ? t('auth.sendingReset') : t('auth.forgotPassword')}
+              </button>
+              {resetStatus === 'sent' ? (
+                <p className="auth-success" role="status">
+                  {t('auth.resetSent')}
+                </p>
+              ) : null}
+              {resetStatus === 'error' ? (
+                <p className="auth-error" role="alert">
+                  {t('auth.resetError')}
+                </p>
+              ) : null}
+            </>
           ) : null}
         </form>
-        <small>{t('auth.closedAccess')}</small>
+
         <Link className="auth-secondary-button" to="/">
-          חזרה לדף המידע הציבורי
+          {t('auth.backToPublicSite')}
         </Link>
       </section>
     </main>

@@ -25,10 +25,16 @@ function numeric(value: string): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
-function payrollValues(record: MvpPayrollRecord | undefined, baseSalary: number | null) {
+function payrollValues(
+  record: MvpPayrollRecord | undefined,
+  baseSalary: number | null,
+  profileSaturdayRate: number | null,
+) {
   const saturdayRate =
     record?.saturdayRate ??
-    (record?.paidSaturdays ? (record.saturdayPay ?? 0) / record.paidSaturdays : 0);
+    (record?.paidSaturdays
+      ? (record.saturdayPay ?? 0) / record.paidSaturdays
+      : (profileSaturdayRate ?? 0));
 
   return {
     month: record?.month ?? currentMonth,
@@ -68,7 +74,9 @@ export function PayrollPage() {
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
   const [step, setStep] = useState(profile.baseSalary === null ? 0 : 1);
   const initialRecord = records.find((record) => record.month === currentMonth);
-  const [values, setValues] = useState(() => payrollValues(initialRecord, profile.baseSalary));
+  const [values, setValues] = useState(() =>
+    payrollValues(initialRecord, profile.baseSalary, profile.saturdayRate),
+  );
   const [expenseDraft, setExpenseDraft] = useState({
     category: 'ביטוח לאומי',
     frequency: 'quarterly' as EmploymentExpenseFrequency,
@@ -290,7 +298,7 @@ export function PayrollPage() {
 
   function loadMonth(month: string) {
     const record = records.find((item) => item.month === month);
-    setValues({ ...payrollValues(record, profile.baseSalary), month });
+    setValues({ ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month });
     setValidationErrors([]);
     setPayrollSaved(false);
     setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');

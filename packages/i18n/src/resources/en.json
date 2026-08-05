@@ -42,6 +42,8 @@
     "ownershipNotice": "During the closed pilot, ownership transfer uses a verified support process to prevent accidental lockout or account takeover."
   },
   "billing": {
+    "onboardingStep": "Final setup step: securely connect a payment method",
+    "completeSetup": "Finish and enter CareDesk",
     "eyebrow": "Subscription and billing",
     "title": "Your CareDesk subscription",
     "intro": "View the subscription price, launch benefit and payment method for the family account.",
@@ -82,13 +84,30 @@
     "local": "Local development environment"
   },
   "auth": {
+    "accountAccess": "Account access",
+    "existingAccount": "I already have an account",
+    "newAccount": "Create an account",
+    "registerTitle": "Create your CareDesk account",
+    "registerIntro": "A short registration: your email is your username. Next, we will guide you through a clear setup checklist.",
+    "emailAsUsername": "Email address (your username)",
+    "passwordRequirements": "Use at least 12 characters. Do not reuse a password from another service.",
+    "createAccount": "Create account and continue",
+    "registering": "Creating your account…",
+    "registrationFailed": "The account could not be created. The address may already be registered, or registration may be temporarily unavailable.",
+    "registrationConfirmationRequired": "Your account was created. Open the verification email we sent, then you will continue directly to the setup checklist.",
+    "registrationErrors": {
+      "email": "Enter a valid email address.",
+      "password": "Choose a password with at least 12 characters.",
+      "confirmation": "The two passwords do not match. Type them again."
+    },
+    "backToPublicSite": "Back to the public information page",
     "or": "or",
     "sendMagicLink": "Sign in with a one-time link",
     "sendingMagicLink": "Sending sign-in link…",
     "magicLinkSent": "If this address was invited, a secure sign-in link has been sent.",
     "magicLinkError": "The link could not be sent. Make sure this address was invited and try again.",
     "loginTitle": "Secure sign in",
-    "loginIntro": "Enter the email address and password provided by the administrator.",
+    "loginIntro": "Enter the email address and password you chose when creating the account.",
     "email": "Email address",
     "password": "Password",
     "signIn": "Sign in",
@@ -255,8 +274,13 @@
       "superseded": "Superseded"
     }
   },
-  "common": { "back": "Back", "continue": "Continue" },
+  "common": { "back": "Back", "continue": "Continue", "select": "Select" },
   "profile": {
+    "employerIdNumber": "Employer Israeli ID number",
+    "employerIdHelp": "Required for National Insurance reporting. Enter 9 digits; spaces and hyphens are allowed.",
+    "employerIdError": "The Israeli ID number is invalid. Check all 9 digits and the check digit.",
+    "caregiverCountry": "Country of origin",
+    "caregiverLanguage": "Preferred language",
     "employerName": "Employer name",
     "recipientName": "Care recipient name",
     "caregiverName": "Caregiver name",
@@ -265,6 +289,17 @@
     "startDate": "Employment start date"
   },
   "onboarding": {
+    "checklist": "Employment setup checklist",
+    "checklistIntro": "Complete all six items before opening the case. Dates will be saved for future tracking and reminders.",
+    "agreementConfirmed": "The employment agreement was signed and saved",
+    "medicalInsuranceConfirmed": "Medical insurance was purchased and is active",
+    "baseSalary": "Monthly base salary (ILS)",
+    "saturdayRate": "Rate per Saturday or rest day (ILS)",
+    "licenseRenewalDate": "Employment license renewal date",
+    "employmentFeeDueDate": "Employment fee payment date",
+    "salaryEffectiveNote": "The salary definition takes effect on the employment start date: {{date}}.",
+    "checklistProgress": "{{completed}} of {{total}} setup items completed",
+    "paymentNext": "Save checklist and continue to payment method",
     "eyebrow": "First-time setup",
     "title": "Let’s prepare your case",
     "intro": "We only ask for what is needed now. You can edit it later in Settings.",

@@ -7,14 +7,19 @@ export function DashboardPage() {
   const path = useClientPath();
   const { t } = useTranslation();
   const [profile] = useMvpProfile();
-  const required = [
-    profile.employerName,
-    profile.recipientName,
-    profile.caregiverName,
-    profile.employmentStartDate,
-    profile.representativeName,
-  ];
-  const missingCount = required.filter((value) => !value.trim()).length;
+  const missingCount = [
+    !profile.employerName.trim(),
+    !profile.recipientName.trim(),
+    !profile.caregiverName.trim(),
+    !profile.employmentStartDate.trim(),
+    !profile.representativeName.trim(),
+    !profile.employmentAgreementConfirmed,
+    !profile.medicalInsuranceConfirmed,
+    (profile.baseSalary ?? 0) <= 0,
+    (profile.saturdayRate ?? 0) <= 0,
+    !profile.licenseRenewalDate,
+    !profile.employmentFeeDueDate,
+  ].filter(Boolean).length;
   const status = missingCount > 0 ? 'missing' : 'attention';
 
   return (

@@ -58,6 +58,28 @@ export function TimelinePage({
           ],
         ] satisfies TimelineEvent[])
       : []),
+    ...(profile.licenseRenewalDate
+      ? ([
+          [
+            shortDate(profile.licenseRenewalDate),
+            'חידוש רישיון ההעסקה',
+            'המועד שהוגדר ברשימת ההקמה',
+            'amber',
+            '/documents',
+          ],
+        ] satisfies TimelineEvent[])
+      : []),
+    ...(profile.employmentFeeDueDate
+      ? ([
+          [
+            shortDate(profile.employmentFeeDueDate),
+            'תשלום אגרת העסקה',
+            'המועד שהוגדר ברשימת ההקמה',
+            'purple',
+            '/tasks',
+          ],
+        ] satisfies TimelineEvent[])
+      : []),
     ...fixedEvents,
     [
       shortDate(
