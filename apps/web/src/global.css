@@ -357,6 +357,22 @@ a {
   color: #9d241c !important;
   background: #ffebe9;
 }
+.sync-retry-button {
+  min-height: 32px;
+  margin-inline-start: 6px;
+  border: 0;
+  border-inline-start: 1px solid currentColor;
+  padding: 0 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.sync-retry-button:focus-visible {
+  outline: 3px solid #1d63c6;
+  outline-offset: 2px;
+}
 .font-size-controls {
   display: flex;
   align-items: center;
