@@ -23,8 +23,13 @@ const completedProfile = {
   quietHoursStart: '21:00',
   quietHoursEnd: '08:00',
   onboardingCompleted: true,
+  employmentAgreementConfirmed: true,
+  medicalInsuranceConfirmed: true,
   baseSalary: 7000,
   salaryEffectiveDate: '2026-01-15',
+  saturdayRate: 440,
+  licenseRenewalDate: '2027-01-15',
+  employmentFeeDueDate: '2026-12-31',
 };
 
 async function seedCompletedProfile(page: import('@playwright/test').Page) {
@@ -39,6 +44,7 @@ async function completeClientOnboarding(
   recipientName: string,
   caregiverName: string,
 ) {
+  const clientBase = page.url().replace(/\/onboarding$/, '');
   await page.getByLabel('שם המעסיק').fill(employerName);
   await page.getByLabel('מספר תעודת זהות').fill('123456782');
   await page.getByLabel('מספר טלפון').fill('0501234567');
@@ -51,7 +57,17 @@ async function completeClientOnboarding(
   await page.getByRole('button', { name: 'המשך' }).click();
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
-  await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();
+  await page.getByLabel('נרכש ביטוח רפואי והוא בתוקף').check();
+  await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
+  await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
+  await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
+  await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+  await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
+  await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
+  await expect(page.getByText('שלב ההקמה האחרון: חיבור אמצעי תשלום מאובטח')).toBeVisible();
+  await page.goto(clientBase);
 }
 
 test('creates and switches between two isolated client records', async ({ page }) => {
@@ -98,7 +114,18 @@ test('completes onboarding, persists data and updates settings', async ({ page }
 
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
-  await page.getByRole('button', { name: 'שמירה וכניסה למערכת' }).click();
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('הסכם ההעסקה נחתם ונשמר').check();
+  await page.getByLabel('נרכש ביטוח רפואי והוא בתוקף').check();
+  await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
+  await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
+  await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
+  await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+  await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
+
+  await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
+  await expect(page.getByText('שלב ההקמה האחרון: חיבור אמצעי תשלום מאובטח')).toBeVisible();
+  await page.goto(clientBase);
 
   await expect(page).toHaveURL(clientBase);
   await expect(page.getByRole('heading', { name: 'שלום בועז בדיקה' })).toBeVisible();
