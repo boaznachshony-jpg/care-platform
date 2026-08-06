@@ -51,16 +51,19 @@ async function completeClientOnboarding(
   caregiverName: string,
 ) {
   const clientBase = page.url().replace(/\/onboarding$/, '');
+  await page.getByLabel('שם המטופל').fill(recipientName);
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('לא, המעסיק הוא אדם אחר').check();
   await page.getByLabel('שם המעסיק').fill(employerName);
   await page.getByLabel('מספר תעודת זהות').fill('123456782');
   await page.getByLabel('מספר טלפון').fill('0501234567');
-  await page.getByLabel('שם המטופל').fill(recipientName);
   await page.getByRole('button', { name: 'המשך' }).click();
   await page.getByLabel('שם המטפל או המטפלת').fill(caregiverName);
   await page.getByLabel('ארץ מוצא').selectOption('אוזבקיסטן');
   await page.getByLabel('שפה מועדפת').selectOption('אוזבקית');
   await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
   await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('כן, הוספת אדם מסייע').check();
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'המשך' }).click();
@@ -83,14 +86,14 @@ async function completeClientOnboarding(
 }
 
 test('creates and switches between two isolated client records', async ({ page }) => {
-  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+  await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
   await completeClientOnboarding(page, 'מעסיק ראשון', 'מטופל ראשון', 'Caregiver One');
   const firstClientUrl = page.url();
   await page.locator('a.top-client-switch').click();
-  await expect(page.getByRole('heading', { name: 'הלקוחות שלי' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'תיקי ההעסקה שלי' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
 
-  await page.getByRole('button', { name: '＋ הוספת לקוח חדש' }).click();
+  await page.getByRole('button', { name: /פתיחת תיק חדש/ }).click();
   await completeClientOnboarding(page, 'מעסיק שני', 'מטופל שני', 'Caregiver Two');
   const secondClientUrl = page.url();
   expect(secondClientUrl).not.toBe(firstClientUrl);
@@ -107,15 +110,17 @@ test('creates and switches between two isolated client records', async ({ page }
 });
 
 test('completes onboarding, persists data and updates settings', async ({ page }) => {
-  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+  await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
   const clientBase = page.url().replace(/\/onboarding$/, '');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
+  await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('לא, המעסיק הוא אדם אחר').check();
   await page.getByLabel('שם המעסיק').fill('בועז בדיקה');
   await page.getByLabel('מספר תעודת זהות').fill('123456782');
   await page.getByLabel('מספר טלפון').fill('0501234567');
-  await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
   await page.getByRole('button', { name: 'המשך' }).click();
 
   await page.getByLabel('שם המטפל או המטפלת').fill('Caregiver Test');
@@ -124,6 +129,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
   await page.getByRole('button', { name: 'המשך' }).click();
 
+  await page.getByLabel('כן, הוספת אדם מסייע').check();
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'המשך' }).click();
@@ -171,8 +177,8 @@ test('completes onboarding, persists data and updates settings', async ({ page }
 
 test('mobile controls remain readable and touch friendly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
-  await expect(page.getByRole('heading', { name: 'בואו נכין את התיק שלכם' })).toBeVisible();
+  await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
+  await expect(page.getByRole('heading', { name: 'בואו נכין את תיק ההעסקה' })).toBeVisible();
   const continueButton = page.getByRole('button', { name: 'המשך' });
   await expect(continueButton).toBeVisible();
   const box = await continueButton.boundingBox();

@@ -45,14 +45,16 @@ test.describe('launch readiness interactions', () => {
     await page.goto('/app');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+    await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
     const clientBase = page.url().replace(/\/onboarding$/, '');
 
     await expect(page.getByRole('button', { name: 'חזרה' })).toBeDisabled();
+    await page.getByLabel('שם המטופל').fill('מטופל חדש');
+    await page.getByRole('button', { name: 'המשך' }).click();
+    await page.getByLabel('לא, המעסיק הוא אדם אחר').check();
     await page.getByLabel('שם המעסיק').fill('מעסיק חדש');
     await page.getByLabel('מספר תעודת זהות').fill('123456782');
     await page.getByLabel('מספר טלפון').fill('0501111111');
-    await page.getByLabel('שם המטופל').fill('מטופל חדש');
     await page.getByRole('button', { name: 'המשך' }).click();
 
     await page.getByLabel('שם המטפל או המטפלת').fill('Dilnoza');
@@ -65,6 +67,7 @@ test.describe('launch readiness interactions', () => {
     await expect(page.getByLabel('שם המטפל או המטפלת')).toHaveValue('Dilnoza');
     await page.getByRole('button', { name: 'המשך' }).click();
 
+    await page.getByLabel('כן, הוספת אדם מסייע').check();
     await page.getByLabel('שם הנציג המורשה').fill('נציג חדש');
     await page.getByLabel('מספר טלפון').fill('0521111111');
     await page.getByRole('button', { name: 'המשך' }).click();

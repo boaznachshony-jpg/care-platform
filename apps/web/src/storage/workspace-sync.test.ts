@@ -60,7 +60,7 @@ describe('workspace sync', () => {
     localStorage.setItem('caredesk.mvp.clients.v1', '[{"id":"old-account"}]');
     localStorage.setItem('caredesk.ui.font-scale.v1', '1.3');
 
-    await startWorkspaceSync();
+    await startWorkspaceSync('user-a');
 
     expect(captureMvpWorkspace().entries['caredesk.mvp.clients.v1']).toBe('[{"id":"remote"}]');
     // Device-only accessibility preferences are intentionally not server data.
@@ -68,7 +68,7 @@ describe('workspace sync', () => {
   });
 
   it('persists changes with optimistic concurrency', async () => {
-    await startWorkspaceSync();
+    await startWorkspaceSync('user-a');
     localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[]');
     window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 
@@ -87,7 +87,7 @@ describe('workspace sync', () => {
   });
 
   it('recovers a deployment-time version conflict when the remote content is unchanged', async () => {
-    await startWorkspaceSync();
+    await startWorkspaceSync('user-a');
     mocks.saveWorkspace
       .mockRejectedValueOnce(new mocks.ApiRequestError(409, 'VERSION_CONFLICT'))
       .mockImplementationOnce(async ({ snapshot }) => ({
@@ -114,7 +114,7 @@ describe('workspace sync', () => {
   });
 
   it('does not overwrite a real remote edit after a version conflict', async () => {
-    await startWorkspaceSync();
+    await startWorkspaceSync('user-a');
     mocks.saveWorkspace.mockRejectedValueOnce(new mocks.ApiRequestError(409, 'VERSION_CONFLICT'));
     mocks.getWorkspace.mockResolvedValueOnce({
       version: 5,
@@ -133,7 +133,7 @@ describe('workspace sync', () => {
   });
 
   it('retries the current local snapshot after a transient save failure', async () => {
-    await startWorkspaceSync();
+    await startWorkspaceSync('user-a');
     mocks.saveWorkspace
       .mockRejectedValueOnce(new TypeError('network unavailable'))
       .mockImplementationOnce(async ({ snapshot }) => ({
@@ -162,5 +162,81 @@ describe('workspace sync', () => {
       }),
     );
     expect(getWorkspaceSyncState()).toBe('saved');
+  });
+
+  it('keeps a valid same-user cache when remote hydration fails', async () => {
+    await startWorkspaceSync('user-a');
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[{"id":"local-task"}]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    await vi.advanceTimersByTimeAsync(300);
+
+    mocks.getWorkspace.mockRejectedValueOnce(new TypeError('network unavailable'));
+
+    await expect(startWorkspaceSync('user-a')).rejects.toThrow('network unavailable');
+
+    expect(captureMvpWorkspace().entries['caredesk.mvp.tasks.v1.client.remote']).toBe(
+      '[{"id":"local-task"}]',
+    );
+    expect(getWorkspaceSyncState()).toBe('error');
+  });
+
+  it('retries an unsaved same-user snapshot on the next hydration', async () => {
+    await startWorkspaceSync('user-a');
+    mocks.saveWorkspace
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+      .mockImplementationOnce(async ({ snapshot }) => ({
+        version: 5,
+        snapshot,
+        updatedAt: '',
+      }));
+
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[{"id":"pending"}]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getWorkspaceSyncState()).toBe('error');
+
+    await startWorkspaceSync('user-a');
+
+    expect(mocks.saveWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expectedVersion: 4,
+        snapshot: expect.objectContaining({
+          entries: expect.objectContaining({
+            'caredesk.mvp.tasks.v1.client.remote': '[{"id":"pending"}]',
+          }),
+        }),
+      }),
+    );
+    expect(getWorkspaceSyncState()).toBe('saved');
+  });
+
+  it('clears a previous account cache before hydrating another account', async () => {
+    await startWorkspaceSync('user-a');
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[{"id":"private-a"}]');
+
+    let resolveWorkspace!: (value: Awaited<ReturnType<typeof mocks.getWorkspace>>) => void;
+    mocks.getWorkspace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveWorkspace = resolve;
+        }),
+    );
+
+    const hydration = startWorkspaceSync('user-b');
+    await Promise.resolve();
+
+    expect(captureMvpWorkspace().entries).toEqual({});
+
+    resolveWorkspace({
+      version: 1,
+      snapshot: {
+        schemaVersion: 1,
+        entries: { 'caredesk.mvp.clients.v1': '[{"id":"user-b"}]' },
+      },
+      updatedAt: '',
+    });
+    await hydration;
+
+    expect(captureMvpWorkspace().entries['caredesk.mvp.clients.v1']).toBe('[{"id":"user-b"}]');
   });
 });

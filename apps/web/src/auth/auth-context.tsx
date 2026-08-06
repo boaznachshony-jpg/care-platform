@@ -2,7 +2,11 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { User } from '@supabase/supabase-js';
 import { getDeploymentEnvironment } from '../environment.js';
 import { getBrowserAuthClient } from './client.js';
-import { startWorkspaceSync, stopWorkspaceSync } from '../storage/workspace-sync.js';
+import {
+  canUseCachedWorkspace,
+  startWorkspaceSync,
+  stopWorkspaceSync,
+} from '../storage/workspace-sync.js';
 
 interface AuthContextValue {
   enabled: boolean;
@@ -48,7 +52,7 @@ export function AuthProvider({
   passwordRecovery,
   loading,
 }: {
-  children: ReactNode;
+  children?: ReactNode;
   login: ReactNode;
   configurationRequired: ReactNode;
   storageUnavailable: ReactNode;
@@ -64,38 +68,77 @@ export function AuthProvider({
   useEffect(() => {
     if (!client) return undefined;
     let active = true;
-    let hydrationId = 0;
+    let sessionId = 0;
+    let currentUserId: string | null | undefined;
 
     const applySession = async (nextUser: User | null) => {
-      const requestId = ++hydrationId;
-      setState('loading');
+      if (nextUser && currentUserId === nextUser.id) {
+        // TOKEN_REFRESHED and USER_UPDATED should refresh context without
+        // restarting hydration or briefly covering the app with a loader.
+        if (active) setUser(nextUser);
+        return;
+      }
+
+      const requestId = ++sessionId;
+      currentUserId = nextUser?.id ?? null;
       if (!nextUser) {
         stopWorkspaceSync();
-        if (!active || requestId !== hydrationId) return;
+        if (!active || requestId !== sessionId) return;
         setUser(null);
         setState('ready');
         return;
       }
 
+      const canResumeImmediately = canUseCachedWorkspace(nextUser.id);
+      if (canResumeImmediately) {
+        // A verified same-account cache makes return visits feel immediate.
+        // Server hydration continues below and sync failures remain visible in
+        // the app banner without hiding otherwise usable local data.
+        setUser(nextUser);
+        setState('ready');
+      } else {
+        setState('loading');
+      }
+
       try {
-        await startWorkspaceSync();
-        if (!active || requestId !== hydrationId) return;
+        await startWorkspaceSync(nextUser.id);
+        if (!active || requestId !== sessionId) return;
         setUser(nextUser);
         setState('ready');
       } catch {
-        if (!active || requestId !== hydrationId) return;
-        setUser(null);
-        setState('storage-error');
+        if (!active || requestId !== sessionId) return;
+        if (canResumeImmediately) {
+          setUser(nextUser);
+          setState('ready');
+        } else {
+          setUser(null);
+          setState('storage-error');
+        }
       }
     };
 
-    void client.auth.getUser().then(({ data }) => {
-      if (active) void applySession(data.user ?? null);
-    });
+    // getSession() reads Supabase's persisted browser session immediately.
+    // Every API call still validates its access token server-side; the UI does
+    // not need to wait for an extra getUser() network round-trip on each visit.
+    void client.auth.getSession().then(
+      ({ data }) => {
+        if (active) void applySession(data.session?.user ?? null);
+      },
+      () => {
+        if (!active) return;
+        setUser(null);
+        setState('storage-error');
+      },
+    );
 
     const { data } = client.auth.onAuthStateChange((event, session) => {
+      // getSession() above owns initial restoration. Handling INITIAL_SESSION
+      // as well can race a transient null event and clear a valid local cache.
+      if (event === 'INITIAL_SESSION') return;
       if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
-      if (active) void applySession(session?.user ?? null);
+      // Supabase holds an internal auth lock while this callback runs. Defer
+      // workspace API calls so request() can safely read the refreshed token.
+      if (active) window.setTimeout(() => void applySession(session?.user ?? null), 0);
     });
 
     return () => {

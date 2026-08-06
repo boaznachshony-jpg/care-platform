@@ -1,122 +1,244 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { useClientPath } from '../hooks/use-client-path.js';
-import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import { useNavigate, useParams } from 'react-router-dom';
 import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
 import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
+import { useClientPath } from '../hooks/use-client-path.js';
+import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { MvpProfile } from '../storage/mvp-storage.js';
-import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
+import {
+  getIsraeliIdValidationError,
+  isValidIsraeliId,
+  normalizeIsraeliId,
+} from '../validation/israeli-id.js';
+import {
+  isPositiveMoney,
+  isValidEmail,
+  isValidIsoDate,
+  isValidOrganizationName,
+  isValidPersonName,
+  isValidPhone,
+  isValidRegistrationNumber,
+} from '../validation/onboarding-fields.js';
 
-type DetailFieldKey =
-  | 'employerName'
-  | 'employerIdNumber'
-  | 'employerPhone'
-  | 'recipientName'
-  | 'caregiverName'
-  | 'caregiverCountry'
-  | 'caregiverLanguage'
-  | 'employmentStartDate'
-  | 'representativeName'
-  | 'representativePhone'
-  | 'licensedBureauName'
-  | 'licensedBureauRegistrationNumber'
-  | 'licensedBureauContactName'
-  | 'licensedBureauContactPhone'
-  | 'licensedBureauContactEmail';
+type ProfileStringKey = {
+  [Key in keyof MvpProfile]: MvpProfile[Key] extends string ? Key : never;
+}[keyof MvpProfile];
 
-type DetailFieldType = 'text' | 'tel' | 'email' | 'date' | 'israeli-id' | 'country' | 'language';
+type Choice = '' | 'yes' | 'no';
 
-interface DetailField {
-  key: DetailFieldKey;
-  label: string;
-  type: DetailFieldType;
+const LAST_STEP = 5;
+
+function stepStorageKey(clientId: string): string {
+  return `caredesk.onboarding.step.${clientId || 'default'}`;
+}
+
+function readSavedStep(clientId: string): number {
+  const value = Number(window.localStorage.getItem(stepStorageKey(clientId)) ?? 0);
+  return Number.isInteger(value) && value >= 0 && value <= LAST_STEP ? value : 0;
 }
 
 export function employmentSetupCompletedCount(profile: MvpProfile): number {
   return [
     profile.employmentAgreementConfirmed,
-    profile.medicalInsuranceConfirmed && Boolean(profile.medicalInsuranceExpiryDate),
-    (profile.baseSalary ?? 0) > 0,
-    (profile.saturdayRate ?? 0) > 0,
-    Boolean(profile.licenseRenewalDate),
-    Boolean(profile.employmentFeeDueDate),
+    profile.medicalInsuranceConfirmed && isValidIsoDate(profile.medicalInsuranceExpiryDate),
+    isPositiveMoney(profile.baseSalary),
+    isPositiveMoney(profile.saturdayRate),
+    isValidIsoDate(profile.licenseRenewalDate),
+    isValidIsoDate(profile.employmentFeeDueDate),
   ].filter(Boolean).length;
+}
+
+function bureauDetailsValid(profile: MvpProfile): boolean {
+  return (
+    isValidOrganizationName(profile.licensedBureauName) &&
+    isValidRegistrationNumber(profile.licensedBureauRegistrationNumber) &&
+    isValidPersonName(profile.licensedBureauContactName) &&
+    isValidPhone(profile.licensedBureauContactPhone) &&
+    (!profile.licensedBureauMainPhone || isValidPhone(profile.licensedBureauMainPhone)) &&
+    (!profile.licensedBureauContactEmail || isValidEmail(profile.licensedBureauContactEmail))
+  );
 }
 
 export function OnboardingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { clientId = '' } = useParams<{ clientId: string }>();
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
   const [draft, setDraft] = useState(profile);
-  const [step, setStep] = useState(0);
-  const isFirstRun = !profile.onboardingCompleted;
-
-  const sections = useMemo(
-    () => [
-      {
-        key: 'people',
-        title: t('onboarding.people'),
-        fields: [
-          { key: 'employerName', label: t('profile.employerName'), type: 'text' },
-          { key: 'employerIdNumber', label: t('profile.employerIdNumber'), type: 'israeli-id' },
-          { key: 'employerPhone', label: t('profile.phone'), type: 'tel' },
-          { key: 'recipientName', label: t('profile.recipientName'), type: 'text' },
-        ] satisfies DetailField[],
-      },
-      {
-        key: 'employment',
-        title: t('onboarding.employment'),
-        fields: [
-          { key: 'caregiverName', label: t('profile.caregiverName'), type: 'text' },
-          { key: 'caregiverCountry', label: t('profile.caregiverCountry'), type: 'country' },
-          { key: 'caregiverLanguage', label: t('profile.caregiverLanguage'), type: 'language' },
-          { key: 'employmentStartDate', label: t('profile.startDate'), type: 'date' },
-        ] satisfies DetailField[],
-      },
-      {
-        key: 'support',
-        title: t('onboarding.support'),
-        fields: [
-          { key: 'representativeName', label: t('profile.representativeName'), type: 'text' },
-          { key: 'representativePhone', label: t('profile.phone'), type: 'tel' },
-        ] satisfies DetailField[],
-      },
-      {
-        key: 'licensedBureau',
-        title: t('onboarding.licensedBureau'),
-        fields: [] satisfies DetailField[],
-      },
-    ],
-    [t],
+  const [step, setStep] = useState(() => readSavedStep(clientId));
+  const [samePerson, setSamePerson] = useState<Choice>(() =>
+    profile.recipientName && profile.recipientName === profile.employerName
+      ? 'yes'
+      : profile.employerName
+        ? 'no'
+        : '',
   );
-
+  const [helperChoice, setHelperChoice] = useState<Choice>(() =>
+    profile.representativeName || profile.representativePhone ? 'yes' : '',
+  );
+  const [touched, setTouched] = useState<Set<string>>(() => new Set());
+  const isFirstRun = !profile.onboardingCompleted;
   const checklistComplete = employmentSetupCompletedCount(draft);
-  const totalSteps = sections.length + 1;
-  const checklistStep = step === sections.length;
-  const current = sections[Math.min(step, sections.length - 1)]!;
-  const licensedBureauStep = !checklistStep && current.key === 'licensedBureau';
-  const detailsValid = licensedBureauStep
-    ? Boolean(
-        draft.licensedBureauName.trim() &&
-        draft.licensedBureauRegistrationNumber.trim() &&
-        draft.licensedBureauContactName.trim() &&
-        draft.licensedBureauContactPhone.trim(),
-      )
-    : current.fields.every(
-        ({ key, type }) =>
-          draft[key].trim().length > 0 &&
-          (type !== 'israeli-id' || isValidIsraeliId(draft.employerIdNumber)),
-      );
-  const isValid = checklistStep ? checklistComplete === 6 : detailsValid;
+
+  useEffect(() => {
+    window.localStorage.setItem(stepStorageKey(clientId), String(step));
+  }, [clientId, step]);
+
+  function persist(next: MvpProfile) {
+    setDraft(next);
+    setProfile(next);
+  }
+
+  function updateField<Key extends ProfileStringKey>(key: Key, value: MvpProfile[Key]) {
+    const next = {
+      ...draft,
+      [key]: value,
+      ...(key === 'recipientName' && samePerson === 'yes' ? { employerName: value } : {}),
+    } as MvpProfile;
+    persist(next);
+  }
+
+  function touch(key: string) {
+    setTouched((current) => new Set(current).add(key));
+  }
+
+  function fieldErrorId(key: string) {
+    return `${key}-error`;
+  }
+
+  function personNameField(
+    key: 'recipientName' | 'employerName' | 'caregiverName' | 'representativeName',
+    label: string,
+  ) {
+    const invalid = touched.has(key) && !isValidPersonName(draft[key]);
+    return (
+      <label>
+        {label}
+        <input
+          value={draft[key]}
+          autoComplete="name"
+          required
+          className={invalid ? 'field-input-error' : undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? fieldErrorId(key) : undefined}
+          onBlur={() => touch(key)}
+          onChange={(event) => updateField(key, event.target.value)}
+        />
+        {invalid ? (
+          <span id={fieldErrorId(key)} className="field-error-message" role="alert">
+            {t('onboarding.nameError')}
+          </span>
+        ) : null}
+      </label>
+    );
+  }
+
+  function phoneField(key: 'employerPhone' | 'representativePhone', label: string) {
+    const invalid = touched.has(key) && !isValidPhone(draft[key]);
+    return (
+      <label>
+        {label}
+        <input
+          type="tel"
+          inputMode="tel"
+          dir="ltr"
+          autoComplete="tel"
+          value={draft[key]}
+          required
+          className={invalid ? 'field-input-error' : undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? fieldErrorId(key) : undefined}
+          onBlur={() => touch(key)}
+          onChange={(event) => updateField(key, event.target.value)}
+        />
+        {invalid ? (
+          <span id={fieldErrorId(key)} className="field-error-message" role="alert">
+            {t('onboarding.phoneError')}
+          </span>
+        ) : null}
+      </label>
+    );
+  }
+
+  const idValidationError = getIsraeliIdValidationError(draft.employerIdNumber);
+  const showIdError =
+    idValidationError !== null &&
+    (touched.has('employerIdNumber') || draft.employerIdNumber.length === 9);
+  const idErrorMessage =
+    idValidationError === 'length'
+      ? t('profile.employerIdLengthError')
+      : idValidationError === 'checksum'
+        ? t('profile.employerIdChecksumError')
+        : t('profile.employerIdRequired');
+
+  const currentValid = (() => {
+    switch (step) {
+      case 0:
+        return isValidPersonName(draft.recipientName);
+      case 1:
+        return (
+          Boolean(samePerson) &&
+          isValidPersonName(draft.employerName) &&
+          isValidIsraeliId(draft.employerIdNumber) &&
+          isValidPhone(draft.employerPhone)
+        );
+      case 2:
+        return (
+          isValidPersonName(draft.caregiverName) &&
+          Boolean(draft.caregiverCountry) &&
+          Boolean(draft.caregiverLanguage) &&
+          isValidIsoDate(draft.employmentStartDate)
+        );
+      case 3:
+        return (
+          helperChoice === 'no' ||
+          (helperChoice === 'yes' &&
+            isValidPersonName(draft.representativeName) &&
+            isValidPhone(draft.representativePhone))
+        );
+      case 4:
+        return bureauDetailsValid(draft);
+      case 5:
+        return checklistComplete === 6;
+      default:
+        return false;
+    }
+  })();
+
+  const stepTitle = [
+    t('onboarding.recipient'),
+    t('onboarding.employer'),
+    t('onboarding.caregiver'),
+    t('onboarding.support'),
+    t('onboarding.licensedBureau'),
+    t('onboarding.checklist'),
+  ][step]!;
+
+  function chooseSamePerson(choice: Exclude<Choice, ''>) {
+    setSamePerson(choice);
+    persist({
+      ...draft,
+      employerName: choice === 'yes' ? draft.recipientName : '',
+    });
+  }
+
+  function chooseHelper(choice: Exclude<Choice, ''>) {
+    setHelperChoice(choice);
+    if (choice === 'no') {
+      persist({ ...draft, representativeName: '', representativePhone: '' });
+    }
+  }
 
   function complete() {
-    setProfile({
+    const completed = {
       ...draft,
       salaryEffectiveDate: draft.salaryEffectiveDate || draft.employmentStartDate,
       onboardingCompleted: true,
-    });
+    };
+    persist(completed);
+    window.localStorage.removeItem(stepStorageKey(clientId));
     navigate(isFirstRun ? '/billing?from=onboarding' : path('/'));
   }
 
@@ -129,52 +251,275 @@ export function OnboardingPage() {
           <p>{t('onboarding.intro')}</p>
         </div>
         <span className="progress-label">
-          {t('onboarding.progress', { current: step + 1, total: totalSteps })}
+          {t('onboarding.progress', { current: step + 1, total: LAST_STEP + 1 })}
         </span>
       </header>
 
-      <aside className="onboarding-checklist-summary" aria-live="polite">
-        <span aria-hidden="true">✓</span>
-        <div>
-          <strong>{t('onboarding.checklist')}</strong>
-          <small>
-            {t('onboarding.checklistProgress', { completed: checklistComplete, total: 6 })}
-          </small>
-        </div>
+      <aside className="onboarding-save-status" role="status" aria-live="polite">
+        <span aria-hidden="true">✓</span> {t('onboarding.saved')}
       </aside>
 
       <section className="wizard-card" aria-labelledby="onboarding-step">
         <div className="onboarding-progress" aria-hidden="true">
-          {Array.from({ length: totalSteps }, (_, index) => (
+          {Array.from({ length: LAST_STEP + 1 }, (_, index) => (
             <span key={index} className={index <= step ? 'active' : ''} />
           ))}
         </div>
         <form
           className="wizard-content readable-form"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            if (checklistStep) complete();
+            if (!currentValid) return;
+            if (step === LAST_STEP) complete();
             else setStep((value) => value + 1);
           }}
         >
-          <h2 id="onboarding-step">{checklistStep ? t('onboarding.checklist') : current.title}</h2>
-          <p>{t(checklistStep ? 'onboarding.checklistIntro' : 'onboarding.stepHint')}</p>
+          <h2 id="onboarding-step">{stepTitle}</h2>
+          <p>
+            {t(
+              `onboarding.stepIntro.${['recipient', 'employer', 'caregiver', 'support', 'licensedBureau', 'checklist'][step]}`,
+            )}
+          </p>
 
-          {checklistStep ? (
+          {step === 0 ? personNameField('recipientName', t('profile.recipientName')) : null}
+
+          {step === 1 ? (
+            <>
+              <fieldset className="onboarding-choice-group">
+                <legend>{t('onboarding.samePersonQuestion')}</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="same-person"
+                    checked={samePerson === 'yes'}
+                    onChange={() => chooseSamePerson('yes')}
+                  />
+                  <span>{t('onboarding.samePersonYes')}</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="same-person"
+                    checked={samePerson === 'no'}
+                    onChange={() => chooseSamePerson('no')}
+                  />
+                  <span>{t('onboarding.samePersonNo')}</span>
+                </label>
+              </fieldset>
+              {samePerson === 'no' ? (
+                personNameField('employerName', t('profile.employerName'))
+              ) : samePerson === 'yes' ? (
+                <p className="info-box">
+                  {t('onboarding.samePersonFilled', { name: draft.recipientName })}
+                </p>
+              ) : null}
+              {samePerson ? (
+                <>
+                  <label>
+                    {t('profile.employerIdNumber')}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="off"
+                      dir="ltr"
+                      value={draft.employerIdNumber}
+                      required
+                      className={showIdError ? 'field-input-error' : undefined}
+                      aria-invalid={showIdError || undefined}
+                      aria-describedby={`employer-id-help employer-id-count${showIdError ? ' employer-id-error' : ''}`}
+                      onBlur={() => touch('employerIdNumber')}
+                      onChange={(event) =>
+                        updateField('employerIdNumber', normalizeIsraeliId(event.target.value))
+                      }
+                    />
+                    <small id="employer-id-help">{t('profile.employerIdHelp')}</small>
+                    <small id="employer-id-count" aria-live="polite">
+                      {t('profile.employerIdCount', { count: draft.employerIdNumber.length })}
+                    </small>
+                    {showIdError ? (
+                      <span id="employer-id-error" className="field-error-message" role="alert">
+                        {idErrorMessage}
+                      </span>
+                    ) : null}
+                  </label>
+                  {phoneField('employerPhone', t('profile.phone'))}
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              {personNameField('caregiverName', t('profile.caregiverName'))}
+              <label>
+                {t('profile.caregiverCountry')}
+                <select
+                  value={draft.caregiverCountry}
+                  required
+                  className={
+                    touched.has('caregiverCountry') && !draft.caregiverCountry
+                      ? 'field-input-error'
+                      : undefined
+                  }
+                  aria-invalid={
+                    (touched.has('caregiverCountry') && !draft.caregiverCountry) || undefined
+                  }
+                  aria-describedby={
+                    touched.has('caregiverCountry') && !draft.caregiverCountry
+                      ? 'caregiver-country-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('caregiverCountry')}
+                  onChange={(event) => {
+                    const country = event.target.value;
+                    persist({
+                      ...draft,
+                      caregiverCountry: country,
+                      caregiverLanguage: draft.caregiverLanguage || suggestedLanguage(country),
+                    });
+                  }}
+                >
+                  <option value="">{t('common.select')}</option>
+                  {caregiverCountries.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+                {touched.has('caregiverCountry') && !draft.caregiverCountry ? (
+                  <span id="caregiver-country-error" className="field-error-message" role="alert">
+                    {t('onboarding.selectError')}
+                  </span>
+                ) : null}
+              </label>
+              <label>
+                {t('profile.caregiverLanguage')}
+                <select
+                  value={draft.caregiverLanguage}
+                  required
+                  className={
+                    touched.has('caregiverLanguage') && !draft.caregiverLanguage
+                      ? 'field-input-error'
+                      : undefined
+                  }
+                  aria-invalid={
+                    (touched.has('caregiverLanguage') && !draft.caregiverLanguage) || undefined
+                  }
+                  aria-describedby={
+                    touched.has('caregiverLanguage') && !draft.caregiverLanguage
+                      ? 'caregiver-language-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('caregiverLanguage')}
+                  onChange={(event) => updateField('caregiverLanguage', event.target.value)}
+                >
+                  <option value="">{t('common.select')}</option>
+                  {caregiverLanguages.map((language) => (
+                    <option key={language} value={language}>
+                      {language}
+                    </option>
+                  ))}
+                </select>
+                {touched.has('caregiverLanguage') && !draft.caregiverLanguage ? (
+                  <span id="caregiver-language-error" className="field-error-message" role="alert">
+                    {t('onboarding.selectError')}
+                  </span>
+                ) : null}
+              </label>
+              <label>
+                {t('profile.startDate')}
+                <input
+                  type="date"
+                  dir="ltr"
+                  required
+                  value={draft.employmentStartDate}
+                  className={
+                    touched.has('employmentStartDate') && !isValidIsoDate(draft.employmentStartDate)
+                      ? 'field-input-error'
+                      : undefined
+                  }
+                  aria-invalid={
+                    (touched.has('employmentStartDate') &&
+                      !isValidIsoDate(draft.employmentStartDate)) ||
+                    undefined
+                  }
+                  aria-describedby={
+                    touched.has('employmentStartDate') && !isValidIsoDate(draft.employmentStartDate)
+                      ? 'employment-start-date-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('employmentStartDate')}
+                  onChange={(event) => updateField('employmentStartDate', event.target.value)}
+                />
+                {touched.has('employmentStartDate') &&
+                !isValidIsoDate(draft.employmentStartDate) ? (
+                  <span
+                    id="employment-start-date-error"
+                    className="field-error-message"
+                    role="alert"
+                  >
+                    {t('onboarding.dateError')}
+                  </span>
+                ) : null}
+              </label>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <fieldset className="onboarding-choice-group">
+                <legend>{t('onboarding.helperQuestion')}</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="helper"
+                    checked={helperChoice === 'yes'}
+                    onChange={() => chooseHelper('yes')}
+                  />
+                  <span>{t('onboarding.helperYes')}</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="helper"
+                    checked={helperChoice === 'no'}
+                    onChange={() => chooseHelper('no')}
+                  />
+                  <span>{t('onboarding.helperNo')}</span>
+                </label>
+              </fieldset>
+              {helperChoice === 'yes' ? (
+                <>
+                  {personNameField('representativeName', t('profile.representativeName'))}
+                  {phoneField('representativePhone', t('profile.phone'))}
+                  <small>{t('onboarding.helperDisclaimer')}</small>
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <LicensedBureauSelector profile={draft} onChange={persist} required />
+          ) : null}
+
+          {step === 5 ? (
             <div className="setup-checklist">
               <label className={draft.employmentAgreementConfirmed ? 'complete' : ''}>
                 <input
                   type="checkbox"
                   checked={draft.employmentAgreementConfirmed}
                   onChange={(event) =>
-                    setDraft({ ...draft, employmentAgreementConfirmed: event.target.checked })
+                    persist({ ...draft, employmentAgreementConfirmed: event.target.checked })
                   }
                 />
                 <span>{t('onboarding.agreementConfirmed')}</span>
               </label>
               <label
                 className={
-                  draft.medicalInsuranceConfirmed && draft.medicalInsuranceExpiryDate
+                  draft.medicalInsuranceConfirmed &&
+                  isValidIsoDate(draft.medicalInsuranceExpiryDate)
                     ? 'complete'
                     : ''
                 }
@@ -183,7 +528,7 @@ export function OnboardingPage() {
                   type="checkbox"
                   checked={draft.medicalInsuranceConfirmed}
                   onChange={(event) =>
-                    setDraft({
+                    persist({
                       ...draft,
                       medicalInsuranceConfirmed: event.target.checked,
                       medicalInsuranceExpiryDate: event.target.checked
@@ -202,11 +547,39 @@ export function OnboardingPage() {
                     dir="ltr"
                     required
                     value={draft.medicalInsuranceExpiryDate}
+                    className={
+                      touched.has('medicalInsuranceExpiryDate') &&
+                      !isValidIsoDate(draft.medicalInsuranceExpiryDate)
+                        ? 'field-input-error'
+                        : undefined
+                    }
+                    aria-invalid={
+                      (touched.has('medicalInsuranceExpiryDate') &&
+                        !isValidIsoDate(draft.medicalInsuranceExpiryDate)) ||
+                      undefined
+                    }
+                    aria-describedby={
+                      touched.has('medicalInsuranceExpiryDate') &&
+                      !isValidIsoDate(draft.medicalInsuranceExpiryDate)
+                        ? 'medical-insurance-expiry-error'
+                        : undefined
+                    }
+                    onBlur={() => touch('medicalInsuranceExpiryDate')}
                     onChange={(event) =>
-                      setDraft({ ...draft, medicalInsuranceExpiryDate: event.target.value })
+                      updateField('medicalInsuranceExpiryDate', event.target.value)
                     }
                   />
                   <small>{t('onboarding.medicalInsuranceExpiryHelp')}</small>
+                  {touched.has('medicalInsuranceExpiryDate') &&
+                  !isValidIsoDate(draft.medicalInsuranceExpiryDate) ? (
+                    <span
+                      id="medical-insurance-expiry-error"
+                      className="field-error-message"
+                      role="alert"
+                    >
+                      {t('onboarding.dateError')}
+                    </span>
+                  ) : null}
                 </label>
               ) : null}
               <label>
@@ -214,34 +587,75 @@ export function OnboardingPage() {
                 <input
                   type="number"
                   inputMode="decimal"
-                  min="1"
+                  min="0.01"
+                  max="1000000"
                   step="0.01"
                   required
                   value={draft.baseSalary ?? ''}
+                  className={
+                    touched.has('baseSalary') && !isPositiveMoney(draft.baseSalary)
+                      ? 'field-input-error'
+                      : undefined
+                  }
+                  aria-invalid={
+                    (touched.has('baseSalary') && !isPositiveMoney(draft.baseSalary)) || undefined
+                  }
+                  aria-describedby={
+                    touched.has('baseSalary') && !isPositiveMoney(draft.baseSalary)
+                      ? 'base-salary-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('baseSalary')}
                   onChange={(event) =>
-                    setDraft({
+                    persist({
                       ...draft,
                       baseSalary: event.target.value ? Number(event.target.value) : null,
                     })
                   }
                 />
+                {touched.has('baseSalary') && !isPositiveMoney(draft.baseSalary) ? (
+                  <span id="base-salary-error" className="field-error-message" role="alert">
+                    {t('onboarding.moneyError')}
+                  </span>
+                ) : null}
               </label>
               <label>
                 {t('onboarding.saturdayRate')}
                 <input
                   type="number"
                   inputMode="decimal"
-                  min="1"
+                  min="0.01"
+                  max="1000000"
                   step="0.01"
                   required
                   value={draft.saturdayRate ?? ''}
+                  className={
+                    touched.has('saturdayRate') && !isPositiveMoney(draft.saturdayRate)
+                      ? 'field-input-error'
+                      : undefined
+                  }
+                  aria-invalid={
+                    (touched.has('saturdayRate') && !isPositiveMoney(draft.saturdayRate)) ||
+                    undefined
+                  }
+                  aria-describedby={
+                    touched.has('saturdayRate') && !isPositiveMoney(draft.saturdayRate)
+                      ? 'saturday-rate-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('saturdayRate')}
                   onChange={(event) =>
-                    setDraft({
+                    persist({
                       ...draft,
                       saturdayRate: event.target.value ? Number(event.target.value) : null,
                     })
                   }
                 />
+                {touched.has('saturdayRate') && !isPositiveMoney(draft.saturdayRate) ? (
+                  <span id="saturday-rate-error" className="field-error-message" role="alert">
+                    {t('onboarding.moneyError')}
+                  </span>
+                ) : null}
               </label>
               <small className="setup-checklist-note">
                 {t('onboarding.salaryEffectiveNote', { date: draft.employmentStartDate })}
@@ -253,10 +667,33 @@ export function OnboardingPage() {
                   dir="ltr"
                   required
                   value={draft.licenseRenewalDate}
-                  onChange={(event) =>
-                    setDraft({ ...draft, licenseRenewalDate: event.target.value })
+                  className={
+                    touched.has('licenseRenewalDate') && !isValidIsoDate(draft.licenseRenewalDate)
+                      ? 'field-input-error'
+                      : undefined
                   }
+                  aria-invalid={
+                    (touched.has('licenseRenewalDate') &&
+                      !isValidIsoDate(draft.licenseRenewalDate)) ||
+                    undefined
+                  }
+                  aria-describedby={
+                    touched.has('licenseRenewalDate') && !isValidIsoDate(draft.licenseRenewalDate)
+                      ? 'license-renewal-date-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('licenseRenewalDate')}
+                  onChange={(event) => updateField('licenseRenewalDate', event.target.value)}
                 />
+                {touched.has('licenseRenewalDate') && !isValidIsoDate(draft.licenseRenewalDate) ? (
+                  <span
+                    id="license-renewal-date-error"
+                    className="field-error-message"
+                    role="alert"
+                  >
+                    {t('onboarding.dateError')}
+                  </span>
+                ) : null}
               </label>
               <label>
                 {t('onboarding.employmentFeeDueDate')}
@@ -265,105 +702,58 @@ export function OnboardingPage() {
                   dir="ltr"
                   required
                   value={draft.employmentFeeDueDate}
-                  onChange={(event) =>
-                    setDraft({ ...draft, employmentFeeDueDate: event.target.value })
+                  className={
+                    touched.has('employmentFeeDueDate') &&
+                    !isValidIsoDate(draft.employmentFeeDueDate)
+                      ? 'field-input-error'
+                      : undefined
                   }
+                  aria-invalid={
+                    (touched.has('employmentFeeDueDate') &&
+                      !isValidIsoDate(draft.employmentFeeDueDate)) ||
+                    undefined
+                  }
+                  aria-describedby={
+                    touched.has('employmentFeeDueDate') &&
+                    !isValidIsoDate(draft.employmentFeeDueDate)
+                      ? 'employment-fee-date-error'
+                      : undefined
+                  }
+                  onBlur={() => touch('employmentFeeDueDate')}
+                  onChange={(event) => updateField('employmentFeeDueDate', event.target.value)}
                 />
+                {touched.has('employmentFeeDueDate') &&
+                !isValidIsoDate(draft.employmentFeeDueDate) ? (
+                  <span id="employment-fee-date-error" className="field-error-message" role="alert">
+                    {t('onboarding.dateError')}
+                  </span>
+                ) : null}
               </label>
             </div>
-          ) : licensedBureauStep ? (
-            <LicensedBureauSelector profile={draft} onChange={setDraft} required />
-          ) : (
-            current.fields.map(({ key, label, type }) => (
-              <label key={key}>
-                {label}
-                {type === 'country' || type === 'language' ? (
-                  <select
-                    value={draft[key]}
-                    required
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setDraft({
-                        ...draft,
-                        [key]: value,
-                        ...(type === 'country' && !draft.caregiverLanguage
-                          ? { caregiverLanguage: suggestedLanguage(value) }
-                          : {}),
-                      });
-                    }}
-                  >
-                    <option value="">{t('common.select')}</option>
-                    {(type === 'country' ? caregiverCountries : caregiverLanguages).map(
-                      (option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                ) : type === 'israeli-id' ? (
-                  <>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      value={draft.employerIdNumber}
-                      required
-                      dir="ltr"
-                      aria-invalid={
-                        draft.employerIdNumber.length > 0 &&
-                        !isValidIsraeliId(draft.employerIdNumber)
-                      }
-                      aria-describedby={
-                        draft.employerIdNumber.length > 0 &&
-                        !isValidIsraeliId(draft.employerIdNumber)
-                          ? 'employer-id-help employer-id-error'
-                          : 'employer-id-help'
-                      }
-                      onBlur={() => {
-                        if (isValidIsraeliId(draft.employerIdNumber)) {
-                          setDraft({
-                            ...draft,
-                            employerIdNumber: normalizeIsraeliId(draft.employerIdNumber),
-                          });
-                        }
-                      }}
-                      onChange={(event) =>
-                        setDraft({ ...draft, employerIdNumber: event.target.value })
-                      }
-                    />
-                    <small id="employer-id-help">{t('profile.employerIdHelp')}</small>
-                    {draft.employerIdNumber.length > 0 &&
-                    !isValidIsraeliId(draft.employerIdNumber) ? (
-                      <span id="employer-id-error" className="field-error" role="alert">
-                        {t('profile.employerIdError')}
-                      </span>
-                    ) : null}
-                  </>
-                ) : (
-                  <input
-                    type={type}
-                    value={draft[key]}
-                    required
-                    dir={type === 'tel' || type === 'date' ? 'ltr' : undefined}
-                    onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
-                  />
-                )}
-              </label>
-            ))
-          )}
+          ) : null}
+
+          {!currentValid ? (
+            <p id="onboarding-blocked-help" className="onboarding-blocked-help" role="status">
+              {t('onboarding.blockedHelp')}
+            </p>
+          ) : null}
 
           <div className="wizard-actions">
             <button
               className="secondary-button"
               type="button"
               disabled={step === 0}
-              onClick={() => setStep((value) => value - 1)}
+              onClick={() => setStep((value) => Math.max(0, value - 1))}
             >
               {t('common.back')}
             </button>
-            <button className="primary-button" type="submit" disabled={!isValid}>
-              {checklistStep ? t('onboarding.paymentNext') : t('common.continue')}
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={!currentValid}
+              aria-describedby={!currentValid ? 'onboarding-blocked-help' : undefined}
+            >
+              {step === LAST_STEP ? t('onboarding.paymentNext') : t('common.continue')}
             </button>
           </div>
         </form>

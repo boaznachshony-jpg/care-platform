@@ -1,4 +1,4 @@
-const ISRAELI_ID_ALLOWED_CHARACTERS = /^(?=.*\d)[\d\s-]+$/;
+export type IsraeliIdValidationError = 'required' | 'length' | 'checksum';
 
 /**
  * Converts a commonly formatted Israeli ID to the canonical nine-digit form.
@@ -6,20 +6,22 @@ const ISRAELI_ID_ALLOWED_CHARACTERS = /^(?=.*\d)[\d\s-]+$/;
  * that happened to surround an otherwise valid number.
  */
 export function normalizeIsraeliId(value: string): string {
-  return value.replace(/[\s-]/g, '').padStart(9, '0');
+  return value.replace(/\D/g, '').slice(0, 9);
 }
 
-export function isValidIsraeliId(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed || !ISRAELI_ID_ALLOWED_CHARACTERS.test(trimmed)) return false;
-
-  const normalized = normalizeIsraeliId(trimmed);
-  if (!/^\d{9}$/.test(normalized)) return false;
+export function getIsraeliIdValidationError(value: string): IsraeliIdValidationError | null {
+  const normalized = normalizeIsraeliId(value);
+  if (!normalized) return 'required';
+  if (normalized.length !== 9) return 'length';
 
   const checksum = [...normalized].reduce((sum, character, index) => {
     const multiplied = Number(character) * (index % 2 === 0 ? 1 : 2);
     return sum + (multiplied > 9 ? multiplied - 9 : multiplied);
   }, 0);
 
-  return checksum % 10 === 0;
+  return checksum % 10 === 0 ? null : 'checksum';
+}
+
+export function isValidIsraeliId(value: string): boolean {
+  return getIsraeliIdValidationError(value) === null;
 }
