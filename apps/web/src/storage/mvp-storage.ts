@@ -36,7 +36,7 @@ export interface MvpProfile {
   salaryEffectiveDate: string;
   saturdayRate: number | null;
   licenseRenewalDate: string;
-  employmentFeeDueDate: string;
+  visaRenewalDate: string;
 }
 
 const STORAGE_KEY = 'caredesk.mvp.profile.v1';
@@ -86,7 +86,7 @@ export const emptyMvpProfile: MvpProfile = {
   salaryEffectiveDate: '',
   saturdayRate: null,
   licenseRenewalDate: '',
-  employmentFeeDueDate: '',
+  visaRenewalDate: '',
 };
 
 function isBrowser(): boolean {
@@ -251,8 +251,13 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
   try {
     const saved = JSON.parse(
       readBusinessItem(scopedKey(STORAGE_KEY, clientId)) ?? '{}',
-    ) as Partial<MvpProfile>;
-    return { ...emptyMvpProfile, ...saved };
+    ) as Partial<MvpProfile> & { employmentFeeDueDate?: string };
+    const { employmentFeeDueDate, ...currentSaved } = saved;
+    const visaRenewalDate =
+      typeof currentSaved.visaRenewalDate === 'string'
+        ? currentSaved.visaRenewalDate
+        : (employmentFeeDueDate ?? '');
+    return { ...emptyMvpProfile, ...currentSaved, visaRenewalDate };
   } catch {
     return emptyMvpProfile;
   }

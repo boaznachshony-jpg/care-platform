@@ -45,7 +45,7 @@ export function employmentSetupCompletedCount(profile: MvpProfile): number {
     isPositiveMoney(profile.baseSalary),
     isPositiveMoney(profile.saturdayRate),
     isValidIsoDate(profile.licenseRenewalDate),
-    isValidIsoDate(profile.employmentFeeDueDate),
+    isValidIsoDate(profile.visaRenewalDate),
   ].filter(Boolean).length;
 }
 
@@ -696,35 +696,31 @@ export function OnboardingPage() {
                 ) : null}
               </label>
               <label>
-                {t('onboarding.employmentFeeDueDate')}
+                {t('onboarding.visaRenewalDate')}
                 <input
                   type="date"
                   dir="ltr"
                   required
-                  value={draft.employmentFeeDueDate}
+                  value={draft.visaRenewalDate}
                   className={
-                    touched.has('employmentFeeDueDate') &&
-                    !isValidIsoDate(draft.employmentFeeDueDate)
+                    touched.has('visaRenewalDate') && !isValidIsoDate(draft.visaRenewalDate)
                       ? 'field-input-error'
                       : undefined
                   }
                   aria-invalid={
-                    (touched.has('employmentFeeDueDate') &&
-                      !isValidIsoDate(draft.employmentFeeDueDate)) ||
+                    (touched.has('visaRenewalDate') && !isValidIsoDate(draft.visaRenewalDate)) ||
                     undefined
                   }
                   aria-describedby={
-                    touched.has('employmentFeeDueDate') &&
-                    !isValidIsoDate(draft.employmentFeeDueDate)
-                      ? 'employment-fee-date-error'
+                    touched.has('visaRenewalDate') && !isValidIsoDate(draft.visaRenewalDate)
+                      ? 'visa-renewal-date-error'
                       : undefined
                   }
-                  onBlur={() => touch('employmentFeeDueDate')}
-                  onChange={(event) => updateField('employmentFeeDueDate', event.target.value)}
+                  onBlur={() => touch('visaRenewalDate')}
+                  onChange={(event) => updateField('visaRenewalDate', event.target.value)}
                 />
-                {touched.has('employmentFeeDueDate') &&
-                !isValidIsoDate(draft.employmentFeeDueDate) ? (
-                  <span id="employment-fee-date-error" className="field-error-message" role="alert">
+                {touched.has('visaRenewalDate') && !isValidIsoDate(draft.visaRenewalDate) ? (
+                  <span id="visa-renewal-date-error" className="field-error-message" role="alert">
                     {t('onboarding.dateError')}
                   </span>
                 ) : null}

@@ -80,10 +80,10 @@ export function TimelinePage({
           ],
         ] satisfies TimelineEvent[])
       : []),
-    ...(profile.employmentFeeDueDate
+    ...(profile.visaRenewalDate
       ? ([
           [
-            shortDate(profile.employmentFeeDueDate),
+            shortDate(profile.visaRenewalDate),
             'חידוש הוויזה',
             'המועד שהוגדר ברשימת ההקמה',
             'purple',

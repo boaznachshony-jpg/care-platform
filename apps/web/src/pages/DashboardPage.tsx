@@ -21,7 +21,7 @@ export function DashboardPage() {
     (profile.baseSalary ?? 0) <= 0,
     (profile.saturdayRate ?? 0) <= 0,
     !profile.licenseRenewalDate,
-    !profile.employmentFeeDueDate,
+    !profile.visaRenewalDate,
   ].filter(Boolean).length;
   const status = missingCount > 0 ? 'missing' : 'attention';
 

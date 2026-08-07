@@ -35,7 +35,7 @@ const completedProfile = {
   salaryEffectiveDate: '2026-01-15',
   saturdayRate: 440,
   licenseRenewalDate: '2027-01-15',
-  employmentFeeDueDate: '2026-12-31',
+  visaRenewalDate: '2026-12-31',
 };
 
 async function seedCompletedProfile(page: import('@playwright/test').Page) {

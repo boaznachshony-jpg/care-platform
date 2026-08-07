@@ -167,7 +167,7 @@ describe('first-run employment checklist', () => {
         baseSalary: 6_500,
         saturdayRate: 440,
         licenseRenewalDate: '2027-07-12',
-        employmentFeeDueDate: '2026-08-15',
+        visaRenewalDate: '2026-08-15',
       }),
     ).toBe(6);
   });

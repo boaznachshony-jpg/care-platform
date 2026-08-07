@@ -33,6 +33,18 @@ describe('MVP local storage', () => {
     });
   });
 
+  it('migrates the legacy employment fee date into the visa renewal date', () => {
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({ employerName: 'Legacy employer', employmentFeeDueDate: '2027-03-15' }),
+    );
+
+    const profile = readMvpProfile();
+
+    expect(profile.visaRenewalDate).toBe('2027-03-15');
+    expect(profile).not.toHaveProperty('employmentFeeDueDate');
+  });
+
   it('persists employment salary settings', () => {
     saveMvpProfile({ ...emptyMvpProfile, baseSalary: 7000, salaryEffectiveDate: '2026-01-01' });
     expect(readMvpProfile().baseSalary).toBe(7000);

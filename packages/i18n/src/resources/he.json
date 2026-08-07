@@ -330,7 +330,7 @@
     "baseSalary": "שכר בסיס חודשי בש״ח",
     "saturdayRate": "מחיר לשבת או ליום מנוחה בש״ח",
     "licenseRenewalDate": "מועד חידוש רישיון ההעסקה",
-    "employmentFeeDueDate": "מועד חידוש הוויזה",
+    "visaRenewalDate": "מועד חידוש הוויזה",
     "salaryEffectiveNote": "הגדרת השכר תהיה בתוקף ממועד תחילת ההעסקה: {{date}}.",
     "checklistProgress": "הושלמו {{completed}} מתוך {{total}} פריטי ההקמה",
     "paymentNext": "שמירת הרשימה והמשך לאמצעי תשלום",
