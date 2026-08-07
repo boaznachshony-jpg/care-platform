@@ -73,7 +73,7 @@ export function registerSupportRequestRoutes(app: FastifyInstance, env: Env): vo
     ].join('\n');
 
     try {
-      const providerResponse = await fetch('https://api.resend.com/emails', {
+      const providerResponse = (await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -87,7 +87,7 @@ export function registerSupportRequestRoutes(app: FastifyInstance, env: Env): vo
           text,
           html: `<h2>${category}</h2><p><strong>Reply address:</strong> ${escapeHtml(replyEmail)}</p><p>${escapeHtml(message).replaceAll('\n', '<br>')}</p><hr><small>Tracking ID: ${escapeHtml(request.correlationId)}</small>`,
         }),
-      });
+      })) as unknown as { ok: boolean; status: number };
 
       if (!providerResponse.ok) {
         request.log.error(
