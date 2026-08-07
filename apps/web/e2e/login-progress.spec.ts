@@ -2,6 +2,11 @@
 import { expect, test } from '@playwright/test';
 
 test('slow authentication stays clear, locked and responsive', async ({ page }) => {
+  test.skip(
+    !process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    'The preview server runs without an authentication provider; the same state is covered by LoginPage.test.tsx.',
+  );
+
   await page.route('**/auth/v1/token**', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 3600));
     await route.fulfill({
