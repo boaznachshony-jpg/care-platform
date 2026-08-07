@@ -78,7 +78,7 @@ async function completeClientOnboarding(
   await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
-  await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+  await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
   await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
   await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
   await expect(page.getByText('שלב ההקמה האחרון: חיבור אמצעי תשלום מאובטח')).toBeVisible();
@@ -144,7 +144,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
-  await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+  await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
   await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
 
   await expect(page).toHaveURL(/\/billing\?from=onboarding$/);

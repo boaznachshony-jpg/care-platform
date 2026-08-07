@@ -137,7 +137,7 @@ describe('ATM onboarding validation and persistence', () => {
     const baseSalary = screen.getByLabelText(/שכר בסיס חודשי/);
     const saturdayRate = screen.getByLabelText(/מחיר לשבת/);
     const licenseDate = screen.getByLabelText(/מועד חידוש רישיון/);
-    const feeDate = screen.getByLabelText(/מועד תשלום אגרת/);
+    const visaDate = screen.getByLabelText(/מועד חידוש הוויזה/);
 
     fireEvent.blur(insuranceDate);
     fireEvent.change(baseSalary, { target: { value: '-1' } });
@@ -145,9 +145,9 @@ describe('ATM onboarding validation and persistence', () => {
     fireEvent.change(saturdayRate, { target: { value: '0' } });
     fireEvent.blur(saturdayRate);
     fireEvent.blur(licenseDate);
-    fireEvent.blur(feeDate);
+    fireEvent.blur(visaDate);
 
-    for (const field of [insuranceDate, baseSalary, saturdayRate, licenseDate, feeDate]) {
+    for (const field of [insuranceDate, baseSalary, saturdayRate, licenseDate, visaDate]) {
       expect(field).toHaveClass('field-input-error');
       expect(field).toHaveAttribute('aria-invalid', 'true');
     }

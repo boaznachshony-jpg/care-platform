@@ -185,7 +185,7 @@ test.describe('ATM onboarding field validation', () => {
     await baseSalary.fill('6450.50');
     await saturdayRate.fill('440.25');
     await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-07-12');
-    await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-08-15');
+    await page.getByLabel('מועד חידוש הוויזה').fill('2026-08-15');
     await expect(baseSalary).toHaveValue('6450.50');
     await expect(saturdayRate).toHaveValue('440.25');
     await expect(continueButton(page)).toBeEnabled();

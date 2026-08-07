@@ -335,7 +335,7 @@
     "baseSalary": "Monthly base salary (ILS)",
     "saturdayRate": "Rate per Saturday or rest day (ILS)",
     "licenseRenewalDate": "Employment license renewal date",
-    "employmentFeeDueDate": "Employment fee payment date",
+    "employmentFeeDueDate": "Visa renewal date",
     "salaryEffectiveNote": "The salary definition takes effect on the employment start date: {{date}}.",
     "checklistProgress": "{{completed}} of {{total}} setup items completed",
     "paymentNext": "Save checklist and continue to payment method",

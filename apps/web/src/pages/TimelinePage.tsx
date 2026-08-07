@@ -84,7 +84,7 @@ export function TimelinePage({
       ? ([
           [
             shortDate(profile.employmentFeeDueDate),
-            'תשלום אגרת העסקה',
+            'חידוש הוויזה',
             'המועד שהוגדר ברשימת ההקמה',
             'purple',
             '/tasks',
