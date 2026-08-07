@@ -95,6 +95,7 @@
     "passwordRequirements": "Use at least 12 characters. Do not reuse a password from another service.",
     "createAccount": "Create account and continue",
     "registering": "Creating your account…",
+    "registrationProgress": "Verifying the details and creating your secure account.",
     "registrationFailed": "The account could not be created. The address may already be registered, or registration may be temporarily unavailable.",
     "registrationConfirmationRequired": "Your account was created. Open the verification email we sent, then you will continue directly to the setup checklist.",
     "registrationErrors": {
@@ -114,7 +115,10 @@
     "password": "Password",
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "signingIn": "Signing in…",
+    "signingIn": "Signing in securely…",
+    "authenticationProgress": "Verifying your sign-in details over a secure connection.",
+    "pleaseWait": "This may take a few seconds. There is no need to click again.",
+    "authenticationTakingLonger": "Verification is taking a little longer than usual. We are still working — there is no need to leave or click again.",
     "invalidCredentials": "The sign-in details are incorrect. Check the email and password and try again.",
     "forgotPassword": "Forgot your password?",
     "sendingReset": "Sending reset link…",
@@ -128,7 +132,10 @@
     "updatingPassword": "Saving…",
     "passwordUpdateError": "The passwords must match and contain at least 12 characters. Try the recovery link again if it has expired.",
     "closedAccess": "Access is limited to pre-approved users.",
-    "checkingSession": "Checking the secure session…",
+    "checkingSession": "Loading your account…",
+    "loadingSecureWorkspace": "Checking the connection and loading your secure case.",
+    "sessionTakingLonger": "Your case is taking a little longer to load. Your data remains protected and we are continuing.",
+    "doNotRefresh": "There is no need to refresh the page or go back.",
     "privatePageTitle": "CareDesk | Sign in to your account",
     "configurationRequiredTitle": "Secure access is not configured yet",
     "configurationRequiredBody": "The application is locked until the authentication provider is configured. No data can be viewed.",
@@ -431,7 +438,7 @@
       "caregiver": {
         "title": "Caregiver",
         "summary": "The employee who provides assistance and care to the care recipient as part of an employment relationship.",
-        "details": "The caregiver has rights and obligations under the employment terms and applicable law. The application stores their employment details, documents, tasks, and payroll calculations."
+        "details": "The caregiver has rights and obligations under the employment terms and applicable law. The application stores their employment details, documents, tasks, payroll records, and payment records."
       },
       "representative": {
         "title": "Authorized representative",
@@ -450,7 +457,7 @@
   "public": {
     "meta": {
       "homeTitle": "CareDesk | Direct caregiver employment management",
-      "homeDescription": "A simple, accessible system for managing caregiver employment: documents, reminders, tasks, payroll and periodic tracking in one place.",
+      "homeDescription": "A simple, accessible system for managing caregiver employment: documents, reminders, tasks, payroll records and payment tracking in one place.",
       "guideTitle": "Direct caregiver employment — management guide | CareDesk",
       "guideDescription": "What to manage when directly employing a caregiver: documents and expiry dates, medical insurance, payroll, National Insurance and reminders."
     },
@@ -469,7 +476,7 @@
     "hero": {
       "kicker": "Calmer management for the employing family",
       "title": "Direct caregiver employment, with greater peace of mind",
-      "body": "CareDesk brings details, documents, tasks, expiry reminders and payroll calculations into one clear process, with an accessible interface that also works on mobile.",
+      "body": "CareDesk brings details, documents, tasks, expiry reminders, payroll records and payment tracking into one clear process, with an accessible interface that also works on mobile.",
       "signup": "Request an account",
       "pilot": "Join the pilot",
       "guide": "Read the direct employment guide",
@@ -497,8 +504,8 @@
       "documentsBody": "Store document details, expiry dates and reminders before an important date.",
       "insuranceTitle": "Medical insurance",
       "insuranceBody": "Track a policy and coverage periods as part of the employment timeline.",
-      "payrollTitle": "Payroll calculation",
-      "payrollBody": "Base pay, rest days, additions and deductions, with a bilingual printable summary.",
+      "payrollTitle": "Payroll records and payment tracking",
+      "payrollBody": "Record user-entered base pay, rest days, additions and deductions, with a bilingual printable summary.",
       "periodicTitle": "Periodic tracking",
       "periodicBody": "Tasks and reminders, including quarterly National Insurance preparation and reporting."
     },
@@ -527,7 +534,7 @@
       "title": "One monthly subscription for the family account",
       "body": "The subscription includes the family file and authorized users invited to it.",
       "item1": "Clients, documents and tasks",
-      "item2": "Payroll calculations, summaries and reminders",
+      "item2": "Payroll records, payment tracking and reminders",
       "item3": "Role-based family access",
       "plan": "Launch price",
       "perMonth": "per month, VAT included",
@@ -554,7 +561,7 @@
       "section3Title": "3. Continuous medical insurance",
       "section3Body": "Record policy periods and align tracking with the employment start date. Before changes or renewals, verify coverage requirements with the insurer or another qualified source.",
       "section4Title": "4. Monthly payroll and records",
-      "section4Body": "A clear calculation separates base pay, Saturdays or rest days, additions and deductions. Saved monthly summaries create an annual record and a clear copy for employer and caregiver.",
+      "section4Body": "A clear monthly record separates base pay, Saturdays or rest days, additions and deductions. Saved summaries create an annual record and a clear copy for employer and caregiver, but do not replace professional review.",
       "section5Title": "5. Periodic payments and tasks",
       "section5Body": "Organize monthly, quarterly and annual tasks by opening and deadline dates. This distinguishes tasks that are not open yet, open tasks and items that need attention.",
       "noticeTitle": "Important",

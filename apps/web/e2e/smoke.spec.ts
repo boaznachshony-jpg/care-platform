@@ -240,7 +240,7 @@ test('mobile navigation keeps payroll accessible', async ({ page }) => {
     .getByRole('link', { name: '₪ שכר' })
     .click();
   await expect(page).toHaveURL(/\/payroll$/);
-  await expect(page.getByRole('heading', { name: 'הכנת שכר חודשי' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'רישום שכר חודשי' })).toBeVisible();
 });
 
 const productRoutes = [
@@ -251,7 +251,7 @@ const productRoutes = [
   ['/glossary', 'מושגים חשובים'],
   ['/documents', 'כל המסמכים במקום אחד'],
   ['/timeline', 'המועדים הבאים'],
-  ['/payroll', 'הכנת שכר חודשי'],
+  ['/payroll', 'רישום שכר חודשי'],
   ['/settings', 'פרטים והעדפות'],
 ] as const;
 
@@ -275,7 +275,7 @@ test('connects every primary screen through visible navigation and action links'
   if (testInfo.project.name === 'mobile-chromium') {
     const directConnections = [
       ['משימות', '/tasks', 'מה צריך לבצע'],
-      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
     ] as const;
     for (const [linkName, route, expectedText] of directConnections) {
@@ -312,7 +312,7 @@ test('connects every primary screen through visible navigation and action links'
       ['מושגים', '/glossary', 'מושגים חשובים'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
-      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
     ] as const;
     for (const [linkName, route, expectedText] of connections) {
@@ -493,7 +493,7 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
   await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
   await expect(
-    page.getByText('חישוב השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.'),
+    page.getByText('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.'),
   ).toBeVisible();
   await expect(page.locator('.employment-expenses').getByText('סכום טרם הוזן')).toBeVisible();
   await page.reload();

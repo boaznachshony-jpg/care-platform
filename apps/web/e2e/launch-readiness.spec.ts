@@ -361,7 +361,7 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7300');
     await page.getByLabel('בתוקף מתאריך').fill('2026-07-01');
     await page.getByRole('button', { name: 'שמירת הגדרת השכר' }).click();
-    await expect(page.getByRole('heading', { name: 'הכנת שכר חודשי' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'רישום שכר חודשי' })).toBeVisible();
   });
 
   test('all dashboard and timeline shortcuts lead to their intended screens', async ({ page }) => {

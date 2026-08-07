@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
@@ -16,6 +16,20 @@ export function validateRegistration(
   return null;
 }
 
+function useDelayedStatus(active: boolean, delay = 3000) {
+  const [takingLonger, setTakingLonger] = useState(false);
+
+  useEffect(() => {
+    setTakingLonger(false);
+    if (!active) return undefined;
+
+    const timer = window.setTimeout(() => setTakingLonger(true), delay);
+    return () => window.clearTimeout(timer);
+  }, [active, delay]);
+
+  return takingLonger;
+}
+
 export function LoginPage() {
   const { t } = useTranslation();
   const { signIn, signUp, requestMagicLink, requestPasswordReset } = useAuth();
@@ -29,6 +43,8 @@ export function LoginPage() {
   const [confirmationRequired, setConfirmationRequired] = useState(false);
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [magicStatus, setMagicStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const submittingRef = useRef(false);
+  const takingLonger = useDelayedStatus(submitting);
 
   function changeMode(nextMode: 'login' | 'register') {
     setMode(nextMode);
@@ -39,29 +55,36 @@ export function LoginPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
     setSubmitting(true);
     setError(false);
     setRegistrationError(null);
     setConfirmationRequired(false);
 
-    if (mode === 'register') {
-      const validationError = validateRegistration(email, password, confirmation);
-      if (validationError) {
-        setRegistrationError(validationError);
-        setSubmitting(false);
+    try {
+      if (mode === 'register') {
+        const validationError = validateRegistration(email, password, confirmation);
+        if (validationError) {
+          setRegistrationError(validationError);
+          return;
+        }
+        const result = await signUp(email.trim(), password);
+        if (result === 'signed-in') window.location.assign('/app?firstRun=1');
+        else if (result === 'confirmation-required') setConfirmationRequired(true);
+        else setError(true);
         return;
       }
-      const result = await signUp(email.trim(), password);
-      setSubmitting(false);
-      if (result === 'signed-in') window.location.assign('/app?firstRun=1');
-      else if (result === 'confirmation-required') setConfirmationRequired(true);
-      else setError(true);
-      return;
-    }
 
-    const success = await signIn(email.trim(), password);
-    setSubmitting(false);
-    if (!success) setError(true);
+      const success = await signIn(email.trim(), password);
+      if (!success) setError(true);
+    } catch {
+      setError(true);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   async function resetPassword() {
@@ -100,6 +123,7 @@ export function LoginPage() {
             role="tab"
             aria-selected={mode === 'login'}
             className={mode === 'login' ? 'active' : ''}
+            disabled={submitting}
             onClick={() => changeMode('login')}
           >
             {t('auth.existingAccount')}
@@ -109,13 +133,14 @@ export function LoginPage() {
             role="tab"
             aria-selected={mode === 'register'}
             className={mode === 'register' ? 'active' : ''}
+            disabled={submitting}
             onClick={() => changeMode('register')}
           >
             {t('auth.newAccount')}
           </button>
         </div>
 
-        <form onSubmit={(event) => void submit(event)}>
+        <form aria-busy={submitting} onSubmit={(event) => void submit(event)}>
           <label htmlFor="auth-email">
             {t(mode === 'register' ? 'auth.emailAsUsername' : 'auth.email')}
           </label>
@@ -125,6 +150,7 @@ export function LoginPage() {
             autoComplete={mode === 'register' ? 'username' : 'email'}
             inputMode="email"
             required
+            disabled={submitting}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
@@ -136,6 +162,7 @@ export function LoginPage() {
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
             required
             minLength={mode === 'register' ? 12 : 8}
+            disabled={submitting}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
@@ -150,6 +177,7 @@ export function LoginPage() {
                 autoComplete="new-password"
                 required
                 minLength={12}
+                disabled={submitting}
                 value={confirmation}
                 aria-invalid={registrationError === 'confirmation' || undefined}
                 onChange={(event) => setConfirmation(event.target.value)}
@@ -173,11 +201,25 @@ export function LoginPage() {
             </p>
           ) : null}
 
-          <button className="primary-button" type="submit" disabled={submitting}>
+          <button
+            className={`primary-button${submitting ? ' auth-submit-loading' : ''}`}
+            type="submit"
+            disabled={submitting}
+          >
+            {submitting ? <span className="auth-spinner" aria-hidden="true" /> : null}
             {submitting
               ? t(mode === 'login' ? 'auth.signingIn' : 'auth.registering')
               : t(mode === 'login' ? 'auth.signIn' : 'auth.createAccount')}
           </button>
+
+          {submitting ? (
+            <div className="auth-progress" role="status" aria-live="polite" aria-atomic="true">
+              <strong>
+                {t(mode === 'login' ? 'auth.authenticationProgress' : 'auth.registrationProgress')}
+              </strong>
+              <span>{t(takingLonger ? 'auth.authenticationTakingLonger' : 'auth.pleaseWait')}</span>
+            </div>
+          ) : null}
 
           {mode === 'login' ? (
             <>
@@ -187,7 +229,7 @@ export function LoginPage() {
               <button
                 className="auth-magic-button"
                 type="button"
-                disabled={magicStatus === 'sending'}
+                disabled={submitting || magicStatus === 'sending'}
                 onClick={() => void sendMagicLink()}
               >
                 {magicStatus === 'sending' ? t('auth.sendingMagicLink') : t('auth.sendMagicLink')}
@@ -205,7 +247,7 @@ export function LoginPage() {
               <button
                 className="auth-secondary-button"
                 type="button"
-                disabled={resetStatus === 'sending'}
+                disabled={submitting || resetStatus === 'sending'}
                 onClick={() => void resetPassword()}
               >
                 {resetStatus === 'sending' ? t('auth.sendingReset') : t('auth.forgotPassword')}
@@ -313,13 +355,19 @@ export function AuthConfigurationRequiredPage() {
 
 export function AuthLoadingPage() {
   const { t } = useTranslation();
+  const takingLonger = useDelayedStatus(true);
   return (
     <main className="auth-page" aria-busy="true">
-      <section className="auth-card">
+      <section className="auth-card auth-loading-card" role="status" aria-live="polite">
         <div className="auth-brand" aria-hidden="true">
           C
         </div>
-        <p>{t('auth.checkingSession')}</p>
+        <div className="auth-loading-heading">
+          <span className="auth-spinner auth-spinner-large" aria-hidden="true" />
+          <h1>{t('auth.checkingSession')}</h1>
+        </div>
+        <p>{t(takingLonger ? 'auth.sessionTakingLonger' : 'auth.loadingSecureWorkspace')}</p>
+        <small className="auth-loading-help">{t('auth.doNotRefresh')}</small>
       </section>
     </main>
   );

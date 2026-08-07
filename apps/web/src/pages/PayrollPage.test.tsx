@@ -69,6 +69,13 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeInTheDocument();
     expect(screen.getByText('סה״כ לתשלום בשנת 2026')).toBeInTheDocument();
     expect(screen.getByText(/14,650\.00/)).toBeInTheDocument();
+    expect(screen.getByText('שבתות וימי מנוחה מצטברים')).toBeInTheDocument();
+    expect(screen.getByText('תשלום ימי חג מצטבר')).toBeInTheDocument();
+    expect(screen.getByText('תשלום חופשה מצטבר')).toBeInTheDocument();
+    expect(screen.getByText('תשלום מחלה מצטבר')).toBeInTheDocument();
+    expect(screen.getByText('הפרשות מעסיק מצטברות')).toBeInTheDocument();
+    expect(screen.getByText('תשלומים ותוספות אחרים')).toBeInTheDocument();
+    expect(screen.getByText('סך כל התוספות')).toBeInTheDocument();
     expect(screen.getByText('2026-01')).toBeInTheDocument();
     expect(screen.queryByText('2025-12')).not.toBeInTheDocument();
 
@@ -331,13 +338,18 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }));
     expect(printSpy).toHaveBeenCalledOnce();
     printSpy.mockRestore();
-    const printableSummary = screen.getByLabelText('ריכוז חישוב שכר להדפסה');
+    const printableSummary = screen.getByLabelText('ריכוז שכר חודשי להדפסה');
     expect(printableSummary).toHaveTextContent('חתימת העובד/ת / Caregiver signature');
     expect(printableSummary).toHaveTextContent('Monthly pay summary');
     expect(printableSummary).toHaveTextContent('Base salary');
+    expect(printableSummary).toHaveTextContent('Saturdays and rest days');
+    expect(printableSummary).toHaveTextContent('Holiday pay');
+    expect(printableSummary).toHaveTextContent('Vacation pay');
+    expect(printableSummary).toHaveTextContent('Sick pay');
+    expect(printableSummary).toHaveTextContent('Employer contributions');
+    expect(printableSummary).toHaveTextContent('Other addition');
     expect(printableSummary).toHaveTextContent('Net amount payable');
     expect(printableSummary).toHaveTextContent('Advances');
-    expect(screen.getByText('תוספות אחרות / Other additions')).toBeInTheDocument();
     expect(screen.getByText('סכום לפני קיזוזים / Total before deductions')).toBeInTheDocument();
     expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
     expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();

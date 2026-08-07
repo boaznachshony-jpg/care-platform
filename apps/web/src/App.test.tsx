@@ -30,6 +30,8 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { name: 'העסקה ישירה של מטפל סיעודי, בראש שקט' }),
     ).toBeInTheDocument();
+    expect(screen.getByText('רישום נתוני שכר, מעקב תשלומים ותזכורות')).toBeInTheDocument();
+    expect(screen.queryByText('חישובי שכר, סיכומים ותזכורות')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
   });
 

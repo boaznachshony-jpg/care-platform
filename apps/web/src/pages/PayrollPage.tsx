@@ -392,7 +392,7 @@ export function PayrollPage() {
     setAdditionalPayments(additionalPaymentDrafts(record));
     setValidationErrors([]);
     setPayrollSaved(false);
-    setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');
+    setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח רישום חדש לחודש שנבחר.');
   }
 
   function saveSalarySettings(event: React.FormEvent) {
@@ -470,7 +470,7 @@ export function PayrollPage() {
     setRecords(next);
     setExpenses(nextExpenses);
     setReportYear(saved.month.slice(0, 4));
-    setMessage('חישוב השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
+    setMessage('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
     setPayrollSaved(true);
   }
 
@@ -543,7 +543,7 @@ export function PayrollPage() {
           <div>
             <p className="eyebrow">שכר</p>
             <h1>הגדרת מקור השכר</h1>
-            <p>אין במערכת שכר מוגדר. הזינו את השכר שסוכם בהעסקה לפני הכנת חישוב חודשי.</p>
+            <p>אין במערכת שכר מוגדר. הזינו את השכר שסוכם בהעסקה לפני פתיחת רישום חודשי.</p>
           </div>
           <span className="pill amber">טרם הוגדר</span>
         </header>
@@ -599,8 +599,8 @@ export function PayrollPage() {
       <header className="page-header">
         <div>
           <p className="eyebrow">שכר</p>
-          <h1>הכנת שכר חודשי</h1>
-          <p>כל הסכומים מוזנים על ידי המשתמש, מחושבים בזמן אמת ונשמרים לפי חודש.</p>
+          <h1>רישום שכר חודשי</h1>
+          <p>כל הסכומים מוזנים על ידי המשתמש, מסוכמים אריתמטית ונשמרים לפי חודש.</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => setStep(0)}>
           עדכון שכר בסיס
@@ -642,9 +642,9 @@ export function PayrollPage() {
                 onChange={(event) => loadMonth(event.target.value)}
               />
               {records.some((record) => record.month === values.month) ? (
-                <small>קיים חישוב שמור לחודש זה. המשך התהליך יעדכן אותו.</small>
+                <small>קיים רישום שמור לחודש זה. המשך התהליך יעדכן אותו.</small>
               ) : (
-                <small>עדיין לא נשמר חישוב לחודש זה.</small>
+                <small>עדיין לא נשמר רישום לחודש זה.</small>
               )}
             </label>
           ) : null}
@@ -1055,8 +1055,8 @@ export function PayrollPage() {
                   <strong>{money.format(calculation.total)}</strong>
                 </div>
                 <p>
-                  זהו כלי תיעוד וחישוב אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול גורם
-                  מקצועי.
+                  זהו כלי רישום, תיעוד וסיכום אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול
+                  גורם מקצועי.
                 </p>
               </div>
               {printPreviewOpen ? (
@@ -1076,12 +1076,12 @@ export function PayrollPage() {
               ) : null}
               <section
                 className={`payroll-print-slip${printPreviewOpen ? ' payroll-print-preview' : ''}`}
-                aria-label="ריכוז חישוב שכר להדפסה"
+                aria-label="ריכוז שכר חודשי להדפסה"
               >
                 <header>
                   <div>
                     <strong>CareDesk</strong>
-                    <h1>ריכוז חישוב שכר חודשי / Monthly pay summary</h1>
+                    <h1>ריכוז שכר חודשי / Monthly pay summary</h1>
                   </div>
                   <span>חודש שכר / Pay month: {values.month}</span>
                 </header>
@@ -1137,11 +1137,32 @@ export function PayrollPage() {
                       <td>{money.format(calculation.saturdayPay)}</td>
                     </tr>
                     <tr>
-                      <td>תוספות אחרות / Other additions</td>
+                      <td>תשלום ימי חג / Holiday pay</td>
                       <td>
-                        חג, חופשה, מחלה ותוספות שהוזנו / Holiday, vacation, sick pay and additions
+                        {numeric(values.paidHolidays)} ימי חג / {numeric(values.paidHolidays)} paid
+                        holidays
                       </td>
-                      <td>{money.format(standardOtherAdditions)}</td>
+                      <td>{money.format(numeric(values.holidayPay))}</td>
+                    </tr>
+                    <tr>
+                      <td>תשלום חופשה / Vacation pay</td>
+                      <td>{numeric(values.vacationDays)} ימי חופשה / Vacation days</td>
+                      <td>{money.format(numeric(values.vacationPay))}</td>
+                    </tr>
+                    <tr>
+                      <td>תשלום מחלה / Sick pay</td>
+                      <td>{numeric(values.sickDays)} ימי מחלה / Sick days</td>
+                      <td>{money.format(numeric(values.sickPay))}</td>
+                    </tr>
+                    <tr>
+                      <td>הפרשות מעסיק / Employer contributions</td>
+                      <td>פנסיה ופיצויים שהוזנו / Entered pension and severance</td>
+                      <td>{money.format(numeric(values.employerContributions))}</td>
+                    </tr>
+                    <tr>
+                      <td>תוספת אחרת / Other addition</td>
+                      <td>תוספת כללית שהוזנה / Entered general addition</td>
+                      <td>{money.format(numeric(values.otherAddition))}</td>
                     </tr>
                     {additionalPayments
                       .filter(
@@ -1205,7 +1226,7 @@ export function PayrollPage() {
           {step === 5 && payrollSaved ? (
             <div className="success-box payroll-save-confirmation" role="status">
               <strong>השכר נשמר בהצלחה</strong>
-              <span>החישוב לחודש {values.month} נוסף לדוח השנתי וניתן לערוך אותו בהמשך.</span>
+              <span>הרישום לחודש {values.month} נוסף לדוח השנתי וניתן לערוך אותו בהמשך.</span>
             </div>
           ) : null}
           <div className="wizard-actions">
@@ -1448,7 +1469,43 @@ export function PayrollPage() {
             </div>
             <div>
               <span>
-                תוספות מצטברות <small>לרבות הפרשות מעסיק שהוזנו</small>
+                שבתות וימי מנוחה מצטברים <small>תשלום נפרד משכר הבסיס</small>
+              </span>
+              <strong>{money.format(annualReport.saturdayPay)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלום ימי חג מצטבר <small>לפי הסכומים שנשמרו בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.holidayPay)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלום חופשה מצטבר <small>לפי הסכומים שנשמרו בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.vacationPay)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלום מחלה מצטבר <small>לפי הסכומים שנשמרו בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.sickPay)}</strong>
+            </div>
+            <div>
+              <span>
+                הפרשות מעסיק מצטברות <small>פנסיה ופיצויים שהוזנו</small>
+              </span>
+              <strong>{money.format(annualReport.employerContributions)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלומים ותוספות אחרים <small>תוספת כללית ותשלומים בעלי תיאור</small>
+              </span>
+              <strong>{money.format(annualReport.otherAdditions)}</strong>
+            </div>
+            <div className="payroll-subtotal">
+              <span>
+                סך כל התוספות <small>שבתות, חג, חופשה, מחלה ושאר התוספות</small>
               </span>
               <strong>{money.format(annualReport.additions)}</strong>
             </div>
@@ -1463,7 +1520,7 @@ export function PayrollPage() {
               <strong>{money.format(annualReport.totalPaid)}</strong>
             </div>
             <p>
-              מקור הנתונים: חישובי השכר החודשיים שנשמרו במערכת. הדוח הוא כלי תיעוד וסיכום אריתמטי
+              מקור הנתונים: רישומי השכר החודשיים שנשמרו במערכת. הדוח הוא כלי תיעוד וסיכום אריתמטי
               ואינו מחליף תלוש שכר או בדיקה מקצועית.
             </p>
           </div>

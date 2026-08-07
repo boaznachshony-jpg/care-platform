@@ -100,6 +100,10 @@ body {
   color: #1455b9;
   box-shadow: 0 3px 12px rgba(24, 52, 89, 0.12);
 }
+.auth-mode-switch button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .auth-field-help {
   margin-top: -6px;
   color: #58677b;
@@ -128,6 +132,69 @@ body {
   background: #eaf8f0;
   color: #17653a;
   font-weight: 800;
+}
+.auth-submit-loading {
+  gap: 12px;
+  cursor: wait;
+  opacity: 0.82;
+}
+.auth-progress {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #bcd2f3;
+  border-radius: 14px;
+  background: #edf5ff;
+  color: #173d73;
+}
+.auth-progress strong,
+.auth-progress span {
+  display: block;
+}
+.auth-progress span {
+  color: #465f80;
+}
+.auth-spinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 3px solid rgba(255, 255, 255, 0.48);
+  border-inline-start-color: currentColor;
+  border-radius: 50%;
+  animation: auth-spinner-turn 0.8s linear infinite;
+}
+.auth-spinner-large {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-color: #d4e3f8;
+  border-inline-start-color: #2867d8;
+}
+.auth-loading-card {
+  text-align: start;
+}
+.auth-loading-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.auth-loading-heading h1 {
+  margin: 0;
+}
+.auth-loading-help {
+  color: #58677b;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+@keyframes auth-spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-spinner {
+    animation: none;
+  }
 }
 .auth-secondary-button {
   min-height: 50px;
@@ -1831,7 +1898,64 @@ a {
 @media print {
   @page {
     size: A4;
-    margin: 14mm;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .environment-banner,
+  .cd-skip-link,
+  .sidebar,
+  .topbar,
+  .mobile-nav {
+    display: none !important;
+  }
+
+  .app-frame {
+    display: block !important;
+    min-height: 0 !important;
+    zoom: 1 !important;
+  }
+
+  .app-body,
+  .main-content,
+  .main-content > .page-stack {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .main-content > .page-stack {
+    display: block !important;
+  }
+
+  .main-content > .page-stack > :not(.wizard-card),
+  .main-content .wizard-card > :not(.wizard-content),
+  .main-content .wizard-content > :not(.payroll-print-slip) {
+    display: none !important;
+  }
+
+  .main-content .wizard-card,
+  .main-content .wizard-content {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
 
   body * {
@@ -1844,71 +1968,70 @@ a {
   }
 
   .payroll-print-slip {
-    position: fixed;
-    top: 0;
-    left: 0;
+    position: static;
     display: block;
     box-sizing: border-box;
     width: 100%;
-    max-width: none;
-    margin: 0;
+    max-width: 190mm;
+    margin: 0 auto;
     padding: 0;
+    transform: none;
     overflow: visible;
     direction: rtl;
     color: #111827;
     background: #fff;
     font-family: Arial, sans-serif;
-    font-size: 12pt;
+    font-size: 8.3pt;
   }
 
   .payroll-print-slip header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 24px;
-    padding-bottom: 14px;
+    gap: 12px;
+    padding-bottom: 4px;
     border-bottom: 3px solid #1f5fbf;
   }
 
   .payroll-print-slip h1 {
     margin: 5px 0 0;
-    font-size: 24pt;
+    font-size: 16pt;
   }
 
   .payroll-print-slip header > span {
-    padding: 9px 14px;
+    padding: 5px 8px;
     border: 1px solid #9db9df;
     border-radius: 8px;
     font-weight: 700;
   }
 
   .payroll-print-disclaimer {
-    margin: 12px 0;
-    padding: 9px 12px;
+    margin: 4px 0;
+    padding: 4px 6px;
     border: 1px solid #d6b754;
     background: #fff8df;
-    font-size: 9.5pt;
+    font-size: 8pt;
   }
 
   .payroll-print-details {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1px;
-    margin: 14px 0;
+    margin: 4px 0;
     border: 1px solid #b9c5d4;
     background: #b9c5d4;
   }
 
   .payroll-print-details > div {
     display: grid;
-    gap: 4px;
-    padding: 9px 12px;
+    gap: 2px;
+    padding: 4px 6px;
     background: #fff;
   }
 
   .payroll-print-details span {
     color: #536174;
-    font-size: 9pt;
+    font-size: 7.5pt;
   }
 
   .payroll-print-slip table {
@@ -1919,7 +2042,7 @@ a {
 
   .payroll-print-slip th,
   .payroll-print-slip td {
-    padding: 9px 10px;
+    padding: 3px 5px;
     border: 1px solid #b9c5d4;
     text-align: right;
     overflow-wrap: anywhere;
@@ -1932,7 +2055,7 @@ a {
 
   .payroll-print-slip td:last-child,
   .payroll-print-slip th:last-child {
-    width: 24%;
+    width: 20%;
     direction: ltr;
     text-align: left;
     font-weight: 700;
@@ -1946,29 +2069,30 @@ a {
   .payroll-print-slip tr.total td {
     border-top: 3px solid #1f5fbf;
     background: #eaf2fd;
-    font-size: 14pt;
+    font-size: 10.5pt;
     font-weight: 800;
   }
 
   .payroll-print-attendance {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
-    margin-top: 14px;
-    padding: 10px;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 4px;
     border: 1px solid #b9c5d4;
   }
 
   .payroll-print-signatures {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-    margin-top: 50px;
+    gap: 16px;
+    margin-top: 18px;
+    font-size: 8pt;
   }
 
   .payroll-print-signatures > div {
     display: grid;
-    gap: 28px;
+    gap: 18px;
   }
 
   .payroll-print-signatures i {
