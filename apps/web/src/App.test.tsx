@@ -6,10 +6,10 @@ import { axe } from 'vitest-axe';
 import { initI18n } from '@caredesk/i18n';
 import { App } from './App.js';
 
-function renderApp() {
+function renderApp(path = '/') {
   return render(
     <I18nextProvider i18n={initI18n()}>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[path]}>
         <App />
       </MemoryRouter>
     </I18nextProvider>,
@@ -34,11 +34,19 @@ describe('App', () => {
     expect(screen.queryByText('חישובי שכר, סיכומים ותזכורות')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
     expect(screen.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeInTheDocument();
-    expect(screen.getAllByText('boaz.nachshony@gmail.com').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'שליחת בקשת עזרה' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('mailto:boaz.nachshony@gmail.com'),
-    );
+    expect(screen.queryByText('boaz.nachshony@gmail.com')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'שליחת בקשת עזרה' })).toBeVisible();
+    for (const link of screen.getAllByRole('link', { name: 'יצירת קשר' })) {
+      expect(link).toHaveAttribute('href', '/contact-us');
+    }
+  });
+
+  it('renders a public contact page with initiative and copyright details', () => {
+    renderApp('/contact-us');
+    expect(screen.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeVisible();
+    expect(screen.getByText('בועז נחשוני')).toBeVisible();
+    expect(screen.getByText(/כל הזכויות שמורות/)).toBeVisible();
+    expect(screen.queryByText('boaz.nachshony@gmail.com')).not.toBeInTheDocument();
   });
 
   it('renders exactly one main landmark', () => {

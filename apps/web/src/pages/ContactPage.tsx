@@ -15,6 +15,27 @@ export function ContactPage() {
       </header>
 
       <ContactOptions />
+      <section className="contact-about" aria-labelledby="contact-about-title">
+        <div>
+          <p className="eyebrow">{t('contact.aboutEyebrow')}</p>
+          <h2 id="contact-about-title">{t('contact.aboutTitle')}</h2>
+          <p>{t('contact.aboutBody')}</p>
+        </div>
+        <dl>
+          <div>
+            <dt>{t('contact.initiativeLabel')}</dt>
+            <dd>{t('contact.initiativeName')}</dd>
+          </div>
+          <div>
+            <dt>{t('contact.entrepreneurLabel')}</dt>
+            <dd>{t('contact.entrepreneurName')}</dd>
+          </div>
+          <div>
+            <dt>{t('contact.copyrightLabel')}</dt>
+            <dd>{t('contact.copyright')}</dd>
+          </div>
+        </dl>
+      </section>
       <p className="form-note">{t('contact.response')}</p>
     </div>
   );

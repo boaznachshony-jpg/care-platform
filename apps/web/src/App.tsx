@@ -25,7 +25,11 @@ import {
   PasswordRecoveryPage,
   StorageUnavailablePage,
 } from './pages/LoginPage.js';
-import { DirectEmploymentGuidePage, PublicLandingPage } from './pages/PublicLandingPage.js';
+import {
+  DirectEmploymentGuidePage,
+  PublicContactPage,
+  PublicLandingPage,
+} from './pages/PublicLandingPage.js';
 import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
 import { BillingPage } from './pages/BillingPage.js';
 import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
@@ -286,6 +290,7 @@ export function App() {
       ) : null}
       <Routes>
         <Route path="/" element={<PublicLandingPage />} />
+        <Route path="/contact-us" element={<PublicContactPage />} />
         <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
         <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
         <Route path="*" element={<ApplicationEntry />} />

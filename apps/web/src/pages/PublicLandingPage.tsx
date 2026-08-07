@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ContactOptions } from '../components/ContactOptions.js';
-import { SUPPORT_EMAIL } from '../contact.js';
+import { ContactPage } from './ContactPage.js';
 
 const DEFAULT_SITE_URL = 'https://care-platform-web.vercel.app';
 
@@ -81,7 +81,7 @@ function PublicHeader() {
         <a href="/#capabilities">{t('public.common.capabilities')}</a>
         <Link to="/guide/direct-caregiver-employment">{t('public.common.guide')}</Link>
         <a href="/#questions">{t('public.common.questions')}</a>
-        <a href="/#contact">{t('public.common.contact')}</a>
+        <Link to="/contact-us">{t('public.common.contact')}</Link>
       </nav>
       <Link className="public-login-link" to="/app">
         {t('public.common.login')}
@@ -101,7 +101,7 @@ function PublicFooter() {
       <p>{t('public.common.footerDisclaimer')}</p>
       <div className="public-footer-links">
         <Link to="/terms/subscription">{t('public.common.subscriptionTerms')}</Link>
-        <a href={`mailto:${SUPPORT_EMAIL}`}>{t('public.common.contact')}</a>
+        <Link to="/contact-us">{t('public.common.contact')}</Link>
       </div>
     </footer>
   );
@@ -368,6 +368,37 @@ export function PublicSubscriptionTermsPage() {
           ))}
           <aside>{t('public.subscriptionTerms.legalNotice')}</aside>
         </article>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+export function PublicContactPage() {
+  const { t } = useTranslation();
+  const title = `${t('contact.title')} | CareDesk`;
+  const description = t('contact.intro');
+  const structuredData = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'ContactPage',
+      name: title,
+      description,
+      inLanguage: 'he',
+      url: `${publicSiteUrl().replace(/\/$/, '')}/contact-us`,
+    }),
+    [description, title],
+  );
+  usePublicMetadata({ title, description, path: '/contact-us', structuredData });
+
+  return (
+    <div className="public-site" dir="rtl">
+      <a className="cd-skip-link" href="#public-main">
+        {t('public.common.skip')}
+      </a>
+      <PublicHeader />
+      <main className="public-contact-page" id="public-main">
+        <ContactPage />
       </main>
       <PublicFooter />
     </div>

@@ -28,6 +28,11 @@ const envSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
     FAMILY_INVITE_REDIRECT_URL: z.string().url().optional(),
+    // Support delivery is server-only. The destination must never be exposed
+    // through a VITE_ variable or rendered into the browser bundle.
+    SUPPORT_DESTINATION_EMAIL: z.string().email().optional(),
+    SUPPORT_FROM_EMAIL: z.string().email().optional(),
+    RESEND_API_KEY: z.string().min(10).optional(),
     BILLING_PROVIDER: z.enum(['disabled', 'cardcom', 'mock']).default('disabled'),
     BILLING_PRICE_AGOROT: z.coerce.number().int().positive().default(3900),
     BILLING_VAT_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(1800),
@@ -60,6 +65,19 @@ const envSchema = z
         path: ['SUPABASE_STORAGE_BUCKET'],
         message:
           'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_STORAGE_BUCKET must be configured together',
+      });
+    }
+    const supportSettings = [
+      value.SUPPORT_DESTINATION_EMAIL,
+      value.SUPPORT_FROM_EMAIL,
+      value.RESEND_API_KEY,
+    ];
+    if (supportSettings.some(Boolean) && !supportSettings.every(Boolean)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SUPPORT_DESTINATION_EMAIL'],
+        message:
+          'SUPPORT_DESTINATION_EMAIL, SUPPORT_FROM_EMAIL and RESEND_API_KEY must be configured together',
       });
     }
     if (value.BILLING_PROVIDER === 'cardcom') {

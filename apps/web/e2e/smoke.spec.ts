@@ -257,6 +257,33 @@ const productRoutes = [
   ['/contact', 'יצירת קשר ועזרה'],
 ] as const;
 
+test('public contact form sends a limited message without exposing the destination address', async ({
+  page,
+}) => {
+  let submittedBody = '';
+  await page.route('**/support/requests', async (route) => {
+    submittedBody = route.request().postData() ?? '';
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: '{"accepted":true}',
+    });
+  });
+  await page.goto('/contact-us');
+
+  await expect(page.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeVisible();
+  await expect(page.getByText('בועז נחשוני')).toBeVisible();
+  await expect(page.getByText('boaz.nachshony@gmail.com')).toHaveCount(0);
+  await page.getByRole('button', { name: 'שליחת בקשת עזרה' }).click();
+  await page.getByLabel('כתובת דוא״ל לקבלת תשובה').fill('pilot@example.com');
+  await page.getByLabel('תוכן הפנייה').fill('לא הצלחתי לעדכן משימה קיימת במסך המשימות.');
+  await page.getByRole('button', { name: 'שליחת הפנייה' }).click();
+
+  await expect(page.getByText('הפנייה התקבלה בהצלחה')).toBeVisible();
+  expect(submittedBody).toContain('pilot@example.com');
+  expect(submittedBody).not.toContain('boaz.nachshony@gmail.com');
+});
+
 for (const [route, heading] of productRoutes) {
   test(`renders ${route} after onboarding`, async ({ page }) => {
     await seedCompletedProfile(page);
