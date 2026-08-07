@@ -53,7 +53,7 @@ describe('quarterly national insurance task', () => {
   it('describes the third-quarter payment card without using September 30 as payment date', () => {
     const task = on('2026-10-01');
     expect(task).toMatchObject({
-      title: 'תשלום ביטוח לאומי לרבעון יולי–ספטמבר',
+      title: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר',
       paymentWindow: 'ניתן לשלם בין 1.10 ל־15.10',
       deadlineLabel: 'מועד אחרון: 15 באוקטובר',
     });

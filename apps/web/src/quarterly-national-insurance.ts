@@ -91,7 +91,7 @@ function createQuarterlyInsuranceSchedule(
   const paymentMonth = (endMonth + 1) % 12;
   const paymentYear = endMonth === 11 ? year + 1 : year;
   const [startMonthLabel, endMonthLabel] = quarterMonths[quarter - 1]!;
-  const periodLabel = `${startMonthLabel}–${endMonthLabel}`;
+  const periodLabel = `${startMonthLabel} – ${endMonthLabel}`;
 
   return {
     id: `national-insurance-${year}-q${quarter}`,

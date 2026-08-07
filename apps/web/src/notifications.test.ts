@@ -150,7 +150,7 @@ describe('care notifications', () => {
 
     expect(notifications).toEqual([
       expect.objectContaining({
-        title: 'תשלום ביטוח לאומי לרבעון יולי–ספטמבר',
+        title: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר',
         detail: 'דורש טיפול · ניתן לשלם בין 1.10 ל־15.10',
         dueDate: '2026-10-15',
         severity: 'attention',
