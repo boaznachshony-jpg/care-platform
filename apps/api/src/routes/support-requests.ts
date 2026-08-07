@@ -72,9 +72,8 @@ export function registerSupportRequestRoutes(app: FastifyInstance, env: Env): vo
       `Tracking ID: ${request.correlationId}`,
     ].join('\n');
 
-    let providerResponse: Response;
     try {
-      providerResponse = await fetch('https://api.resend.com/emails', {
+      const providerResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -89,17 +88,17 @@ export function registerSupportRequestRoutes(app: FastifyInstance, env: Env): vo
           html: `<h2>${category}</h2><p><strong>Reply address:</strong> ${escapeHtml(replyEmail)}</p><p>${escapeHtml(message).replaceAll('\n', '<br>')}</p><hr><small>Tracking ID: ${escapeHtml(request.correlationId)}</small>`,
         }),
       });
+
+      if (!providerResponse.ok) {
+        request.log.error(
+          { correlationId: request.correlationId, providerStatus: providerResponse.status },
+          'support provider rejected request',
+        );
+        sendError(request, reply, 502, 'SUPPORT_DELIVERY_FAILED');
+        return;
+      }
     } catch {
       request.log.error({ correlationId: request.correlationId }, 'support provider unavailable');
-      sendError(request, reply, 502, 'SUPPORT_DELIVERY_FAILED');
-      return;
-    }
-
-    if (!providerResponse.ok) {
-      request.log.error(
-        { correlationId: request.correlationId, providerStatus: providerResponse.status },
-        'support provider rejected request',
-      );
       sendError(request, reply, 502, 'SUPPORT_DELIVERY_FAILED');
       return;
     }
