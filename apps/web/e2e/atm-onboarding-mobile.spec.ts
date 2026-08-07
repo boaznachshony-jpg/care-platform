@@ -117,6 +117,24 @@ test.describe('ATM onboarding field validation', () => {
 
     const helperChoices = page.locator('.onboarding-choice-group input[name="helper"]');
     await expect(helperChoices).toHaveCount(2);
+    const helperGroup = page.locator('.onboarding-choice-group');
+    const helperLabel = helperGroup.locator('label').first();
+    await expect(helperGroup).toHaveCSS('border-top-width', '0px');
+    await expect(helperLabel).toHaveCSS('display', 'flex');
+    await expect(helperLabel).toHaveCSS('align-items', 'center');
+    const helperLabelBox = await helperLabel.boundingBox();
+    const helperRadioBox = await helperChoices.first().boundingBox();
+    expect(helperLabelBox).not.toBeNull();
+    expect(helperRadioBox).not.toBeNull();
+    expect(helperRadioBox!.width).toBeLessThanOrEqual(30);
+    expect(helperRadioBox!.height).toBeLessThanOrEqual(30);
+    expect(
+      Math.abs(
+        helperLabelBox!.y +
+          helperLabelBox!.height / 2 -
+          (helperRadioBox!.y + helperRadioBox!.height / 2),
+      ),
+    ).toBeLessThanOrEqual(2);
     await helperChoices.first().check();
     const representativeName = page.getByLabel('שם הנציג המורשה');
     const representativePhone = page.getByLabel('מספר טלפון');
