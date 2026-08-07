@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   emptyMvpProfile,
+  readMvpEmploymentExpenses,
   readMvpPayroll,
   saveMvpPayroll,
   saveMvpProfile,
@@ -136,6 +137,47 @@ describe('PayrollPage annual report', () => {
       pocketMoney: 100,
       advances: 500,
       total: proratedBaseSalary + 850,
+    });
+  });
+
+  it('creates one quarterly national-insurance tracking item after payroll save without requiring an amount', () => {
+    render(<PayrollPage />);
+
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-07' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'אישור ושמירה' }));
+
+    expect(
+      screen.getByText(/מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('סכום טרם הוזן')).toBeInTheDocument();
+    expect(readMvpEmploymentExpenses()).toEqual([
+      expect.objectContaining({
+        id: 'expense-national-insurance-2026-q3',
+        category: 'ביטוח לאומי',
+        frequency: 'quarterly',
+        amount: 0,
+        amountEntered: false,
+        dueDate: '2026-10-15',
+        status: 'upcoming',
+        source: 'payroll-national-insurance',
+        sourcePeriod: '2026-Q3',
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'שמירה מחדש' }));
+    expect(readMvpEmploymentExpenses()).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'עדכון פרטים' }));
+    fireEvent.change(screen.getByLabelText(/^סכום בש״ח/), { target: { value: '720' } });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת עדכון' }));
+    expect(readMvpEmploymentExpenses()[0]).toMatchObject({
+      amount: 720,
+      amountEntered: true,
+      dueDate: '2026-10-15',
     });
   });
 

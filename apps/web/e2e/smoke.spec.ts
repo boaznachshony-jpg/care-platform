@@ -159,7 +159,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.goto(`${clientBase}/tasks`);
   const insuranceTask = page.locator('.list-task').filter({ hasText: 'חידוש ביטוח רפואי' });
   await expect(insuranceTask).toContainText('30.06.2027');
-  await expect(insuranceTask).toContainText('נוצר אוטומטית');
+  await expect(insuranceTask).toContainText('נוצרה אוטומטית');
 
   await page.goto(`${clientBase}/settings`);
   await page.getByLabel('שם המעסיק').fill('בועז מעודכן');
@@ -492,7 +492,10 @@ test('walks through all payroll steps', async ({ page }) => {
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
   await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
   await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
-  await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
+  await expect(
+    page.getByText('חישוב השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.'),
+  ).toBeVisible();
+  await expect(page.locator('.employment-expenses').getByText('סכום טרם הוזן')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
   await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();

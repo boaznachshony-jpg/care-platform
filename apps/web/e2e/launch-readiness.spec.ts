@@ -339,6 +339,17 @@ test.describe('launch readiness interactions', () => {
     await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
     await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
 
+    const nationalInsuranceTracking = page
+      .locator('.employment-expenses > div')
+      .filter({ hasText: 'נוצר אוטומטית משכר 2026-07' });
+    await expect(nationalInsuranceTracking).toContainText('ביטוח לאומי');
+    await expect(nationalInsuranceTracking).toContainText('יעד 2026-10-15');
+    await expect(nationalInsuranceTracking).toContainText('סכום טרם הוזן');
+    await nationalInsuranceTracking.getByRole('button', { name: 'עדכון פרטים' }).click();
+    await page.getByLabel(/^סכום בש״ח/).fill('720');
+    await page.getByRole('button', { name: 'שמירת עדכון' }).click();
+    await expect(nationalInsuranceTracking).toContainText('720.00');
+
     await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
     await page.reload();
     await expect(page.getByText('2026-07', { exact: true })).toBeVisible();

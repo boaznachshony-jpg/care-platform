@@ -1,11 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { createQuarterlyInsuranceTask } from './quarterly-national-insurance.js';
+import {
+  createQuarterlyInsuranceTask,
+  quarterlyInsuranceScheduleForPayrollMonth,
+} from './quarterly-national-insurance.js';
 
 function on(value: string) {
   return createQuarterlyInsuranceTask(new Date(`${value}T12:00:00`));
 }
 
 describe('quarterly national insurance task', () => {
+  it('derives the payment period from the saved payroll month, including year rollover', () => {
+    expect(quarterlyInsuranceScheduleForPayrollMonth('2026-07')).toMatchObject({
+      quarter: 3,
+      year: 2026,
+      periodRange: 'תקופת דיווח: 1.7–30.9',
+      paymentOpenDate: '2026-10-01',
+      deadlineDate: '2026-10-15',
+    });
+    expect(quarterlyInsuranceScheduleForPayrollMonth('2026-12')).toMatchObject({
+      quarter: 4,
+      year: 2026,
+      paymentOpenDate: '2027-01-01',
+      deadlineDate: '2027-01-15',
+    });
+    expect(quarterlyInsuranceScheduleForPayrollMonth('not-a-month')).toBeNull();
+  });
+
   it('uses the last day of the quarter for preparation only', () => {
     const task = on('2026-09-30');
     expect(task).toMatchObject({

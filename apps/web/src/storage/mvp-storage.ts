@@ -356,10 +356,13 @@ export interface MvpEmploymentExpense {
   category: string;
   frequency: EmploymentExpenseFrequency;
   amount: number;
+  amountEntered?: boolean;
   dueDate: string;
   status: EmploymentExpenseStatus;
   note: string;
   savedAt: string;
+  source?: 'payroll-national-insurance';
+  sourcePeriod?: string;
 }
 
 export type MvpTaskPriority = 'normal' | 'important' | 'urgent';

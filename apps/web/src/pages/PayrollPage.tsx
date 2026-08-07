@@ -4,6 +4,7 @@ import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
+import { quarterlyInsuranceScheduleForPayrollMonth } from '../quarterly-national-insurance.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -86,6 +87,39 @@ function recordSaturdayRate(record: MvpPayrollRecord): number {
   );
 }
 
+function withNationalInsuranceTracking(
+  expenses: MvpEmploymentExpense[],
+  payrollMonth: string,
+): MvpEmploymentExpense[] {
+  const schedule = quarterlyInsuranceScheduleForPayrollMonth(payrollMonth);
+  if (!schedule) return expenses;
+
+  const sourcePeriod = `${schedule.year}-Q${schedule.quarter}`;
+  const id = `expense-${schedule.id}`;
+  const existing = expenses.find(
+    (expense) => expense.id === id || expense.sourcePeriod === sourcePeriod,
+  );
+  const trackedExpense: MvpEmploymentExpense = {
+    id: existing?.id ?? id,
+    category: 'ביטוח לאומי',
+    frequency: 'quarterly',
+    amount: existing?.amount ?? 0,
+    amountEntered: existing?.amountEntered ?? false,
+    dueDate: schedule.deadlineDate,
+    status: existing?.status ?? 'upcoming',
+    note:
+      existing?.note ||
+      `${schedule.periodRange} · ${schedule.paymentWindow} · נוצר אוטומטית משכר ${payrollMonth}`,
+    savedAt: existing?.savedAt ?? new Date().toISOString(),
+    source: 'payroll-national-insurance',
+    sourcePeriod,
+  };
+
+  return existing
+    ? expenses.map((expense) => (expense.id === existing.id ? trackedExpense : expense))
+    : [trackedExpense, ...expenses];
+}
+
 export function PayrollPage() {
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
@@ -106,6 +140,7 @@ export function PayrollPage() {
     dueDate: '',
     note: '',
   });
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
@@ -429,10 +464,13 @@ export function PayrollPage() {
     const next = records.some((record) => record.month === saved.month)
       ? records.map((record) => (record.month === saved.month ? saved : record))
       : [saved, ...records];
+    const nextExpenses = withNationalInsuranceTracking(expenses, saved.month);
     saveMvpPayroll(next);
+    saveMvpEmploymentExpenses(nextExpenses);
     setRecords(next);
+    setExpenses(nextExpenses);
     setReportYear(saved.month.slice(0, 4));
-    setMessage('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.');
+    setMessage('חישוב השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
     setPayrollSaved(true);
   }
 
@@ -442,21 +480,42 @@ export function PayrollPage() {
       setMessage('יש לבחור סוג תשלום ותאריך יעד.');
       return;
     }
+    const existingExpense = expenses.find((expense) => expense.id === editingExpenseId);
     const saved: MvpEmploymentExpense = {
-      id: crypto.randomUUID(),
+      id: existingExpense?.id ?? crypto.randomUUID(),
       category: expenseDraft.category,
       frequency: expenseDraft.frequency,
       amount: numeric(expenseDraft.amount),
+      amountEntered: expenseDraft.amount.trim() !== '',
       dueDate: expenseDraft.dueDate,
-      status: 'upcoming',
+      status: existingExpense?.status ?? 'upcoming',
       note: expenseDraft.note,
-      savedAt: new Date().toISOString(),
+      savedAt: existingExpense?.savedAt ?? new Date().toISOString(),
+      source: existingExpense?.source,
+      sourcePeriod: existingExpense?.sourcePeriod,
     };
-    const next = [saved, ...expenses];
+    const next = existingExpense
+      ? expenses.map((expense) => (expense.id === existingExpense.id ? saved : expense))
+      : [saved, ...expenses];
     saveMvpEmploymentExpenses(next);
     setExpenses(next);
     setExpenseDraft((current) => ({ ...current, amount: '', dueDate: '', note: '' }));
-    setMessage('התשלום התקופתי נשמר בלוח עלויות ההעסקה.');
+    setEditingExpenseId(null);
+    setMessage(
+      existingExpense ? 'פרטי התשלום התקופתי עודכנו.' : 'התשלום התקופתי נשמר בלוח עלויות ההעסקה.',
+    );
+  }
+
+  function editExpense(expense: MvpEmploymentExpense) {
+    setExpenseDraft({
+      category: expense.category,
+      frequency: expense.frequency,
+      amount: expense.amountEntered === false ? '' : String(expense.amount),
+      dueDate: expense.dueDate,
+      note: expense.note,
+    });
+    setEditingExpenseId(expense.id);
+    setMessage('עדכנו את הפרטים בטופס ושמרו.');
   }
 
   function toggleExpense(expense: MvpEmploymentExpense) {
@@ -1248,6 +1307,7 @@ export function PayrollPage() {
                   setExpenseDraft((current) => ({ ...current, amount: event.target.value }))
                 }
               />
+              <small>אפשר להשאיר ריק ולהוסיף את הסכום בהמשך. המעקב יישמר בכל מקרה.</small>
             </label>
             <label>
               תאריך יעד
@@ -1275,9 +1335,28 @@ export function PayrollPage() {
             המערכת אינה קובעת את שיעור התשלום או את מועדו המשפטי. יש להזין את הנתונים מהדרישה
             שקיבלתם ולאמת אותם מול גורם מוסמך.
           </p>
-          <button className="primary-button" type="submit">
-            הוספת תשלום למעקב
-          </button>
+          <div className="button-row">
+            <button className="primary-button" type="submit">
+              {editingExpenseId ? 'שמירת עדכון' : 'הוספת תשלום למעקב'}
+            </button>
+            {editingExpenseId ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setEditingExpenseId(null);
+                  setExpenseDraft((current) => ({
+                    ...current,
+                    amount: '',
+                    dueDate: '',
+                    note: '',
+                  }));
+                }}
+              >
+                ביטול עריכה
+              </button>
+            ) : null}
+          </div>
         </form>
         {expenses.length > 0 ? (
           <div className="detail-list employment-expenses">
@@ -1297,13 +1376,22 @@ export function PayrollPage() {
                     {expense.note ? ` · ${expense.note}` : ''}
                   </small>
                 </span>
-                <strong>{money.format(expense.amount)}</strong>
+                <strong>
+                  {expense.amountEntered === false ? 'סכום טרם הוזן' : money.format(expense.amount)}
+                </strong>
                 <button
                   className="secondary-button"
                   type="button"
                   onClick={() => toggleExpense(expense)}
                 >
                   {expense.status === 'paid' ? 'שולם ✓' : 'סימון כשולם'}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => editExpense(expense)}
+                >
+                  עדכון פרטים
                 </button>
                 <button
                   className="text-button"
