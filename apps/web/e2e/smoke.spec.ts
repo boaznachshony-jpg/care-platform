@@ -201,6 +201,7 @@ test('mobile layouts stay symmetrical at the largest text size', async ({ page }
     '/timeline',
     '/payroll',
     '/settings',
+    '/contact',
   ];
 
   for (const route of routes) {
@@ -253,6 +254,7 @@ const productRoutes = [
   ['/timeline', 'המועדים הבאים'],
   ['/payroll', 'רישום שכר חודשי'],
   ['/settings', 'פרטים והעדפות'],
+  ['/contact', 'יצירת קשר ועזרה'],
 ] as const;
 
 for (const [route, heading] of productRoutes) {
@@ -294,6 +296,7 @@ test('connects every primary screen through visible navigation and action links'
       ['מושגים חשובים', '/glossary', 'מושגים חשובים'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
+      ['עזרה ויצירת קשר', '/contact', 'יצירת קשר ועזרה'],
     ] as const;
     for (const [linkName, route, expectedText] of moreConnections) {
       await page.goto(clientHome);
@@ -314,6 +317,7 @@ test('connects every primary screen through visible navigation and action links'
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
+      ['עזרה', '/contact', 'יצירת קשר ועזרה'],
     ] as const;
     for (const [linkName, route, expectedText] of connections) {
       await page.goto(clientHome);

@@ -33,6 +33,12 @@ describe('App', () => {
     expect(screen.getByText('רישום נתוני שכר, מעקב תשלומים ותזכורות')).toBeInTheDocument();
     expect(screen.queryByText('חישובי שכר, סיכומים ותזכורות')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
+    expect(screen.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeInTheDocument();
+    expect(screen.getAllByText('boaz.nachshony@gmail.com').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'שליחת בקשת עזרה' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('mailto:boaz.nachshony@gmail.com'),
+    );
   });
 
   it('renders exactly one main landmark', () => {

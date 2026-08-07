@@ -29,6 +29,7 @@ import { DirectEmploymentGuidePage, PublicLandingPage } from './pages/PublicLand
 import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
 import { BillingPage } from './pages/BillingPage.js';
 import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
+import { ContactPage } from './pages/ContactPage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -43,6 +44,7 @@ const authenticatedEntrypoints = new Set([
   '/settings',
   '/family',
   '/billing',
+  '/contact',
 ]);
 
 function ClientHome() {
@@ -174,6 +176,14 @@ function AuthenticatedApp() {
           }
         />
         <Route
+          path="/clients/:clientId/contact"
+          element={
+            <ClientApp>
+              <ContactPage />
+            </ClientApp>
+          }
+        />
+        <Route
           path="/onboarding"
           element={
             <ClientApp>
@@ -242,6 +252,14 @@ function AuthenticatedApp() {
           element={
             <ClientApp>
               <SettingsPage />
+            </ClientApp>
+          }
+        />
+        <Route
+          path="/contact"
+          element={
+            <ClientApp>
+              <ContactPage />
             </ClientApp>
           }
         />

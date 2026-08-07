@@ -454,6 +454,25 @@
       }
     }
   },
+  "contact": {
+    "eyebrow": "We are here to help",
+    "title": "Contact and support",
+    "intro": "Ran into a problem or have an idea for an improvement? Send us a message and we will reply by email.",
+    "helpTitle": "Need help with the application?",
+    "helpBody": "Briefly tell us which screen or action caused a problem and what you tried to do.",
+    "helpAction": "Send a support request",
+    "feedbackTitle": "Have an improvement suggestion?",
+    "feedbackBody": "We would be glad to hear what could make CareDesk simpler and more useful.",
+    "feedbackAction": "Send an improvement suggestion",
+    "emailLabel": "Contact email address",
+    "fallback": "If your email application does not open, copy the address and send the message directly.",
+    "privacy": "To protect your privacy, do not send passwords, credit-card details, identity numbers, or medical documents by email.",
+    "response": "During the pilot, support is provided by email.",
+    "helpSubject": "CareDesk – Support request",
+    "helpTemplate": "Hello,\n\nI would like help with:\n\nThe screen where I had a problem:\n\nWhat I tried to do:\n",
+    "feedbackSubject": "CareDesk – Improvement suggestion",
+    "feedbackTemplate": "Hello,\n\nI would like to suggest the following improvement to CareDesk:\n\n"
+  },
   "public": {
     "meta": {
       "homeTitle": "CareDesk | Direct caregiver employment management",
@@ -468,6 +487,7 @@
       "capabilities": "What the system brings together",
       "guide": "Direct employment guide",
       "questions": "Frequently asked questions",
+      "contact": "Contact",
       "login": "Sign in",
       "footerTagline": "A control center for directly employing a caregiver",
       "footerDisclaimer": "Information in the system is an organizational aid, not legal or accounting advice or a substitute for checking with the relevant authorities.",
