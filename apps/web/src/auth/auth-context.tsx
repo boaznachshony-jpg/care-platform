@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { prewarmApi } from '../api/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
 import { getBrowserAuthClient } from './client.js';
 import {
@@ -67,6 +68,10 @@ export function AuthProvider({
 
   useEffect(() => {
     if (!client) return undefined;
+    // Wake the public API while Supabase restores or verifies the session. The
+    // request contains no credentials or customer data and overlaps the most
+    // expensive part of a cold first sign-in.
+    void prewarmApi();
     let active = true;
     let sessionId = 0;
     let currentUserId: string | null | undefined;
@@ -101,6 +106,9 @@ export function AuthProvider({
       }
 
       try {
+        // If this is a cold deployment, finish waking it before the protected
+        // workspace request. Recent/in-flight warm-ups are reused.
+        await prewarmApi();
         await startWorkspaceSync(nextUser.id);
         if (!active || requestId !== sessionId) return;
         setUser(nextUser);

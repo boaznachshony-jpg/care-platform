@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  prewarmApi: vi.fn(),
   canUseCachedWorkspace: vi.fn(),
   startWorkspaceSync: vi.fn(),
   stopWorkspaceSync: vi.fn(),
@@ -14,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   resetPasswordForEmail: vi.fn(),
   updateUser: vi.fn(),
   signOut: vi.fn(),
+}));
+
+vi.mock('../api/client.js', () => ({
+  prewarmApi: mocks.prewarmApi,
 }));
 
 vi.mock('./client.js', () => ({
@@ -57,6 +62,8 @@ function renderProvider() {
 
 describe('authentication gate', () => {
   beforeEach(() => {
+    mocks.prewarmApi.mockReset();
+    mocks.prewarmApi.mockResolvedValue(undefined);
     mocks.canUseCachedWorkspace.mockReset();
     mocks.startWorkspaceSync.mockReset();
     mocks.stopWorkspaceSync.mockReset();
@@ -117,6 +124,27 @@ describe('authentication gate', () => {
     expect(screen.queryByText('workspace')).not.toBeInTheDocument();
 
     finishHydration();
+    await waitFor(() => expect(screen.getByText('workspace')).toBeInTheDocument());
+  });
+
+  it('finishes API warm-up before the first uncached workspace request', async () => {
+    let finishWarmup!: () => void;
+    mocks.prewarmApi.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishWarmup = resolve;
+      }),
+    );
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-a' } } } });
+    mocks.canUseCachedWorkspace.mockReturnValue(false);
+    mocks.startWorkspaceSync.mockResolvedValue(undefined);
+
+    renderProvider();
+
+    expect(await screen.findByText('loading')).toBeInTheDocument();
+    expect(mocks.startWorkspaceSync).not.toHaveBeenCalled();
+
+    finishWarmup();
+    await waitFor(() => expect(mocks.startWorkspaceSync).toHaveBeenCalledWith('user-a'));
     await waitFor(() => expect(screen.getByText('workspace')).toBeInTheDocument());
   });
 
