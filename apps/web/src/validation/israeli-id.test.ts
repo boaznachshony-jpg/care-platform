@@ -6,8 +6,9 @@ describe('Israeli ID validation', () => {
     expect(isValidIsraeliId('123456782')).toBe(true);
   });
 
-  it('removes common formatting without inventing a leading zero', () => {
-    expect(isValidIsraeliId('123-456 782')).toBe(true);
+  it('normalizes formatting for input controls but rejects formatted raw values', () => {
+    expect(isValidIsraeliId('123-456 782')).toBe(false);
+    expect(getIsraeliIdValidationError('123-456 782')).toBe('characters');
     expect(normalizeIsraeliId('123-456 782')).toBe('123456782');
   });
 
@@ -20,11 +21,12 @@ describe('Israeli ID validation', () => {
   it('strips pasted non-digits and limits input to nine digits', () => {
     expect(normalizeIsraeliId(' 123-456 782 abc 9')).toBe('123456782');
     expect(normalizeIsraeliId('038-852 562')).toBe('038852562');
-    expect(isValidIsraeliId('038-852 562')).toBe(true);
+    expect(isValidIsraeliId(normalizeIsraeliId('038-852 562'))).toBe(true);
   });
 
-  it('distinguishes a missing value, a length error and a checksum error', () => {
+  it('distinguishes missing, character, length and checksum errors', () => {
     expect(getIsraeliIdValidationError('')).toBe('required');
+    expect(getIsraeliIdValidationError('123-456782')).toBe('characters');
     expect(getIsraeliIdValidationError('12345678')).toBe('length');
     expect(getIsraeliIdValidationError('123456789')).toBe('checksum');
   });

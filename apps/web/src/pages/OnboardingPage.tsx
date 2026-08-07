@@ -167,11 +167,13 @@ export function OnboardingPage() {
     idValidationError !== null &&
     (touched.has('employerIdNumber') || draft.employerIdNumber.length === 9);
   const idErrorMessage =
-    idValidationError === 'length'
-      ? t('profile.employerIdLengthError')
-      : idValidationError === 'checksum'
-        ? t('profile.employerIdChecksumError')
-        : t('profile.employerIdRequired');
+    idValidationError === 'characters'
+      ? t('profile.employerIdCharactersError')
+      : idValidationError === 'length'
+        ? t('profile.employerIdLengthError')
+        : idValidationError === 'checksum'
+          ? t('profile.employerIdChecksumError')
+          : t('profile.employerIdRequired');
 
   const currentValid = (() => {
     switch (step) {

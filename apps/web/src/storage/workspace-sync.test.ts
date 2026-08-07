@@ -24,7 +24,9 @@ vi.mock('../api/client.js', () => ({
 
 import { captureMvpWorkspace, MVP_PROFILE_CHANGED } from './mvp-storage.js';
 import {
+  flushWorkspaceSync,
   getWorkspaceSyncState,
+  pauseWorkspaceSync,
   retryWorkspaceSync,
   startWorkspaceSync,
   stopWorkspaceSync,
@@ -33,6 +35,7 @@ import {
 describe('workspace sync', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.useFakeTimers();
     mocks.getWorkspace.mockReset();
     mocks.saveWorkspace.mockReset();
@@ -83,6 +86,37 @@ describe('workspace sync', () => {
           }),
         }),
       }),
+    );
+  });
+
+  it('flushes a pending employer edit before the debounce timer expires', async () => {
+    await startWorkspaceSync('user-a');
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[{"id":"just-entered"}]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+
+    expect(mocks.saveWorkspace).not.toHaveBeenCalled();
+    await expect(flushWorkspaceSync()).resolves.toBe(true);
+
+    expect(mocks.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshot: expect.objectContaining({
+          entries: expect.objectContaining({
+            'caredesk.mvp.tasks.v1.client.remote': '[{"id":"just-entered"}]',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('preserves the encrypted same-user cache on a transient auth pause', async () => {
+    await startWorkspaceSync('user-a');
+    localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[{"id":"still-here"}]');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+
+    pauseWorkspaceSync();
+
+    expect(captureMvpWorkspace().entries['caredesk.mvp.tasks.v1.client.remote']).toBe(
+      '[{"id":"still-here"}]',
     );
   });
 

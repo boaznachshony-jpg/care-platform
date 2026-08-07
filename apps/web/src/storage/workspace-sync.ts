@@ -198,9 +198,35 @@ export function retryWorkspaceSync(): Promise<void> {
   return flush();
 }
 
+/**
+ * Persists every pending local edit before a lifecycle boundary such as
+ * signing out or moving a mobile browser to the background.
+ */
+export async function flushWorkspaceSync(): Promise<boolean> {
+  if (!listening) return state !== 'error';
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+
+  try {
+    if (hydrationInFlight) await hydrationInFlight;
+    if (flushInFlight) await flushInFlight;
+    if (dirty) await flush();
+    if (flushInFlight) await flushInFlight;
+  } catch {
+    return false;
+  }
+
+  return !dirty && state !== 'error';
+}
+
+function handleVisibilityChange(): void {
+  if (document.visibilityState === 'hidden') void flushWorkspaceSync();
+}
+
 function detachWorkspaceSync(): void {
   listening = false;
   window.removeEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   if (timer) clearTimeout(timer);
   timer = undefined;
   flushQueued = false;
@@ -274,6 +300,7 @@ export async function startWorkspaceSync(userId: string): Promise<void> {
 
   listening = true;
   window.addEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   const hydration = hydrateWorkspace(userId, generation, hasUsableCache);
   hydrationInFlight = hydration;
@@ -289,6 +316,21 @@ export async function startWorkspaceSync(userId: string): Promise<void> {
       void flush();
     }
   }
+}
+
+/**
+ * Stops the active network session without deleting the same-user encrypted
+ * cache. This is used for transient auth loss so a returning mobile session
+ * cannot make a recently entered employer record appear to have vanished.
+ */
+export function pauseWorkspaceSync(): void {
+  detachWorkspaceSync();
+  syncGeneration += 1;
+  activeUserId = '';
+  remoteVersion = 0;
+  remoteFingerprint = '';
+  dirty = false;
+  setState('disabled');
 }
 
 /** Clears account data on explicit sign-out; startWorkspaceSync never calls it. */

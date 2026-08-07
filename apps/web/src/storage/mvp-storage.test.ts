@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createMvpClient,
   emptyMvpProfile,
+  isNewEmployerLabel,
   readMvpDocuments,
   readMvpClients,
   readMvpEmploymentExpenses,
@@ -48,6 +49,24 @@ describe('MVP local storage', () => {
   it('persists employment salary settings', () => {
     saveMvpProfile({ ...emptyMvpProfile, baseSalary: 7000, salaryEffectiveDate: '2026-01-01' });
     expect(readMvpProfile().baseSalary).toBe(7000);
+  });
+
+  it('stores an employer ID as exactly digits and migrates formatted legacy values', () => {
+    saveMvpProfile({ ...emptyMvpProfile, employerIdNumber: '038-852 562' });
+    expect(readMvpProfile().employerIdNumber).toBe('038852562');
+
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({ ...emptyMvpProfile, employerIdNumber: '123-456 782 extra' }),
+    );
+    expect(readMvpProfile().employerIdNumber).toBe('123456782');
+  });
+
+  it('uses employer terminology while recognizing legacy new-record labels', () => {
+    const employer = createMvpClient();
+    expect(employer.label).toBe('מעסיק חדש');
+    expect(isNewEmployerLabel('מעסיק חדש')).toBe(true);
+    expect(isNewEmployerLabel('לקוח חדש')).toBe(true);
   });
 
   it('creates and updates automatic renewal tasks as soon as their dates are saved', () => {

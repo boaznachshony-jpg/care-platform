@@ -1,10 +1,12 @@
-import { createElement } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   prewarmApi: vi.fn(),
   canUseCachedWorkspace: vi.fn(),
+  flushWorkspaceSync: vi.fn(),
+  pauseWorkspaceSync: vi.fn(),
   startWorkspaceSync: vi.fn(),
   stopWorkspaceSync: vi.fn(),
   getSession: vi.fn(),
@@ -38,13 +40,23 @@ vi.mock('./client.js', () => ({
 
 vi.mock('../storage/workspace-sync.js', () => ({
   canUseCachedWorkspace: mocks.canUseCachedWorkspace,
+  flushWorkspaceSync: mocks.flushWorkspaceSync,
+  pauseWorkspaceSync: mocks.pauseWorkspaceSync,
   startWorkspaceSync: mocks.startWorkspaceSync,
   stopWorkspaceSync: mocks.stopWorkspaceSync,
 }));
 
-import { AuthProvider, resolveAuthGateState } from './auth-context.js';
+import { AuthProvider, resolveAuthGateState, useAuth } from './auth-context.js';
 
-function renderProvider() {
+let authStateListener:
+  ((event: string, session: { user: { id: string } } | null) => void) | undefined;
+
+function SignOutProbe() {
+  const auth = useAuth();
+  return createElement('button', { onClick: () => void auth.signOut() }, 'sign out');
+}
+
+function renderProvider(children: ReactNode = createElement('div', null, 'workspace')) {
   return render(
     createElement(
       AuthProvider,
@@ -55,7 +67,7 @@ function renderProvider() {
         passwordRecovery: createElement('div', null, 'password recovery'),
         loading: createElement('div', null, 'loading'),
       },
-      createElement('div', null, 'workspace'),
+      children,
     ),
   );
 }
@@ -65,12 +77,19 @@ describe('authentication gate', () => {
     mocks.prewarmApi.mockReset();
     mocks.prewarmApi.mockResolvedValue(undefined);
     mocks.canUseCachedWorkspace.mockReset();
+    mocks.flushWorkspaceSync.mockReset();
+    mocks.flushWorkspaceSync.mockResolvedValue(true);
+    mocks.pauseWorkspaceSync.mockReset();
     mocks.startWorkspaceSync.mockReset();
     mocks.stopWorkspaceSync.mockReset();
+    mocks.signOut.mockReset();
+    mocks.signOut.mockResolvedValue({ error: null });
     mocks.getSession.mockReset();
     mocks.onAuthStateChange.mockReset();
-    mocks.onAuthStateChange.mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
+    authStateListener = undefined;
+    mocks.onAuthStateChange.mockImplementation((listener) => {
+      authStateListener = listener;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
     });
   });
 
@@ -168,5 +187,37 @@ describe('authentication gate', () => {
 
     expect(await screen.findByText('storage unavailable')).toBeInTheDocument();
     expect(screen.queryByText('workspace')).not.toBeInTheDocument();
+  });
+
+  it('preserves the same-user cache when auth temporarily reports no session', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-a' } } } });
+    mocks.canUseCachedWorkspace.mockReturnValue(true);
+    mocks.startWorkspaceSync.mockResolvedValue(undefined);
+
+    renderProvider();
+    expect(await screen.findByText('workspace')).toBeInTheDocument();
+
+    authStateListener?.('SIGNED_OUT', null);
+
+    await waitFor(() => expect(mocks.flushWorkspaceSync).toHaveBeenCalled());
+    expect(mocks.pauseWorkspaceSync).toHaveBeenCalled();
+    expect(mocks.stopWorkspaceSync).not.toHaveBeenCalled();
+  });
+
+  it('flushes pending edits before an explicit sign-out clears the cache', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-a' } } } });
+    mocks.canUseCachedWorkspace.mockReturnValue(true);
+    mocks.startWorkspaceSync.mockResolvedValue(undefined);
+
+    renderProvider(createElement(SignOutProbe));
+    fireEvent.click(await screen.findByRole('button', { name: 'sign out' }));
+
+    await waitFor(() => expect(mocks.stopWorkspaceSync).toHaveBeenCalled());
+    expect(mocks.flushWorkspaceSync.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.signOut.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.signOut.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.stopWorkspaceSync.mock.invocationCallOrder[0]!,
+    );
   });
 });

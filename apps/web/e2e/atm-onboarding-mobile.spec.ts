@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-const mobileWidths = [320, 360, 375, 390, 430] as const;
+const mobileWidths = [320, 360, 375, 390, 393, 430] as const;
 const textScales = [1, 1.3] as const;
 
 function continueButton(page: Page): Locator {
@@ -216,6 +216,7 @@ test.describe('ATM onboarding field validation', () => {
 interface MobileAudit {
   innerWidth: number;
   scrollWidth: number;
+  clippedTargets: string[];
   undersizedTargets: string[];
 }
 
@@ -240,24 +241,34 @@ async function auditMobileLayout(page: Page): Promise<MobileAudit> {
       'select',
       'textarea',
     ].join(',');
-    const undersizedTargets = [...document.querySelectorAll<HTMLElement>(selector)]
+    const visibleTargets = [...document.querySelectorAll<HTMLElement>(selector)]
       .filter(visible)
+      .filter((element) => !element.matches('.cd-skip-link'));
+    const describe = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      const label =
+        element.getAttribute('aria-label') ||
+        element.textContent?.trim().slice(0, 40) ||
+        element.tagName.toLowerCase();
+      return `${element.tagName.toLowerCase()} "${label}" ${Math.round(rect.width)}x${Math.round(rect.height)}`;
+    };
+    const undersizedTargets = visibleTargets
       .filter((element) => {
         const rect = element.getBoundingClientRect();
         return rect.width < 47.5 || rect.height < 47.5;
       })
-      .map((element) => {
+      .map(describe);
+    const clippedTargets = visibleTargets
+      .filter((element) => {
         const rect = element.getBoundingClientRect();
-        const label =
-          element.getAttribute('aria-label') ||
-          element.textContent?.trim().slice(0, 40) ||
-          element.tagName.toLowerCase();
-        return `${element.tagName.toLowerCase()} "${label}" ${Math.round(rect.width)}x${Math.round(rect.height)}`;
-      });
+        return rect.left < -0.5 || rect.right > window.innerWidth + 0.5;
+      })
+      .map(describe);
 
     return {
       innerWidth: window.innerWidth,
       scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+      clippedTargets,
       undersizedTargets,
     };
   });
@@ -266,6 +277,7 @@ async function auditMobileLayout(page: Page): Promise<MobileAudit> {
 async function expectMobileAuditPasses(page: Page): Promise<void> {
   const audit = await auditMobileLayout(page);
   expect(audit.scrollWidth).toBeLessThanOrEqual(audit.innerWidth + 1);
+  expect(audit.clippedTargets).toEqual([]);
   expect(audit.undersizedTargets).toEqual([]);
 }
 

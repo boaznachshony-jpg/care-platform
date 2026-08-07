@@ -6,7 +6,7 @@
     "eyebrow": "Family access",
     "title": "Who can access this family file?",
     "intro": "Each person signs in with a separate identity. Everyone works on the same family file under their assigned permission.",
-    "back": "Back to clients",
+    "back": "Back to employers",
     "inviteTitle": "Invite a family member",
     "inviteBody": "CareDesk sends a one-time sign-in link by email. No password needs to be shared.",
     "displayName": "Full name",
@@ -49,7 +49,7 @@
     "eyebrow": "Subscription and billing",
     "title": "Your CareDesk subscription",
     "intro": "View the subscription price, launch benefit and payment method for the family account.",
-    "back": "Back to clients",
+    "back": "Back to employers",
     "launchPlan": "Launch price",
     "perMonth": "per month",
     "includesVat": "Price includes {{rate}}% VAT",
@@ -58,7 +58,7 @@
     "launchDiscount": "Pilot discount",
     "currentCharge": "Monthly charge after discount",
     "noChargeTitle": "No charge during the pilot",
-    "noChargeBody": "The current discount is 100%. A ₪39 charge will not begin without a start date shown in advance and clear notice to the customer.",
+    "noChargeBody": "The current discount is 100%. A ₪39 charge will not begin without a start date shown in advance and clear notice to the employer.",
     "paidChargeTitle": "Monthly subscription active",
     "paidChargeBody": "The next charge of {{amount}} is scheduled for {{date}}.",
     "paidChargeDatePending": "The subscription is {{amount}} per month. The next charge date has not been set; no charge can be made without an active date.",
@@ -291,9 +291,10 @@
   },
   "profile": {
     "employerIdNumber": "Employer Israeli ID number",
-    "employerIdHelp": "Enter the 9 digits exactly as shown on the ID card. Spaces and hyphens are not needed.",
+    "employerIdHelp": "Enter exactly 9 digits. Do not use spaces or hyphens.",
     "employerIdError": "The Israeli ID number is invalid. Check all 9 digits and the check digit.",
     "employerIdRequired": "Enter the Israeli ID number.",
+    "employerIdCharactersError": "Use digits only, without spaces, hyphens or letters.",
     "employerIdLengthError": "Digits are missing. Enter exactly 9 digits, including a leading zero when it appears on the card.",
     "employerIdChecksumError": "The number did not pass the check-digit test. Check it again against the ID card.",
     "employerIdCount": "{{count}} of 9 digits",
@@ -525,7 +526,7 @@
       "trustLabel": "Main benefits",
       "trust1": "Clear Hebrew interface",
       "trust2": "Configurable reminders",
-      "trust3": "Separate customer accounts"
+      "trust3": "Separate employer accounts"
     },
     "visual": {
       "aria": "Control-center illustration",
@@ -575,7 +576,7 @@
       "eyebrow": "Simple, transparent pricing",
       "title": "One monthly subscription for the family account",
       "body": "The subscription includes the family file and authorized users invited to it.",
-      "item1": "Clients, documents and tasks",
+      "item1": "Employers, documents and tasks",
       "item2": "Payroll records, payment tracking and reminders",
       "item3": "Role-based family access",
       "plan": "Launch price",
@@ -587,7 +588,7 @@
     },
     "pilot": {
       "eyebrow": "Limited commercial launch",
-      "title": "Want to join the first customer group?",
+      "title": "Want to join the first employer group?",
       "body": "Accounts are currently opened by invitation and personal coordination so each account can be configured and checked properly.",
       "signup": "Send a request to join",
       "existing": "Sign in to an existing account"

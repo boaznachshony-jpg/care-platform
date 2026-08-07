@@ -9,6 +9,7 @@ import {
   consumeMvpMigrationRedirect,
   deleteMvpClient,
   exportMvpClient,
+  isNewEmployerLabel,
   readMvpClients,
   resetMvpClient,
   type MvpClient,
@@ -112,13 +113,13 @@ export function ClientsPage() {
             <article className="client-card" key={client.id}>
               <div className="client-card-heading">
                 <span className="client-avatar" aria-hidden="true">
-                  {(client.label === 'לקוח חדש' ? t('clients.newCase') : client.label || 'ת').slice(
-                    0,
-                    1,
-                  )}
+                  {(isNewEmployerLabel(client.label)
+                    ? t('clients.newCase')
+                    : client.label || 'ת'
+                  ).slice(0, 1)}
                 </span>
                 <div>
-                  <h2>{client.label === 'לקוח חדש' ? t('clients.newCase') : client.label}</h2>
+                  <h2>{isNewEmployerLabel(client.label) ? t('clients.newCase') : client.label}</h2>
                   <p>
                     {client.caregiverName
                       ? t('clients.caregiver', { name: client.caregiverName })
@@ -142,7 +143,7 @@ export function ClientsPage() {
                   type="button"
                   onClick={() =>
                     navigate(
-                      clientPath(client.id, client.label === 'לקוח חדש' ? '/onboarding' : '/'),
+                      clientPath(client.id, isNewEmployerLabel(client.label) ? '/onboarding' : '/'),
                     )
                   }
                 >

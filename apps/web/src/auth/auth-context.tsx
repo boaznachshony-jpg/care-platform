@@ -5,6 +5,8 @@ import { getDeploymentEnvironment } from '../environment.js';
 import { getBrowserAuthClient } from './client.js';
 import {
   canUseCachedWorkspace,
+  flushWorkspaceSync,
+  pauseWorkspaceSync,
   startWorkspaceSync,
   stopWorkspaceSync,
 } from '../storage/workspace-sync.js';
@@ -17,7 +19,7 @@ interface AuthContextValue {
   requestMagicLink(email: string): Promise<boolean>;
   requestPasswordReset(email: string): Promise<boolean>;
   updatePassword(password: string): Promise<boolean>;
-  signOut(): Promise<void>;
+  signOut(): Promise<boolean>;
 }
 
 const defaultAuthContext: AuthContextValue = {
@@ -28,7 +30,7 @@ const defaultAuthContext: AuthContextValue = {
   requestMagicLink: async () => false,
   requestPasswordReset: async () => false,
   updatePassword: async () => false,
-  signOut: async () => undefined,
+  signOut: async () => true,
 };
 
 const AuthContext = createContext<AuthContextValue>(defaultAuthContext);
@@ -87,7 +89,11 @@ export function AuthProvider({
       const requestId = ++sessionId;
       currentUserId = nextUser?.id ?? null;
       if (!nextUser) {
-        stopWorkspaceSync();
+        // A token refresh or mobile tab suspension can briefly surface a null
+        // session. Flush what we can, then keep the encrypted same-user cache
+        // so the next verified session can resume without apparent data loss.
+        await flushWorkspaceSync();
+        pauseWorkspaceSync();
         if (!active || requestId !== sessionId) return;
         setUser(null);
         setState('ready');
@@ -201,8 +207,11 @@ export function AuthProvider({
         return !error;
       },
       async signOut() {
-        if (client) await client.auth.signOut();
+        if (!(await flushWorkspaceSync())) return false;
+        const result = client ? await client.auth.signOut() : undefined;
+        if (result?.error) return false;
         stopWorkspaceSync();
+        return true;
       },
     }),
     [client, user],

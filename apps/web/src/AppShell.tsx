@@ -126,7 +126,7 @@ export function AppShell({ children }: AppShellProps) {
           ⚙ הגדרות
         </NavLink>
         <NavLink className="settings-link client-switch-link" to="/app">
-          ⇄ החלפת לקוח
+          ⇄ החלפת מעסיק
         </NavLink>
       </aside>
       <div className="app-body">
@@ -157,7 +157,7 @@ export function AppShell({ children }: AppShellProps) {
                 {t('auth.signOut')}
               </button>
             ) : null}
-            <Link className="top-client-switch" to="/app" aria-label="החלפת לקוח">
+            <Link className="top-client-switch" to="/app" aria-label="החלפת מעסיק">
               ⇄
             </Link>
             <div className="font-size-controls" role="group" aria-label="גודל טקסט">
@@ -251,8 +251,21 @@ export function AppShell({ children }: AppShellProps) {
             ))}
             <Link to="/app" onClick={() => setMobileMoreOpen(false)}>
               <span aria-hidden="true">⇄</span>
-              החלפת לקוח
+              החלפת מעסיק
             </Link>
+            {auth.enabled ? (
+              <button
+                className="mobile-more-sign-out"
+                type="button"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  void auth.signOut();
+                }}
+              >
+                <span aria-hidden="true">↪</span>
+                {t('auth.signOut')}
+              </button>
+            ) : null}
           </nav>
         ) : null}
       </div>

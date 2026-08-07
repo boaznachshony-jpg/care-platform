@@ -45,6 +45,8 @@ const MIGRATION_REDIRECT_KEY = 'caredesk.mvp.migration-redirect.v1';
 const CLIENT_KEY_SEPARATOR = '.client.';
 export const MVP_PROFILE_CHANGED = 'caredesk:mvp-profile-changed';
 const MVP_STORAGE_PREFIX = 'caredesk.mvp.';
+const NEW_EMPLOYER_LABEL = 'מעסיק חדש';
+const LEGACY_NEW_CLIENT_LABEL = 'לקוח חדש';
 
 export interface MvpClient {
   id: string;
@@ -129,7 +131,13 @@ function saveClients(clients: MvpClient[]): void {
 }
 
 function profileLabel(profile: Partial<MvpProfile>): string {
-  return profile.recipientName || profile.employerName || profile.caregiverName || 'לקוח חדש';
+  return (
+    profile.recipientName || profile.employerName || profile.caregiverName || NEW_EMPLOYER_LABEL
+  );
+}
+
+export function isNewEmployerLabel(label: string): boolean {
+  return label === NEW_EMPLOYER_LABEL || label === LEGACY_NEW_CLIENT_LABEL;
 }
 
 export function ensureMvpClientMigration(): MvpClient[] {
@@ -186,7 +194,7 @@ export function createMvpClient(): MvpClient {
   const now = new Date().toISOString();
   const client: MvpClient = {
     id: crypto.randomUUID(),
-    label: 'לקוח חדש',
+    label: NEW_EMPLOYER_LABEL,
     employerName: '',
     recipientName: '',
     caregiverName: '',
@@ -219,7 +227,7 @@ export function resetMvpClient(clientId: string): void {
         item.id === clientId
           ? {
               ...item,
-              label: 'לקוח חדש',
+              label: NEW_EMPLOYER_LABEL,
               employerName: '',
               recipientName: '',
               caregiverName: '',
@@ -257,7 +265,15 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
       typeof currentSaved.visaRenewalDate === 'string'
         ? currentSaved.visaRenewalDate
         : (employmentFeeDueDate ?? '');
-    return { ...emptyMvpProfile, ...currentSaved, visaRenewalDate };
+    return {
+      ...emptyMvpProfile,
+      ...currentSaved,
+      employerIdNumber:
+        typeof currentSaved.employerIdNumber === 'string'
+          ? currentSaved.employerIdNumber.replace(/\D/g, '').slice(0, 9)
+          : '',
+      visaRenewalDate,
+    };
   } catch {
     return emptyMvpProfile;
   }
@@ -270,7 +286,11 @@ export function readMvpProfile(): MvpProfile {
 export function saveMvpProfile(profile: MvpProfile): void {
   if (!isBrowser()) return;
   const clientId = clientIdFromPath();
-  writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(profile));
+  const normalizedProfile = {
+    ...profile,
+    employerIdNumber: profile.employerIdNumber.replace(/\D/g, '').slice(0, 9),
+  };
+  writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(normalizedProfile));
   if (clientId) {
     const now = new Date().toISOString();
     saveClients(
@@ -278,17 +298,17 @@ export function saveMvpProfile(profile: MvpProfile): void {
         client.id === clientId
           ? {
               ...client,
-              label: profileLabel(profile),
-              employerName: profile.employerName,
-              recipientName: profile.recipientName,
-              caregiverName: profile.caregiverName,
+              label: profileLabel(normalizedProfile),
+              employerName: normalizedProfile.employerName,
+              recipientName: normalizedProfile.recipientName,
+              caregiverName: normalizedProfile.caregiverName,
               updatedAt: now,
             }
           : client,
       ),
     );
   }
-  syncAutomaticTasks(profile);
+  syncAutomaticTasks(normalizedProfile);
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
