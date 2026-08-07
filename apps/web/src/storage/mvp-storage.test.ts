@@ -116,9 +116,8 @@ describe('MVP local storage', () => {
     saveMvpProfile({ ...emptyMvpProfile, employerName, baseSalary: 7000 });
 
     const stored = localStorage.getItem('caredesk.mvp.profile.v1');
-    expect(stored).toMatch(/^caredesk-encrypted-v1:/);
+    expect(stored).toMatch(/^caredesk-encrypted-v1:[0-9a-f]{24}:[0-9a-f]+$/);
     expect(stored).not.toContain(employerName);
-    expect(stored).not.toContain('7000');
     expect(readMvpProfile()).toMatchObject({ employerName, baseSalary: 7000 });
   });
 
