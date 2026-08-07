@@ -1,8 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { prewarmApi } from '../api/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
 import { getBrowserAuthClient } from './client.js';
-import { startWorkspaceSync, stopWorkspaceSync } from '../storage/workspace-sync.js';
+import {
+  canUseCachedWorkspace,
+  flushWorkspaceSync,
+  pauseWorkspaceSync,
+  startWorkspaceSync,
+  stopWorkspaceSync,
+} from '../storage/workspace-sync.js';
 
 interface AuthContextValue {
   enabled: boolean;
@@ -12,7 +19,7 @@ interface AuthContextValue {
   requestMagicLink(email: string): Promise<boolean>;
   requestPasswordReset(email: string): Promise<boolean>;
   updatePassword(password: string): Promise<boolean>;
-  signOut(): Promise<void>;
+  signOut(): Promise<boolean>;
 }
 
 const defaultAuthContext: AuthContextValue = {
@@ -23,7 +30,7 @@ const defaultAuthContext: AuthContextValue = {
   requestMagicLink: async () => false,
   requestPasswordReset: async () => false,
   updatePassword: async () => false,
-  signOut: async () => undefined,
+  signOut: async () => true,
 };
 
 const AuthContext = createContext<AuthContextValue>(defaultAuthContext);
@@ -48,7 +55,7 @@ export function AuthProvider({
   passwordRecovery,
   loading,
 }: {
-  children: ReactNode;
+  children?: ReactNode;
   login: ReactNode;
   configurationRequired: ReactNode;
   storageUnavailable: ReactNode;
@@ -63,39 +70,89 @@ export function AuthProvider({
 
   useEffect(() => {
     if (!client) return undefined;
+    // Wake the public API while Supabase restores or verifies the session. The
+    // request contains no credentials or customer data and overlaps the most
+    // expensive part of a cold first sign-in.
+    void prewarmApi();
     let active = true;
-    let hydrationId = 0;
+    let sessionId = 0;
+    let currentUserId: string | null | undefined;
 
     const applySession = async (nextUser: User | null) => {
-      const requestId = ++hydrationId;
-      setState('loading');
+      if (nextUser && currentUserId === nextUser.id) {
+        // TOKEN_REFRESHED and USER_UPDATED should refresh context without
+        // restarting hydration or briefly covering the app with a loader.
+        if (active) setUser(nextUser);
+        return;
+      }
+
+      const requestId = ++sessionId;
+      currentUserId = nextUser?.id ?? null;
       if (!nextUser) {
-        stopWorkspaceSync();
-        if (!active || requestId !== hydrationId) return;
+        // A token refresh or mobile tab suspension can briefly surface a null
+        // session. Flush what we can, then keep the encrypted same-user cache
+        // so the next verified session can resume without apparent data loss.
+        await flushWorkspaceSync();
+        pauseWorkspaceSync();
+        if (!active || requestId !== sessionId) return;
         setUser(null);
         setState('ready');
         return;
       }
 
+      const canResumeImmediately = canUseCachedWorkspace(nextUser.id);
+      if (canResumeImmediately) {
+        // A verified same-account cache makes return visits feel immediate.
+        // Server hydration continues below and sync failures remain visible in
+        // the app banner without hiding otherwise usable local data.
+        setUser(nextUser);
+        setState('ready');
+      } else {
+        setState('loading');
+      }
+
       try {
-        await startWorkspaceSync();
-        if (!active || requestId !== hydrationId) return;
+        // If this is a cold deployment, finish waking it before the protected
+        // workspace request. Recent/in-flight warm-ups are reused.
+        await prewarmApi();
+        await startWorkspaceSync(nextUser.id);
+        if (!active || requestId !== sessionId) return;
         setUser(nextUser);
         setState('ready');
       } catch {
-        if (!active || requestId !== hydrationId) return;
-        setUser(null);
-        setState('storage-error');
+        if (!active || requestId !== sessionId) return;
+        if (canResumeImmediately) {
+          setUser(nextUser);
+          setState('ready');
+        } else {
+          setUser(null);
+          setState('storage-error');
+        }
       }
     };
 
-    void client.auth.getUser().then(({ data }) => {
-      if (active) void applySession(data.user ?? null);
-    });
+    // getSession() reads Supabase's persisted browser session immediately.
+    // Every API call still validates its access token server-side; the UI does
+    // not need to wait for an extra getUser() network round-trip on each visit.
+    void client.auth.getSession().then(
+      ({ data }) => {
+        if (active) void applySession(data.session?.user ?? null);
+      },
+      () => {
+        if (!active) return;
+        setUser(null);
+        setState('storage-error');
+      },
+    );
 
     const { data } = client.auth.onAuthStateChange((event, session) => {
+      // getSession() above owns initial restoration. Handling INITIAL_SESSION
+      // as well can race a transient null event and clear a valid local cache.
+      if (event === 'INITIAL_SESSION') return;
       if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
-      if (active) void applySession(session?.user ?? null);
+      // Supabase holds an internal auth lock while this callback runs. Defer
+      // workspace API calls so request() can safely read the refreshed token.
+      if (active) window.setTimeout(() => void applySession(session?.user ?? null), 0);
     });
 
     return () => {
@@ -150,8 +207,11 @@ export function AuthProvider({
         return !error;
       },
       async signOut() {
-        if (client) await client.auth.signOut();
+        if (!(await flushWorkspaceSync())) return false;
+        const result = client ? await client.auth.signOut() : undefined;
+        if (result?.error) return false;
         stopWorkspaceSync();
+        return true;
       },
     }),
     [client, user],

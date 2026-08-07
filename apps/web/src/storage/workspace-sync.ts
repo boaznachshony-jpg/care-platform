@@ -4,6 +4,7 @@ import {
   clearMvpWorkspace,
   MVP_PROFILE_CHANGED,
   replaceMvpWorkspace,
+  type MvpWorkspaceSnapshot,
 } from './mvp-storage.js';
 import { clearLocalDocumentFileCache } from './document-file-store.js';
 import { clearBusinessStorageKey } from './business-storage-crypto.js';
@@ -11,17 +12,80 @@ import { clearBusinessStorageKey } from './business-storage-crypto.js';
 export type WorkspaceSyncState = 'disabled' | 'loading' | 'saved' | 'saving' | 'error';
 export const WORKSPACE_SYNC_CHANGED = 'caredesk:workspace-sync-changed';
 
+const WORKSPACE_OWNER_KEY = 'caredesk.workspace-owner.v1';
+const WORKSPACE_META_PREFIX = 'caredesk.workspace-sync.v1.';
+const MVP_STORAGE_PREFIX = 'caredesk.mvp.';
+
+interface WorkspaceSyncMeta {
+  version: number;
+  dirty: boolean;
+}
+
 let state: WorkspaceSyncState = 'disabled';
 let remoteVersion = 0;
 let remoteFingerprint = '';
+let activeUserId = '';
+let syncGeneration = 0;
+let dirty = false;
+let applyingRemote = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let listening = false;
+let hydrationInFlight: Promise<void> | undefined;
 let flushInFlight: Promise<void> | undefined;
 let flushQueued = false;
 
-function fingerprint(snapshot: ReturnType<typeof captureMvpWorkspace>): string {
+function fingerprint(snapshot: MvpWorkspaceSnapshot): string {
   return JSON.stringify(
     Object.entries(snapshot.entries).sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function metaKey(userId: string): string {
+  return `${WORKSPACE_META_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+function readMeta(userId: string): WorkspaceSyncMeta {
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(metaKey(userId)) ?? '{}',
+    ) as Partial<WorkspaceSyncMeta>;
+    return {
+      version:
+        Number.isInteger(parsed.version) && (parsed.version ?? -1) >= 0 ? parsed.version! : 0,
+      dirty: parsed.dirty === true,
+    };
+  } catch {
+    return { version: 0, dirty: false };
+  }
+}
+
+function writeMeta(): void {
+  if (!activeUserId) return;
+  window.localStorage.setItem(
+    metaKey(activeUserId),
+    JSON.stringify({ version: remoteVersion, dirty }),
+  );
+}
+
+function localWorkspaceIsReadable(): boolean {
+  const rawKeys = Object.keys(window.localStorage).filter((key) =>
+    key.startsWith(MVP_STORAGE_PREFIX),
+  );
+  if (rawKeys.length === 0) return true;
+  const entries = captureMvpWorkspace().entries;
+  return rawKeys.every((key) => Object.hasOwn(entries, key) && entries[key] !== '');
+}
+
+/**
+ * A matching owner marker allows the UI to use its encrypted device cache
+ * while the server is checked in the background. Unknown or unreadable data
+ * is never shown because it may belong to another account or encryption key.
+ */
+export function canUseCachedWorkspace(userId: string): boolean {
+  return (
+    Boolean(userId) &&
+    window.localStorage.getItem(WORKSPACE_OWNER_KEY) === userId &&
+    localWorkspaceIsReadable()
   );
 }
 
@@ -34,7 +98,25 @@ export function getWorkspaceSyncState(): WorkspaceSyncState {
   return state;
 }
 
+function isCurrentSync(userId: string, generation: number): boolean {
+  return activeUserId === userId && syncGeneration === generation;
+}
+
+function markSaved(
+  response: { version: number; snapshot: MvpWorkspaceSnapshot },
+  savedSnapshot?: MvpWorkspaceSnapshot,
+): void {
+  remoteVersion = response.version;
+  remoteFingerprint = fingerprint(response.snapshot);
+  dirty = savedSnapshot ? fingerprint(captureMvpWorkspace()) !== fingerprint(savedSnapshot) : false;
+  if (dirty) flushQueued = true;
+  writeMeta();
+  setState(dirty ? 'saving' : 'saved');
+}
+
 async function persistSnapshot(): Promise<void> {
+  const userId = activeUserId;
+  const generation = syncGeneration;
   setState('saving');
   const snapshot = captureMvpWorkspace();
   try {
@@ -42,20 +124,19 @@ async function persistSnapshot(): Promise<void> {
       expectedVersion: remoteVersion,
       snapshot,
     });
-    remoteVersion = response.version;
-    remoteFingerprint = fingerprint(response.snapshot);
-    setState('saved');
+    if (!isCurrentSync(userId, generation)) return;
+    markSaved(response, snapshot);
   } catch (error) {
-    // A stale tab must never overwrite a newer server version. The visible
-    // error indicator tells the user to reload instead of pretending it saved.
+    if (!isCurrentSync(userId, generation)) return;
+    // A stale tab must never overwrite a newer server version. Retry only
+    // when the server content is the same snapshot this tab last observed.
     if (error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT') {
       try {
         const latest = await getWorkspace();
-        // A deployment can briefly return an older version from one instance
-        // and reject the following write on another. Retry only when the
-        // server payload itself is unchanged; a real edit from another device
-        // must remain a visible conflict and must never be overwritten.
+        if (!isCurrentSync(userId, generation)) return;
         if (fingerprint(latest.snapshot) !== remoteFingerprint) {
+          dirty = true;
+          writeMeta();
           setState('error');
           return;
         }
@@ -63,46 +144,53 @@ async function persistSnapshot(): Promise<void> {
           expectedVersion: latest.version,
           snapshot,
         });
-        remoteVersion = retried.version;
-        remoteFingerprint = fingerprint(retried.snapshot);
-        setState('saved');
+        if (!isCurrentSync(userId, generation)) return;
+        markSaved(retried, snapshot);
         return;
       } catch {
+        if (!isCurrentSync(userId, generation)) return;
+        dirty = true;
+        writeMeta();
         setState('error');
         return;
       }
     }
+    dirty = true;
+    writeMeta();
     setState('error');
   }
 }
 
 function flush(): Promise<void> {
+  if (hydrationInFlight) {
+    flushQueued = true;
+    return hydrationInFlight;
+  }
   if (flushInFlight) {
     flushQueued = true;
     return flushInFlight;
   }
-  flushInFlight = persistSnapshot().finally(() => {
-    flushInFlight = undefined;
-    if (flushQueued && listening) {
+  const generation = syncGeneration;
+  const trackedFlush = persistSnapshot().finally(() => {
+    if (flushInFlight === trackedFlush) flushInFlight = undefined;
+    if (generation === syncGeneration && flushQueued && listening) {
       flushQueued = false;
       void flush();
     }
   });
-  return flushInFlight;
+  flushInFlight = trackedFlush;
+  return trackedFlush;
 }
 
 function scheduleFlush(): void {
-  if (!listening) return;
+  if (!listening || applyingRemote) return;
+  dirty = true;
+  writeMeta();
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => void flush(), 250);
 }
 
-/**
- * Retries the current local snapshot without reloading or rehydrating it.
- * This is deliberately separate from startWorkspaceSync(): after a transient
- * network or deployment failure, rehydrating first could discard edits that
- * have not reached the server yet.
- */
+/** Retries the current device snapshot without rehydrating over local edits. */
 export function retryWorkspaceSync(): Promise<void> {
   if (!listening) return Promise.resolve();
   if (timer) clearTimeout(timer);
@@ -110,32 +198,154 @@ export function retryWorkspaceSync(): Promise<void> {
   return flush();
 }
 
-export async function startWorkspaceSync(): Promise<void> {
-  stopWorkspaceSync();
-  setState('loading');
-  // Clear first: data cached by a previous account must never appear while a
-  // new account is being hydrated.
-  clearMvpWorkspace();
-  await clearLocalDocumentFileCache();
-  const response = await getWorkspace();
-  remoteVersion = response.version;
-  remoteFingerprint = fingerprint(response.snapshot);
-  replaceMvpWorkspace(response.snapshot);
-  listening = true;
-  window.addEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
-  setState('saved');
-}
-
-export function stopWorkspaceSync(): void {
-  listening = false;
-  window.removeEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
+/**
+ * Persists every pending local edit before a lifecycle boundary such as
+ * signing out or moving a mobile browser to the background.
+ */
+export async function flushWorkspaceSync(): Promise<boolean> {
+  if (!listening) return state !== 'error';
   if (timer) clearTimeout(timer);
   timer = undefined;
+
+  try {
+    if (hydrationInFlight) await hydrationInFlight;
+    if (flushInFlight) await flushInFlight;
+    if (dirty) await flush();
+    if (flushInFlight) await flushInFlight;
+  } catch {
+    return false;
+  }
+
+  return !dirty && state !== 'error';
+}
+
+function handleVisibilityChange(): void {
+  if (document.visibilityState === 'hidden') void flushWorkspaceSync();
+}
+
+function detachWorkspaceSync(): void {
+  listening = false;
+  window.removeEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+  flushQueued = false;
+  hydrationInFlight = undefined;
+  flushInFlight = undefined;
+}
+
+function applyRemoteSnapshot(snapshot: MvpWorkspaceSnapshot): void {
+  applyingRemote = true;
+  try {
+    replaceMvpWorkspace(snapshot);
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+async function hydrateWorkspace(
+  userId: string,
+  generation: number,
+  hasUsableCache: boolean,
+): Promise<void> {
+  const response = await getWorkspace();
+  if (!isCurrentSync(userId, generation)) return;
+
+  if (hasUsableCache && dirty) {
+    // Preserve a snapshot that failed to save on a previous visit. It can be
+    // retried only if the remote version has not moved in the meantime.
+    if (response.version !== remoteVersion) {
+      setState('error');
+      throw new Error('WORKSPACE_VERSION_CONFLICT');
+    }
+    remoteFingerprint = fingerprint(response.snapshot);
+    await persistSnapshot();
+    if (!isCurrentSync(userId, generation)) return;
+    if (state === 'error') throw new Error('WORKSPACE_SAVE_FAILED');
+  } else {
+    applyRemoteSnapshot(response.snapshot);
+    markSaved(response);
+  }
+
+  if (isCurrentSync(userId, generation)) {
+    window.localStorage.setItem(WORKSPACE_OWNER_KEY, userId);
+  }
+}
+
+/**
+ * Starts account-scoped synchronization. A valid same-user cache stays visible
+ * during hydration; a different or unknown cache is cleared before any app UI
+ * can render it and is replaced only after a successful server response.
+ */
+export async function startWorkspaceSync(userId: string): Promise<void> {
+  detachWorkspaceSync();
+  const generation = ++syncGeneration;
+  setState('loading');
+  activeUserId = userId;
+
+  const hasUsableCache = canUseCachedWorkspace(userId);
+  if (hasUsableCache) {
+    const meta = readMeta(userId);
+    remoteVersion = meta.version;
+    dirty = meta.dirty;
+  } else {
+    clearMvpWorkspace();
+    await clearLocalDocumentFileCache();
+    clearBusinessStorageKey();
+    window.localStorage.removeItem(WORKSPACE_OWNER_KEY);
+    remoteVersion = 0;
+    remoteFingerprint = '';
+    dirty = false;
+  }
+
+  listening = true;
+  window.addEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  const hydration = hydrateWorkspace(userId, generation, hasUsableCache);
+  hydrationInFlight = hydration;
+  try {
+    await hydration;
+  } catch (error) {
+    if (activeUserId === userId) setState('error');
+    throw error;
+  } finally {
+    if (hydrationInFlight === hydration) hydrationInFlight = undefined;
+    if (flushQueued && listening && activeUserId === userId) {
+      flushQueued = false;
+      void flush();
+    }
+  }
+}
+
+/**
+ * Stops the active network session without deleting the same-user encrypted
+ * cache. This is used for transient auth loss so a returning mobile session
+ * cannot make a recently entered employer record appear to have vanished.
+ */
+export function pauseWorkspaceSync(): void {
+  detachWorkspaceSync();
+  syncGeneration += 1;
+  activeUserId = '';
   remoteVersion = 0;
   remoteFingerprint = '';
-  flushQueued = false;
+  dirty = false;
+  setState('disabled');
+}
+
+/** Clears account data on explicit sign-out; startWorkspaceSync never calls it. */
+export function stopWorkspaceSync(): void {
+  const previousUserId = activeUserId;
+  detachWorkspaceSync();
+  syncGeneration += 1;
+  activeUserId = '';
+  remoteVersion = 0;
+  remoteFingerprint = '';
+  dirty = false;
   clearMvpWorkspace();
   clearBusinessStorageKey();
   void clearLocalDocumentFileCache();
+  window.localStorage.removeItem(WORKSPACE_OWNER_KEY);
+  if (previousUserId) window.localStorage.removeItem(metaKey(previousUserId));
   setState('disabled');
 }

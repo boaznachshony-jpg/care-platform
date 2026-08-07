@@ -40,8 +40,16 @@ Both authentication variables are required in Preview and Production. A hosted b
   - `SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>`
   - `SUPABASE_STORAGE_BUCKET=caredesk-private-documents`
   - `FAMILY_INVITE_REDIRECT_URL=https://care-platform-web.vercel.app/app`
+  - `SUPPORT_DESTINATION_EMAIL=<server-only destination address>`
+  - `SUPPORT_FROM_EMAIL=<verified sender address>`
+  - `RESEND_API_KEY=<server-only Resend key>`
 
 The storage bucket must be private, limited to PDF/JPEG/PNG and 10 MB per object. The service-role key belongs only in the API project. Never add it to the web project or to a `VITE_` variable.
+
+Contact delivery is also API-only. The destination and provider key must be set
+only on the API project; the web project receives neither value. Verify the
+sender domain in Resend, submit one help request and one improvement suggestion,
+and confirm that both arrive with the visitor's address set as Reply-To.
 
 `apps/api/src/index.ts` is both the Vercel entrypoint and the local launcher. It
 exports the Fastify instance by default, and opens a listening socket only when
@@ -111,7 +119,7 @@ command result in the release log before the first collection run.
 
 ## Public website and search indexing
 
-- `/` is the public landing page, `/guide/direct-caregiver-employment` is the public guide, and `/app` is the authenticated application entrance.
+- `/` is the public landing page, `/guide/direct-caregiver-employment` is the public guide, `/contact-us` is the public contact page, and `/app` is the authenticated application entrance.
 - The public pages must contain no customer data. Private application routes set `noindex` and are also excluded in `robots.txt`.
 - Before using a custom domain, replace `VITE_PUBLIC_SITE_URL` and the static URLs in `apps/web/index.html`, `apps/web/public/robots.txt`, and `apps/web/public/sitemap.xml` with the final HTTPS origin.
 - Set `VITE_PUBLIC_SIGNUP_URL` only to an approved public account-request, contact, or scheduling form. If it is unset, the site correctly states that the pilot is invitation-only and sends existing customers to sign in.

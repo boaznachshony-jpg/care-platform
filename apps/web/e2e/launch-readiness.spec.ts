@@ -29,7 +29,7 @@ const completedProfile = {
   salaryEffectiveDate: '2026-01-15',
   saturdayRate: 440,
   licenseRenewalDate: '2027-01-15',
-  employmentFeeDueDate: '2026-12-31',
+  visaRenewalDate: '2026-12-31',
 };
 
 async function seedCompletedProfile(page: Page) {
@@ -45,14 +45,16 @@ test.describe('launch readiness interactions', () => {
     await page.goto('/app');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+    await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
     const clientBase = page.url().replace(/\/onboarding$/, '');
 
     await expect(page.getByRole('button', { name: 'חזרה' })).toBeDisabled();
+    await page.getByLabel('שם המטופל').fill('מטופל חדש');
+    await page.getByRole('button', { name: 'המשך' }).click();
+    await page.getByLabel('לא, המעסיק הוא אדם אחר').check();
     await page.getByLabel('שם המעסיק').fill('מעסיק חדש');
     await page.getByLabel('מספר תעודת זהות').fill('123456782');
     await page.getByLabel('מספר טלפון').fill('0501111111');
-    await page.getByLabel('שם המטופל').fill('מטופל חדש');
     await page.getByRole('button', { name: 'המשך' }).click();
 
     await page.getByLabel('שם המטפל או המטפלת').fill('Dilnoza');
@@ -65,6 +67,7 @@ test.describe('launch readiness interactions', () => {
     await expect(page.getByLabel('שם המטפל או המטפלת')).toHaveValue('Dilnoza');
     await page.getByRole('button', { name: 'המשך' }).click();
 
+    await page.getByLabel('כן, הוספת אדם מסייע').check();
     await page.getByLabel('שם הנציג המורשה').fill('נציג חדש');
     await page.getByLabel('מספר טלפון').fill('0521111111');
     await page.getByRole('button', { name: 'המשך' }).click();
@@ -82,7 +85,7 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
     await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
     await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
-    await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+    await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
     await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
 
     await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
@@ -90,6 +93,13 @@ test.describe('launch readiness interactions', () => {
     await page.goto(clientBase);
     await expect(page).toHaveURL(clientBase);
     await expect(page.getByRole('heading', { name: 'שלום מעסיק חדש' })).toBeVisible();
+
+    await page.goto(`${clientBase}/tasks`);
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'חידוש רישיון ההעסקה' })).toBeVisible();
+    await expect(page.getByText('מועד יעד: 15.01.2027')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'חידוש הוויזה' })).toBeVisible();
+    await expect(page.getByText('מועד יעד: 31.12.2026')).toBeVisible();
   });
 
   test('updates and persists every editable caregiver field', async ({ page }) => {
@@ -329,6 +339,17 @@ test.describe('launch readiness interactions', () => {
     await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
     await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
 
+    const nationalInsuranceTracking = page
+      .locator('.employment-expenses > div')
+      .filter({ hasText: 'נוצר אוטומטית משכר 2026-07' });
+    await expect(nationalInsuranceTracking).toContainText('ביטוח לאומי');
+    await expect(nationalInsuranceTracking).toContainText('יעד 2026-10-15');
+    await expect(nationalInsuranceTracking).toContainText('סכום טרם הוזן');
+    await nationalInsuranceTracking.getByRole('button', { name: 'עדכון פרטים' }).click();
+    await page.getByLabel(/^סכום בש״ח/).fill('720');
+    await page.getByRole('button', { name: 'שמירת עדכון' }).click();
+    await expect(nationalInsuranceTracking).toContainText('720.00');
+
     await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
     await page.reload();
     await expect(page.getByText('2026-07', { exact: true })).toBeVisible();
@@ -340,7 +361,7 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7300');
     await page.getByLabel('בתוקף מתאריך').fill('2026-07-01');
     await page.getByRole('button', { name: 'שמירת הגדרת השכר' }).click();
-    await expect(page.getByRole('heading', { name: 'הכנת שכר חודשי' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'רישום שכר חודשי' })).toBeVisible();
   });
 
   test('all dashboard and timeline shortcuts lead to their intended screens', async ({ page }) => {
@@ -359,7 +380,7 @@ test.describe('launch readiness interactions', () => {
       { title: 'בדיקת ביטוח רפואי', path: '/documents' },
       { title: 'חידוש ביטוח רפואי', path: '/tasks' },
       { title: 'חידוש רישיון ההעסקה', path: '/documents' },
-      { title: 'תשלום אגרת העסקה', path: '/tasks' },
+      { title: 'חידוש הוויזה', path: '/tasks' },
       { title: 'הכנת שכר יולי', path: '/payroll' },
       { title: 'יום חופשה מתוכנן', path: '/tasks' },
       { title: 'סיכום חודש', path: '/' },

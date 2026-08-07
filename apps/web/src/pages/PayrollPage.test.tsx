@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   emptyMvpProfile,
+  readMvpEmploymentExpenses,
   readMvpPayroll,
   saveMvpPayroll,
   saveMvpProfile,
@@ -68,6 +69,13 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeInTheDocument();
     expect(screen.getByText('סה״כ לתשלום בשנת 2026')).toBeInTheDocument();
     expect(screen.getByText(/14,650\.00/)).toBeInTheDocument();
+    expect(screen.getByText('שבתות וימי מנוחה מצטברים')).toBeInTheDocument();
+    expect(screen.getByText('תשלום ימי חג מצטבר')).toBeInTheDocument();
+    expect(screen.getByText('תשלום חופשה מצטבר')).toBeInTheDocument();
+    expect(screen.getByText('תשלום מחלה מצטבר')).toBeInTheDocument();
+    expect(screen.getByText('הפרשות מעסיק מצטברות')).toBeInTheDocument();
+    expect(screen.getByText('תשלומים ותוספות אחרים')).toBeInTheDocument();
+    expect(screen.getByText('סך כל התוספות')).toBeInTheDocument();
     expect(screen.getByText('2026-01')).toBeInTheDocument();
     expect(screen.queryByText('2025-12')).not.toBeInTheDocument();
 
@@ -136,6 +144,47 @@ describe('PayrollPage annual report', () => {
       pocketMoney: 100,
       advances: 500,
       total: proratedBaseSalary + 850,
+    });
+  });
+
+  it('creates one quarterly national-insurance tracking item after payroll save without requiring an amount', () => {
+    render(<PayrollPage />);
+
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-07' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'אישור ושמירה' }));
+
+    expect(
+      screen.getByText(/מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('סכום טרם הוזן')).toBeInTheDocument();
+    expect(readMvpEmploymentExpenses()).toEqual([
+      expect.objectContaining({
+        id: 'expense-national-insurance-2026-q3',
+        category: 'ביטוח לאומי',
+        frequency: 'quarterly',
+        amount: 0,
+        amountEntered: false,
+        dueDate: '2026-10-15',
+        status: 'upcoming',
+        source: 'payroll-national-insurance',
+        sourcePeriod: '2026-Q3',
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'שמירה מחדש' }));
+    expect(readMvpEmploymentExpenses()).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'עדכון פרטים' }));
+    fireEvent.change(screen.getByLabelText(/^סכום בש״ח/), { target: { value: '720' } });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת עדכון' }));
+    expect(readMvpEmploymentExpenses()[0]).toMatchObject({
+      amount: 720,
+      amountEntered: true,
+      dueDate: '2026-10-15',
     });
   });
 
@@ -289,13 +338,18 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'הדפסה / שמירה כ־PDF' }));
     expect(printSpy).toHaveBeenCalledOnce();
     printSpy.mockRestore();
-    const printableSummary = screen.getByLabelText('ריכוז חישוב שכר להדפסה');
+    const printableSummary = screen.getByLabelText('ריכוז שכר חודשי להדפסה');
     expect(printableSummary).toHaveTextContent('חתימת העובד/ת / Caregiver signature');
     expect(printableSummary).toHaveTextContent('Monthly pay summary');
     expect(printableSummary).toHaveTextContent('Base salary');
+    expect(printableSummary).toHaveTextContent('Saturdays and rest days');
+    expect(printableSummary).toHaveTextContent('Holiday pay');
+    expect(printableSummary).toHaveTextContent('Vacation pay');
+    expect(printableSummary).toHaveTextContent('Sick pay');
+    expect(printableSummary).toHaveTextContent('Employer contributions');
+    expect(printableSummary).toHaveTextContent('Other addition');
     expect(printableSummary).toHaveTextContent('Net amount payable');
     expect(printableSummary).toHaveTextContent('Advances');
-    expect(screen.getByText('תוספות אחרות / Other additions')).toBeInTheDocument();
     expect(screen.getByText('סכום לפני קיזוזים / Total before deductions')).toBeInTheDocument();
     expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
     expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();

@@ -35,7 +35,7 @@ const completedProfile = {
   salaryEffectiveDate: '2026-01-15',
   saturdayRate: 440,
   licenseRenewalDate: '2027-01-15',
-  employmentFeeDueDate: '2026-12-31',
+  visaRenewalDate: '2026-12-31',
 };
 
 async function seedCompletedProfile(page: import('@playwright/test').Page) {
@@ -51,16 +51,19 @@ async function completeClientOnboarding(
   caregiverName: string,
 ) {
   const clientBase = page.url().replace(/\/onboarding$/, '');
+  await page.getByLabel('שם המטופל').fill(recipientName);
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('לא, המעסיק הוא אדם אחר').check();
   await page.getByLabel('שם המעסיק').fill(employerName);
   await page.getByLabel('מספר תעודת זהות').fill('123456782');
   await page.getByLabel('מספר טלפון').fill('0501234567');
-  await page.getByLabel('שם המטופל').fill(recipientName);
   await page.getByRole('button', { name: 'המשך' }).click();
   await page.getByLabel('שם המטפל או המטפלת').fill(caregiverName);
   await page.getByLabel('ארץ מוצא').selectOption('אוזבקיסטן');
   await page.getByLabel('שפה מועדפת').selectOption('אוזבקית');
   await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
   await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('כן, הוספת אדם מסייע').check();
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'המשך' }).click();
@@ -75,27 +78,38 @@ async function completeClientOnboarding(
   await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
-  await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+  await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
   await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
   await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
   await expect(page.getByText('שלב ההקמה האחרון: חיבור אמצעי תשלום מאובטח')).toBeVisible();
   await page.goto(clientBase);
 }
 
+async function openEmployerList(page: import('@playwright/test').Page) {
+  const desktopSwitch = page.locator('a.top-client-switch');
+  if (await desktopSwitch.isVisible()) {
+    await desktopSwitch.click();
+    return;
+  }
+
+  await page.locator('.mobile-nav button[aria-controls="mobile-more-menu"]').click();
+  await page.locator('#mobile-more-menu a[href="/app"]').click();
+}
+
 test('creates and switches between two isolated client records', async ({ page }) => {
-  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+  await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
   await completeClientOnboarding(page, 'מעסיק ראשון', 'מטופל ראשון', 'Caregiver One');
   const firstClientUrl = page.url();
-  await page.locator('a.top-client-switch').click();
-  await expect(page.getByRole('heading', { name: 'הלקוחות שלי' })).toBeVisible();
+  await openEmployerList(page);
+  await expect(page.getByRole('heading', { name: 'תיקי ההעסקה שלי' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
 
-  await page.getByRole('button', { name: '＋ הוספת לקוח חדש' }).click();
+  await page.getByRole('button', { name: /פתיחת תיק חדש/ }).click();
   await completeClientOnboarding(page, 'מעסיק שני', 'מטופל שני', 'Caregiver Two');
   const secondClientUrl = page.url();
   expect(secondClientUrl).not.toBe(firstClientUrl);
 
-  await page.locator('a.top-client-switch').click();
+  await openEmployerList(page);
   await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'מטופל שני' })).toBeVisible();
   await page.goto(firstClientUrl);
@@ -107,15 +121,17 @@ test('creates and switches between two isolated client records', async ({ page }
 });
 
 test('completes onboarding, persists data and updates settings', async ({ page }) => {
-  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
+  await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
   const clientBase = page.url().replace(/\/onboarding$/, '');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
+  await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByLabel('לא, המעסיק הוא אדם אחר').check();
   await page.getByLabel('שם המעסיק').fill('בועז בדיקה');
   await page.getByLabel('מספר תעודת זהות').fill('123456782');
   await page.getByLabel('מספר טלפון').fill('0501234567');
-  await page.getByLabel('שם המטופל').fill('מטופל בדיקה');
   await page.getByRole('button', { name: 'המשך' }).click();
 
   await page.getByLabel('שם המטפל או המטפלת').fill('Caregiver Test');
@@ -124,6 +140,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('תאריך תחילת ההעסקה').fill('2026-01-15');
   await page.getByRole('button', { name: 'המשך' }).click();
 
+  await page.getByLabel('כן, הוספת אדם מסייע').check();
   await page.getByLabel('שם הנציג המורשה').fill('נציג בדיקה');
   await page.getByLabel('מספר טלפון').fill('0521234567');
   await page.getByRole('button', { name: 'המשך' }).click();
@@ -138,7 +155,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('שכר בסיס חודשי בש״ח').fill('7000');
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
-  await page.getByLabel('מועד תשלום אגרת ההעסקה').fill('2026-12-31');
+  await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
   await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
 
   await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
@@ -153,7 +170,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.goto(`${clientBase}/tasks`);
   const insuranceTask = page.locator('.list-task').filter({ hasText: 'חידוש ביטוח רפואי' });
   await expect(insuranceTask).toContainText('30.06.2027');
-  await expect(insuranceTask).toContainText('נוצר אוטומטית');
+  await expect(insuranceTask).toContainText('נוצרה אוטומטית');
 
   await page.goto(`${clientBase}/settings`);
   await page.getByLabel('שם המעסיק').fill('בועז מעודכן');
@@ -171,8 +188,8 @@ test('completes onboarding, persists data and updates settings', async ({ page }
 
 test('mobile controls remain readable and touch friendly', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'התחלת לקוח ראשון' }).click();
-  await expect(page.getByRole('heading', { name: 'בואו נכין את התיק שלכם' })).toBeVisible();
+  await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
+  await expect(page.getByRole('heading', { name: 'בואו נכין את תיק ההעסקה' })).toBeVisible();
   const continueButton = page.getByRole('button', { name: 'המשך' });
   await expect(continueButton).toBeVisible();
   const box = await continueButton.boundingBox();
@@ -195,6 +212,7 @@ test('mobile layouts stay symmetrical at the largest text size', async ({ page }
     '/timeline',
     '/payroll',
     '/settings',
+    '/contact',
   ];
 
   for (const route of routes) {
@@ -234,7 +252,7 @@ test('mobile navigation keeps payroll accessible', async ({ page }) => {
     .getByRole('link', { name: '₪ שכר' })
     .click();
   await expect(page).toHaveURL(/\/payroll$/);
-  await expect(page.getByRole('heading', { name: 'הכנת שכר חודשי' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'רישום שכר חודשי' })).toBeVisible();
 });
 
 const productRoutes = [
@@ -245,9 +263,37 @@ const productRoutes = [
   ['/glossary', 'מושגים חשובים'],
   ['/documents', 'כל המסמכים במקום אחד'],
   ['/timeline', 'המועדים הבאים'],
-  ['/payroll', 'הכנת שכר חודשי'],
+  ['/payroll', 'רישום שכר חודשי'],
   ['/settings', 'פרטים והעדפות'],
+  ['/contact', 'יצירת קשר ועזרה'],
 ] as const;
+
+test('public contact form sends a limited message without exposing the destination address', async ({
+  page,
+}) => {
+  let submittedBody = '';
+  await page.route('**/support/requests', async (route) => {
+    submittedBody = route.request().postData() ?? '';
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: '{"accepted":true}',
+    });
+  });
+  await page.goto('/contact-us');
+
+  await expect(page.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeVisible();
+  await expect(page.getByText('בועז נחשוני')).toBeVisible();
+  await expect(page.getByText('boaz.nachshony@gmail.com')).toHaveCount(0);
+  await page.getByRole('button', { name: 'שליחת בקשת עזרה' }).click();
+  await page.getByLabel('כתובת דוא״ל לקבלת תשובה').fill('pilot@example.com');
+  await page.getByLabel('תוכן הפנייה').fill('לא הצלחתי לעדכן משימה קיימת במסך המשימות.');
+  await page.getByRole('button', { name: 'שליחת הפנייה' }).click();
+
+  await expect(page.getByText('הפנייה התקבלה בהצלחה')).toBeVisible();
+  expect(submittedBody).toContain('pilot@example.com');
+  expect(submittedBody).not.toContain('boaz.nachshony@gmail.com');
+});
 
 for (const [route, heading] of productRoutes) {
   test(`renders ${route} after onboarding`, async ({ page }) => {
@@ -269,7 +315,7 @@ test('connects every primary screen through visible navigation and action links'
   if (testInfo.project.name === 'mobile-chromium') {
     const directConnections = [
       ['משימות', '/tasks', 'מה צריך לבצע'],
-      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
     ] as const;
     for (const [linkName, route, expectedText] of directConnections) {
@@ -288,6 +334,7 @@ test('connects every primary screen through visible navigation and action links'
       ['מושגים חשובים', '/glossary', 'מושגים חשובים'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
+      ['עזרה ויצירת קשר', '/contact', 'יצירת קשר ועזרה'],
     ] as const;
     for (const [linkName, route, expectedText] of moreConnections) {
       await page.goto(clientHome);
@@ -306,8 +353,9 @@ test('connects every primary screen through visible navigation and action links'
       ['מושגים', '/glossary', 'מושגים חשובים'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
       ['ציר זמן', '/timeline', 'המועדים הבאים'],
-      ['שכר', '/payroll', 'הכנת שכר חודשי'],
+      ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
+      ['עזרה', '/contact', 'יצירת קשר ועזרה'],
     ] as const;
     for (const [linkName, route, expectedText] of connections) {
       await page.goto(clientHome);
@@ -395,7 +443,7 @@ test('shows the quarterly national insurance payment window and deadline', async
   await page.goto('/tasks');
 
   const card = page.getByRole('region', { name: 'משימת ביטוח לאומי רבעונית' });
-  await expect(card).toContainText('תשלום ביטוח לאומי לרבעון יולי–ספטמבר');
+  await expect(card).toContainText('תשלום ביטוח לאומי לרבעון יולי – ספטמבר');
   await expect(card).toContainText('תקופת דיווח: 1.7–30.9');
   await expect(card).toContainText('ניתן לשלם בין 1.10 ל־15.10');
   await expect(card).toContainText('מועד אחרון: 15 באוקטובר');
@@ -486,7 +534,10 @@ test('walks through all payroll steps', async ({ page }) => {
   await page.getByRole('button', { name: 'אישור ושמירה' }).click();
   await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
   await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
-  await expect(page.getByText('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.')).toBeVisible();
+  await expect(
+    page.getByText('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.'),
+  ).toBeVisible();
+  await expect(page.locator('.employment-expenses').getByText('סכום טרם הוזן')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
   await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();

@@ -25,10 +25,15 @@ import {
   PasswordRecoveryPage,
   StorageUnavailablePage,
 } from './pages/LoginPage.js';
-import { DirectEmploymentGuidePage, PublicLandingPage } from './pages/PublicLandingPage.js';
+import {
+  DirectEmploymentGuidePage,
+  PublicContactPage,
+  PublicLandingPage,
+} from './pages/PublicLandingPage.js';
 import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
 import { BillingPage } from './pages/BillingPage.js';
 import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
+import { ContactPage } from './pages/ContactPage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -43,6 +48,7 @@ const authenticatedEntrypoints = new Set([
   '/settings',
   '/family',
   '/billing',
+  '/contact',
 ]);
 
 function ClientHome() {
@@ -174,6 +180,14 @@ function AuthenticatedApp() {
           }
         />
         <Route
+          path="/clients/:clientId/contact"
+          element={
+            <ClientApp>
+              <ContactPage />
+            </ClientApp>
+          }
+        />
+        <Route
           path="/onboarding"
           element={
             <ClientApp>
@@ -245,6 +259,14 @@ function AuthenticatedApp() {
             </ClientApp>
           }
         />
+        <Route
+          path="/contact"
+          element={
+            <ClientApp>
+              <ContactPage />
+            </ClientApp>
+          }
+        />
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
     </AuthProvider>
@@ -268,6 +290,7 @@ export function App() {
       ) : null}
       <Routes>
         <Route path="/" element={<PublicLandingPage />} />
+        <Route path="/contact-us" element={<PublicContactPage />} />
         <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
         <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
         <Route path="*" element={<ApplicationEntry />} />

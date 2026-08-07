@@ -4,6 +4,7 @@ import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
+import { quarterlyInsuranceScheduleForPayrollMonth } from '../quarterly-national-insurance.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -86,6 +87,39 @@ function recordSaturdayRate(record: MvpPayrollRecord): number {
   );
 }
 
+function withNationalInsuranceTracking(
+  expenses: MvpEmploymentExpense[],
+  payrollMonth: string,
+): MvpEmploymentExpense[] {
+  const schedule = quarterlyInsuranceScheduleForPayrollMonth(payrollMonth);
+  if (!schedule) return expenses;
+
+  const sourcePeriod = `${schedule.year}-Q${schedule.quarter}`;
+  const id = `expense-${schedule.id}`;
+  const existing = expenses.find(
+    (expense) => expense.id === id || expense.sourcePeriod === sourcePeriod,
+  );
+  const trackedExpense: MvpEmploymentExpense = {
+    id: existing?.id ?? id,
+    category: 'ביטוח לאומי',
+    frequency: 'quarterly',
+    amount: existing?.amount ?? 0,
+    amountEntered: existing?.amountEntered ?? false,
+    dueDate: schedule.deadlineDate,
+    status: existing?.status ?? 'upcoming',
+    note:
+      existing?.note ||
+      `${schedule.periodRange} · ${schedule.paymentWindow} · נוצר אוטומטית משכר ${payrollMonth}`,
+    savedAt: existing?.savedAt ?? new Date().toISOString(),
+    source: 'payroll-national-insurance',
+    sourcePeriod,
+  };
+
+  return existing
+    ? expenses.map((expense) => (expense.id === existing.id ? trackedExpense : expense))
+    : [trackedExpense, ...expenses];
+}
+
 export function PayrollPage() {
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
@@ -106,6 +140,7 @@ export function PayrollPage() {
     dueDate: '',
     note: '',
   });
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
@@ -357,7 +392,7 @@ export function PayrollPage() {
     setAdditionalPayments(additionalPaymentDrafts(record));
     setValidationErrors([]);
     setPayrollSaved(false);
-    setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח חישוב חדש לחודש שנבחר.');
+    setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח רישום חדש לחודש שנבחר.');
   }
 
   function saveSalarySettings(event: React.FormEvent) {
@@ -429,10 +464,13 @@ export function PayrollPage() {
     const next = records.some((record) => record.month === saved.month)
       ? records.map((record) => (record.month === saved.month ? saved : record))
       : [saved, ...records];
+    const nextExpenses = withNationalInsuranceTracking(expenses, saved.month);
     saveMvpPayroll(next);
+    saveMvpEmploymentExpenses(nextExpenses);
     setRecords(next);
+    setExpenses(nextExpenses);
     setReportYear(saved.month.slice(0, 4));
-    setMessage('חישוב השכר החודשי נשמר וניתן לעריכה חוזרת.');
+    setMessage('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
     setPayrollSaved(true);
   }
 
@@ -442,21 +480,42 @@ export function PayrollPage() {
       setMessage('יש לבחור סוג תשלום ותאריך יעד.');
       return;
     }
+    const existingExpense = expenses.find((expense) => expense.id === editingExpenseId);
     const saved: MvpEmploymentExpense = {
-      id: crypto.randomUUID(),
+      id: existingExpense?.id ?? crypto.randomUUID(),
       category: expenseDraft.category,
       frequency: expenseDraft.frequency,
       amount: numeric(expenseDraft.amount),
+      amountEntered: expenseDraft.amount.trim() !== '',
       dueDate: expenseDraft.dueDate,
-      status: 'upcoming',
+      status: existingExpense?.status ?? 'upcoming',
       note: expenseDraft.note,
-      savedAt: new Date().toISOString(),
+      savedAt: existingExpense?.savedAt ?? new Date().toISOString(),
+      source: existingExpense?.source,
+      sourcePeriod: existingExpense?.sourcePeriod,
     };
-    const next = [saved, ...expenses];
+    const next = existingExpense
+      ? expenses.map((expense) => (expense.id === existingExpense.id ? saved : expense))
+      : [saved, ...expenses];
     saveMvpEmploymentExpenses(next);
     setExpenses(next);
     setExpenseDraft((current) => ({ ...current, amount: '', dueDate: '', note: '' }));
-    setMessage('התשלום התקופתי נשמר בלוח עלויות ההעסקה.');
+    setEditingExpenseId(null);
+    setMessage(
+      existingExpense ? 'פרטי התשלום התקופתי עודכנו.' : 'התשלום התקופתי נשמר בלוח עלויות ההעסקה.',
+    );
+  }
+
+  function editExpense(expense: MvpEmploymentExpense) {
+    setExpenseDraft({
+      category: expense.category,
+      frequency: expense.frequency,
+      amount: expense.amountEntered === false ? '' : String(expense.amount),
+      dueDate: expense.dueDate,
+      note: expense.note,
+    });
+    setEditingExpenseId(expense.id);
+    setMessage('עדכנו את הפרטים בטופס ושמרו.');
   }
 
   function toggleExpense(expense: MvpEmploymentExpense) {
@@ -484,7 +543,7 @@ export function PayrollPage() {
           <div>
             <p className="eyebrow">שכר</p>
             <h1>הגדרת מקור השכר</h1>
-            <p>אין במערכת שכר מוגדר. הזינו את השכר שסוכם בהעסקה לפני הכנת חישוב חודשי.</p>
+            <p>אין במערכת שכר מוגדר. הזינו את השכר שסוכם בהעסקה לפני פתיחת רישום חודשי.</p>
           </div>
           <span className="pill amber">טרם הוגדר</span>
         </header>
@@ -540,8 +599,8 @@ export function PayrollPage() {
       <header className="page-header">
         <div>
           <p className="eyebrow">שכר</p>
-          <h1>הכנת שכר חודשי</h1>
-          <p>כל הסכומים מוזנים על ידי המשתמש, מחושבים בזמן אמת ונשמרים לפי חודש.</p>
+          <h1>רישום שכר חודשי</h1>
+          <p>כל הסכומים מוזנים על ידי המשתמש, מסוכמים אריתמטית ונשמרים לפי חודש.</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => setStep(0)}>
           עדכון שכר בסיס
@@ -583,9 +642,9 @@ export function PayrollPage() {
                 onChange={(event) => loadMonth(event.target.value)}
               />
               {records.some((record) => record.month === values.month) ? (
-                <small>קיים חישוב שמור לחודש זה. המשך התהליך יעדכן אותו.</small>
+                <small>קיים רישום שמור לחודש זה. המשך התהליך יעדכן אותו.</small>
               ) : (
-                <small>עדיין לא נשמר חישוב לחודש זה.</small>
+                <small>עדיין לא נשמר רישום לחודש זה.</small>
               )}
             </label>
           ) : null}
@@ -996,8 +1055,8 @@ export function PayrollPage() {
                   <strong>{money.format(calculation.total)}</strong>
                 </div>
                 <p>
-                  זהו כלי תיעוד וחישוב אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול גורם
-                  מקצועי.
+                  זהו כלי רישום, תיעוד וסיכום אריתמטי בלבד. יש לאמת זכויות, ניכויים ותשלומים מול
+                  גורם מקצועי.
                 </p>
               </div>
               {printPreviewOpen ? (
@@ -1017,12 +1076,12 @@ export function PayrollPage() {
               ) : null}
               <section
                 className={`payroll-print-slip${printPreviewOpen ? ' payroll-print-preview' : ''}`}
-                aria-label="ריכוז חישוב שכר להדפסה"
+                aria-label="ריכוז שכר חודשי להדפסה"
               >
                 <header>
                   <div>
                     <strong>CareDesk</strong>
-                    <h1>ריכוז חישוב שכר חודשי / Monthly pay summary</h1>
+                    <h1>ריכוז שכר חודשי / Monthly pay summary</h1>
                   </div>
                   <span>חודש שכר / Pay month: {values.month}</span>
                 </header>
@@ -1078,11 +1137,32 @@ export function PayrollPage() {
                       <td>{money.format(calculation.saturdayPay)}</td>
                     </tr>
                     <tr>
-                      <td>תוספות אחרות / Other additions</td>
+                      <td>תשלום ימי חג / Holiday pay</td>
                       <td>
-                        חג, חופשה, מחלה ותוספות שהוזנו / Holiday, vacation, sick pay and additions
+                        {numeric(values.paidHolidays)} ימי חג / {numeric(values.paidHolidays)} paid
+                        holidays
                       </td>
-                      <td>{money.format(standardOtherAdditions)}</td>
+                      <td>{money.format(numeric(values.holidayPay))}</td>
+                    </tr>
+                    <tr>
+                      <td>תשלום חופשה / Vacation pay</td>
+                      <td>{numeric(values.vacationDays)} ימי חופשה / Vacation days</td>
+                      <td>{money.format(numeric(values.vacationPay))}</td>
+                    </tr>
+                    <tr>
+                      <td>תשלום מחלה / Sick pay</td>
+                      <td>{numeric(values.sickDays)} ימי מחלה / Sick days</td>
+                      <td>{money.format(numeric(values.sickPay))}</td>
+                    </tr>
+                    <tr>
+                      <td>הפרשות מעסיק / Employer contributions</td>
+                      <td>פנסיה ופיצויים שהוזנו / Entered pension and severance</td>
+                      <td>{money.format(numeric(values.employerContributions))}</td>
+                    </tr>
+                    <tr>
+                      <td>תוספת אחרת / Other addition</td>
+                      <td>תוספת כללית שהוזנה / Entered general addition</td>
+                      <td>{money.format(numeric(values.otherAddition))}</td>
                     </tr>
                     {additionalPayments
                       .filter(
@@ -1146,7 +1226,7 @@ export function PayrollPage() {
           {step === 5 && payrollSaved ? (
             <div className="success-box payroll-save-confirmation" role="status">
               <strong>השכר נשמר בהצלחה</strong>
-              <span>החישוב לחודש {values.month} נוסף לדוח השנתי וניתן לערוך אותו בהמשך.</span>
+              <span>הרישום לחודש {values.month} נוסף לדוח השנתי וניתן לערוך אותו בהמשך.</span>
             </div>
           ) : null}
           <div className="wizard-actions">
@@ -1248,6 +1328,7 @@ export function PayrollPage() {
                   setExpenseDraft((current) => ({ ...current, amount: event.target.value }))
                 }
               />
+              <small>אפשר להשאיר ריק ולהוסיף את הסכום בהמשך. המעקב יישמר בכל מקרה.</small>
             </label>
             <label>
               תאריך יעד
@@ -1275,9 +1356,28 @@ export function PayrollPage() {
             המערכת אינה קובעת את שיעור התשלום או את מועדו המשפטי. יש להזין את הנתונים מהדרישה
             שקיבלתם ולאמת אותם מול גורם מוסמך.
           </p>
-          <button className="primary-button" type="submit">
-            הוספת תשלום למעקב
-          </button>
+          <div className="button-row">
+            <button className="primary-button" type="submit">
+              {editingExpenseId ? 'שמירת עדכון' : 'הוספת תשלום למעקב'}
+            </button>
+            {editingExpenseId ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setEditingExpenseId(null);
+                  setExpenseDraft((current) => ({
+                    ...current,
+                    amount: '',
+                    dueDate: '',
+                    note: '',
+                  }));
+                }}
+              >
+                ביטול עריכה
+              </button>
+            ) : null}
+          </div>
         </form>
         {expenses.length > 0 ? (
           <div className="detail-list employment-expenses">
@@ -1297,13 +1397,22 @@ export function PayrollPage() {
                     {expense.note ? ` · ${expense.note}` : ''}
                   </small>
                 </span>
-                <strong>{money.format(expense.amount)}</strong>
+                <strong>
+                  {expense.amountEntered === false ? 'סכום טרם הוזן' : money.format(expense.amount)}
+                </strong>
                 <button
                   className="secondary-button"
                   type="button"
                   onClick={() => toggleExpense(expense)}
                 >
                   {expense.status === 'paid' ? 'שולם ✓' : 'סימון כשולם'}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => editExpense(expense)}
+                >
+                  עדכון פרטים
                 </button>
                 <button
                   className="text-button"
@@ -1360,7 +1469,43 @@ export function PayrollPage() {
             </div>
             <div>
               <span>
-                תוספות מצטברות <small>לרבות הפרשות מעסיק שהוזנו</small>
+                שבתות וימי מנוחה מצטברים <small>תשלום נפרד משכר הבסיס</small>
+              </span>
+              <strong>{money.format(annualReport.saturdayPay)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלום ימי חג מצטבר <small>לפי הסכומים שנשמרו בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.holidayPay)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלום חופשה מצטבר <small>לפי הסכומים שנשמרו בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.vacationPay)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלום מחלה מצטבר <small>לפי הסכומים שנשמרו בכל חודש</small>
+              </span>
+              <strong>{money.format(annualReport.sickPay)}</strong>
+            </div>
+            <div>
+              <span>
+                הפרשות מעסיק מצטברות <small>פנסיה ופיצויים שהוזנו</small>
+              </span>
+              <strong>{money.format(annualReport.employerContributions)}</strong>
+            </div>
+            <div>
+              <span>
+                תשלומים ותוספות אחרים <small>תוספת כללית ותשלומים בעלי תיאור</small>
+              </span>
+              <strong>{money.format(annualReport.otherAdditions)}</strong>
+            </div>
+            <div className="payroll-subtotal">
+              <span>
+                סך כל התוספות <small>שבתות, חג, חופשה, מחלה ושאר התוספות</small>
               </span>
               <strong>{money.format(annualReport.additions)}</strong>
             </div>
@@ -1375,7 +1520,7 @@ export function PayrollPage() {
               <strong>{money.format(annualReport.totalPaid)}</strong>
             </div>
             <p>
-              מקור הנתונים: חישובי השכר החודשיים שנשמרו במערכת. הדוח הוא כלי תיעוד וסיכום אריתמטי
+              מקור הנתונים: רישומי השכר החודשיים שנשמרו במערכת. הדוח הוא כלי תיעוד וסיכום אריתמטי
               ואינו מחליף תלוש שכר או בדיקה מקצועית.
             </p>
           </div>

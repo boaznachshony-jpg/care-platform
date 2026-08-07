@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { ContactOptions } from '../components/ContactOptions.js';
+import { ContactPage } from './ContactPage.js';
 
 const DEFAULT_SITE_URL = 'https://care-platform-web.vercel.app';
 
@@ -79,6 +81,7 @@ function PublicHeader() {
         <a href="/#capabilities">{t('public.common.capabilities')}</a>
         <Link to="/guide/direct-caregiver-employment">{t('public.common.guide')}</Link>
         <a href="/#questions">{t('public.common.questions')}</a>
+        <Link to="/contact-us">{t('public.common.contact')}</Link>
       </nav>
       <Link className="public-login-link" to="/app">
         {t('public.common.login')}
@@ -96,7 +99,10 @@ function PublicFooter() {
         <span>{t('public.common.footerTagline')}</span>
       </div>
       <p>{t('public.common.footerDisclaimer')}</p>
-      <Link to="/terms/subscription">{t('public.common.subscriptionTerms')}</Link>
+      <div className="public-footer-links">
+        <Link to="/terms/subscription">{t('public.common.subscriptionTerms')}</Link>
+        <Link to="/contact-us">{t('public.common.contact')}</Link>
+      </div>
     </footer>
   );
 }
@@ -307,6 +313,15 @@ export function PublicLandingPage() {
             </Link>
           )}
         </section>
+
+        <section className="public-contact" id="contact" aria-labelledby="public-contact-title">
+          <div className="public-section-heading">
+            <span>{t('contact.eyebrow')}</span>
+            <h2 id="public-contact-title">{t('contact.title')}</h2>
+            <p>{t('contact.intro')}</p>
+          </div>
+          <ContactOptions />
+        </section>
       </main>
       <PublicFooter />
     </div>
@@ -353,6 +368,37 @@ export function PublicSubscriptionTermsPage() {
           ))}
           <aside>{t('public.subscriptionTerms.legalNotice')}</aside>
         </article>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+export function PublicContactPage() {
+  const { t } = useTranslation();
+  const title = `${t('contact.title')} | CareDesk`;
+  const description = t('contact.intro');
+  const structuredData = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'ContactPage',
+      name: title,
+      description,
+      inLanguage: 'he',
+      url: `${publicSiteUrl().replace(/\/$/, '')}/contact-us`,
+    }),
+    [description, title],
+  );
+  usePublicMetadata({ title, description, path: '/contact-us', structuredData });
+
+  return (
+    <div className="public-site" dir="rtl">
+      <a className="cd-skip-link" href="#public-main">
+        {t('public.common.skip')}
+      </a>
+      <PublicHeader />
+      <main className="public-contact-page" id="public-main">
+        <ContactPage />
       </main>
       <PublicFooter />
     </div>

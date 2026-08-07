@@ -36,7 +36,7 @@ export interface MvpProfile {
   salaryEffectiveDate: string;
   saturdayRate: number | null;
   licenseRenewalDate: string;
-  employmentFeeDueDate: string;
+  visaRenewalDate: string;
 }
 
 const STORAGE_KEY = 'caredesk.mvp.profile.v1';
@@ -45,6 +45,8 @@ const MIGRATION_REDIRECT_KEY = 'caredesk.mvp.migration-redirect.v1';
 const CLIENT_KEY_SEPARATOR = '.client.';
 export const MVP_PROFILE_CHANGED = 'caredesk:mvp-profile-changed';
 const MVP_STORAGE_PREFIX = 'caredesk.mvp.';
+const NEW_EMPLOYER_LABEL = 'מעסיק חדש';
+const LEGACY_NEW_CLIENT_LABEL = 'לקוח חדש';
 
 export interface MvpClient {
   id: string;
@@ -86,7 +88,7 @@ export const emptyMvpProfile: MvpProfile = {
   salaryEffectiveDate: '',
   saturdayRate: null,
   licenseRenewalDate: '',
-  employmentFeeDueDate: '',
+  visaRenewalDate: '',
 };
 
 function isBrowser(): boolean {
@@ -129,7 +131,13 @@ function saveClients(clients: MvpClient[]): void {
 }
 
 function profileLabel(profile: Partial<MvpProfile>): string {
-  return profile.recipientName || profile.employerName || profile.caregiverName || 'לקוח חדש';
+  return (
+    profile.recipientName || profile.employerName || profile.caregiverName || NEW_EMPLOYER_LABEL
+  );
+}
+
+export function isNewEmployerLabel(label: string): boolean {
+  return label === NEW_EMPLOYER_LABEL || label === LEGACY_NEW_CLIENT_LABEL;
 }
 
 export function ensureMvpClientMigration(): MvpClient[] {
@@ -186,7 +194,7 @@ export function createMvpClient(): MvpClient {
   const now = new Date().toISOString();
   const client: MvpClient = {
     id: crypto.randomUUID(),
-    label: 'לקוח חדש',
+    label: NEW_EMPLOYER_LABEL,
     employerName: '',
     recipientName: '',
     caregiverName: '',
@@ -219,7 +227,7 @@ export function resetMvpClient(clientId: string): void {
         item.id === clientId
           ? {
               ...item,
-              label: 'לקוח חדש',
+              label: NEW_EMPLOYER_LABEL,
               employerName: '',
               recipientName: '',
               caregiverName: '',
@@ -251,8 +259,21 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
   try {
     const saved = JSON.parse(
       readBusinessItem(scopedKey(STORAGE_KEY, clientId)) ?? '{}',
-    ) as Partial<MvpProfile>;
-    return { ...emptyMvpProfile, ...saved };
+    ) as Partial<MvpProfile> & { employmentFeeDueDate?: string };
+    const { employmentFeeDueDate, ...currentSaved } = saved;
+    const visaRenewalDate =
+      typeof currentSaved.visaRenewalDate === 'string'
+        ? currentSaved.visaRenewalDate
+        : (employmentFeeDueDate ?? '');
+    return {
+      ...emptyMvpProfile,
+      ...currentSaved,
+      employerIdNumber:
+        typeof currentSaved.employerIdNumber === 'string'
+          ? currentSaved.employerIdNumber.replace(/\D/g, '').slice(0, 9)
+          : '',
+      visaRenewalDate,
+    };
   } catch {
     return emptyMvpProfile;
   }
@@ -265,7 +286,11 @@ export function readMvpProfile(): MvpProfile {
 export function saveMvpProfile(profile: MvpProfile): void {
   if (!isBrowser()) return;
   const clientId = clientIdFromPath();
-  writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(profile));
+  const normalizedProfile = {
+    ...profile,
+    employerIdNumber: profile.employerIdNumber.replace(/\D/g, '').slice(0, 9),
+  };
+  writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(normalizedProfile));
   if (clientId) {
     const now = new Date().toISOString();
     saveClients(
@@ -273,17 +298,17 @@ export function saveMvpProfile(profile: MvpProfile): void {
         client.id === clientId
           ? {
               ...client,
-              label: profileLabel(profile),
-              employerName: profile.employerName,
-              recipientName: profile.recipientName,
-              caregiverName: profile.caregiverName,
+              label: profileLabel(normalizedProfile),
+              employerName: normalizedProfile.employerName,
+              recipientName: normalizedProfile.recipientName,
+              caregiverName: normalizedProfile.caregiverName,
               updatedAt: now,
             }
           : client,
       ),
     );
   }
-  syncMedicalInsuranceTask(profile);
+  syncAutomaticTasks(normalizedProfile);
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
@@ -351,14 +376,18 @@ export interface MvpEmploymentExpense {
   category: string;
   frequency: EmploymentExpenseFrequency;
   amount: number;
+  amountEntered?: boolean;
   dueDate: string;
   status: EmploymentExpenseStatus;
   note: string;
   savedAt: string;
+  source?: 'payroll-national-insurance';
+  sourcePeriod?: string;
 }
 
 export type MvpTaskPriority = 'normal' | 'important' | 'urgent';
 export type MvpTaskStatus = 'open' | 'completed';
+export type MvpTaskSource = 'medical-insurance' | 'employment-license' | 'visa-renewal';
 
 export interface MvpTask {
   id: string;
@@ -367,7 +396,7 @@ export interface MvpTask {
   priority: MvpTaskPriority;
   status: MvpTaskStatus;
   createdAt: string;
-  source?: 'medical-insurance';
+  source?: MvpTaskSource;
   sourceDate?: string;
 }
 
@@ -392,34 +421,72 @@ function saveList<T>(key: string, value: T[]): void {
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
-function syncMedicalInsuranceTask(profile: MvpProfile): void {
-  const tasks = readList<MvpTask>(TASKS_STORAGE_NAME);
-  const existing = tasks.find((task) => task.source === 'medical-insurance');
+interface AutomaticTaskConfig {
+  id: string;
+  title: string;
+  dueDate: string;
+  enabled: boolean;
+  source: MvpTaskSource;
+}
 
-  if (!profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate) {
-    if (existing) {
-      saveList(
-        TASKS_STORAGE_NAME,
-        tasks.filter((task) => task.id !== existing.id),
-      );
+function validTaskDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function automaticTaskConfigs(profile: MvpProfile): AutomaticTaskConfig[] {
+  return [
+    {
+      id: 'system-medical-insurance-renewal',
+      title: 'חידוש ביטוח רפואי',
+      dueDate: profile.medicalInsuranceExpiryDate,
+      enabled:
+        profile.medicalInsuranceConfirmed && validTaskDate(profile.medicalInsuranceExpiryDate),
+      source: 'medical-insurance',
+    },
+    {
+      id: 'system-employment-license-renewal',
+      title: 'חידוש רישיון ההעסקה',
+      dueDate: profile.licenseRenewalDate,
+      enabled: validTaskDate(profile.licenseRenewalDate),
+      source: 'employment-license',
+    },
+    {
+      id: 'system-visa-renewal',
+      title: 'חידוש הוויזה',
+      dueDate: profile.visaRenewalDate,
+      enabled: validTaskDate(profile.visaRenewalDate),
+      source: 'visa-renewal',
+    },
+  ];
+}
+
+function syncAutomaticTasks(profile: MvpProfile): void {
+  const tasks = readList<MvpTask>(TASKS_STORAGE_NAME);
+  let next = tasks;
+
+  for (const config of automaticTaskConfigs(profile)) {
+    const existing = next.find((task) => task.source === config.source);
+    if (!config.enabled) {
+      if (existing) next = next.filter((task) => task.id !== existing.id);
+      continue;
     }
-    return;
+
+    const task: MvpTask = {
+      id: existing?.id ?? config.id,
+      title: config.title,
+      dueDate: config.dueDate,
+      priority: 'important',
+      status: existing?.sourceDate === config.dueDate ? existing.status : 'open',
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      source: config.source,
+      sourceDate: config.dueDate,
+    };
+    next = existing ? next.map((item) => (item.id === existing.id ? task : item)) : [task, ...next];
   }
 
-  const task: MvpTask = {
-    id: existing?.id ?? 'system-medical-insurance-renewal',
-    title: 'חידוש ביטוח רפואי',
-    dueDate: profile.medicalInsuranceExpiryDate,
-    priority: 'important',
-    status: existing?.sourceDate === profile.medicalInsuranceExpiryDate ? existing.status : 'open',
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
-    source: 'medical-insurance',
-    sourceDate: profile.medicalInsuranceExpiryDate,
-  };
-  saveList(
-    TASKS_STORAGE_NAME,
-    existing ? tasks.map((item) => (item.id === existing.id ? task : item)) : [task, ...tasks],
-  );
+  if (JSON.stringify(next) !== JSON.stringify(tasks)) {
+    saveList(TASKS_STORAGE_NAME, next);
+  }
 }
 
 export function readMvpDocuments(): MvpDocument[] {
@@ -447,6 +514,7 @@ export function saveMvpEmploymentExpenses(expenses: MvpEmploymentExpense[]): voi
 }
 
 export function readMvpTasks(): MvpTask[] {
+  syncAutomaticTasks(readMvpProfile());
   return readList<MvpTask>(TASKS_STORAGE_NAME);
 }
 

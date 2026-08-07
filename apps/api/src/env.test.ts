@@ -37,6 +37,19 @@ describe('loadEnv', () => {
     expect(env.BILLING_LAUNCH_DISCOUNT_PERCENT).toBe(100);
   });
 
+  it('requires all server-only support delivery settings together', () => {
+    expect(() =>
+      loadEnv({ SUPPORT_DESTINATION_EMAIL: 'private-destination@example.com' }),
+    ).toThrow();
+    expect(
+      loadEnv({
+        SUPPORT_DESTINATION_EMAIL: 'private-destination@example.com',
+        SUPPORT_FROM_EMAIL: 'support@example.com',
+        RESEND_API_KEY: 'server-only-key',
+      }).SUPPORT_DESTINATION_EMAIL,
+    ).toBe('private-destination@example.com');
+  });
+
   it('requires every server-only Cardcom credential and forbids a production mock', () => {
     expect(() => loadEnv({ BILLING_PROVIDER: 'cardcom' })).toThrow();
     expect(() => loadEnv({ NODE_ENV: 'production', BILLING_PROVIDER: 'mock' })).toThrow();

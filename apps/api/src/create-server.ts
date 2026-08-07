@@ -12,6 +12,7 @@ import { registerCaseDocumentRoutes } from './routes/case-documents.js';
 import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerFamilyAccessRoutes } from './routes/family-access.js';
 import { registerBillingRoutes } from './routes/billing.js';
+import { registerSupportRequestRoutes } from './routes/support-requests.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -136,6 +137,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerWorkspaceRoutes(app, container);
   registerFamilyAccessRoutes(app, container);
   registerBillingRoutes(app, container, env);
+  registerSupportRequestRoutes(app, env);
 
   return app;
 }

@@ -1,19 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { isValidIsraeliId, normalizeIsraeliId } from './israeli-id.js';
+import { getIsraeliIdValidationError, isValidIsraeliId, normalizeIsraeliId } from './israeli-id.js';
 
 describe('Israeli ID validation', () => {
   it('accepts a valid nine-digit ID', () => {
     expect(isValidIsraeliId('123456782')).toBe(true);
   });
 
-  it('accepts common formatting and normalizes it', () => {
-    expect(isValidIsraeliId('123-456 782')).toBe(true);
+  it('normalizes formatting for input controls but rejects formatted raw values', () => {
+    expect(isValidIsraeliId('123-456 782')).toBe(false);
+    expect(getIsraeliIdValidationError('123-456 782')).toBe('characters');
     expect(normalizeIsraeliId('123-456 782')).toBe('123456782');
   });
 
-  it('pads a valid short ID with leading zeroes', () => {
-    expect(normalizeIsraeliId('18')).toBe('000000018');
-    expect(isValidIsraeliId('18')).toBe(true);
+  it('preserves an explicitly entered leading zero and requires all nine digits', () => {
+    expect(normalizeIsraeliId('000000018')).toBe('000000018');
+    expect(isValidIsraeliId('000000018')).toBe(true);
+    expect(getIsraeliIdValidationError('18')).toBe('length');
+  });
+
+  it('strips pasted non-digits and limits input to nine digits', () => {
+    expect(normalizeIsraeliId(' 123-456 782 abc 9')).toBe('123456782');
+    expect(normalizeIsraeliId('038-852 562')).toBe('038852562');
+    expect(isValidIsraeliId(normalizeIsraeliId('038-852 562'))).toBe(true);
+  });
+
+  it('distinguishes missing, character, length and checksum errors', () => {
+    expect(getIsraeliIdValidationError('')).toBe('required');
+    expect(getIsraeliIdValidationError('123-456782')).toBe('characters');
+    expect(getIsraeliIdValidationError('12345678')).toBe('length');
+    expect(getIsraeliIdValidationError('123456789')).toBe('checksum');
   });
 
   it.each(['123456789', '12345678', '1234567890', '12345A782', '', '---'])(

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readMvpTasks } from '../storage/mvp-storage.js';
+import { emptyMvpProfile, readMvpTasks, saveMvpProfile } from '../storage/mvp-storage.js';
 import { TasksPage } from './TasksPage.js';
 
 describe('TasksPage', () => {
@@ -51,6 +51,24 @@ describe('TasksPage', () => {
     expect(screen.getByText('הגשת דיווח')).toBeVisible();
   });
 
+  it('shows license and visa follow-up tasks immediately after their dates are defined', () => {
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      licenseRenewalDate: '2027-01-15',
+      visaRenewalDate: '2026-12-31',
+    });
+
+    render(<TasksPage />);
+
+    expect(screen.getByRole('heading', { name: 'חידוש רישיון ההעסקה' })).toBeVisible();
+    expect(screen.getByText('מועד יעד: 15.01.2027')).toBeVisible();
+    expect(screen.getByText(/נוצרה אוטומטית ממועד חידוש רישיון ההעסקה/)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'חידוש הוויזה' })).toBeVisible();
+    expect(screen.getByText('מועד יעד: 31.12.2026')).toBeVisible();
+    expect(screen.getByText(/נוצרה אוטומטית ממועד חידוש הוויזה/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'עריכה' })).not.toBeInTheDocument();
+  });
+
   it('edits a task and persists the updated fields', () => {
     render(<TasksPage />);
     fireEvent.click(screen.getByRole('button', { name: /משימה חדשה/ }));
@@ -99,7 +117,7 @@ describe('TasksPage', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'תשלום ביטוח לאומי לרבעון יולי–ספטמבר',
+        name: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר',
       }),
     ).toBeVisible();
     expect(screen.getByText('ניתן לשלם בין 1.10 ל־15.10')).toBeVisible();

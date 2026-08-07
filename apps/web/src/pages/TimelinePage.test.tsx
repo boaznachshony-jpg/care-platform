@@ -35,7 +35,7 @@ describe('TimelinePage', () => {
     expect(screen.getByText('15 אוק׳')).toBeVisible();
     expect(
       screen.getByRole('heading', {
-        name: 'תשלום ביטוח לאומי לרבעון יולי–ספטמבר',
+        name: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר',
       }),
     ).toBeVisible();
     expect(screen.getByText('ניתן לשלם בין 1.10 ל־15.10 · דורש טיפול')).toBeVisible();

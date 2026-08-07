@@ -19,6 +19,20 @@ export interface QuarterlyInsuranceTask {
   statusLabel: string;
 }
 
+export interface QuarterlyInsuranceSchedule {
+  id: string;
+  quarter: 1 | 2 | 3 | 4;
+  year: number;
+  periodLabel: string;
+  periodRange: string;
+  paymentWindow: string;
+  deadlineLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  paymentOpenDate: string;
+  deadlineDate: string;
+}
+
 const quarterMonths = [
   ['ינואר', 'מרץ'],
   ['אפריל', 'יוני'],
@@ -67,32 +81,62 @@ function relevantQuarter(today: Date): { year: number; quarter: 1 | 2 | 3 | 4 } 
   };
 }
 
-export function createQuarterlyInsuranceTask(today = new Date()): QuarterlyInsuranceTask {
-  const { year, quarter } = relevantQuarter(today);
+function createQuarterlyInsuranceSchedule(
+  year: number,
+  quarter: 1 | 2 | 3 | 4,
+): QuarterlyInsuranceSchedule {
   const startMonth = (quarter - 1) * 3;
   const endMonth = startMonth + 2;
   const endDay = new Date(year, endMonth + 1, 0).getDate();
   const paymentMonth = (endMonth + 1) % 12;
   const paymentYear = endMonth === 11 ? year + 1 : year;
-  const periodStart = isoDate(year, startMonth, 1);
-  const periodEnd = isoDate(year, endMonth, endDay);
-  const paymentOpenDate = isoDate(paymentYear, paymentMonth, 1);
-  const deadlineDate = isoDate(paymentYear, paymentMonth, 15);
+  const [startMonthLabel, endMonthLabel] = quarterMonths[quarter - 1]!;
+  const periodLabel = `${startMonthLabel} – ${endMonthLabel}`;
+
+  return {
+    id: `national-insurance-${year}-q${quarter}`,
+    quarter,
+    year,
+    periodLabel,
+    periodRange: `תקופת דיווח: ${dayMonth(year, startMonth, 1)}–${dayMonth(year, endMonth, endDay)}`,
+    paymentWindow: `ניתן לשלם בין ${dayMonth(paymentYear, paymentMonth, 1)} ל־${dayMonth(paymentYear, paymentMonth, 15)}`,
+    deadlineLabel: `מועד אחרון: 15 ${deadlineMonths[paymentMonth]}`,
+    periodStart: isoDate(year, startMonth, 1),
+    periodEnd: isoDate(year, endMonth, endDay),
+    paymentOpenDate: isoDate(paymentYear, paymentMonth, 1),
+    deadlineDate: isoDate(paymentYear, paymentMonth, 15),
+  };
+}
+
+export function quarterlyInsuranceScheduleForPayrollMonth(
+  payrollMonth: string,
+): QuarterlyInsuranceSchedule | null {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(payrollMonth);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const quarter = (Math.floor(monthIndex / 3) + 1) as 1 | 2 | 3 | 4;
+  return createQuarterlyInsuranceSchedule(year, quarter);
+}
+
+export function createQuarterlyInsuranceTask(today = new Date()): QuarterlyInsuranceTask {
+  const { year, quarter } = relevantQuarter(today);
+  const schedule = createQuarterlyInsuranceSchedule(year, quarter);
   const currentDate = localIso(today);
-  const preparationOnly = currentDate === periodEnd;
+  const preparationOnly = currentDate === schedule.periodEnd;
 
   let status: QuarterlyInsuranceStatus;
   let statusLabel: string;
-  if (currentDate < paymentOpenDate) {
+  if (currentDate < schedule.paymentOpenDate) {
     status = 'not_open';
     statusLabel = 'טרם נפתח לתשלום';
-  } else if (currentDate <= isoDate(paymentYear, paymentMonth, 9)) {
+  } else if (currentDate <= schedule.deadlineDate.replace(/15$/, '09')) {
     status = 'open';
     statusLabel = 'פתוח לתשלום';
-  } else if (currentDate <= isoDate(paymentYear, paymentMonth, 14)) {
+  } else if (currentDate <= schedule.deadlineDate.replace(/15$/, '14')) {
     status = 'attention';
     statusLabel = 'דורש טיפול';
-  } else if (currentDate === deadlineDate) {
+  } else if (currentDate === schedule.deadlineDate) {
     status = 'due_today';
     statusLabel = 'מועד אחרון היום';
   } else {
@@ -100,23 +144,13 @@ export function createQuarterlyInsuranceTask(today = new Date()): QuarterlyInsur
     statusLabel = 'באיחור';
   }
 
-  const [startMonthLabel, endMonthLabel] = quarterMonths[quarter - 1]!;
-  const periodLabel = `${startMonthLabel}–${endMonthLabel}`;
   return {
-    id: `national-insurance-${year}-q${quarter}`,
+    ...schedule,
     quarter,
     year,
     title: preparationOnly
       ? 'הכנת נתוני ביטוח לאומי לרבעון'
-      : `תשלום ביטוח לאומי לרבעון ${periodLabel}`,
-    periodLabel,
-    periodRange: `תקופת דיווח: ${dayMonth(year, startMonth, 1)}–${dayMonth(year, endMonth, endDay)}`,
-    paymentWindow: `ניתן לשלם בין ${dayMonth(paymentYear, paymentMonth, 1)} ל־${dayMonth(paymentYear, paymentMonth, 15)}`,
-    deadlineLabel: `מועד אחרון: 15 ${deadlineMonths[paymentMonth]}`,
-    periodStart,
-    periodEnd,
-    paymentOpenDate,
-    deadlineDate,
+      : `תשלום ביטוח לאומי לרבעון ${schedule.periodLabel}`,
     preparationOnly,
     status,
     statusLabel,

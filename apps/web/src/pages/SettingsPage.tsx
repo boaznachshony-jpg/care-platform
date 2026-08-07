@@ -81,6 +81,7 @@ export function SettingsPage() {
               dir="ltr"
               type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
               autoComplete="off"
               value={draft.employerIdNumber}
               required
@@ -90,17 +91,16 @@ export function SettingsPage() {
                   ? 'settings-employer-id-help'
                   : 'settings-employer-id-help settings-employer-id-error'
               }
-              onBlur={() => {
-                if (employerIdIsValid) {
-                  setDraft({
-                    ...draft,
-                    employerIdNumber: normalizeIsraeliId(draft.employerIdNumber),
-                  });
-                }
-              }}
-              onChange={(event) => setDraft({ ...draft, employerIdNumber: event.target.value })}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  employerIdNumber: normalizeIsraeliId(event.target.value),
+                })
+              }
             />
-            <small id="settings-employer-id-help">נדרש לצורך דיווח לביטוח לאומי בלבד.</small>
+            <small id="settings-employer-id-help">
+              נדרש לצורך דיווח לביטוח לאומי. יש להזין 9 ספרות בלבד, ללא רווחים וללא מקפים.
+            </small>
             {!employerIdIsValid ? (
               <span id="settings-employer-id-error" className="field-error" role="alert">
                 מספר תעודת הזהות אינו תקין. יש לבדוק את 9 הספרות ואת ספרת הביקורת.

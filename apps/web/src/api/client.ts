@@ -45,6 +45,41 @@ function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
+const API_PREWARM_TTL_MS = 60_000;
+let apiWarmUntil = 0;
+let apiWarmupInFlight: Promise<void> | undefined;
+
+/**
+ * Starts the public API instance before an authenticated workspace request is
+ * needed. This request carries no token or customer data; it only calls the
+ * public health endpoint so a cold deployment can wake while the user signs
+ * in. Concurrent calls are coalesced and a recent successful warm-up is reused.
+ */
+export function prewarmApi(): Promise<void> {
+  if (Date.now() < apiWarmUntil) return Promise.resolve();
+  if (apiWarmupInFlight) return apiWarmupInFlight;
+
+  const warmup = fetch(`${API_BASE_URL}/health`, {
+    method: 'GET',
+    cache: 'no-store',
+  })
+    .then((response) => {
+      if (response.ok) apiWarmUntil = Date.now() + API_PREWARM_TTL_MS;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (apiWarmupInFlight === warmup) apiWarmupInFlight = undefined;
+    });
+
+  apiWarmupInFlight = warmup;
+  return warmup;
+}
+
+export function resetApiPrewarmForTests(): void {
+  apiWarmUntil = 0;
+  apiWarmupInFlight = undefined;
+}
+
 /**
  * Development-only bearer token matching apps/api's synthetic dev session —
  * not a secret (mock session over synthetic data; never seeded in

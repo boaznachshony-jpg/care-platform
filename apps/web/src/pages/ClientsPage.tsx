@@ -9,6 +9,7 @@ import {
   consumeMvpMigrationRedirect,
   deleteMvpClient,
   exportMvpClient,
+  isNewEmployerLabel,
   readMvpClients,
   resetMvpClient,
   type MvpClient,
@@ -53,15 +54,14 @@ export function ClientsPage() {
   }
 
   function removeClient(client: MvpClient) {
-    if (!window.confirm(`למחוק את הרשומה של “${client.label}” ואת כל הנתונים המקומיים שלה?`))
+    if (!window.confirm(`למחוק את תיק ההעסקה “${client.label}” ואת כל הנתונים המקומיים שלו?`))
       return;
     deleteMvpClient(client.id);
     setClients(readMvpClients());
   }
 
   function resetClient(client: MvpClient) {
-    if (!window.confirm(`לאפס את “${client.label}” ולהתחיל מחדש? הפעולה אינה ניתנת לביטול.`))
-      return;
+    if (!window.confirm(`להתחיל מחדש את “${client.label}”? הפעולה אינה ניתנת לביטול.`)) return;
     resetMvpClient(client.id);
     setClients(readMvpClients());
     navigate(clientPath(client.id, '/onboarding'));
@@ -79,13 +79,9 @@ export function ClientsPage() {
           </div>
         </div>
         <div>
-          <p className="eyebrow">סביבת ייצור סגורה לתרגול</p>
-          <h1>הלקוחות שלי</h1>
-          <p>
-            {auth.enabled
-              ? 'כל לקוח נשמר בנפרד בחשבון ומסתנכרן בין המכשירים המורשים.'
-              : 'כל לקוח נשמר בנפרד ורק בדפדפן הזה. בחרו רשומה קיימת או התחילו חדשה.'}
-          </p>
+          <p className="eyebrow">{t('clients.eyebrow')}</p>
+          <h1>{t('clients.title')}</h1>
+          <p>{auth.enabled ? t('clients.introCloud') : t('clients.introLocal')}</p>
         </div>
         <div className="clients-hero-actions">
           <button className="secondary-button" type="button" onClick={() => navigate('/family')}>
@@ -97,7 +93,7 @@ export function ClientsPage() {
             </button>
           ) : null}
           <button className="primary-button clients-add-button" type="button" onClick={addClient}>
-            ＋ הוספת לקוח חדש
+            ＋ {t('clients.add')}
           </button>
         </div>
       </header>
@@ -105,34 +101,39 @@ export function ClientsPage() {
       {clients.length === 0 ? (
         <section className="clients-empty card">
           <span aria-hidden="true">◎</span>
-          <h2>עדיין אין לקוחות</h2>
-          <p>הוסיפו לקוח ראשון והשלימו את פרטי המעסיק, המטופל והמטפל/ת.</p>
+          <h2>{t('clients.emptyTitle')}</h2>
+          <p>{t('clients.emptyBody')}</p>
           <button className="primary-button" type="button" onClick={addClient}>
-            התחלת לקוח ראשון
+            {t('clients.first')}
           </button>
         </section>
       ) : (
-        <section className="clients-grid" aria-label="רשימת לקוחות">
+        <section className="clients-grid" aria-label={t('clients.listLabel')}>
           {clients.map((client) => (
             <article className="client-card" key={client.id}>
               <div className="client-card-heading">
                 <span className="client-avatar" aria-hidden="true">
-                  {(client.label || 'ל').slice(0, 1)}
+                  {(isNewEmployerLabel(client.label)
+                    ? t('clients.newCase')
+                    : client.label || 'ת'
+                  ).slice(0, 1)}
                 </span>
                 <div>
-                  <h2>{client.label}</h2>
+                  <h2>{isNewEmployerLabel(client.label) ? t('clients.newCase') : client.label}</h2>
                   <p>
-                    {client.caregiverName ? `מטפל/ת: ${client.caregiverName}` : 'ההקמה טרם הושלמה'}
+                    {client.caregiverName
+                      ? t('clients.caregiver', { name: client.caregiverName })
+                      : t('clients.setupPending')}
                   </p>
                 </div>
               </div>
               <dl>
                 <div>
-                  <dt>מעסיק</dt>
+                  <dt>{t('clients.employer')}</dt>
                   <dd>{client.employerName || 'טרם הוזן'}</dd>
                 </div>
                 <div>
-                  <dt>עודכן</dt>
+                  <dt>{t('clients.updated')}</dt>
                   <dd>{new Date(client.updatedAt).toLocaleDateString('he-IL')}</dd>
                 </div>
               </dl>
@@ -142,30 +143,30 @@ export function ClientsPage() {
                   type="button"
                   onClick={() =>
                     navigate(
-                      clientPath(client.id, client.label === 'לקוח חדש' ? '/onboarding' : '/'),
+                      clientPath(client.id, isNewEmployerLabel(client.label) ? '/onboarding' : '/'),
                     )
                   }
                 >
-                  פתיחת הרשומה
+                  {t('clients.open')}
                 </button>
                 <button
                   className="secondary-button"
                   type="button"
                   onClick={() => downloadClient(client)}
                 >
-                  ייצוא גיבוי
+                  {t('clients.backup')}
                 </button>
                 <details className="client-more-actions">
-                  <summary>פעולות נוספות</summary>
+                  <summary>{t('clients.more')}</summary>
                   <button type="button" onClick={() => resetClient(client)}>
-                    איפוס הרשומה
+                    {t('clients.reset')}
                   </button>
                   <button
                     className="danger-text-button"
                     type="button"
                     onClick={() => removeClient(client)}
                   >
-                    מחיקת הרשומה
+                    {t('clients.delete')}
                   </button>
                 </details>
               </div>
