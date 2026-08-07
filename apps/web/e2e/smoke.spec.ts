@@ -85,11 +85,22 @@ async function completeClientOnboarding(
   await page.goto(clientBase);
 }
 
+async function openEmployerList(page: import('@playwright/test').Page) {
+  const desktopSwitch = page.locator('a.top-client-switch');
+  if (await desktopSwitch.isVisible()) {
+    await desktopSwitch.click();
+    return;
+  }
+
+  await page.locator('.mobile-nav button[aria-controls="mobile-more-menu"]').click();
+  await page.locator('#mobile-more-menu a[href="/app"]').click();
+}
+
 test('creates and switches between two isolated client records', async ({ page }) => {
   await page.getByRole('button', { name: 'פתיחת תיק ראשון' }).click();
   await completeClientOnboarding(page, 'מעסיק ראשון', 'מטופל ראשון', 'Caregiver One');
   const firstClientUrl = page.url();
-  await page.locator('a.top-client-switch').click();
+  await openEmployerList(page);
   await expect(page.getByRole('heading', { name: 'תיקי ההעסקה שלי' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
 
@@ -98,7 +109,7 @@ test('creates and switches between two isolated client records', async ({ page }
   const secondClientUrl = page.url();
   expect(secondClientUrl).not.toBe(firstClientUrl);
 
-  await page.locator('a.top-client-switch').click();
+  await openEmployerList(page);
   await expect(page.getByRole('heading', { name: 'מטופל ראשון' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'מטופל שני' })).toBeVisible();
   await page.goto(firstClientUrl);
