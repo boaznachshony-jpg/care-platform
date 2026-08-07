@@ -90,6 +90,36 @@ describe('care notifications', () => {
     expect(notifications).toEqual([]);
   });
 
+  it('alerts for a renewal task according to the selected reminder lead time', () => {
+    const input = {
+      today: new Date('2026-08-10T12:00:00'),
+      documents: [],
+      expenses: [],
+      tasks: [
+        {
+          id: 'system-employment-license-renewal',
+          title: 'חידוש רישיון ההעסקה',
+          dueDate: '2026-08-31',
+          priority: 'important' as const,
+          status: 'open' as const,
+          createdAt: '2026-08-01T12:00:00.000Z',
+          source: 'employment-license' as const,
+          sourceDate: '2026-08-31',
+        },
+      ],
+    };
+
+    expect(createCareNotifications({ ...input, reminderLeadDays: 14 })).toEqual([]);
+    expect(createCareNotifications({ ...input, reminderLeadDays: 21 })).toEqual([
+      expect.objectContaining({
+        title: 'חידוש רישיון ההעסקה',
+        detail: 'נותרו 21 ימים',
+        dueDate: '2026-08-31',
+        to: '/tasks',
+      }),
+    ]);
+  });
+
   it('uses the quarterly preparation task on the final day instead of a payment deadline', () => {
     const notifications = createCareNotifications({
       today: new Date('2026-09-30T12:00:00'),

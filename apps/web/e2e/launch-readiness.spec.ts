@@ -93,6 +93,13 @@ test.describe('launch readiness interactions', () => {
     await page.goto(clientBase);
     await expect(page).toHaveURL(clientBase);
     await expect(page.getByRole('heading', { name: 'שלום מעסיק חדש' })).toBeVisible();
+
+    await page.goto(`${clientBase}/tasks`);
+    await expect(page.getByRole('heading', { name: 'חידוש ביטוח רפואי' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'חידוש רישיון ההעסקה' })).toBeVisible();
+    await expect(page.getByText('מועד יעד: 15.01.2027')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'חידוש הוויזה' })).toBeVisible();
+    await expect(page.getByText('מועד יעד: 31.12.2026')).toBeVisible();
   });
 
   test('updates and persists every editable caregiver field', async ({ page }) => {

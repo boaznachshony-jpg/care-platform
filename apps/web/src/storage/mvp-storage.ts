@@ -288,7 +288,7 @@ export function saveMvpProfile(profile: MvpProfile): void {
       ),
     );
   }
-  syncMedicalInsuranceTask(profile);
+  syncAutomaticTasks(profile);
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
@@ -364,6 +364,7 @@ export interface MvpEmploymentExpense {
 
 export type MvpTaskPriority = 'normal' | 'important' | 'urgent';
 export type MvpTaskStatus = 'open' | 'completed';
+export type MvpTaskSource = 'medical-insurance' | 'employment-license' | 'visa-renewal';
 
 export interface MvpTask {
   id: string;
@@ -372,7 +373,7 @@ export interface MvpTask {
   priority: MvpTaskPriority;
   status: MvpTaskStatus;
   createdAt: string;
-  source?: 'medical-insurance';
+  source?: MvpTaskSource;
   sourceDate?: string;
 }
 
@@ -397,34 +398,72 @@ function saveList<T>(key: string, value: T[]): void {
   window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
 }
 
-function syncMedicalInsuranceTask(profile: MvpProfile): void {
-  const tasks = readList<MvpTask>(TASKS_STORAGE_NAME);
-  const existing = tasks.find((task) => task.source === 'medical-insurance');
+interface AutomaticTaskConfig {
+  id: string;
+  title: string;
+  dueDate: string;
+  enabled: boolean;
+  source: MvpTaskSource;
+}
 
-  if (!profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate) {
-    if (existing) {
-      saveList(
-        TASKS_STORAGE_NAME,
-        tasks.filter((task) => task.id !== existing.id),
-      );
+function validTaskDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function automaticTaskConfigs(profile: MvpProfile): AutomaticTaskConfig[] {
+  return [
+    {
+      id: 'system-medical-insurance-renewal',
+      title: 'חידוש ביטוח רפואי',
+      dueDate: profile.medicalInsuranceExpiryDate,
+      enabled:
+        profile.medicalInsuranceConfirmed && validTaskDate(profile.medicalInsuranceExpiryDate),
+      source: 'medical-insurance',
+    },
+    {
+      id: 'system-employment-license-renewal',
+      title: 'חידוש רישיון ההעסקה',
+      dueDate: profile.licenseRenewalDate,
+      enabled: validTaskDate(profile.licenseRenewalDate),
+      source: 'employment-license',
+    },
+    {
+      id: 'system-visa-renewal',
+      title: 'חידוש הוויזה',
+      dueDate: profile.visaRenewalDate,
+      enabled: validTaskDate(profile.visaRenewalDate),
+      source: 'visa-renewal',
+    },
+  ];
+}
+
+function syncAutomaticTasks(profile: MvpProfile): void {
+  const tasks = readList<MvpTask>(TASKS_STORAGE_NAME);
+  let next = tasks;
+
+  for (const config of automaticTaskConfigs(profile)) {
+    const existing = next.find((task) => task.source === config.source);
+    if (!config.enabled) {
+      if (existing) next = next.filter((task) => task.id !== existing.id);
+      continue;
     }
-    return;
+
+    const task: MvpTask = {
+      id: existing?.id ?? config.id,
+      title: config.title,
+      dueDate: config.dueDate,
+      priority: 'important',
+      status: existing?.sourceDate === config.dueDate ? existing.status : 'open',
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      source: config.source,
+      sourceDate: config.dueDate,
+    };
+    next = existing ? next.map((item) => (item.id === existing.id ? task : item)) : [task, ...next];
   }
 
-  const task: MvpTask = {
-    id: existing?.id ?? 'system-medical-insurance-renewal',
-    title: 'חידוש ביטוח רפואי',
-    dueDate: profile.medicalInsuranceExpiryDate,
-    priority: 'important',
-    status: existing?.sourceDate === profile.medicalInsuranceExpiryDate ? existing.status : 'open',
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
-    source: 'medical-insurance',
-    sourceDate: profile.medicalInsuranceExpiryDate,
-  };
-  saveList(
-    TASKS_STORAGE_NAME,
-    existing ? tasks.map((item) => (item.id === existing.id ? task : item)) : [task, ...tasks],
-  );
+  if (JSON.stringify(next) !== JSON.stringify(tasks)) {
+    saveList(TASKS_STORAGE_NAME, next);
+  }
 }
 
 export function readMvpDocuments(): MvpDocument[] {
@@ -452,6 +491,7 @@ export function saveMvpEmploymentExpenses(expenses: MvpEmploymentExpense[]): voi
 }
 
 export function readMvpTasks(): MvpTask[] {
+  syncAutomaticTasks(readMvpProfile());
   return readList<MvpTask>(TASKS_STORAGE_NAME);
 }
 

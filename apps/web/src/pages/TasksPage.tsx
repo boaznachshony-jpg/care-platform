@@ -5,6 +5,7 @@ import {
   saveMvpTasks,
   type MvpTask,
   type MvpTaskPriority,
+  type MvpTaskSource,
 } from '../storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 
@@ -23,6 +24,12 @@ const priorityLabels: Record<MvpTaskPriority, string> = {
   normal: 'רגיל',
   important: 'חשוב',
   urgent: 'דחוף',
+};
+
+const automaticTaskNotes: Record<MvpTaskSource, string> = {
+  'medical-insurance': 'נוצרה אוטומטית מתוקף הביטוח הרפואי שנשמר בתיק.',
+  'employment-license': 'נוצרה אוטומטית ממועד חידוש רישיון ההעסקה שנשמר בתיק.',
+  'visa-renewal': 'נוצרה אוטומטית ממועד חידוש הוויזה שנשמר בתיק.',
 };
 
 function isDueThisWeek(dueDate: string): boolean {
@@ -265,14 +272,12 @@ export function TasksPage({ today }: { today?: Date } = {}) {
               <div>
                 <h3>{task.title}</h3>
                 <p>מועד יעד: {displayDate(task.dueDate)}</p>
-                {task.source === 'medical-insurance' ? (
-                  <small>נוצר אוטומטית מתוקף הביטוח הרפואי שנשמר בתיק.</small>
-                ) : null}
+                {task.source ? <small>{automaticTaskNotes[task.source]}</small> : null}
               </div>
               <span className={`pill ${task.priority === 'urgent' ? 'amber' : 'neutral'}`}>
                 {priorityLabels[task.priority]}
               </span>
-              {task.source === 'medical-insurance' ? null : (
+              {task.source ? null : (
                 <div className="task-actions">
                   <button className="secondary-button" type="button" onClick={() => editTask(task)}>
                     עריכה

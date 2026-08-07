@@ -50,29 +50,65 @@ describe('MVP local storage', () => {
     expect(readMvpProfile().baseSalary).toBe(7000);
   });
 
-  it('creates and updates an open medical-insurance renewal task from the saved expiry date', () => {
+  it('creates and updates automatic renewal tasks as soon as their dates are saved', () => {
     saveMvpProfile({
       ...emptyMvpProfile,
       medicalInsuranceConfirmed: true,
       medicalInsuranceExpiryDate: '2027-06-30',
+      licenseRenewalDate: '2027-04-15',
+      visaRenewalDate: '2027-05-20',
     });
 
-    expect(readMvpTasks()).toContainEqual(
-      expect.objectContaining({
-        title: 'חידוש ביטוח רפואי',
-        dueDate: '2027-06-30',
-        status: 'open',
-        source: 'medical-insurance',
-      }),
+    expect(readMvpTasks()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: 'חידוש ביטוח רפואי',
+          dueDate: '2027-06-30',
+          status: 'open',
+          source: 'medical-insurance',
+        }),
+        expect.objectContaining({
+          title: 'חידוש רישיון ההעסקה',
+          dueDate: '2027-04-15',
+          status: 'open',
+          source: 'employment-license',
+        }),
+        expect.objectContaining({
+          title: 'חידוש הוויזה',
+          dueDate: '2027-05-20',
+          status: 'open',
+          source: 'visa-renewal',
+        }),
+      ]),
     );
 
     saveMvpProfile({
       ...readMvpProfile(),
-      medicalInsuranceExpiryDate: '2027-07-31',
+      licenseRenewalDate: '2027-07-31',
     });
-    expect(readMvpTasks().filter((task) => task.source === 'medical-insurance')).toEqual([
+
+    expect(readMvpTasks().filter((task) => task.source === 'employment-license')).toEqual([
       expect.objectContaining({ dueDate: '2027-07-31', status: 'open' }),
     ]);
+    expect(readMvpTasks()).toHaveLength(3);
+  });
+
+  it('backfills automatic renewal tasks for dates saved before this feature existed', () => {
+    localStorage.setItem(
+      'caredesk.mvp.profile.v1',
+      JSON.stringify({
+        ...emptyMvpProfile,
+        licenseRenewalDate: '2027-09-01',
+        visaRenewalDate: '2027-10-01',
+      }),
+    );
+
+    expect(readMvpTasks()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'employment-license', dueDate: '2027-09-01' }),
+        expect.objectContaining({ source: 'visa-renewal', dueDate: '2027-10-01' }),
+      ]),
+    );
   });
 
   it('encrypts sensitive business values in the device cache', () => {
