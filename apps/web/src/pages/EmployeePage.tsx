@@ -2,7 +2,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
-import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import {
+  caregiverCountries,
+  caregiverLanguages,
+  languageAfterCountryChange,
+} from '../caregiver-options.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 
 export function EmployeePage() {
@@ -88,7 +92,11 @@ export function EmployeePage() {
                 setDraft({
                   ...draft,
                   caregiverCountry: country,
-                  caregiverLanguage: suggestedLanguage(country) || draft.caregiverLanguage,
+                  caregiverLanguage: languageAfterCountryChange(
+                    draft.caregiverCountry,
+                    country,
+                    draft.caregiverLanguage,
+                  ),
                 });
               }}
             >

@@ -36,3 +36,14 @@ export function suggestedLanguage(country: string): string {
   };
   return suggestions[country] ?? '';
 }
+
+export function languageAfterCountryChange(
+  previousCountry: string,
+  nextCountry: string,
+  currentLanguage: string,
+): string {
+  const previousSuggestion = suggestedLanguage(previousCountry);
+  const nextSuggestion = suggestedLanguage(nextCountry);
+  const hasManualOverride = Boolean(currentLanguage) && currentLanguage !== previousSuggestion;
+  return hasManualOverride ? currentLanguage : nextSuggestion || currentLanguage;
+}

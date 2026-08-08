@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { User } from '@supabase/supabase-js';
 import { prewarmApi } from '../api/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
@@ -34,6 +42,7 @@ const defaultAuthContext: AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue>(defaultAuthContext);
+export const AUTH_SESSION_RECOVERY_GRACE_MS = 1_500;
 
 export type AuthGateState =
   'local-bypass' | 'configuration-required' | 'storage-error' | 'loading' | 'ready';
@@ -67,6 +76,7 @@ export function AuthProvider({
   const [state, setState] = useState<AuthGateState>(initialState);
   const [user, setUser] = useState<User | null>(null);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
+  const explicitSignOutRef = useRef(false);
 
   useEffect(() => {
     if (!client) return undefined;
@@ -77,12 +87,20 @@ export function AuthProvider({
     let active = true;
     let sessionId = 0;
     let currentUserId: string | null | undefined;
+    let recoveryTimer: number | undefined;
 
     const applySession = async (nextUser: User | null) => {
+      if (nextUser && recoveryTimer !== undefined) {
+        window.clearTimeout(recoveryTimer);
+        recoveryTimer = undefined;
+      }
       if (nextUser && currentUserId === nextUser.id) {
         // TOKEN_REFRESHED and USER_UPDATED should refresh context without
         // restarting hydration or briefly covering the app with a loader.
-        if (active) setUser(nextUser);
+        if (active) {
+          setUser(nextUser);
+          setState('ready');
+        }
         return;
       }
 
@@ -131,6 +149,34 @@ export function AuthProvider({
       }
     };
 
+    const recoverTransientSession = () => {
+      if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
+      pauseWorkspaceSync();
+      setState('loading');
+      console.info('[auth] Empty session observed; verifying persisted session before sign-out.');
+      recoveryTimer = window.setTimeout(async () => {
+        recoveryTimer = undefined;
+        if (!active) return;
+        try {
+          const persisted = await client.auth.getSession();
+          if (persisted.data.session?.user) {
+            console.info('[auth] Session recovered from persisted state.');
+            await applySession(persisted.data.session.user);
+            return;
+          }
+          const refreshed = await client.auth.refreshSession();
+          if (refreshed.data.session?.user) {
+            console.info('[auth] Session recovered by token refresh.');
+            await applySession(refreshed.data.session.user);
+            return;
+          }
+        } catch {
+          console.warn('[auth] Session recovery failed; authentication will be cleared.');
+        }
+        if (active) await applySession(null);
+      }, AUTH_SESSION_RECOVERY_GRACE_MS);
+    };
+
     // getSession() reads Supabase's persisted browser session immediately.
     // Every API call still validates its access token server-side; the UI does
     // not need to wait for an extra getUser() network round-trip on each visit.
@@ -152,11 +198,18 @@ export function AuthProvider({
       if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
       // Supabase holds an internal auth lock while this callback runs. Defer
       // workspace API calls so request() can safely read the refreshed token.
-      if (active) window.setTimeout(() => void applySession(session?.user ?? null), 0);
+      if (!active) return;
+      if (!session?.user && !explicitSignOutRef.current) {
+        recoverTransientSession();
+        return;
+      }
+      const nextUser = session?.user ?? null;
+      window.setTimeout(() => void applySession(nextUser), 0);
     });
 
     return () => {
       active = false;
+      if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
       data.subscription.unsubscribe();
     };
   }, [client]);
@@ -208,9 +261,16 @@ export function AuthProvider({
       },
       async signOut() {
         if (!(await flushWorkspaceSync())) return false;
+        explicitSignOutRef.current = true;
         const result = client ? await client.auth.signOut() : undefined;
-        if (result?.error) return false;
+        if (result?.error) {
+          explicitSignOutRef.current = false;
+          return false;
+        }
         stopWorkspaceSync();
+        setUser(null);
+        setState('ready');
+        explicitSignOutRef.current = false;
         return true;
       },
     }),
