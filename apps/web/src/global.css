@@ -4346,6 +4346,80 @@ input[type='number'] {
   }
 }
 
+.reports-filter .form-grid {
+  margin-top: 18px;
+}
+
+.reports-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.reports-kpis article {
+  display: grid;
+  gap: 8px;
+}
+
+.reports-kpis strong {
+  font-size: clamp(1.25rem, 2.5vw, 1.8rem);
+}
+
+.reports-table-wrap {
+  overflow-x: auto;
+}
+
+.reports-table-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reports-table-card th,
+.reports-table-card td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color, #d9e1e7);
+  text-align: start;
+}
+
+.reports-table-card td {
+  direction: ltr;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-days dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.reports-days dl > div {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-muted, #f4f7f9);
+}
+
+.reports-days dd {
+  margin: 6px 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .reports-kpis,
+  .reports-days dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .reports-kpis,
+  .reports-days dl {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ATM-style small-screen flow: one obvious action, large targets and no cropped data. */
 @media (max-width: 760px) {
   html,

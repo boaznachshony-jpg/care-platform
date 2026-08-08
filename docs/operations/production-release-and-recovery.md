@@ -106,6 +106,40 @@ Before production:
 - [ ] the application version remains compatible with the existing schema;
 - [ ] a code rollback target and forward-fix migration are prepared;
 - [ ] production health and readiness checks are green after deployment.
+- [ ] `pnpm test:data-safety` passes, including empty/invalid workspace,
+  refresh, sign-out, failed sync, and optimistic-concurrency scenarios;
+- [ ] a staging smoke test creates synthetic employer and payroll records,
+  reloads, signs out/in, opens a second tab, and confirms every value remains;
+- [ ] the canary account is synthetic and its workspace version and record
+  counts are recorded before and after deployment;
+
+Do not promote a release when the client reports `workspace-sync` error or when
+an authenticated workspace unexpectedly becomes empty. The client deliberately
+fails closed in that state and retains the same-user encrypted cache. Before a
+newer remote snapshot replaces a readable cache, the previous encrypted values
+are copied to the account-scoped `caredesk.workspace-backup.v1.*` recovery key.
+The recovery copy is usable only while that browser session's encryption key
+still exists; it is defense in depth, not a durable backup. Recovery from it is
+an incident operation: keep the affected tab open, compare workspace versions
+and record counts, and restore only after an authorized operator has identified
+the correct source of truth. Never paste the snapshot into tickets or logs.
+
+## Canary and post-deploy sequence
+
+1. Deploy to staging and run CI plus the synthetic persistence smoke above.
+2. Verify a current database and private-Storage backup and a recent restore drill.
+3. Deploy the identical artifact to a limited synthetic canary; do not migrate
+   or test with a real employer account.
+4. Confirm health/readiness, authentication refresh, workspace version, record
+   counts, payroll reads, document access, and browser reload/two-tab behavior.
+5. Promote only after the observation window is clean and an operator records
+   artifact identifier, checks, timestamps, and approval.
+
+If any count decreases, hydration fails, or a suspicious empty workspace is
+observed, stop promotion. Roll back application code to the recorded artifact;
+do not roll the database schema backward. Preserve logs without personal data,
+open an incident record, and use a compatible forward fix unless verified data
+loss requires the documented backup restore process.
 
 Code rollback does not roll the database backward. If a schema migration has
 already committed, prefer a compatible forward fix. Restore a backup only for

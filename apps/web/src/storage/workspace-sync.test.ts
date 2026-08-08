@@ -26,8 +26,10 @@ import { captureMvpWorkspace, MVP_PROFILE_CHANGED } from './mvp-storage.js';
 import {
   flushWorkspaceSync,
   getWorkspaceSyncState,
+  hasWorkspaceRecoverySnapshot,
   pauseWorkspaceSync,
   retryWorkspaceSync,
+  restoreWorkspaceRecoverySnapshot,
   startWorkspaceSync,
   stopWorkspaceSync,
 } from './workspace-sync.js';
@@ -212,6 +214,102 @@ describe('workspace sync', () => {
       '[{"id":"local-task"}]',
     );
     expect(getWorkspaceSyncState()).toBe('error');
+  });
+
+  it('fails closed instead of replacing a populated same-user cache with an empty workspace', async () => {
+    await startWorkspaceSync('user-a');
+    const preserved = localStorage.getItem('caredesk.mvp.clients.v1');
+    pauseWorkspaceSync();
+    mocks.getWorkspace.mockResolvedValueOnce({
+      version: 5,
+      snapshot: { schemaVersion: 1, entries: {} },
+      updatedAt: '',
+    });
+
+    await expect(startWorkspaceSync('user-a')).rejects.toThrow('WORKSPACE_SUSPICIOUS_REMOTE');
+
+    expect(localStorage.getItem('caredesk.mvp.clients.v1')).toBe(preserved);
+    expect(getWorkspaceSyncState()).toBe('error');
+  });
+
+  it('rejects schema downgrade without touching the local cache', async () => {
+    await startWorkspaceSync('user-a');
+    const preserved = localStorage.getItem('caredesk.mvp.clients.v1');
+    pauseWorkspaceSync();
+    mocks.getWorkspace.mockResolvedValueOnce({
+      version: 5,
+      snapshot: { schemaVersion: 0, entries: {} },
+      updatedAt: '',
+    });
+
+    await expect(startWorkspaceSync('user-a')).rejects.toThrow('WORKSPACE_SCHEMA_UNSUPPORTED');
+    expect(localStorage.getItem('caredesk.mvp.clients.v1')).toBe(preserved);
+  });
+
+  it('keeps an encrypted recovery snapshot before applying a newer remote workspace', async () => {
+    await startWorkspaceSync('user-a');
+    const previousEncrypted = localStorage.getItem('caredesk.mvp.clients.v1');
+    pauseWorkspaceSync();
+    mocks.getWorkspace.mockResolvedValueOnce({
+      version: 5,
+      snapshot: {
+        schemaVersion: 1,
+        entries: { 'caredesk.mvp.clients.v1': '[{"id":"newer"}]' },
+      },
+      updatedAt: '',
+    });
+
+    await startWorkspaceSync('user-a');
+
+    const backup = JSON.parse(
+      localStorage.getItem('caredesk.workspace-backup.v1.user-a') ?? '{}',
+    ) as { entries?: Record<string, string> };
+    expect(backup.entries?.['caredesk.mvp.clients.v1']).toBe(previousEncrypted);
+  });
+
+  it('restores a validated same-user recovery snapshot and marks it unsynced', async () => {
+    await startWorkspaceSync('user-a');
+    const original = localStorage.getItem('caredesk.mvp.clients.v1');
+    pauseWorkspaceSync();
+    mocks.getWorkspace.mockResolvedValueOnce({
+      version: 5,
+      snapshot: {
+        schemaVersion: 1,
+        entries: { 'caredesk.mvp.clients.v1': '[{"id":"newer"}]' },
+      },
+      updatedAt: '',
+    });
+    await startWorkspaceSync('user-a');
+
+    expect(hasWorkspaceRecoverySnapshot('user-a')).toBe(true);
+    expect(restoreWorkspaceRecoverySnapshot('different-user')).toBe(false);
+    expect(restoreWorkspaceRecoverySnapshot('user-a')).toBe(true);
+    expect(localStorage.getItem('caredesk.mvp.clients.v1')).toBe(original);
+    expect(getWorkspaceSyncState()).toBe('error');
+    await expect(flushWorkspaceSync()).resolves.toBe(true);
+    expect(mocks.saveWorkspace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expectedVersion: 5,
+        snapshot: expect.objectContaining({
+          entries: expect.objectContaining({
+            'caredesk.mvp.clients.v1': '[{"id":"remote"}]',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('rejects malformed recovery snapshots without changing business data', async () => {
+    await startWorkspaceSync('user-a');
+    const original = localStorage.getItem('caredesk.mvp.clients.v1');
+    localStorage.setItem(
+      'caredesk.workspace-backup.v1.user-a',
+      JSON.stringify({ schemaVersion: 1, createdAt: '', entries: { unsafe: 'value' } }),
+    );
+
+    expect(hasWorkspaceRecoverySnapshot('user-a')).toBe(false);
+    expect(restoreWorkspaceRecoverySnapshot('user-a')).toBe(false);
+    expect(localStorage.getItem('caredesk.mvp.clients.v1')).toBe(original);
   });
 
   it('retries an unsaved same-user snapshot on the next hydration', async () => {

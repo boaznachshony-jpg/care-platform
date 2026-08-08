@@ -8,6 +8,7 @@ import { EmployeePage } from './pages/EmployeePage.js';
 import { DocumentsPage } from './pages/DocumentsPage.js';
 import { TimelinePage } from './pages/TimelinePage.js';
 import { PayrollPage } from './pages/PayrollPage.js';
+import { ReportsPage } from './pages/ReportsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
 import { TrustMessagesPage } from './pages/TrustMessagesPage.js';
@@ -45,6 +46,7 @@ const authenticatedEntrypoints = new Set([
   '/documents',
   '/timeline',
   '/payroll',
+  '/reports',
   '/settings',
   '/family',
   '/billing',
@@ -180,6 +182,14 @@ function AuthenticatedApp() {
           }
         />
         <Route
+          path="/clients/:clientId/reports"
+          element={
+            <ClientApp>
+              <ReportsPage />
+            </ClientApp>
+          }
+        />
+        <Route
           path="/clients/:clientId/contact"
           element={
             <ClientApp>
@@ -256,6 +266,14 @@ function AuthenticatedApp() {
           element={
             <ClientApp>
               <SettingsPage />
+            </ClientApp>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ClientApp>
+              <ReportsPage />
             </ClientApp>
           }
         />

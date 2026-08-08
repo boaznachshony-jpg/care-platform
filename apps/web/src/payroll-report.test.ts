@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createAnnualPayrollReport, getPayrollYears } from './payroll-report.js';
+import {
+  createAnnualPayrollReport,
+  createPeriodPayrollReport,
+  getPayrollYears,
+} from './payroll-report.js';
 import type { MvpPayrollRecord } from './storage/mvp-storage.js';
 
 function payroll(
@@ -79,5 +83,54 @@ describe('annual payroll report', () => {
     expect(report.additions).toBe(0);
     expect(report.deductions).toBe(0);
     expect(report.totalPaid).toBe(7_000);
+  });
+});
+
+describe('period payroll report', () => {
+  it('sums every supported component, recorded day and deduction inside the range', () => {
+    const report = createPeriodPayrollReport(
+      [
+        payroll('jan', '2026-01', {
+          saturdayPay: 500,
+          holidayPay: 200,
+          vacationPay: 300,
+          sickPay: 100,
+          employerContributions: 700,
+          otherAddition: 50,
+          additionalPayments: [{ id: 'bonus', description: 'bonus', amount: 150 }],
+          vacationDays: 2,
+          sickDays: 1,
+          paidHolidays: 1,
+          pocketMoney: 100,
+          medicalInsuranceDeduction: 50,
+          housingDeduction: 75,
+          advances: 400,
+          agreedDeduction: 25,
+          total: 8_350,
+        }),
+        payroll('feb', '2026-02', { vacationDays: 1, advances: 200, total: 6_800 }),
+        payroll('outside', '2026-03', { total: 99_999 }),
+      ],
+      '2026-01',
+      '2026-02',
+    );
+
+    expect(report.monthsReported).toBe(2);
+    expect(report.baseSalary).toBe(14_000);
+    expect(report.additionalPayments).toBe(150);
+    expect(report.additions).toBe(2_000);
+    expect(report.deductions).toBe(850);
+    expect(report.calculatedFinalTotal).toBe(15_150);
+    expect(report.vacationDays).toBe(3);
+    expect(report.sickDays).toBe(1);
+    expect(report.paidHolidays).toBe(1);
+    expect(report.advances).toBe(600);
+  });
+
+  it('treats missing legacy fields as zero and reports that limitation', () => {
+    const report = createPeriodPayrollReport([payroll('legacy', '2026-01')], '2026-01', '2026-01');
+    expect(report.recordsWithMissingOptionalFields).toBe(1);
+    expect(report.vacationDays).toBe(0);
+    expect(report.additionalPayments).toBe(0);
   });
 });

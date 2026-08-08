@@ -117,6 +117,10 @@ export function AppShell({ children }: AppShellProps) {
               {label}
             </NavLink>
           ))}
+          <NavLink to={path('/reports')}>
+            <span aria-hidden="true">▤</span>
+            {t('reports.nav')}
+          </NavLink>
         </nav>
         <div className="sidebar-help">
           <strong>הכול בשליטה</strong>
@@ -243,6 +247,10 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
         {mobileMoreOpen ? (
           <nav id="mobile-more-menu" className="mobile-more-menu" aria-label="ניווט נוסף">
+            <NavLink to={path('/reports')} onClick={() => setMobileMoreOpen(false)}>
+              <span aria-hidden="true">▤</span>
+              {t('reports.nav')}
+            </NavLink>
             {mobileMoreNav.map(([to, icon, label]) => (
               <NavLink key={to} to={path(to)} onClick={() => setMobileMoreOpen(false)}>
                 <span aria-hidden="true">{icon}</span>

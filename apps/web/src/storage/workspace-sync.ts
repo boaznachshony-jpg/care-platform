@@ -14,11 +14,13 @@ export const WORKSPACE_SYNC_CHANGED = 'caredesk:workspace-sync-changed';
 
 const WORKSPACE_OWNER_KEY = 'caredesk.workspace-owner.v1';
 const WORKSPACE_META_PREFIX = 'caredesk.workspace-sync.v1.';
+const WORKSPACE_BACKUP_PREFIX = 'caredesk.workspace-backup.v1.';
 const MVP_STORAGE_PREFIX = 'caredesk.mvp.';
 
 interface WorkspaceSyncMeta {
   version: number;
   dirty: boolean;
+  fingerprint: string;
 }
 
 let state: WorkspaceSyncState = 'disabled';
@@ -53,9 +55,10 @@ function readMeta(userId: string): WorkspaceSyncMeta {
       version:
         Number.isInteger(parsed.version) && (parsed.version ?? -1) >= 0 ? parsed.version! : 0,
       dirty: parsed.dirty === true,
+      fingerprint: typeof parsed.fingerprint === 'string' ? parsed.fingerprint : '',
     };
   } catch {
-    return { version: 0, dirty: false };
+    return { version: 0, dirty: false, fingerprint: '' };
   }
 }
 
@@ -63,8 +66,98 @@ function writeMeta(): void {
   if (!activeUserId) return;
   window.localStorage.setItem(
     metaKey(activeUserId),
-    JSON.stringify({ version: remoteVersion, dirty }),
+    JSON.stringify({ version: remoteVersion, dirty, fingerprint: remoteFingerprint }),
   );
+}
+
+function backupKey(userId: string): string {
+  return `${WORKSPACE_BACKUP_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+/** Keeps the previous encrypted-at-rest cache recoverable before hydration replaces it. */
+function backupEncryptedWorkspace(userId: string): void {
+  const entries = Object.fromEntries(
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
+      .map((key) => [key, window.localStorage.getItem(key)]),
+  );
+  if (Object.keys(entries).length > 0) {
+    window.localStorage.setItem(
+      backupKey(userId),
+      JSON.stringify({ schemaVersion: 1, createdAt: new Date().toISOString(), entries }),
+    );
+  }
+}
+
+interface EncryptedWorkspaceBackup {
+  schemaVersion: 1;
+  createdAt: string;
+  entries: Record<string, string>;
+}
+
+function readEncryptedWorkspaceBackup(userId: string): EncryptedWorkspaceBackup | null {
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(backupKey(userId)) ?? 'null',
+    ) as Partial<EncryptedWorkspaceBackup> | null;
+    if (
+      parsed?.schemaVersion !== 1 ||
+      typeof parsed.createdAt !== 'string' ||
+      !parsed.entries ||
+      Object.entries(parsed.entries).some(
+        ([key, value]) => !key.startsWith(MVP_STORAGE_PREFIX) || typeof value !== 'string',
+      )
+    ) {
+      return null;
+    }
+    return parsed as EncryptedWorkspaceBackup;
+  } catch {
+    return null;
+  }
+}
+
+export function hasWorkspaceRecoverySnapshot(userId: string): boolean {
+  return Boolean(userId) && readEncryptedWorkspaceBackup(userId) !== null;
+}
+
+/**
+ * Incident-only recovery for the currently authenticated account. The current
+ * encrypted cache becomes the new rollback snapshot before restoration.
+ */
+export function restoreWorkspaceRecoverySnapshot(userId: string): boolean {
+  if (!userId || userId !== activeUserId) return false;
+  const recovery = readEncryptedWorkspaceBackup(userId);
+  if (!recovery) return false;
+  backupEncryptedWorkspace(userId);
+  applyingRemote = true;
+  try {
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
+      .forEach((key) => window.localStorage.removeItem(key));
+    Object.entries(recovery.entries).forEach(([key, value]) =>
+      window.localStorage.setItem(key, value),
+    );
+    dirty = true;
+    writeMeta();
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    setState('error');
+    return true;
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+function assertValidRemoteSnapshot(snapshot: MvpWorkspaceSnapshot): void {
+  if (
+    snapshot.schemaVersion !== 1 ||
+    !snapshot.entries ||
+    typeof snapshot.entries !== 'object' ||
+    Object.entries(snapshot.entries).some(
+      ([key, value]) => !key.startsWith(MVP_STORAGE_PREFIX) || typeof value !== 'string',
+    )
+  ) {
+    throw new Error('WORKSPACE_SCHEMA_UNSUPPORTED');
+  }
 }
 
 function localWorkspaceIsReadable(): boolean {
@@ -235,6 +328,7 @@ function detachWorkspaceSync(): void {
 }
 
 function applyRemoteSnapshot(snapshot: MvpWorkspaceSnapshot): void {
+  if (activeUserId) backupEncryptedWorkspace(activeUserId);
   applyingRemote = true;
   try {
     replaceMvpWorkspace(snapshot);
@@ -250,6 +344,26 @@ async function hydrateWorkspace(
 ): Promise<void> {
   const response = await getWorkspace();
   if (!isCurrentSync(userId, generation)) return;
+  assertValidRemoteSnapshot(response.snapshot);
+
+  const localSnapshot = captureMvpWorkspace();
+  const localHasData = Object.keys(localSnapshot.entries).length > 0;
+  const remoteHasData = Object.keys(response.snapshot.entries).length > 0;
+  if (hasUsableCache && response.version < remoteVersion) {
+    throw new Error('WORKSPACE_VERSION_ROLLBACK');
+  }
+  if (
+    hasUsableCache &&
+    localHasData &&
+    (!remoteHasData ||
+      (response.version === remoteVersion &&
+        remoteFingerprint !== '' &&
+        fingerprint(response.snapshot) !== remoteFingerprint))
+  ) {
+    dirty = true;
+    writeMeta();
+    throw new Error('WORKSPACE_SUSPICIOUS_REMOTE');
+  }
 
   if (hasUsableCache && dirty) {
     // Preserve a snapshot that failed to save on a previous visit. It can be
@@ -288,6 +402,7 @@ export async function startWorkspaceSync(userId: string): Promise<void> {
     const meta = readMeta(userId);
     remoteVersion = meta.version;
     dirty = meta.dirty;
+    remoteFingerprint = meta.fingerprint;
   } else {
     clearMvpWorkspace();
     await clearLocalDocumentFileCache();

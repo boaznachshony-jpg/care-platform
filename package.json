@@ -23,6 +23,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "test:a11y": "pnpm --filter @caredesk/web test:a11y",
+    "test:data-safety": "pnpm --filter @caredesk/web exec vitest run src/storage/workspace-sync.test.ts src/storage/mvp-storage.test.ts src/auth/auth-context.test.ts",
     "build": "pnpm -r --if-present build",
     "check": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test"
   },

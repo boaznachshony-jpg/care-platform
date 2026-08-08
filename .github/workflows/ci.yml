@@ -43,6 +43,8 @@ jobs:
         run: pnpm typecheck
       - name: Unit and integration tests
         run: pnpm test
+      - name: Employer data preservation gate
+        run: pnpm test:data-safety
 
   e2e:
     name: Playwright end-to-end
