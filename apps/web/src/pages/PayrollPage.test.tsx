@@ -7,7 +7,34 @@ import {
   saveMvpPayroll,
   saveMvpProfile,
 } from '../storage/mvp-storage.js';
-import { PayrollPage } from './PayrollPage.js';
+import { monthsInRange, nextSequencePayrollValues, PayrollPage } from './PayrollPage.js';
+
+describe('PayrollPage retroactive sequence helpers', () => {
+  it('creates an inclusive month range across a year boundary', () => {
+    expect(monthsInRange('2025-11', '2026-02')).toEqual([
+      '2025-11',
+      '2025-12',
+      '2026-01',
+      '2026-02',
+    ]);
+    expect(monthsInRange('2026-03', '2026-01')).toEqual([]);
+  });
+
+  it('copies only fixed payroll values into the next month', () => {
+    expect(nextSequencePayrollValues('2026-04', '7000', '450')).toMatchObject({
+      month: '2026-04',
+      baseSalary: '7000',
+      saturdayRate: '450',
+      workDays: '0',
+      paidSaturdays: '0',
+      holidayPay: '0',
+      pocketMoney: '0',
+      otherAddition: '0',
+      advances: '0',
+      agreedDeduction: '0',
+    });
+  });
+});
 
 describe('PayrollPage annual report', () => {
   beforeEach(() => {
@@ -61,6 +88,21 @@ describe('PayrollPage annual report', () => {
         savedAt: '2025-12-31T12:00:00.000Z',
       },
     ]);
+  });
+
+  it('starts a retroactive sequence at the first missing month and skips existing months', () => {
+    render(<PayrollPage />);
+
+    fireEvent.change(screen.getByLabelText('חודש התחלה לרצף'), { target: { value: '2026-01' } });
+    fireEvent.change(screen.getByLabelText('חודש סיום לרצף'), { target: { value: '2026-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'התחלת הזנת רצף' }));
+
+    expect(screen.getByText('חודש 1 מתוך 1')).toBeInTheDocument();
+    expect(screen.getByText('כעת מזינים: 2026-03')).toBeInTheDocument();
+    expect(screen.getByText('2 חודשים קיימים ידולגו.')).toBeInTheDocument();
+    const payrollMonthInput = document.querySelector('.wizard-content input[type="month"]');
+    expect(payrollMonthInput).toHaveValue('2026-03');
+    expect(payrollMonthInput).toBeDisabled();
   });
 
   it('shows a reconciled report and changes the monthly detail with the selected year', () => {

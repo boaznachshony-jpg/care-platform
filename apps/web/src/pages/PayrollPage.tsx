@@ -22,6 +22,32 @@ const MAX_PAYROLL_AMOUNT = 10_000_000;
 const MAX_PAID_SATURDAYS = 6;
 const MAX_PAID_HOLIDAYS = 10;
 
+interface PayrollSequenceState {
+  startMonth: string;
+  endMonth: string;
+  pendingMonths: string[];
+  skippedMonths: string[];
+  addedMonths: string[];
+}
+
+export function monthsInRange(startMonth: string, endMonth: string): string[] {
+  if (!/^\d{4}-\d{2}$/.test(startMonth) || !/^\d{4}-\d{2}$/.test(endMonth) || startMonth > endMonth)
+    return [];
+  const result: string[] = [];
+  let year = Number(startMonth.slice(0, 4));
+  let month = Number(startMonth.slice(5, 7));
+  const endYear = Number(endMonth.slice(0, 4));
+  const endMonthNumber = Number(endMonth.slice(5, 7));
+  while (year < endYear || (year === endYear && month <= endMonthNumber)) {
+    result.push(`${year}-${String(month).padStart(2, '0')}`);
+    if (++month === 13) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return result;
+}
+
 interface AdditionalPaymentDraft {
   id: string;
   description: string;
@@ -77,6 +103,13 @@ function payrollValues(
     housingDeduction: String(record?.housingDeduction ?? 0),
     advances: String(record?.advances ?? 0),
     agreedDeduction: String(record?.agreedDeduction ?? 0),
+  };
+}
+
+export function nextSequencePayrollValues(month: string, baseSalary: string, saturdayRate: string) {
+  return {
+    ...payrollValues(undefined, numeric(baseSalary), numeric(saturdayRate)),
+    month,
   };
 }
 
@@ -145,6 +178,12 @@ export function PayrollPage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+  const [sequenceDraft, setSequenceDraft] = useState({
+    startMonth: `${currentMonth.slice(0, 4)}-01`,
+    endMonth: currentMonth,
+  });
+  const [sequence, setSequence] = useState<PayrollSequenceState | null>(null);
+  const [sequenceSummary, setSequenceSummary] = useState<PayrollSequenceState | null>(null);
 
   const validationTerms: Partial<Record<keyof typeof values, string[]>> = {
     month: ['חודש שכר'],
@@ -395,6 +434,33 @@ export function PayrollPage() {
     setMessage(record ? 'הרישום השמור נטען לעריכה.' : 'נפתח רישום חדש לחודש שנבחר.');
   }
 
+  function startPayrollSequence() {
+    const months = monthsInRange(sequenceDraft.startMonth, sequenceDraft.endMonth);
+    if (months.length === 0 || sequenceDraft.endMonth > currentMonth) {
+      setMessage('יש לבחור טווח חודשים תקין שאינו מסתיים בעתיד.');
+      return;
+    }
+    const existingMonths = new Set(records.map((record) => record.month));
+    const nextSequence: PayrollSequenceState = {
+      ...sequenceDraft,
+      pendingMonths: months.filter((month) => !existingMonths.has(month)),
+      skippedMonths: months.filter((month) => existingMonths.has(month)),
+      addedMonths: [],
+    };
+    setSequenceSummary(null);
+    const firstMissingMonth = nextSequence.pendingMonths[0];
+    if (!firstMissingMonth) {
+      setSequence(null);
+      setSequenceSummary(nextSequence);
+      setMessage('כל החודשים בטווח כבר קיימים ולכן לא בוצע שינוי.');
+      return;
+    }
+    setSequence(nextSequence);
+    loadMonth(firstMissingMonth);
+    setStep(1);
+    setMessage(`נפתח החודש החסר הראשון, ${firstMissingMonth}. חודשים קיימים יסומנו וידולגו.`);
+  }
+
   function saveSalarySettings(event: React.FormEvent) {
     event.preventDefault();
     const baseSalary = numeric(values.baseSalary);
@@ -407,7 +473,7 @@ export function PayrollPage() {
     setStep(1);
   }
 
-  function savePayroll() {
+  function savePayroll(continueSequence = false) {
     const errorsByStep = [1, 2, 3, 4].map((stepNumber) => ({
       stepNumber,
       errors: validateStep(stepNumber),
@@ -425,6 +491,12 @@ export function PayrollPage() {
       return;
     }
     const existing = records.find((record) => record.month === values.month);
+    if (sequence && existing) {
+      setMessage(
+        'החודש כבר קיים ולא נדרס. עריכת חודש קיים זמינה רק מפעולת העריכה המפורשת בהיסטוריה.',
+      );
+      return;
+    }
     const savedAdditionalPayments: MvpAdditionalPayment[] = additionalPayments
       .filter((payment) => payment.description.trim() || numeric(payment.amount) > 0)
       .map((payment) => ({
@@ -472,6 +544,31 @@ export function PayrollPage() {
     setReportYear(saved.month.slice(0, 4));
     setMessage('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
     setPayrollSaved(true);
+    if (sequence && continueSequence) {
+      const addedMonths = sequence.addedMonths.includes(saved.month)
+        ? sequence.addedMonths
+        : [...sequence.addedMonths, saved.month];
+      const nextMonth = sequence.pendingMonths.find(
+        (month) => month > saved.month && !next.some((record) => record.month === month),
+      );
+      if (!nextMonth) {
+        const completed = { ...sequence, addedMonths };
+        setSequence(null);
+        setSequenceSummary(completed);
+        setStep(1);
+        setMessage(
+          `הרצף הושלם: ${addedMonths.length} חודשים נוספו ו-${sequence.skippedMonths.length} חודשים קיימים דולגו.`,
+        );
+        return;
+      }
+      setSequence({ ...sequence, addedMonths });
+      setValues(nextSequencePayrollValues(nextMonth, values.baseSalary, values.saturdayRate));
+      setAdditionalPayments([]);
+      setValidationErrors([]);
+      setPayrollSaved(false);
+      setStep(1);
+      setMessage(`חודש ${saved.month} נשמר. הועברת לחודש החסר הבא: ${nextMonth}.`);
+    }
   }
 
   function saveExpense(event: React.FormEvent) {
@@ -621,6 +718,73 @@ export function PayrollPage() {
           </ul>
         </div>
       ) : null}
+      <section className="card payroll-sequence-card" aria-labelledby="payroll-sequence-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">הזנה רטרואקטיבית</p>
+            <h2 id="payroll-sequence-title">הוספת רצף חודשים</h2>
+            <p>בחרו טווח. חודשים שכבר נשמרו לא יידרסו, אלא יסומנו וידולגו אוטומטית.</p>
+          </div>
+        </div>
+        <div className="form-grid payroll-sequence-range">
+          <label>
+            חודש התחלה
+            <input
+              type="month"
+              aria-label="חודש התחלה לרצף"
+              max={currentMonth}
+              value={sequenceDraft.startMonth}
+              disabled={Boolean(sequence)}
+              onChange={(event) =>
+                setSequenceDraft((draft) => ({ ...draft, startMonth: event.target.value }))
+              }
+            />
+          </label>
+          <label>
+            חודש סיום
+            <input
+              type="month"
+              aria-label="חודש סיום לרצף"
+              max={currentMonth}
+              value={sequenceDraft.endMonth}
+              disabled={Boolean(sequence)}
+              onChange={(event) =>
+                setSequenceDraft((draft) => ({ ...draft, endMonth: event.target.value }))
+              }
+            />
+          </label>
+        </div>
+        {sequence ? (
+          <div className="info-box payroll-sequence-progress" role="status">
+            <strong>
+              חודש {sequence.addedMonths.length + 1} מתוך {sequence.pendingMonths.length}
+            </strong>
+            <span>כעת מזינים: {values.month}</span>
+            <span>{sequence.skippedMonths.length} חודשים קיימים ידולגו.</span>
+          </div>
+        ) : (
+          <button className="primary-button" type="button" onClick={startPayrollSequence}>
+            התחלת הזנת רצף
+          </button>
+        )}
+        {sequenceSummary ? (
+          <div className="success-box payroll-sequence-summary" role="status">
+            <strong>סיכום הרצף</strong>
+            <span>
+              נוספו:{' '}
+              {sequenceSummary.addedMonths.length
+                ? sequenceSummary.addedMonths.join(', ')
+                : 'לא נוספו חודשים'}
+            </span>
+            <span>
+              דולגו כקיימים:{' '}
+              {sequenceSummary.skippedMonths.length
+                ? sequenceSummary.skippedMonths.join(', ')
+                : 'לא דולגו חודשים'}
+            </span>
+          </div>
+        ) : null}
+      </section>
       <section className="wizard-card">
         <div className="steps">
           {['חודש', 'בסיס ושבתות', 'תוספות', 'קיזוזים', 'סיכום'].map((label, index) => (
@@ -639,6 +803,7 @@ export function PayrollPage() {
                 type="month"
                 aria-label="חודש שכר"
                 value={values.month}
+                disabled={Boolean(sequence)}
                 onChange={(event) => loadMonth(event.target.value)}
               />
               {records.some((record) => record.month === values.month) ? (
@@ -1258,8 +1423,18 @@ export function PayrollPage() {
                     הדפסה / שמירה כ־PDF
                   </button>
                 ) : null}
-                <button className="primary-button" type="button" onClick={savePayroll}>
-                  {payrollSaved ? 'שמירה מחדש' : 'אישור ושמירה'}
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => savePayroll(Boolean(sequence))}
+                >
+                  {sequence
+                    ? sequence.pendingMonths.at(-1) === values.month
+                      ? 'שמירה וסיום הרצף'
+                      : 'שמירה והמשך לחודש הבא'
+                    : payrollSaved
+                      ? 'שמירה מחדש'
+                      : 'אישור ושמירה'}
                 </button>
               </div>
             ) : (

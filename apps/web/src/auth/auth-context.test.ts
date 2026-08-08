@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   startWorkspaceSync: vi.fn(),
   stopWorkspaceSync: vi.fn(),
   getSession: vi.fn(),
+  refreshSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   signInWithPassword: vi.fn(),
   signUp: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('./client.js', () => ({
   getBrowserAuthClient: () => ({
     auth: {
       getSession: mocks.getSession,
+      refreshSession: mocks.refreshSession,
       onAuthStateChange: mocks.onAuthStateChange,
       signInWithPassword: mocks.signInWithPassword,
       signUp: mocks.signUp,
@@ -85,6 +87,8 @@ describe('authentication gate', () => {
     mocks.signOut.mockReset();
     mocks.signOut.mockResolvedValue({ error: null });
     mocks.getSession.mockReset();
+    mocks.refreshSession.mockReset();
+    mocks.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
     mocks.onAuthStateChange.mockReset();
     authStateListener = undefined;
     mocks.onAuthStateChange.mockImplementation((listener) => {
@@ -93,7 +97,10 @@ describe('authentication gate', () => {
     });
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
 
   it('allows an explicit local-only bypass when no provider is configured', () => {
     expect(resolveAuthGateState(false, 'local')).toBe('local-bypass');
@@ -189,7 +196,7 @@ describe('authentication gate', () => {
     expect(screen.queryByText('workspace')).not.toBeInTheDocument();
   });
 
-  it('preserves the same-user cache when auth temporarily reports no session', async () => {
+  it('recovers a temporary null auth event before showing the login screen', async () => {
     mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-a' } } } });
     mocks.canUseCachedWorkspace.mockReturnValue(true);
     mocks.startWorkspaceSync.mockResolvedValue(undefined);
@@ -197,11 +204,57 @@ describe('authentication gate', () => {
     renderProvider();
     expect(await screen.findByText('workspace')).toBeInTheDocument();
 
-    authStateListener?.('SIGNED_OUT', null);
+    vi.useFakeTimers();
+    act(() => authStateListener?.('SIGNED_OUT', null));
+    expect(screen.getByText('loading')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(1_500));
+    vi.useRealTimers();
 
-    await waitFor(() => expect(mocks.flushWorkspaceSync).toHaveBeenCalled());
     expect(mocks.pauseWorkspaceSync).toHaveBeenCalled();
+    expect(mocks.getSession).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('workspace')).toBeInTheDocument();
+    expect(screen.queryByText('login')).not.toBeInTheDocument();
     expect(mocks.stopWorkspaceSync).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the token when persisted state is still empty', async () => {
+    mocks.getSession
+      .mockResolvedValueOnce({ data: { session: { user: { id: 'user-a' } } } })
+      .mockResolvedValueOnce({ data: { session: null } });
+    mocks.refreshSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-a' } } },
+      error: null,
+    });
+    mocks.canUseCachedWorkspace.mockReturnValue(true);
+    mocks.startWorkspaceSync.mockResolvedValue(undefined);
+    renderProvider();
+    expect(await screen.findByText('workspace')).toBeInTheDocument();
+
+    vi.useFakeTimers();
+    act(() => authStateListener?.('TOKEN_REFRESHED', null));
+    await act(() => vi.advanceTimersByTimeAsync(1_500));
+    vi.useRealTimers();
+
+    expect(mocks.refreshSession).toHaveBeenCalledOnce();
+    expect(screen.getByText('workspace')).toBeInTheDocument();
+  });
+
+  it('fails closed after the grace period when session recovery is not valid', async () => {
+    mocks.getSession
+      .mockResolvedValueOnce({ data: { session: { user: { id: 'user-a' } } } })
+      .mockResolvedValueOnce({ data: { session: null } });
+    mocks.canUseCachedWorkspace.mockReturnValue(true);
+    mocks.startWorkspaceSync.mockResolvedValue(undefined);
+    renderProvider();
+    expect(await screen.findByText('workspace')).toBeInTheDocument();
+
+    vi.useFakeTimers();
+    act(() => authStateListener?.('SIGNED_OUT', null));
+    await act(() => vi.advanceTimersByTimeAsync(1_500));
+    vi.useRealTimers();
+
+    expect(mocks.refreshSession).toHaveBeenCalledOnce();
+    expect(screen.getByText('login')).toBeInTheDocument();
   });
 
   it('flushes pending edits before an explicit sign-out clears the cache', async () => {

@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { caregiverCountries, caregiverLanguages, suggestedLanguage } from '../caregiver-options.js';
+import {
+  caregiverCountries,
+  caregiverLanguages,
+  languageAfterCountryChange,
+} from '../caregiver-options.js';
 import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
@@ -379,7 +383,11 @@ export function OnboardingPage() {
                     persist({
                       ...draft,
                       caregiverCountry: country,
-                      caregiverLanguage: draft.caregiverLanguage || suggestedLanguage(country),
+                      caregiverLanguage: languageAfterCountryChange(
+                        draft.caregiverCountry,
+                        country,
+                        draft.caregiverLanguage,
+                      ),
                     });
                   }}
                 >
