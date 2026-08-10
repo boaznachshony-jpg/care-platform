@@ -1,7 +1,10 @@
 # Repository and Specification Gap Analysis
 
-Status: **Updated after authority-document completion**
-Audit date: 2026-07-23
+Status: **Reconciled with the deployed pilot baseline**
+Audit date: 2026-08-10
+
+> Historical findings below are retained for auditability. For current delivery
+> status, read this document together with the root `BUILD_STATUS.md`.
 
 ## Preserved read-only findings
 
@@ -81,7 +84,8 @@ envelope, log redaction, deny-by-default guard); layered packages
 port; design tokens with a drift test; CI with format/lint/typecheck/test/build
 plus secret scanning.
 
-**Milestone 1 (Employment Case Foundation) — partially complete.**
+**Milestone 1 (Employment Case Foundation) — complete for the synthetic-data
+pilot baseline.**
 
 | Capability | State |
 |---|---|
@@ -89,15 +93,40 @@ plus secret scanning.
 | Contacts and organizations on a case | Done, persisted |
 | Tasks (create, complete) | Done, persisted, completion idempotent |
 | Case timeline | Done, persisted, translation-key based |
-| Documents | In progress |
-| Family-member invitations | Not started |
-| Contact channels (editable in UI) | Modelled in schema only |
+| Documents | Done, persisted, with protected storage adapter and UI |
+| Family-member invitations | Done, persisted, with invitation and access UI |
+| Contact channels | Done in case and public/private support experiences |
+| Authentication and workspace recovery | Done |
+| Employer onboarding and workspace switching | Done |
+| Product billing | Done for the configured pilot gateway |
+| Payroll records and printable report | Done; calculations remain non-authoritative pending professional validation |
+| Quarterly national-insurance tracking | Done |
+| Renewal-date follow-up tasks | Done |
 
-**Database.** Migrations 0001–0007 applied to the development Supabase
-project. Tenant isolation is enforced by RLS and verified by a live
-two-tenant isolation check (`pnpm db:rls-test`), which also asserts that RLS
-is *forced* on every tenant-owned table and that the application role cannot
-create tables.
+### Current implementation baseline
+
+The current `main` branch includes migrations `0001` through `0019`, web and API
+applications, domain/application/infrastructure packages, Supabase-backed
+authentication and persistence, billing, family access, documents, support,
+and broad unit/integration/Playwright coverage. Older statements that the
+repository contains only documentation or Milestone 0 shells are historical
+and must not be used to plan new work.
+
+### Highest-priority product gap
+
+The next bounded product gap is the **full Visa Renewal Workflow**. The product
+already captures a renewal date and generates follow-up tasks, but it does not
+yet provide the complete persisted workflow described by the authority pack:
+template/version provenance, step dependencies, RACI/contact assignments,
+evidence capture, completion policy, and synchronized audit/timeline events.
+
+**Database.** The repository now contains migrations `0001` through `0019`.
+The original live two-tenant isolation evidence covered the employment-case
+foundation through migration `0007`; subsequent release work added documents,
+audit, workspace persistence, family access, billing, schema lockdown, and
+self-service account bootstrap. The RLS harness continues to assert that RLS
+is *forced* on tenant-owned tables and that the application role cannot create
+tables.
 
 ### Defects found by verification, not by review
 
