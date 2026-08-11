@@ -40,7 +40,8 @@ function useDelayedStatus(active: boolean, delay = 3000) {
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const { signIn, signUp, requestMagicLink, requestPasswordReset } = useAuth();
+  const { signIn, signUp, resendSignUpConfirmation, requestMagicLink, requestPasswordReset } =
+    useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,6 +50,7 @@ export function LoginPage() {
   const [error, setError] = useState(false);
   const [registrationError, setRegistrationError] = useState<RegistrationValidationError>(null);
   const [confirmationRequired, setConfirmationRequired] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [magicStatus, setMagicStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const submittingRef = useRef(false);
@@ -59,6 +61,7 @@ export function LoginPage() {
     setError(false);
     setRegistrationError(null);
     setConfirmationRequired(false);
+    setResendStatus('idle');
   }
 
   async function submit(event: FormEvent) {
@@ -103,6 +106,16 @@ export function LoginPage() {
     setResetStatus('sending');
     const success = await requestPasswordReset(email.trim());
     setResetStatus(success ? 'sent' : 'error');
+  }
+
+  async function resendConfirmation() {
+    if (!email.trim()) {
+      setResendStatus('error');
+      return;
+    }
+    setResendStatus('sending');
+    const success = await resendSignUpConfirmation(email.trim());
+    setResendStatus(success ? 'sent' : 'error');
   }
 
   async function sendMagicLink() {
@@ -204,9 +217,34 @@ export function LoginPage() {
             </p>
           ) : null}
           {confirmationRequired ? (
-            <p className="auth-success" role="status">
-              {t('auth.registrationConfirmationRequired')}
-            </p>
+            <div className="auth-confirmation-panel">
+              <p className="auth-success" role="status">
+                {t('auth.registrationConfirmationRequired')}
+              </p>
+              <p className="auth-field-help">{t('auth.registrationConfirmationHelp')}</p>
+              <button
+                className="auth-secondary-button"
+                type="button"
+                disabled={submitting || resendStatus === 'sending'}
+                onClick={() => void resendConfirmation()}
+              >
+                {t(
+                  resendStatus === 'sending'
+                    ? 'auth.resendingConfirmation'
+                    : 'auth.resendConfirmation',
+                )}
+              </button>
+              {resendStatus === 'sent' ? (
+                <p className="auth-success" role="status">
+                  {t('auth.confirmationResent')}
+                </p>
+              ) : null}
+              {resendStatus === 'error' ? (
+                <p className="auth-error" role="alert">
+                  {t('auth.confirmationResendError')}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           <button

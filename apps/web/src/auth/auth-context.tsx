@@ -24,6 +24,7 @@ interface AuthContextValue {
   user: User | null;
   signIn(email: string, password: string): Promise<boolean>;
   signUp(email: string, password: string): Promise<'signed-in' | 'confirmation-required' | 'error'>;
+  resendSignUpConfirmation(email: string): Promise<boolean>;
   requestMagicLink(email: string): Promise<boolean>;
   requestPasswordReset(email: string): Promise<boolean>;
   updatePassword(password: string): Promise<boolean>;
@@ -35,6 +36,7 @@ const defaultAuthContext: AuthContextValue = {
   user: null,
   signIn: async () => false,
   signUp: async () => 'error',
+  resendSignUpConfirmation: async () => false,
   requestMagicLink: async () => false,
   requestPasswordReset: async () => false,
   updatePassword: async () => false,
@@ -234,6 +236,17 @@ export function AuthProvider({
         });
         if (error) return 'error';
         return data.session ? 'signed-in' : 'confirmation-required';
+      },
+      async resendSignUpConfirmation(email) {
+        if (!client) return false;
+        const { error } = await client.auth.resend({
+          type: 'signup',
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/app?firstRun=1`,
+          },
+        });
+        return !error;
       },
       async requestMagicLink(email) {
         if (!client) return false;
