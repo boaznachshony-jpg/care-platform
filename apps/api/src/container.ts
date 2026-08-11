@@ -86,6 +86,7 @@ import type { Env } from './env.js';
 import { SupabaseAuthService } from './auth/supabase-auth-service.js';
 import { SupabaseInvitationService } from './auth/supabase-invitation-service.js';
 import { SupabaseDocumentStorage } from './storage/supabase-document-storage.js';
+import { MirroredDocumentStorage } from './storage/mirrored-document-storage.js';
 import { CardcomProductBillingGateway } from './billing/cardcom-gateway.js';
 
 /**
@@ -330,7 +331,7 @@ export function buildContainer(env: Env): Container {
 
   // Object storage is mocked for Milestone 1. Real cloud storage is a separate
   // decision (ADR pending) — the port keeps that swap to one line.
-  const storage =
+  const primaryStorage =
     env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET
       ? new SupabaseDocumentStorage(
           env.SUPABASE_URL,
@@ -338,6 +339,19 @@ export function buildContainer(env: Env): Container {
           env.SUPABASE_STORAGE_BUCKET,
         )
       : new InMemoryDocumentStorage();
+  const storage =
+    env.BACKUP_SUPABASE_URL &&
+    env.BACKUP_SUPABASE_SERVICE_ROLE_KEY &&
+    env.BACKUP_SUPABASE_STORAGE_BUCKET
+      ? new MirroredDocumentStorage(
+          primaryStorage,
+          new SupabaseDocumentStorage(
+            env.BACKUP_SUPABASE_URL,
+            env.BACKUP_SUPABASE_SERVICE_ROLE_KEY,
+            env.BACKUP_SUPABASE_STORAGE_BUCKET,
+          ),
+        )
+      : primaryStorage;
 
   const invitationRedirect =
     env.FAMILY_INVITE_REDIRECT_URL ?? `${env.CORS_ORIGINS.split(',')[0]?.trim()}/app`;

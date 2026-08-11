@@ -31,6 +31,9 @@ const envSchema = z
     SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
+    BACKUP_SUPABASE_URL: z.string().url().optional(),
+    BACKUP_SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+    BACKUP_SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
     FAMILY_INVITE_REDIRECT_URL: z.string().url().optional(),
     // Support delivery is server-only. The destination must never be exposed
     // through a VITE_ variable or rendered into the browser bundle.
@@ -69,6 +72,29 @@ const envSchema = z
         path: ['SUPABASE_STORAGE_BUCKET'],
         message:
           'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_STORAGE_BUCKET must be configured together',
+      });
+    }
+    const backupStorageSettings = [
+      value.BACKUP_SUPABASE_URL,
+      value.BACKUP_SUPABASE_SERVICE_ROLE_KEY,
+      value.BACKUP_SUPABASE_STORAGE_BUCKET,
+    ];
+    if (backupStorageSettings.some(Boolean) && !backupStorageSettings.every(Boolean)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BACKUP_SUPABASE_URL'],
+        message: 'All BACKUP_SUPABASE_* settings must be configured together',
+      });
+    }
+    if (
+      value.NODE_ENV === 'production' &&
+      value.SUPABASE_STORAGE_BUCKET &&
+      !backupStorageSettings.every(Boolean)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BACKUP_SUPABASE_URL'],
+        message: 'Production document storage requires an independent backup destination',
       });
     }
     const supportSettings = [
