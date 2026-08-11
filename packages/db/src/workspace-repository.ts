@@ -103,6 +103,15 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
         [tenantId],
       );
       const row = result.rows[0];
+      if (row && this.encryptionKey && !isEncryptedEnvelope(row.payload)) {
+        const encrypted = encryptPayload(row.payload, row.tenant_id, this.encryptionKey);
+        await client.query(
+          `update tenant_workspace
+              set payload = $2::jsonb
+            where tenant_id = $1 and payload = $3::jsonb`,
+          [row.tenant_id, JSON.stringify(encrypted), JSON.stringify(row.payload)],
+        );
+      }
       return row ? toRecord(row, this.encryptionKey) : null;
     });
   }

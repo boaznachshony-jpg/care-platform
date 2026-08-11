@@ -49,6 +49,25 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ SUPABASE_STORAGE_BUCKET: 'private-documents' })).toThrow();
   });
 
+  it('requires an independent backup whenever production document storage is enabled', () => {
+    const primary = {
+      NODE_ENV: 'production',
+      SUPABASE_URL: 'https://primary.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'publishable-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'primary-server-only',
+      SUPABASE_STORAGE_BUCKET: 'private-documents',
+    };
+    expect(() => loadEnv(primary)).toThrow();
+    expect(
+      loadEnv({
+        ...primary,
+        BACKUP_SUPABASE_URL: 'https://backup.supabase.co',
+        BACKUP_SUPABASE_SERVICE_ROLE_KEY: 'backup-server-only',
+        BACKUP_SUPABASE_STORAGE_BUCKET: 'private-documents-backup',
+      }).BACKUP_SUPABASE_STORAGE_BUCKET,
+    ).toBe('private-documents-backup');
+  });
+
   it('keeps product billing disabled and fully sponsored by default', () => {
     const env = loadEnv({});
     expect(env.BILLING_PROVIDER).toBe('disabled');
