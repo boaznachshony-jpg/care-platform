@@ -5,6 +5,14 @@ import { useAuth } from '../auth/auth-context.js';
 
 export type RegistrationValidationError = 'email' | 'password' | 'confirmation' | null;
 
+function LandingPageLink() {
+  return (
+    <Link className="auth-secondary-button" to="/">
+      חזרה לדף הנחיתה
+    </Link>
+  );
+}
+
 export function validateRegistration(
   email: string,
   password: string,
@@ -266,9 +274,7 @@ export function LoginPage() {
           ) : null}
         </form>
 
-        <Link className="auth-secondary-button" to="/">
-          {t('auth.backToPublicSite')}
-        </Link>
+        <LandingPageLink />
       </section>
     </main>
   );
@@ -333,6 +339,7 @@ export function PasswordRecoveryPage() {
             {submitting ? t('auth.updatingPassword') : t('auth.updatePassword')}
           </button>
         </form>
+        <LandingPageLink />
       </section>
     </main>
   );
@@ -348,6 +355,7 @@ export function AuthConfigurationRequiredPage() {
         </div>
         <h1>{t('auth.configurationRequiredTitle')}</h1>
         <p>{t('auth.configurationRequiredBody')}</p>
+        <LandingPageLink />
       </section>
     </main>
   );
@@ -368,6 +376,7 @@ export function AuthLoadingPage() {
         </div>
         <p>{t(takingLonger ? 'auth.sessionTakingLonger' : 'auth.loadingSecureWorkspace')}</p>
         <small className="auth-loading-help">{t('auth.doNotRefresh')}</small>
+        <LandingPageLink />
       </section>
     </main>
   );
@@ -386,6 +395,7 @@ export function StorageUnavailablePage() {
         <button className="primary-button" type="button" onClick={() => window.location.reload()}>
           {t('auth.retry')}
         </button>
+        <LandingPageLink />
       </section>
     </main>
   );

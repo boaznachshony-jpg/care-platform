@@ -102,14 +102,14 @@ export function AppShell({ children }: AppShellProps) {
         דלג לתוכן
       </a>
       <aside className="sidebar" aria-label="ניווט ראשי">
-        <div className="brand">
+        <Link className="brand brand-home-link" to="/" aria-label="CareDesk — חזרה לדף הנחיתה">
           <span className="brand-mark">C</span>
           <div>
             <strong>CareDesk</strong>
             <small>{RELEASE_LABEL}</small>
             <small>ניהול העסקה ישירה</small>
           </div>
-        </div>
+        </Link>
         <nav className="desktop-nav">
           {nav.map(([to, icon, label]) => (
             <NavLink key={to} to={path(to)} end={to === '/'}>
@@ -128,6 +128,9 @@ export function AppShell({ children }: AppShellProps) {
         <NavLink className="settings-link client-switch-link" to="/app">
           ⇄ החלפת מעסיק
         </NavLink>
+        <Link className="settings-link landing-page-link" to="/">
+          ⌂ חזרה לדף הנחיתה
+        </Link>
       </aside>
       <div className="app-body">
         <header className="topbar">
@@ -252,6 +255,10 @@ export function AppShell({ children }: AppShellProps) {
             <Link to="/app" onClick={() => setMobileMoreOpen(false)}>
               <span aria-hidden="true">⇄</span>
               החלפת מעסיק
+            </Link>
+            <Link to="/" onClick={() => setMobileMoreOpen(false)}>
+              <span aria-hidden="true">⌂</span>
+              חזרה לדף הנחיתה
             </Link>
             {auth.enabled ? (
               <button

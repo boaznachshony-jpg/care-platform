@@ -55,6 +55,22 @@ describe('AppShell text size controls', () => {
     ).toHaveAttribute('href', '/tasks');
   });
 
+  it('always provides a clear route back to the public landing page', () => {
+    render(
+      <MemoryRouter>
+        <AppShell>
+          <p>תוכן בדיקה</p>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'CareDesk — חזרה לדף הנחיתה' })).toHaveAttribute(
+      'href',
+      '/',
+    );
+    expect(screen.getAllByRole('link', { name: /חזרה לדף הנחיתה/ })).toHaveLength(2);
+  });
+
   it('shows the saved employer name and the current date instead of demo text', () => {
     localStorage.setItem(
       'caredesk.mvp.profile.v1',
