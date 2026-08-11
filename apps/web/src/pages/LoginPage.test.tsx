@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const authMocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   signUp: vi.fn(),
+  resendSignUpConfirmation: vi.fn(),
   requestMagicLink: vi.fn(),
   requestPasswordReset: vi.fn(),
   updatePassword: vi.fn(),
@@ -90,6 +91,30 @@ describe('login progress', () => {
 });
 
 describe('registration validation', () => {
+  it('lets an unconfirmed user request a fresh verification email', async () => {
+    authMocks.signUp.mockResolvedValue('confirmation-required');
+    authMocks.resendSignUpConfirmation.mockResolvedValue(true);
+    renderWithProviders(<LoginPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'פתיחת חשבון' }));
+    fireEvent.change(screen.getByLabelText('כתובת דוא״ל (שם המשתמש)'), {
+      target: { value: 'owner@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('סיסמה'), {
+      target: { value: 'a-secure-password' },
+    });
+    fireEvent.change(screen.getByLabelText('אימות הסיסמה החדשה'), {
+      target: { value: 'a-secure-password' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'פתיחת חשבון והמשך' }));
+
+    const resend = await screen.findByRole('button', { name: 'שלחו שוב את הודעת האימות' });
+    fireEvent.click(resend);
+
+    expect(authMocks.resendSignUpConfirmation).toHaveBeenCalledWith('owner@example.test');
+    expect(await screen.findByText(/הודעת אימות חדשה נשלחה/)).toBeInTheDocument();
+  });
+
   it('accepts an email username with matching secure passwords', () => {
     expect(
       validateRegistration('owner@example.test', 'a-secure-password', 'a-secure-password'),

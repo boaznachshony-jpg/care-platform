@@ -98,6 +98,11 @@
     "registrationProgress": "Verifying the details and creating your secure account.",
     "registrationFailed": "The account could not be created. The address may already be registered, or registration may be temporarily unavailable.",
     "registrationConfirmationRequired": "Your account was created. Open the verification email we sent, then you will continue directly to the setup checklist.",
+    "registrationConfirmationHelp": "No email yet? Check your spam folder and wait one minute before requesting another message.",
+    "resendConfirmation": "Resend verification email",
+    "resendingConfirmation": "Sending verification email…",
+    "confirmationResent": "A new verification email was sent. Please check your spam folder too.",
+    "confirmationResendError": "Another message cannot be sent right now. Wait one minute and try again, or contact support.",
     "registrationErrors": {
       "email": "Enter a valid email address.",
       "password": "Choose a password with at least 12 characters.",
