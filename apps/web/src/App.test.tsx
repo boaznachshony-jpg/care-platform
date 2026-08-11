@@ -33,6 +33,8 @@ describe('App', () => {
     expect(screen.getByText('רישום נתוני שכר, מעקב תשלומים ותזכורות')).toBeInTheDocument();
     expect(screen.queryByText('חישובי שכר, סיכומים ותזכורות')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: 'הצטרפות לפיילוט' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'למדריך ההעסקה הישירה' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeInTheDocument();
     expect(screen.queryByText('boaz.nachshony@gmail.com')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'שליחת בקשת עזרה' })).toBeVisible();
