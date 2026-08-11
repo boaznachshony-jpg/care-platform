@@ -246,7 +246,7 @@ export function buildContainer(env: Env): Container {
     // Constitution §19: audit must survive a process restart, so it goes to
     // Postgres whenever a database is configured.
     audit = new PgAuditService(pool);
-    workspaceRepository = new PgWorkspaceRepository(pool);
+    workspaceRepository = new PgWorkspaceRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
     workspaceFileRepository = new PgWorkspaceFileRepository(pool);
     familyMembershipRepository = new PgFamilyMembershipRepository(pool);
     billingRepository = new PgBillingRepository(pool);

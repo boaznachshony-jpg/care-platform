@@ -21,6 +21,10 @@ const envSchema = z
     // from this schema — migrations and provisioning read it directly, and the
     // application process should never hold an administrative credential.
     DATABASE_URL: z.string().optional(),
+    // AES-256-GCM key used to encrypt the complete tenant workspace before it
+    // reaches Postgres. This must be a base64 encoded 32-byte random key and
+    // must be managed by the deployment secret store.
+    WORKSPACE_ENCRYPTION_KEY: z.string().optional(),
     // Supabase publishable credentials are safe to identify the Auth project;
     // they are not an administrative service key. Both are required together.
     SUPABASE_URL: z.string().url().optional(),
@@ -119,6 +123,26 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['BILLING_PROVIDER'],
         message: 'The mock billing provider is forbidden in production',
+      });
+    }
+    if (value.WORKSPACE_ENCRYPTION_KEY) {
+      try {
+        if (Buffer.from(value.WORKSPACE_ENCRYPTION_KEY, 'base64').length !== 32) {
+          throw new Error('invalid length');
+        }
+      } catch {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['WORKSPACE_ENCRYPTION_KEY'],
+          message: 'WORKSPACE_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+        });
+      }
+    }
+    if (value.NODE_ENV === 'production' && value.DATABASE_URL && !value.WORKSPACE_ENCRYPTION_KEY) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['WORKSPACE_ENCRYPTION_KEY'],
+        message: 'WORKSPACE_ENCRYPTION_KEY is required for a production database',
       });
     }
   });
