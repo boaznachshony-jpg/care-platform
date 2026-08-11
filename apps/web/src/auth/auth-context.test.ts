@@ -60,6 +60,15 @@ function SignOutProbe() {
   return createElement('button', { onClick: () => void auth.signOut() }, 'sign out');
 }
 
+function MagicLinkProbe() {
+  const auth = useAuth();
+  return createElement(
+    'button',
+    { onClick: () => void auth.requestMagicLink('owner@example.test') },
+    'send magic link',
+  );
+}
+
 function renderProvider(children: ReactNode = createElement('div', null, 'workspace')) {
   return render(
     createElement(
@@ -88,6 +97,8 @@ describe('authentication gate', () => {
     mocks.stopWorkspaceSync.mockReset();
     mocks.signOut.mockReset();
     mocks.signOut.mockResolvedValue({ error: null });
+    mocks.signInWithOtp.mockReset();
+    mocks.signInWithOtp.mockResolvedValue({ error: null });
     mocks.getSession.mockReset();
     mocks.refreshSession.mockReset();
     mocks.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
@@ -115,6 +126,25 @@ describe('authentication gate', () => {
 
   it('loads the remote session when provider configuration exists', () => {
     expect(resolveAuthGateState(true, 'staging')).toBe('loading');
+  });
+
+  it('returns passwordless first-time entry to client onboarding', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'user-a' } } } });
+    mocks.canUseCachedWorkspace.mockReturnValue(true);
+    mocks.startWorkspaceSync.mockResolvedValue(undefined);
+
+    renderProvider(createElement(MagicLinkProbe));
+    fireEvent.click(await screen.findByRole('button', { name: 'send magic link' }));
+
+    await waitFor(() =>
+      expect(mocks.signInWithOtp).toHaveBeenCalledWith({
+        email: 'owner@example.test',
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: `${window.location.origin}/app?firstRun=1`,
+        },
+      }),
+    );
   });
 
   it('renders a persisted same-user workspace without waiting for remote hydration', async () => {
