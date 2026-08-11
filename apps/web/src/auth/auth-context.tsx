@@ -254,7 +254,11 @@ export function AuthProvider({
           email,
           options: {
             shouldCreateUser: false,
-            emailRedirectTo: `${window.location.origin}/app`,
+            // A passwordless link can also be the first successful entry for
+            // an account whose email was just confirmed. Preserve the same
+            // first-run intent as the sign-up confirmation flow so the user
+            // lands in client onboarding instead of an empty client picker.
+            emailRedirectTo: `${window.location.origin}/app?firstRun=1`,
           },
         });
         return !error;
