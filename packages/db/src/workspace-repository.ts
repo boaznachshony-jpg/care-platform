@@ -4,7 +4,71 @@ import type {
   WorkspaceRepository,
 } from '@caredesk/application';
 import type { Pool } from 'pg';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { withTenant } from './pool.js';
+
+const ENCRYPTED_MARKER = '__caredesk_encrypted_workspace_v1';
+
+interface EncryptedWorkspaceEnvelope extends Record<string, string> {
+  [ENCRYPTED_MARKER]: 'aes-256-gcm';
+  iv: string;
+  ciphertext: string;
+  authTag: string;
+}
+
+function isEncryptedEnvelope(
+  payload: Record<string, string>,
+): payload is EncryptedWorkspaceEnvelope {
+  return payload[ENCRYPTED_MARKER] === 'aes-256-gcm';
+}
+
+function decodeKey(encodedKey: string): Buffer {
+  const key = Buffer.from(encodedKey, 'base64');
+  if (key.length !== 32) throw new Error('Workspace encryption key must contain 32 bytes');
+  return key;
+}
+
+function encryptPayload(
+  payload: Record<string, string>,
+  tenantId: string,
+  encodedKey?: string,
+): Record<string, string> {
+  if (!encodedKey) return payload;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', decodeKey(encodedKey), iv);
+  cipher.setAAD(Buffer.from(tenantId, 'utf8'));
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(payload), 'utf8'),
+    cipher.final(),
+  ]);
+  return {
+    [ENCRYPTED_MARKER]: 'aes-256-gcm',
+    iv: iv.toString('base64'),
+    ciphertext: ciphertext.toString('base64'),
+    authTag: cipher.getAuthTag().toString('base64'),
+  };
+}
+
+function decryptPayload(
+  payload: Record<string, string>,
+  tenantId: string,
+  encodedKey?: string,
+): Record<string, string> {
+  if (!isEncryptedEnvelope(payload)) return payload;
+  if (!encodedKey) throw new Error('Encrypted workspace cannot be read without its encryption key');
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    decodeKey(encodedKey),
+    Buffer.from(payload.iv, 'base64'),
+  );
+  decipher.setAAD(Buffer.from(tenantId, 'utf8'));
+  decipher.setAuthTag(Buffer.from(payload.authTag, 'base64'));
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(payload.ciphertext, 'base64')),
+    decipher.final(),
+  ]).toString('utf8');
+  return JSON.parse(plaintext) as Record<string, string>;
+}
 
 interface WorkspaceRow {
   tenant_id: string;
@@ -14,18 +78,21 @@ interface WorkspaceRow {
   updated_at: Date;
 }
 
-function toRecord(row: WorkspaceRow): WorkspaceRecord {
+function toRecord(row: WorkspaceRow, encodedKey?: string): WorkspaceRecord {
   return {
     tenantId: row.tenant_id,
     schemaVersion: row.schema_version,
-    payload: row.payload,
+    payload: decryptPayload(row.payload, row.tenant_id, encodedKey),
     version: row.version,
     updatedAt: row.updated_at.toISOString(),
   };
 }
 
 export class PgWorkspaceRepository implements WorkspaceRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly encryptionKey?: string,
+  ) {}
 
   async find(tenantId: string): Promise<WorkspaceRecord | null> {
     return withTenant(this.pool, tenantId, async (client) => {
@@ -36,7 +103,7 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
         [tenantId],
       );
       const row = result.rows[0];
-      return row ? toRecord(row) : null;
+      return row ? toRecord(row, this.encryptionKey) : null;
     });
   }
 
@@ -53,7 +120,7 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
               [
                 input.tenantId,
                 input.schemaVersion,
-                JSON.stringify(input.payload),
+                JSON.stringify(encryptPayload(input.payload, input.tenantId, this.encryptionKey)),
                 input.updatedBy,
                 input.updatedAt,
               ],
@@ -70,14 +137,14 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
               [
                 input.tenantId,
                 input.schemaVersion,
-                JSON.stringify(input.payload),
+                JSON.stringify(encryptPayload(input.payload, input.tenantId, this.encryptionKey)),
                 input.expectedVersion,
                 input.updatedBy,
                 input.updatedAt,
               ],
             );
       const row = result.rows[0];
-      return row ? toRecord(row) : null;
+      return row ? toRecord(row, this.encryptionKey) : null;
     });
   }
 }

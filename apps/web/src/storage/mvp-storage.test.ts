@@ -62,6 +62,39 @@ describe('MVP local storage', () => {
     expect(readMvpProfile().employerIdNumber).toBe('123456782');
   });
 
+  it('normalizes and persists the complete client contact profile', () => {
+    history.replaceState({}, '', '/clients/client-profile/settings');
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      recipientName: 'מקבל טיפול לדוגמה',
+      recipientIdNumber: '038-852 562',
+      recipientEmail: ' RECIPIENT@EXAMPLE.TEST ',
+      recipientCity: 'חיפה',
+      recipientHealthFund: 'קופת חולים לדוגמה',
+      caregiverPassportNumber: ' ab-123 456! ',
+      employerName: 'מעסיק לדוגמה',
+      employerIdNumber: '123-456 782',
+      employerPhone: '050-0000000',
+      employerEmail: ' OWNER@EXAMPLE.TEST ',
+      employerRelationship: 'בן משפחה',
+      representativeName: 'נציג לדוגמה',
+      representativePhone: '052-0000000',
+      representativeEmail: ' HELPER@EXAMPLE.TEST ',
+    });
+
+    expect(readMvpProfile()).toMatchObject({
+      recipientIdNumber: '038852562',
+      recipientEmail: 'recipient@example.test',
+      recipientCity: 'חיפה',
+      recipientHealthFund: 'קופת חולים לדוגמה',
+      caregiverPassportNumber: 'AB123456',
+      employerIdNumber: '123456782',
+      employerEmail: 'owner@example.test',
+      employerRelationship: 'בן משפחה',
+      representativeEmail: 'helper@example.test',
+    });
+  });
+
   it('uses employer terminology while recognizing legacy new-record labels', () => {
     const employer = createMvpClient();
     expect(employer.label).toBe('מעסיק חדש');

@@ -4,8 +4,10 @@ import {
   isValidEmail,
   isValidIsoDate,
   isValidOrganizationName,
+  isValidPassportNumber,
   isValidPersonName,
   isValidPhone,
+  normalizePassportNumber,
 } from './onboarding-fields.js';
 
 describe('onboarding field validation', () => {
@@ -39,5 +41,14 @@ describe('onboarding field validation', () => {
     expect(isPositiveMoney(0.01)).toBe(true);
     expect(isPositiveMoney(0)).toBe(false);
     expect(isPositiveMoney(Number.NaN)).toBe(false);
+  });
+
+  it('accepts only alphanumeric caregiver passport numbers', () => {
+    expect(normalizePassportNumber(' ab-12 34! ')).toBe('AB1234');
+    expect(isValidPassportNumber('AB1234567')).toBe(true);
+    expect(isValidPassportNumber('123456789')).toBe(true);
+    expect(isValidPassportNumber('AB-1234')).toBe(false);
+    expect(isValidPassportNumber('1234')).toBe(false);
+    expect(isValidPassportNumber('אב12345')).toBe(false);
   });
 });

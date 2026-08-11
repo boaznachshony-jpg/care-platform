@@ -5,10 +5,21 @@ import { PgWorkspaceRepository } from './workspace-repository.js';
 const TENANT_ID = '10000000-0000-4000-8000-000000000001';
 const USER_ID = '20000000-0000-4000-8000-000000000001';
 const UPDATED_AT = '2026-08-04T18:00:00.000Z';
+const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 
-function fakePool(workspaceRows: Array<Record<string, unknown>>) {
-  const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+function fakePool(workspaceRows: Array<Record<string, unknown>>, echoSavedPayload = false) {
+  const query = vi.fn(async (sql: string, values?: unknown[]) => {
     if (sql.includes('insert into tenant_workspace') || sql.includes('update tenant_workspace')) {
+      if (echoSavedPayload && values) {
+        return {
+          rows: [
+            {
+              ...workspaceRow(1),
+              payload: JSON.parse(String(values[2])) as Record<string, string>,
+            },
+          ],
+        };
+      }
       return { rows: workspaceRows };
     }
     return { rows: [] };
@@ -100,5 +111,31 @@ describe('PgWorkspaceRepository.save', () => {
       }),
     ).resolves.toBeNull();
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('commit');
+  });
+
+  it('encrypts sensitive workspace entries before sending them to Postgres', async () => {
+    const db = fakePool([workspaceRow(1)], true);
+    const repository = new PgWorkspaceRepository(db.pool, ENCRYPTION_KEY);
+
+    const saved = await repository.save({
+      tenantId: TENANT_ID,
+      schemaVersion: 1,
+      payload: { 'caredesk.mvp.clients.v1': '[{"identityNumber":"123456782"}]' },
+      expectedVersion: 0,
+      updatedBy: USER_ID,
+      updatedAt: UPDATED_AT,
+    });
+
+    const encoded = String(db.query.mock.calls[3]?.[1]?.[2]);
+    const stored = JSON.parse(encoded) as Record<string, string>;
+    expect(stored.__caredesk_encrypted_workspace_v1).toBe('aes-256-gcm');
+    expect(stored.iv).toBeTruthy();
+    expect(stored.authTag).toBeTruthy();
+    expect(stored.ciphertext).toBeTruthy();
+    expect(encoded).not.toContain('identityNumber');
+    expect(encoded).not.toContain('123456782');
+    expect(saved?.payload).toEqual({
+      'caredesk.mvp.clients.v1': '[{"identityNumber":"123456782"}]',
+    });
   });
 });

@@ -9,6 +9,26 @@ describe('loadEnv', () => {
     expect(env.AI_PROVIDER).toBe('mock');
   });
 
+  it('requires a valid workspace encryption key for a production database', () => {
+    expect(() =>
+      loadEnv({ NODE_ENV: 'production', DATABASE_URL: 'postgres://example.invalid/db' }),
+    ).toThrow();
+    expect(() =>
+      loadEnv({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgres://example.invalid/db',
+        WORKSPACE_ENCRYPTION_KEY: 'not-a-key',
+      }),
+    ).toThrow();
+    expect(
+      loadEnv({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgres://example.invalid/db',
+        WORKSPACE_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
+      }).WORKSPACE_ENCRYPTION_KEY,
+    ).toBeTruthy();
+  });
+
   it('rejects an AI_PROVIDER value outside the approved set', () => {
     expect(() => loadEnv({ AI_PROVIDER: 'some-other-vendor' })).toThrow();
   });
