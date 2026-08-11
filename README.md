@@ -189,5 +189,13 @@ be removed only in a separate approved maintenance change.
 
 ## Next milestone
 
-Follow [Milestone 0 – Repository Foundation](docs/architecture/repository-bootstrap-plan.md).
-Do not implement product features before its quality gates pass.
+Milestone 0 is complete and the pilot application is already deployed. The next
+product slice is **Milestone 2 — Visa Renewal Workflow**: turn the existing visa
+renewal date and generated follow-up tasks into a persisted, auditable workflow
+with explicit ownership, contact guidance, completion evidence, and timeline
+events.
+
+Before starting that slice, use [BUILD_STATUS.md](BUILD_STATUS.md) and the
+[Gap Analysis](docs/product/gap-analysis.md) as the current recovery baseline.
+Continue to use synthetic data until every blocking gate listed there has an
+approved owner and evidence.
