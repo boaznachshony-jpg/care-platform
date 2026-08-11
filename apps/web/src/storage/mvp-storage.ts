@@ -27,6 +27,7 @@ export interface MvpProfile {
   recipientCareLevel: string;
   recipientNationalInsuranceCaseNumber: string;
   caregiverName: string;
+  caregiverPassportNumber: string;
   caregiverCountry: string;
   caregiverLanguage: string;
   employmentStartDate: string;
@@ -96,6 +97,7 @@ export const emptyMvpProfile: MvpProfile = {
   recipientCareLevel: '',
   recipientNationalInsuranceCaseNumber: '',
   caregiverName: '',
+  caregiverPassportNumber: '',
   caregiverCountry: '',
   caregiverLanguage: '',
   employmentStartDate: '',
@@ -310,6 +312,13 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
         typeof currentSaved.recipientIdNumber === 'string'
           ? currentSaved.recipientIdNumber.replace(/\D/g, '').slice(0, 9)
           : '',
+      caregiverPassportNumber:
+        typeof currentSaved.caregiverPassportNumber === 'string'
+          ? currentSaved.caregiverPassportNumber
+              .replace(/[^a-zA-Z0-9]/g, '')
+              .toUpperCase()
+              .slice(0, 20)
+          : '',
       visaRenewalDate,
     };
   } catch {
@@ -330,6 +339,10 @@ export function saveMvpProfile(profile: MvpProfile): void {
     employerEmail: profile.employerEmail.trim().toLowerCase(),
     recipientIdNumber: profile.recipientIdNumber.replace(/\D/g, '').slice(0, 9),
     recipientEmail: profile.recipientEmail.trim().toLowerCase(),
+    caregiverPassportNumber: profile.caregiverPassportNumber
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase()
+      .slice(0, 20),
     representativeEmail: profile.representativeEmail.trim().toLowerCase(),
   };
   writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(normalizedProfile));

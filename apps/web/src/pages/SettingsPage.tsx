@@ -9,8 +9,10 @@ import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.j
 import {
   isValidEmail,
   isValidIsoDate,
+  isValidPassportNumber,
   isValidPersonName,
   isValidPhone,
+  normalizePassportNumber,
 } from '../validation/onboarding-fields.js';
 
 export function SettingsPage() {
@@ -42,6 +44,7 @@ export function SettingsPage() {
     isValidPersonName(draft.employerName) &&
     isValidPhone(draft.employerPhone) &&
     (!draft.employerEmail || isValidEmail(draft.employerEmail)) &&
+    (!draft.caregiverPassportNumber || isValidPassportNumber(draft.caregiverPassportNumber)) &&
     representativeIsValid;
   const profileIsValid = employerIdIsValid && recipientIdIsValid && contactDetailsAreValid;
 
@@ -113,6 +116,7 @@ export function SettingsPage() {
             <label>
               {t('profile.recipientIdNumber')}
               <input
+                id="settings-recipient-id"
                 dir="ltr"
                 type="text"
                 inputMode="numeric"
@@ -231,6 +235,7 @@ export function SettingsPage() {
           <label>
             מספר תעודת זהות
             <input
+              id="settings-employer-id"
               dir="ltr"
               type="text"
               inputMode="numeric"
@@ -263,6 +268,7 @@ export function SettingsPage() {
           <label>
             {t('profile.phone')}
             <input
+              id="settings-employer-phone"
               dir="ltr"
               type="tel"
               value={draft.employerPhone}
@@ -319,6 +325,72 @@ export function SettingsPage() {
           </div>
         </section>
         <section className="card readable-form">
+          <h2>{t('settings.caregiver')}</h2>
+          <div className="form-grid two-columns">
+            <label>
+              {t('profile.caregiverName')}
+              <input
+                value={draft.caregiverName}
+                onChange={(event) => setDraft({ ...draft, caregiverName: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.caregiverPassportNumber')}
+              <input
+                dir="ltr"
+                type="text"
+                inputMode="text"
+                pattern="[A-Za-z0-9]*"
+                autoComplete="off"
+                maxLength={20}
+                value={draft.caregiverPassportNumber}
+                aria-invalid={
+                  Boolean(draft.caregiverPassportNumber) &&
+                  !isValidPassportNumber(draft.caregiverPassportNumber)
+                }
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    caregiverPassportNumber: normalizePassportNumber(event.target.value),
+                  })
+                }
+              />
+              <small>{t('profile.caregiverPassportHelp')}</small>
+              {draft.caregiverPassportNumber &&
+              !isValidPassportNumber(draft.caregiverPassportNumber) ? (
+                <span className="field-error" role="alert">
+                  {t('profile.caregiverPassportError')}
+                </span>
+              ) : null}
+            </label>
+            <label>
+              {t('profile.caregiverCountry')}
+              <input
+                value={draft.caregiverCountry}
+                onChange={(event) => setDraft({ ...draft, caregiverCountry: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.caregiverLanguage')}
+              <input
+                value={draft.caregiverLanguage}
+                onChange={(event) => setDraft({ ...draft, caregiverLanguage: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.employmentStartDate')}
+              <input
+                dir="ltr"
+                type="date"
+                value={draft.employmentStartDate}
+                onChange={(event) =>
+                  setDraft({ ...draft, employmentStartDate: event.target.value })
+                }
+              />
+            </label>
+          </div>
+        </section>
+        <section className="card readable-form">
           <h2>{t('settings.representative')}</h2>
           <p>{t('familyAccess.contactDisclaimer')}</p>
           <label>
@@ -331,6 +403,7 @@ export function SettingsPage() {
           <label>
             {t('profile.phone')}
             <input
+              id="settings-representative-phone"
               dir="ltr"
               type="tel"
               value={draft.representativePhone}

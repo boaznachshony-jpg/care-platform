@@ -232,13 +232,14 @@ test.describe('launch readiness interactions', () => {
     await page.goto('/settings');
 
     await page.getByLabel('שם המעסיק').fill('מעסיק מעודכן להשקה');
-    await page.getByLabel('מספר תעודת זהות').fill('123');
+    await page.locator('#settings-employer-id').fill('123');
     await expect(page.getByRole('alert')).toContainText('אינו תקין');
     await expect(page.getByRole('button', { name: 'שמירת השינויים' })).toBeDisabled();
-    await page.getByLabel('מספר תעודת זהות').fill('123456782');
-    await page.getByLabel('מספר טלפון').first().fill('0507654321');
+    await page.locator('#settings-employer-id').fill('123456782');
+    await page.locator('#settings-employer-phone').fill('0507654321');
+    await page.getByLabel(/מספר דרכון של המטפל/).fill('AB1234567');
     await page.getByLabel('שם הנציג המורשה').fill('נציג מעודכן');
-    await page.getByLabel('מספר טלפון').last().fill('0527654321');
+    await page.locator('#settings-representative-phone').fill('0527654321');
 
     const masterSwitch = page.getByRole('checkbox', { name: 'הפעלת כל ההתראות' });
     await masterSwitch.uncheck();
@@ -260,9 +261,10 @@ test.describe('launch readiness interactions', () => {
 
     await page.reload();
     await expect(page.getByLabel('שם המעסיק')).toHaveValue('מעסיק מעודכן להשקה');
-    await expect(page.getByLabel('מספר טלפון').first()).toHaveValue('0507654321');
+    await expect(page.locator('#settings-employer-phone')).toHaveValue('0507654321');
+    await expect(page.getByLabel(/מספר דרכון של המטפל/)).toHaveValue('AB1234567');
     await expect(page.getByLabel('שם הנציג המורשה')).toHaveValue('נציג מעודכן');
-    await expect(page.getByLabel('מספר טלפון').last()).toHaveValue('0527654321');
+    await expect(page.locator('#settings-representative-phone')).toHaveValue('0527654321');
     await expect(page.getByLabel('כמה זמן מראש להזכיר?')).toHaveValue('30');
     await expect(page.getByLabel('תחילת שעות שקטות')).toHaveValue('22:30');
     await expect(page.getByLabel('סיום שעות שקטות')).toHaveValue('07:15');

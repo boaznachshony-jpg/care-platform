@@ -48,6 +48,9 @@ describe('SettingsPage complete client profile', () => {
     fireEvent.change(screen.getAllByLabelText('Relationship to care recipient')[0]!, {
       target: { value: 'Family member' },
     });
+    fireEvent.change(screen.getByLabelText(/^Caregiver passport number/), {
+      target: { value: 'ab-123 456' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(readMvpProfile()).toMatchObject({
@@ -55,6 +58,7 @@ describe('SettingsPage complete client profile', () => {
       recipientHealthFund: 'Sample Health Fund',
       recipientEmail: 'recipient@example.test',
       employerRelationship: 'Family member',
+      caregiverPassportNumber: 'AB123456',
     });
     expect(screen.getByText('Changes saved successfully')).toBeVisible();
   });
@@ -67,6 +71,20 @@ describe('SettingsPage complete client profile', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('keeps Israeli IDs numeric and caregiver passports alphanumeric', async () => {
+    await renderPage();
+
+    fireEvent.change(screen.getByLabelText('Care recipient ID number'), {
+      target: { value: 'AB-038 852 562' },
+    });
+    fireEvent.change(screen.getByLabelText(/^Caregiver passport number/), {
+      target: { value: 'ab-123 456!' },
+    });
+
+    expect(screen.getByLabelText('Care recipient ID number')).toHaveValue('038852562');
+    expect(screen.getByLabelText(/^Caregiver passport number/)).toHaveValue('AB123456');
   });
 
   it('shows the synthetic-data safety notice', async () => {

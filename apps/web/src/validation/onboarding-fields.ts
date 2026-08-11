@@ -38,6 +38,17 @@ export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized);
 }
 
+export function normalizePassportNumber(value: string): string {
+  return value
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 20);
+}
+
+export function isValidPassportNumber(value: string): boolean {
+  return /^[A-Z0-9]{5,20}$/.test(value.trim().toUpperCase());
+}
+
 export function isValidIsoDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
