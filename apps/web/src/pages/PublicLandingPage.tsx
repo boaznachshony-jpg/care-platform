@@ -175,11 +175,7 @@ export function PublicLandingPage() {
                 <a className="public-primary-action" href={signupUrl}>
                   {t('public.hero.signup')}
                 </a>
-              ) : (
-                <a className="public-primary-action" href="#pilot">
-                  {t('public.hero.pilot')}
-                </a>
-              )}
+              ) : null}
               <Link className="public-secondary-action" to="/guide/direct-caregiver-employment">
                 {t('public.hero.guide')}
               </Link>
