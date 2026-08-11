@@ -10,13 +10,30 @@ export interface MvpProfile {
   employerName: string;
   employerIdNumber: string;
   employerPhone: string;
+  employerEmail: string;
+  employerRelationship: string;
+  employerAddress: string;
+  employerCity: string;
+  employerPostalCode: string;
   recipientName: string;
+  recipientIdNumber: string;
+  recipientBirthDate: string;
+  recipientPhone: string;
+  recipientEmail: string;
+  recipientAddress: string;
+  recipientCity: string;
+  recipientPostalCode: string;
+  recipientHealthFund: string;
+  recipientCareLevel: string;
+  recipientNationalInsuranceCaseNumber: string;
   caregiverName: string;
   caregiverCountry: string;
   caregiverLanguage: string;
   employmentStartDate: string;
   representativeName: string;
   representativePhone: string;
+  representativeEmail: string;
+  representativeRelationship: string;
   licensedBureauName: string;
   licensedBureauRegistrationNumber: string;
   licensedBureauContactName: string;
@@ -62,13 +79,30 @@ export const emptyMvpProfile: MvpProfile = {
   employerName: '',
   employerIdNumber: '',
   employerPhone: '',
+  employerEmail: '',
+  employerRelationship: '',
+  employerAddress: '',
+  employerCity: '',
+  employerPostalCode: '',
   recipientName: '',
+  recipientIdNumber: '',
+  recipientBirthDate: '',
+  recipientPhone: '',
+  recipientEmail: '',
+  recipientAddress: '',
+  recipientCity: '',
+  recipientPostalCode: '',
+  recipientHealthFund: '',
+  recipientCareLevel: '',
+  recipientNationalInsuranceCaseNumber: '',
   caregiverName: '',
   caregiverCountry: '',
   caregiverLanguage: '',
   employmentStartDate: '',
   representativeName: '',
   representativePhone: '',
+  representativeEmail: '',
+  representativeRelationship: '',
   licensedBureauName: '',
   licensedBureauRegistrationNumber: '',
   licensedBureauContactName: '',
@@ -272,6 +306,10 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
         typeof currentSaved.employerIdNumber === 'string'
           ? currentSaved.employerIdNumber.replace(/\D/g, '').slice(0, 9)
           : '',
+      recipientIdNumber:
+        typeof currentSaved.recipientIdNumber === 'string'
+          ? currentSaved.recipientIdNumber.replace(/\D/g, '').slice(0, 9)
+          : '',
       visaRenewalDate,
     };
   } catch {
@@ -289,6 +327,10 @@ export function saveMvpProfile(profile: MvpProfile): void {
   const normalizedProfile = {
     ...profile,
     employerIdNumber: profile.employerIdNumber.replace(/\D/g, '').slice(0, 9),
+    employerEmail: profile.employerEmail.trim().toLowerCase(),
+    recipientIdNumber: profile.recipientIdNumber.replace(/\D/g, '').slice(0, 9),
+    recipientEmail: profile.recipientEmail.trim().toLowerCase(),
+    representativeEmail: profile.representativeEmail.trim().toLowerCase(),
   };
   writeBusinessItem(scopedKey(STORAGE_KEY, clientId), JSON.stringify(normalizedProfile));
   if (clientId) {

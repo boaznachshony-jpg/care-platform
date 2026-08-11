@@ -6,6 +6,12 @@ import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { ReminderLeadDays } from '../storage/mvp-storage.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
+import {
+  isValidEmail,
+  isValidIsoDate,
+  isValidPersonName,
+  isValidPhone,
+} from '../validation/onboarding-fields.js';
 
 export function SettingsPage() {
   const path = useClientPath();
@@ -15,6 +21,29 @@ export function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [notificationResult, setNotificationResult] = useState('');
   const employerIdIsValid = isValidIsraeliId(draft.employerIdNumber);
+  const recipientIdIsValid =
+    draft.recipientIdNumber.length === 0 || isValidIsraeliId(draft.recipientIdNumber);
+  const representativeHasData = Boolean(
+    draft.representativeName ||
+    draft.representativePhone ||
+    draft.representativeEmail ||
+    draft.representativeRelationship,
+  );
+  const representativeIsValid =
+    !representativeHasData ||
+    (isValidPersonName(draft.representativeName) &&
+      isValidPhone(draft.representativePhone) &&
+      (!draft.representativeEmail || isValidEmail(draft.representativeEmail)));
+  const contactDetailsAreValid =
+    isValidPersonName(draft.recipientName) &&
+    (!draft.recipientBirthDate || isValidIsoDate(draft.recipientBirthDate)) &&
+    (!draft.recipientPhone || isValidPhone(draft.recipientPhone)) &&
+    (!draft.recipientEmail || isValidEmail(draft.recipientEmail)) &&
+    isValidPersonName(draft.employerName) &&
+    isValidPhone(draft.employerPhone) &&
+    (!draft.employerEmail || isValidEmail(draft.employerEmail)) &&
+    representativeIsValid;
+  const profileIsValid = employerIdIsValid && recipientIdIsValid && contactDetailsAreValid;
 
   useEffect(() => {
     setSaved(false);
@@ -60,11 +89,135 @@ export function SettingsPage() {
         className="settings-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!employerIdIsValid) return;
+          if (!profileIsValid) return;
           setProfile(draft);
           setSaved(true);
         }}
       >
+        <section className="card readable-form" aria-labelledby="client-profile-safety-title">
+          <h2 id="client-profile-safety-title">{t('settings.dataSafetyTitle')}</h2>
+          <p>{t('settings.dataSafetyBody')}</p>
+        </section>
+        <section className="card readable-form">
+          <h2>{t('settings.recipient')}</h2>
+          <div className="form-grid two-columns">
+            <label>
+              {t('profile.recipientName')}
+              <input
+                autoComplete="name"
+                value={draft.recipientName}
+                required
+                onChange={(event) => setDraft({ ...draft, recipientName: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.recipientIdNumber')}
+              <input
+                dir="ltr"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                value={draft.recipientIdNumber}
+                aria-invalid={!recipientIdIsValid}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    recipientIdNumber: normalizeIsraeliId(event.target.value),
+                  })
+                }
+              />
+              {!recipientIdIsValid ? (
+                <span className="field-error" role="alert">
+                  {t('profile.idError')}
+                </span>
+              ) : null}
+            </label>
+            <label>
+              {t('profile.birthDate')}
+              <input
+                dir="ltr"
+                type="date"
+                value={draft.recipientBirthDate}
+                onChange={(event) => setDraft({ ...draft, recipientBirthDate: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.phone')}
+              <input
+                dir="ltr"
+                type="tel"
+                autoComplete="tel"
+                value={draft.recipientPhone}
+                onChange={(event) => setDraft({ ...draft, recipientPhone: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.email')}
+              <input
+                dir="ltr"
+                type="email"
+                autoComplete="email"
+                value={draft.recipientEmail}
+                onChange={(event) => setDraft({ ...draft, recipientEmail: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.healthFund')}
+              <input
+                value={draft.recipientHealthFund}
+                onChange={(event) =>
+                  setDraft({ ...draft, recipientHealthFund: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {t('profile.careLevel')}
+              <input
+                value={draft.recipientCareLevel}
+                onChange={(event) => setDraft({ ...draft, recipientCareLevel: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.nationalInsuranceCaseNumber')}
+              <input
+                dir="ltr"
+                value={draft.recipientNationalInsuranceCaseNumber}
+                onChange={(event) =>
+                  setDraft({ ...draft, recipientNationalInsuranceCaseNumber: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {t('profile.address')}
+              <input
+                autoComplete="street-address"
+                value={draft.recipientAddress}
+                onChange={(event) => setDraft({ ...draft, recipientAddress: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.city')}
+              <input
+                autoComplete="address-level2"
+                value={draft.recipientCity}
+                onChange={(event) => setDraft({ ...draft, recipientCity: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.postalCode')}
+              <input
+                dir="ltr"
+                inputMode="numeric"
+                autoComplete="postal-code"
+                value={draft.recipientPostalCode}
+                onChange={(event) =>
+                  setDraft({ ...draft, recipientPostalCode: event.target.value })
+                }
+              />
+            </label>
+          </div>
+        </section>
         <section className="card readable-form">
           <h2>{t('settings.employer')}</h2>
           <label>
@@ -117,6 +270,53 @@ export function SettingsPage() {
               onChange={(event) => setDraft({ ...draft, employerPhone: event.target.value })}
             />
           </label>
+          <div className="form-grid two-columns">
+            <label>
+              {t('profile.email')}
+              <input
+                dir="ltr"
+                type="email"
+                autoComplete="email"
+                value={draft.employerEmail}
+                onChange={(event) => setDraft({ ...draft, employerEmail: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.relationship')}
+              <input
+                value={draft.employerRelationship}
+                onChange={(event) =>
+                  setDraft({ ...draft, employerRelationship: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {t('profile.address')}
+              <input
+                autoComplete="street-address"
+                value={draft.employerAddress}
+                onChange={(event) => setDraft({ ...draft, employerAddress: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.city')}
+              <input
+                autoComplete="address-level2"
+                value={draft.employerCity}
+                onChange={(event) => setDraft({ ...draft, employerCity: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('profile.postalCode')}
+              <input
+                dir="ltr"
+                inputMode="numeric"
+                autoComplete="postal-code"
+                value={draft.employerPostalCode}
+                onChange={(event) => setDraft({ ...draft, employerPostalCode: event.target.value })}
+              />
+            </label>
+          </div>
         </section>
         <section className="card readable-form">
           <h2>{t('settings.representative')}</h2>
@@ -125,7 +325,6 @@ export function SettingsPage() {
             {t('profile.representativeName')}
             <input
               value={draft.representativeName}
-              required
               onChange={(event) => setDraft({ ...draft, representativeName: event.target.value })}
             />
           </label>
@@ -135,10 +334,31 @@ export function SettingsPage() {
               dir="ltr"
               type="tel"
               value={draft.representativePhone}
-              required
               onChange={(event) => setDraft({ ...draft, representativePhone: event.target.value })}
             />
           </label>
+          <div className="form-grid two-columns">
+            <label>
+              {t('profile.email')}
+              <input
+                dir="ltr"
+                type="email"
+                value={draft.representativeEmail}
+                onChange={(event) =>
+                  setDraft({ ...draft, representativeEmail: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {t('profile.relationship')}
+              <input
+                value={draft.representativeRelationship}
+                onChange={(event) =>
+                  setDraft({ ...draft, representativeRelationship: event.target.value })
+                }
+              />
+            </label>
+          </div>
         </section>
         <section className="card readable-form">
           <h2>{t('settings.licensedBureau')}</h2>
@@ -243,7 +463,7 @@ export function SettingsPage() {
         </section>
         <div className="save-bar">
           {saved ? <span role="status">{t('settings.saved')}</span> : <span />}
-          <button className="primary-button" type="submit" disabled={!employerIdIsValid}>
+          <button className="primary-button" type="submit" disabled={!profileIsValid}>
             {t('settings.save')}
           </button>
         </div>
