@@ -307,6 +307,16 @@ a {
   gap: 12px;
   padding: 0 8px 26px;
 }
+.brand-home-link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 14px;
+}
+.brand-home-link:hover,
+.brand-home-link:focus-visible {
+  outline: 3px solid rgba(33, 89, 199, 0.2);
+  outline-offset: 4px;
+}
 .brand-mark {
   width: 44px;
   height: 44px;
@@ -370,6 +380,9 @@ a {
 }
 .settings-link {
   margin-top: 10px;
+}
+.landing-page-link {
+  margin-top: 2px;
 }
 .app-body {
   width: calc(100% - 260px);
@@ -756,6 +769,9 @@ a {
   display: flex;
   align-items: end;
   gap: 12px;
+}
+.clients-home-link {
+  text-decoration: none;
 }
 .clients-grid {
   display: grid;

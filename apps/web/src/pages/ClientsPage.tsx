@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
 import { clientPath } from '../hooks/use-client-path.js';
 import {
@@ -70,20 +70,27 @@ export function ClientsPage() {
   return (
     <main className="clients-landing" id="main-content">
       <header className="clients-hero">
-        <div className="brand clients-brand">
+        <Link
+          className="brand clients-brand brand-home-link"
+          to="/"
+          aria-label="CareDesk — חזרה לדף הנחיתה"
+        >
           <span className="brand-mark">C</span>
           <div>
             <strong>CareDesk</strong>
             <small>{RELEASE_LABEL}</small>
             <small>ניהול העסקה ישירה, פשוט ובטוח</small>
           </div>
-        </div>
+        </Link>
         <div>
           <p className="eyebrow">{t('clients.eyebrow')}</p>
           <h1>{t('clients.title')}</h1>
           <p>{auth.enabled ? t('clients.introCloud') : t('clients.introLocal')}</p>
         </div>
         <div className="clients-hero-actions">
+          <Link className="secondary-button clients-home-link" to="/">
+            ⌂ דף הנחיתה
+          </Link>
           <button className="secondary-button" type="button" onClick={() => navigate('/family')}>
             👥 {t('familyAccess.eyebrow')}
           </button>
