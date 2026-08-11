@@ -34,18 +34,18 @@ tests.
 
 ## Current delivery state
 
-| Area | State |
-|---|---|
-| Repository foundation and CI | Complete |
-| Web and API application shells | Complete |
-| Authentication and workspace persistence | Implemented |
-| Employment case foundation | Implemented |
-| Contacts, tasks, timeline, and documents | Implemented |
-| Family access | Implemented |
-| Billing | Implemented |
-| Payroll record workflow | Implemented; professional validation still blocks authoritative calculations |
-| Visa renewal | Date capture and follow-up tasks implemented; full persisted workflow is next |
-| External AI | Disabled by design pending privacy approval |
+| Area                                     | State                                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Repository foundation and CI             | Complete                                                                      |
+| Web and API application shells           | Complete                                                                      |
+| Authentication and workspace persistence | Implemented                                                                   |
+| Employment case foundation               | Implemented                                                                   |
+| Contacts, tasks, timeline, and documents | Implemented                                                                   |
+| Family access                            | Implemented                                                                   |
+| Billing                                  | Implemented                                                                   |
+| Payroll record workflow                  | Implemented; professional validation still blocks authoritative calculations  |
+| Visa renewal                             | Date capture and follow-up tasks implemented; full persisted workflow is next |
+| External AI                              | Disabled by design pending privacy approval                                   |
 
 ## Next engineering slice
 
