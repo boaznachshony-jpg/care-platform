@@ -195,7 +195,11 @@ export interface Container {
   completeProductBillingSetup: CompleteProductBillingSetup;
   collectDueProductSubscriptions: CollectDueProductSubscriptions;
   cancelProductSubscription: CancelProductSubscription;
-  readiness(): Promise<{ ready: boolean; reasons: string[] }>;
+  readiness(): Promise<{
+    ready: boolean;
+    reasons: string[];
+    checks: Record<string, 'ok' | 'unconfigured' | 'unreachable' | 'migration-required'>;
+  }>;
   /** Present only when backed by Postgres; close it on shutdown. */
   pool?: Pool;
 }
@@ -476,7 +480,12 @@ export function buildContainer(env: Env): Container {
     collectDueProductSubscriptions: new CollectDueProductSubscriptions(billingDeps),
     cancelProductSubscription: new CancelProductSubscription(billingDeps),
     async readiness() {
-      if (env.NODE_ENV !== 'production') return { ready: true, reasons: [] };
+      const checks: Record<string, 'ok' | 'unconfigured' | 'unreachable' | 'migration-required'> = {
+        database: pool ? 'ok' : 'unconfigured',
+        authentication: hasSupabaseAuth ? 'ok' : 'unconfigured',
+        privateStorage: hasPrivateStorage ? 'ok' : 'unconfigured',
+      };
+      if (env.NODE_ENV !== 'production') return { ready: true, reasons: [], checks };
       const reasons: string[] = [];
       if (!pool) reasons.push('DATABASE_URL is not configured');
       if (!hasSupabaseAuth) reasons.push('Supabase authentication is not configured');
@@ -506,12 +515,14 @@ export function buildContainer(env: Env): Container {
             !row.billing_table
           ) {
             reasons.push('Required pilot database migrations are missing');
+            checks.database = 'migration-required';
           }
         } catch {
           reasons.push('Database is unreachable');
+          checks.database = 'unreachable';
         }
       }
-      return { ready: reasons.length === 0, reasons };
+      return { ready: reasons.length === 0, reasons, checks };
     },
   };
 }

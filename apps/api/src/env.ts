@@ -7,6 +7,9 @@ const envSchema = z
     PORT: z.coerce.number().int().positive().default(4000),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     CORRELATION_HEADER: z.string().min(1).default('x-correlation-id'),
+    // Report mode preserves the closed-pilot flow while making every missing
+    // MFA event visible. Set to enforce after pilot identities have AAL2.
+    SENSITIVE_OPERATION_MFA_MODE: z.enum(['report', 'enforce']).default('report'),
     // Comma-separated origin allowlist for CORS. Dev default is the local web
     // shell only; production values come from environment, never a wildcard.
     CORS_ORIGINS: z.string().default('http://localhost:5173,https://care-platform-web.vercel.app'),

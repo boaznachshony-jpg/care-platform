@@ -2,11 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Env } from '../env.js';
 import { sendError, sendValidationError } from './http-errors.js';
+import type { RateLimiter } from '../rate-limit.js';
 
 const MAX_MESSAGE_LENGTH = 500;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_REQUESTS = 5;
-const recentRequests = new Map<string, number[]>();
 
 const supportRequestSchema = z.object({
   kind: z.enum(['help', 'feedback']),
@@ -24,19 +24,11 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#039;');
 }
 
-function isRateLimited(key: string, now = Date.now()): boolean {
-  const threshold = now - RATE_LIMIT_WINDOW_MS;
-  const active = (recentRequests.get(key) ?? []).filter((timestamp) => timestamp > threshold);
-  if (active.length >= RATE_LIMIT_REQUESTS) {
-    recentRequests.set(key, active);
-    return true;
-  }
-  active.push(now);
-  recentRequests.set(key, active);
-  return false;
-}
-
-export function registerSupportRequestRoutes(app: FastifyInstance, env: Env): void {
+export function registerSupportRequestRoutes(
+  app: FastifyInstance,
+  env: Env,
+  rateLimiter: RateLimiter,
+): void {
   app.post<{ Body: unknown }>('/support/requests', async (request, reply) => {
     const parsed = supportRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -51,7 +43,13 @@ export function registerSupportRequestRoutes(app: FastifyInstance, env: Env): vo
       return;
     }
 
-    if (isRateLimited(request.ip)) {
+    const rateLimit = await rateLimiter.consume(
+      `support:${request.ip}`,
+      RATE_LIMIT_REQUESTS,
+      RATE_LIMIT_WINDOW_MS,
+    );
+    if (!rateLimit.allowed) {
+      if (rateLimit.retryAfterSeconds) reply.header('retry-after', rateLimit.retryAfterSeconds);
       sendError(request, reply, 429, 'SUPPORT_RATE_LIMITED');
       return;
     }

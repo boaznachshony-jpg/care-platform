@@ -92,4 +92,30 @@ describe('support request routes', () => {
     expect(response.json()).toMatchObject({ code: 'SUPPORT_NOT_CONFIGURED' });
     await app.close();
   });
+
+  it('rate limits through the provider contract and sends retry guidance', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => new Response('{}', { status: 200 })),
+    );
+    const app = buildServer(configuredEnv);
+    const request = {
+      method: 'POST' as const,
+      url: '/support/requests',
+      payload: {
+        kind: 'help',
+        replyEmail: 'customer@example.com',
+        message: 'A sufficiently detailed support request.',
+      },
+    };
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await app.inject(request)).statusCode).toBe(202);
+    }
+    const limited = await app.inject(request);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: 'SUPPORT_RATE_LIMITED' });
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+    await app.close();
+  });
 });

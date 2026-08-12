@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { ApiError } from '@caredesk/schemas';
+import { safeErrorDetails } from './safe-error.js';
 
 /**
  * The one error shape every response uses (Constitution §14). Never expose
@@ -9,7 +10,10 @@ import type { ApiError } from '@caredesk/schemas';
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode ?? 500;
-    request.log.error({ err: error, correlationId: request.correlationId }, 'request failed');
+    request.log.error(
+      { ...safeErrorDetails(error), correlationId: request.correlationId },
+      'request failed',
+    );
 
     const body: ApiError = {
       code: statusCode === 500 ? 'INTERNAL_ERROR' : (error.code ?? 'REQUEST_ERROR'),

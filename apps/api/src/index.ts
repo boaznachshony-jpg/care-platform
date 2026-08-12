@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { buildContainer } from './container.js';
 import { loadEnv } from './env.js';
 import { buildServer } from './create-server.js';
+import { safeErrorDetails } from './plugins/safe-error.js';
 
 const env = loadEnv();
 const container = buildContainer(env);
@@ -22,7 +23,7 @@ async function startLocalServer(): Promise<void> {
       'case repository backend',
     );
   } catch (error) {
-    app.log.error(error);
+    app.log.error(safeErrorDetails(error), 'API failed to start');
     process.exitCode = 1;
   }
 }

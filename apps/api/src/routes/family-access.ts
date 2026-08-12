@@ -12,7 +12,10 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
+import type { Env } from '../env.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
+import { requireMfa } from '../plugins/mfa.js';
+import { safeErrorDetails } from '../plugins/safe-error.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const membershipParamsSchema = z.object({ membershipId: z.string().uuid() });
@@ -49,9 +52,14 @@ function handleKnownError(error: unknown): { statusCode: number } | null {
   return null;
 }
 
-export function registerFamilyAccessRoutes(app: FastifyInstance, container: Container): void {
+export function registerFamilyAccessRoutes(
+  app: FastifyInstance,
+  container: Container,
+  env: Env,
+): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
+  const manageOptions = { preHandler: [authenticate, requireMfa(env, 'membership.manage')] };
 
   app.get('/family/members', options, async (request, reply) => {
     const actor = request.actor;
@@ -69,7 +77,7 @@ export function registerFamilyAccessRoutes(app: FastifyInstance, container: Cont
     }
   });
 
-  app.post('/family/invitations', options, async (request, reply) => {
+  app.post('/family/invitations', manageOptions, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
     const parsed = inviteFamilyMemberRequestSchema.safeParse(request.body);
@@ -84,14 +92,14 @@ export function registerFamilyAccessRoutes(app: FastifyInstance, container: Cont
           error instanceof FamilyMemberConflictError ? 'FAMILY_MEMBER_EXISTS' : 'FORBIDDEN';
         return sendError(request, reply, known.statusCode, code);
       }
-      request.log.error({ err: error }, 'Family invitation failed');
+      request.log.error(safeErrorDetails(error), 'Family invitation failed');
       return sendError(request, reply, 502, 'INVITATION_DELIVERY_FAILED');
     }
   });
 
   app.patch<{ Params: { membershipId: string } }>(
     '/family/members/:membershipId',
-    options,
+    manageOptions,
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
@@ -124,7 +132,7 @@ export function registerFamilyAccessRoutes(app: FastifyInstance, container: Cont
 
   app.delete<{ Params: { membershipId: string } }>(
     '/family/members/:membershipId',
-    options,
+    manageOptions,
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;

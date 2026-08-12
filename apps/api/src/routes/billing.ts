@@ -9,6 +9,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Container } from '../container.js';
 import type { Env } from '../env.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
+import { requireMfa } from '../plugins/mfa.js';
+import { safeErrorDetails } from '../plugins/safe-error.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 function secureEqual(actual: string, expected: string): boolean {
@@ -26,6 +28,7 @@ function webhookId(value: unknown): string | null {
 export function registerBillingRoutes(app: FastifyInstance, container: Container, env: Env): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
+  const manageOptions = { preHandler: [authenticate, requireMfa(env, 'billing.manage')] };
 
   app.get('/billing/subscription', options, async (request, reply) => {
     const actor = request.actor;
@@ -40,7 +43,7 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
     }
   });
 
-  app.post('/billing/payment-method/setup', options, async (request, reply) => {
+  app.post('/billing/payment-method/setup', manageOptions, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
     const parsed = startBillingSetupRequestSchema.safeParse(request.body);
@@ -62,12 +65,12 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
       ) {
         return sendError(request, reply, 503, 'BILLING_PROVIDER_UNAVAILABLE');
       }
-      request.log.error({ err: error }, 'Billing setup failed');
+      request.log.error(safeErrorDetails(error), 'Billing setup failed');
       return sendError(request, reply, 502, 'BILLING_SETUP_FAILED');
     }
   });
 
-  app.delete('/billing/subscription', options, async (request, reply) => {
+  app.delete('/billing/subscription', manageOptions, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
     try {
@@ -92,7 +95,7 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
       await container.completeProductBillingSetup.execute(providerSetupId);
       reply.status(200).send({ received: true });
     } catch (error) {
-      request.log.error({ err: error }, 'Cardcom webhook verification failed');
+      request.log.error(safeErrorDetails(error), 'Cardcom webhook verification failed');
       // Non-200 intentionally asks Cardcom to retry its notification.
       return sendError(request, reply, 502, 'BILLING_WEBHOOK_VERIFICATION_FAILED');
     }
@@ -106,7 +109,7 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
     try {
       reply.send(await container.collectDueProductSubscriptions.execute());
     } catch (error) {
-      request.log.error({ err: error }, 'Recurring subscription collection failed');
+      request.log.error(safeErrorDetails(error), 'Recurring subscription collection failed');
       return sendError(request, reply, 503, 'BILLING_COLLECTION_UNAVAILABLE');
     }
   });

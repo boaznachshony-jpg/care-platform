@@ -9,6 +9,18 @@ export function sendError(
   code: string,
   fieldErrors?: Record<string, string[]>,
 ): void {
+  if (status === 403) {
+    request.log.warn(
+      {
+        securityEvent: code === 'MFA_REQUIRED' ? 'mfa_denied' : 'authorization_denied',
+        reasonCode: code,
+        correlationId: request.correlationId,
+        method: request.method,
+        route: request.routeOptions.url,
+      },
+      'security policy denied request',
+    );
+  }
   const body: ApiError = {
     code,
     // Deliberately generic: the code identifies the failure, the message never

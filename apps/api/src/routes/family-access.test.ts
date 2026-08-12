@@ -7,6 +7,18 @@ import { loadEnv } from '../env.js';
 const AUTH = { authorization: `Bearer ${DEV_TOKEN}` };
 
 describe('/family routes', () => {
+  it('enforces MFA for family administration when the rollout policy is enabled', async () => {
+    const app = buildServer(loadEnv({ SENSITIVE_OPERATION_MFA_MODE: 'enforce' }));
+    const response = await app.inject({
+      method: 'POST',
+      url: '/family/invitations',
+      headers: AUTH,
+      payload: { displayName: 'Family Manager', email: 'manager@example.test', role: 'manager' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: 'MFA_REQUIRED' });
+  });
+
   it('lets the owner invite, change and revoke a family member', async () => {
     const app = buildServer(loadEnv({}));
 
