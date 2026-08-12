@@ -8,7 +8,21 @@ declare module 'fastify' {
   }
 }
 
-function unauthorized(request: FastifyRequest, reply: FastifyReply): void {
+function unauthorized(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  reason: 'missing_bearer' | 'invalid_session' | 'membership_unresolved',
+): void {
+  request.log.warn(
+    {
+      securityEvent: 'authentication_denied',
+      reason,
+      correlationId: request.correlationId,
+      method: request.method,
+      route: request.routeOptions.url,
+    },
+    'authentication denied',
+  );
   const body: ApiError = {
     code: 'UNAUTHENTICATED',
     message: 'Unable to complete the request',
@@ -30,19 +44,19 @@ export function makeAuthenticate(
   return async (request, reply) => {
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
-      unauthorized(request, reply);
+      unauthorized(request, reply, 'missing_bearer');
       return;
     }
 
     const session = await auth.verifySession(header.slice('Bearer '.length));
     if (!session) {
-      unauthorized(request, reply);
+      unauthorized(request, reply, 'invalid_session');
       return;
     }
 
     const actor = await actorResolver.resolveActor(session);
     if (!actor) {
-      unauthorized(request, reply);
+      unauthorized(request, reply, 'membership_unresolved');
       return;
     }
 

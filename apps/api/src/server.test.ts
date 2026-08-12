@@ -10,6 +10,29 @@ describe('apps/api server', () => {
     expect(response.json()).toMatchObject({ status: 'ok', service: '@caredesk/api' });
   });
 
+  it('sets hardened API response headers without blocking the separate web deployment', async () => {
+    const development = buildServer(loadEnv({}));
+    const response = await development.inject({ method: 'GET', url: '/health' });
+    expect(response.headers).toMatchObject({
+      'cache-control': 'no-store',
+      'content-security-policy':
+        "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; sandbox",
+      'cross-origin-opener-policy': 'same-origin',
+      'cross-origin-resource-policy': 'cross-origin',
+      'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+      'referrer-policy': 'no-referrer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+    });
+    expect(response.headers).not.toHaveProperty('strict-transport-security');
+
+    const production = buildServer(loadEnv({ NODE_ENV: 'production' }));
+    const productionResponse = await production.inject({ method: 'GET', url: '/health' });
+    expect(productionResponse.headers['strict-transport-security']).toBe(
+      'max-age=31536000; includeSubDomains',
+    );
+  });
+
   it('reports development ready but fails closed for an unconfigured production deployment', async () => {
     const development = buildServer(loadEnv({}));
     expect((await development.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200);
@@ -24,6 +47,12 @@ describe('apps/api server', () => {
         'Private document storage is not configured',
       ]),
     );
+    expect(response.json().checks).toMatchObject({
+      database: 'unconfigured',
+      authentication: 'unconfigured',
+      privateStorage: 'unconfigured',
+    });
+    expect(response.json().rateLimiting).toEqual({ support: 'memory' });
   });
 
   it('echoes a client-supplied correlation id and generates one otherwise', async () => {

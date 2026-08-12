@@ -9,6 +9,20 @@ const AUTH = { authorization: `Bearer ${DEV_TOKEN}` };
 const CRON_SECRET = 'test-cron-secret-at-least-24-characters';
 
 describe('/billing routes', () => {
+  it('enforces MFA for billing mutations when the rollout policy is enabled', async () => {
+    const app = buildServer(
+      loadEnv({ BILLING_PROVIDER: 'mock', SENSITIVE_OPERATION_MFA_MODE: 'enforce' }),
+    );
+    const response = await app.inject({
+      method: 'POST',
+      url: '/billing/payment-method/setup',
+      headers: AUTH,
+      payload: {},
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: 'MFA_REQUIRED' });
+  });
+
   it('shows the 39 ILS VAT-inclusive plan with a 100% pilot discount', async () => {
     const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock' }));
     const response = await app.inject({

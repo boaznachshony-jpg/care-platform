@@ -13,6 +13,8 @@ import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerFamilyAccessRoutes } from './routes/family-access.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerSupportRequestRoutes } from './routes/support-requests.js';
+import { registerSecurityHeaders } from './plugins/security-headers.js';
+import { InMemoryRateLimiter } from './rate-limit.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -21,9 +23,15 @@ import { registerSupportRequestRoutes } from './routes/support-requests.js';
 const REDACTED_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
-  'body.password',
-  'body.bankAccountNumber',
-  'body.passportNumber',
+  'req.headers["x-api-key"]',
+  'body',
+  'payload',
+  'document',
+  'identity',
+  'passport',
+  'bank',
+  'authorization',
+  'cookie',
 ];
 
 /** RFC 1918 private ranges plus loopback — the addresses a home network hands out. */
@@ -95,7 +103,9 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   });
 
   registerCorrelationId(app, env.CORRELATION_HEADER);
+  registerSecurityHeaders(app, env);
   registerErrorHandler(app);
+  const supportRateLimiter = new InMemoryRateLimiter();
 
   app.get('/health', async () => {
     const response: HealthResponse = {
@@ -114,13 +124,20 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
         service: '@caredesk/api',
         timestamp: new Date().toISOString(),
         reasons: readiness.reasons,
+        checks: readiness.checks,
+        rateLimiting: { support: supportRateLimiter.kind },
       });
       return;
     }
-    const response: HealthResponse = {
+    const response: HealthResponse & {
+      checks: typeof readiness.checks;
+      rateLimiting: { support: string };
+    } = {
       status: 'ok',
       service: '@caredesk/api',
       timestamp: new Date().toISOString(),
+      checks: readiness.checks,
+      rateLimiting: { support: supportRateLimiter.kind },
     };
     reply.send(response);
   });
@@ -135,9 +152,9 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseSubResourceRoutes(app, container);
   registerCaseDocumentRoutes(app, container);
   registerWorkspaceRoutes(app, container);
-  registerFamilyAccessRoutes(app, container);
+  registerFamilyAccessRoutes(app, container, env);
   registerBillingRoutes(app, container, env);
-  registerSupportRequestRoutes(app, env);
+  registerSupportRequestRoutes(app, env, supportRateLimiter);
 
   return app;
 }
