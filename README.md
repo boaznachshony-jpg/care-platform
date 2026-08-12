@@ -5,18 +5,20 @@ families that directly employ a foreign live-in caregiver.
 
 ## Current status
 
-**Milestone 0 (Foundation) is complete. Milestone 1 (Employment Case
-Foundation) is in progress.**
+**Sprint 0 is complete. Wave 2 is in progress.**
 
-You can open an employment case, add contacts and organizations to it,
-create and complete tasks, and read a case timeline — all persisted to
-Postgres with tenant isolation enforced by Row Level Security. Documents,
-family-member invitations, and editable contact channels are still to come.
+The current pilot foundation includes persisted employment cases, contacts,
+tasks, timeline, documents, family access, billing, payroll records, quarterly
+national-insurance tracking, and renewal-date follow-up tasks. Supabase
+authentication and tenant isolation are implemented; the canonical normalized
+architecture and engineering guardrails are recorded in
+[BUILD_STATUS.md](BUILD_STATUS.md).
 
-Everything runs on **synthetic data only**. There is no real authentication
-(a mock session over a synthetic dev identity, never seeded in production),
-no live AI provider, and no real personal data anywhere. See
-[the gap analysis](docs/product/gap-analysis.md) for what blocks real data.
+Development and test data remain **synthetic only**. External AI is disabled,
+and no real personal data may be used until every blocking gate in the
+[gap analysis](docs/product/gap-analysis.md) has an approved owner and evidence.
+Wave 2 delivers the full persisted Visa Renewal Workflow; see
+[issue #30](https://github.com/boaznachshony-jpg/care-platform/issues/30).
 
 `caredesk_prototype.html` is a visual reference only and must not be used as
 a production code base.
@@ -90,8 +92,9 @@ packages/domain            → Domain (entities, status vocabulary)
 packages/infrastructure   → Infrastructure (mock adapters implementing the ports)
 ```
 
-`packages/rules` and `packages/workflows` are Milestone 0 shells only — no
-legal, payroll, or workflow content belongs in them yet (Milestone 2).
+`packages/rules` and `packages/workflows` provide deterministic rule and
+workflow primitives. Wave 2 extends them for the governed Visa Renewal flow;
+unverified legal values or authority procedures must not be encoded as truth.
 `packages/ui`, `packages/design-tokens`, and `packages/i18n` are
 domain-neutral and used by `apps/web` only.
 
@@ -153,9 +156,9 @@ and remaining decisions. Architecture decisions are under [docs/adr](docs/adr).
 - The first foundation slice is **Employment Case Foundation**.
 - The first complete business workflow is **Visa Renewal**.
 - The repository is a pnpm monorepo with `apps/` and `packages/`.
-- Authentication target: Supabase Auth, subject to ADR-001 acceptance.
-- Tenancy target: shared PostgreSQL schema with `tenant_id` and RLS, subject to
-  ADR-002 acceptance.
+- Authentication: Supabase Auth under accepted ADR-001.
+- Tenancy: shared PostgreSQL schema with `tenant_id`, forced RLS, and
+  least-privilege roles under accepted ADR-002.
 - External AI is disabled initially; `MockProvider` is required until ADR-003
   privacy gates are met.
 - No legal, payroll, or regulatory value is considered verified without
@@ -187,15 +190,15 @@ Do not develop directly on `main`. The historical remote branches `api`, `web`,
 the same empty initial commit. They are preserved as an audit finding and can
 be removed only in a separate approved maintenance change.
 
-## Next milestone
+## Next delivery phase
 
-Milestone 0 is complete and the pilot application is already deployed. The next
-product slice is **Milestone 2 — Visa Renewal Workflow**: turn the existing visa
+Sprint 0 is complete and the pilot application is already deployed. **Wave 2 —
+Visa Renewal Workflow** is now the active delivery phase: turn the existing visa
 renewal date and generated follow-up tasks into a persisted, auditable workflow
-with explicit ownership, contact guidance, completion evidence, and timeline
-events.
+with version provenance, explicit ownership, contact guidance, completion
+evidence, and synchronized Timeline/Audit events.
 
-Before starting that slice, use [BUILD_STATUS.md](BUILD_STATUS.md) and the
-[Gap Analysis](docs/product/gap-analysis.md) as the current recovery baseline.
-Continue to use synthetic data until every blocking gate listed there has an
-approved owner and evidence.
+Work is governed by [issue #30](https://github.com/boaznachshony-jpg/care-platform/issues/30)
+and the [Wave 2 Definition of Done](docs/governance/wave-2-definition-of-done.md).
+Continue to use synthetic data and do not encode unverified legal rules while
+the required professional approvals remain outstanding.
