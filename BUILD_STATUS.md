@@ -2,36 +2,60 @@
 
 Status date: **2026-08-12**
 
-Baseline for Sprint 0 review: `main` at `0c6acee`
+Sprint 0 closeout baseline: `main` after merged PRs #25, #26, #27, and #28
+Previous architecture-review baseline (retained for history): `main` at `0c6acee`
 Previous recovery baseline (retained for history): `main` at `3eaee63`
 
-## Sprint 0 architecture hardening (2026-08-12)
+## Sprint 0 status
 
-The data architecture is frozen before further product delivery. Normalized
-PostgreSQL aggregates are the canonical target, `EmploymentCase` is the central
-employment aggregate, and `document` / `document_version` is the canonical
-document model. `tenant_workspace`, `workspace_file`, `MvpClient`, and
-`MvpProfile` remain transitional compatibility only.
+**Complete.** Sprint 0 delivered the engineering and governance foundation required
+before the next product-delivery phase. The next delivery phase is **Wave 2**.
 
-Sprint 0 adds governance documentation only: ADR-006, the strangler migration
-strategy, canonical legacy mapping/data inventory, rollback and reconciliation
-rules, legacy sunset gates, the MvpProfile extension prohibition, and the
-Sprint 0 Definition of Done. No application code, database migration, product
-feature, or production configuration is changed.
+The completed scope comprised four coordinated tracks:
 
-Implementation status is intentionally unchanged by this documentation work.
-The previously recorded recovery summary and delivery state follow as
-historical context.
+- **Architecture and governance:** canonical data architecture, authority order,
+  migration governance, legacy mapping, rollback/reconciliation rules, and
+  architecture guardrails.
+- **Database and RLS hardening:** normalized database foundation, forced
+  tenant-scoped row-level security, least-privilege access, cross-tenant
+  integrity controls, append-only audit protection, and executable RLS checks.
+- **API and security hardening:** authorization and tenant-context enforcement,
+  safer request handling, security controls, and operational observability.
+- **QA and CI guardrails:** migration and architecture checks, static analysis,
+  build/typecheck, unit/integration/accessibility tests, PostgreSQL RLS
+  integration, desktop/mobile end-to-end tests, secret scanning, and a required
+  aggregate quality gate.
+
+Sprint 0 was originally described as a documentation-only architecture freeze.
+That description is retained only as historical planning context: the delivered
+Sprint 0 expanded through the separately reviewed and merged PRs #25–#28 and
+included application, database migration, security, test, and CI changes. This
+governance closeout PR itself remains documentation-only.
+
+## Canonical architecture decisions
+
+- Normalized PostgreSQL aggregates are the canonical persistence target.
+- `EmploymentCase` is the central employment aggregate.
+- `document` and `document_version` are the canonical document model.
+- `tenant_workspace`, `workspace_file`, `MvpClient`, and `MvpProfile`
+  are transitional compatibility structures, not targets for new product data.
+- Each datum has one declared writer in every migration phase; undefined dual
+  writes are prohibited.
+- Tenant isolation is enforced through API authorization, least-privilege
+  database roles, forced RLS, and tenant-consistent relationships.
+- Sensitive identifiers must not be migrated to plaintext columns.
+- Legacy sunset, backfill, cutover, and destructive removal require explicit
+  evidence and separately approved gates.
 
 ## Recovery summary
 
 The repository is substantially ahead of the older milestone documentation.
-Milestone 0 is complete and the product is already a working pilot candidate;
-the project must not be bootstrapped again. The current baseline contains a
-React web application, Fastify API, PostgreSQL/Supabase persistence, tenant
-isolation, authentication, billing, case management, documents, family access,
-support requests, payroll records, national-insurance tracking, and automated
-tests.
+Milestone 0 and Sprint 0 are complete, and the product is already a working
+pilot candidate; the project must not be bootstrapped again. The current
+baseline contains a React web application, Fastify API, PostgreSQL/Supabase
+persistence, tenant isolation, authentication, billing, case management,
+documents, family access, support requests, payroll records,
+national-insurance tracking, and automated tests.
 
 ## Included in this E2E candidate
 
@@ -40,7 +64,7 @@ tests.
 - Vercel-compatible Fastify default export.
 - Workspace dependency builds before Web/API builds.
 - Unit, integration, accessibility, and Playwright E2E coverage.
-- CI jobs for quality checks, E2E, and secret scanning.
+- CI jobs for quality checks, E2E, RLS integration, and secret scanning.
 - CORS configuration for the production Web domain.
 - Supabase authentication and authenticated workspace recovery.
 - Employment onboarding and employer/workspace switching.
@@ -56,6 +80,10 @@ tests.
 | Area                                     | State                                                                         |
 | ---------------------------------------- | ----------------------------------------------------------------------------- |
 | Repository foundation and CI             | Complete                                                                      |
+| Sprint 0 architecture and governance     | Complete                                                                      |
+| Database and RLS hardening               | Complete                                                                      |
+| API and security hardening               | Complete                                                                      |
+| QA and CI guardrails                     | Complete                                                                      |
 | Web and API application shells           | Complete                                                                      |
 | Authentication and workspace persistence | Implemented                                                                   |
 | Employment case foundation               | Implemented                                                                   |
@@ -66,24 +94,26 @@ tests.
 | Visa renewal                             | Date capture and follow-up tasks implemented; full persisted workflow is next |
 | External AI                              | Disabled by design pending privacy approval                                   |
 
-## Previously recorded next engineering slice (historical context)
+## Next delivery phase
 
-**Milestone 2 — Visa Renewal Workflow**
+**Wave 2** is the next product-delivery phase. Its detailed scope and acceptance
+criteria must be governed by the Source of Truth, accepted ADRs, and the
+synchronization matrix.
 
-1. Persist a workflow instance linked to the employment case.
-2. Generate versioned steps from an approved workflow template.
-3. Assign responsible, consulted, and informed contacts.
-4. Record completion evidence and idempotent timeline/audit events.
-5. Expose the workflow in the RTL web UI with loading, empty, error, and success states.
-6. Add unit, integration, authorization, RLS, accessibility, and end-to-end coverage.
+The previously recorded Milestone 2 visa-renewal slice remains useful historical
+planning context, but it does not override the approved Wave 2 plan.
 
 ## Verification status
 
-Dependencies were restored locally on 2026-08-10 and Prettier completed
-successfully. The desktop command runner timed out while ESLint was still
-running, so the complete local `pnpm check` result is not claimed. Recent
-GitHub CI and Vercel checks on merged product changes are the authoritative
-verification evidence until a fresh recovery PR completes all gates.
+PRs #25, #26, #27, and #28 were merged to `main`. Post-merge CI on `main`
+completed successfully, including the required quality gates introduced during
+Sprint 0. The post-merge Vercel checks for both the Web and API projects also
+reported success.
+
+This closeout changes governance documentation only. Formatting, terminology,
+cross-document status, and Markdown consistency were reviewed; no application
+code, database migration, CI configuration, dependency, or production
+configuration is modified.
 
 ## Before real personal data
 
