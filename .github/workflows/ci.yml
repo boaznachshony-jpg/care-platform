@@ -14,8 +14,8 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: Format, lint, typecheck, test, build
+  guardrails:
+    name: Migration and architecture guardrails
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -33,21 +33,112 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Migration safety
         run: pnpm db:migration-safety
+      - name: Architecture guardrails
+        run: >-
+          pnpm --filter @caredesk/testing test
+          src/mvp-profile-architecture.test.ts
+          src/database-security-contracts.test.ts
+
+  static:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Format check
         run: pnpm format:check
       - name: Lint
         run: pnpm lint
+
+  compile:
+    name: Build and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Build workspace packages
         run: pnpm build
       - name: Typecheck
         run: pnpm typecheck
+
+  test:
+    name: Unit, integration, and accessibility tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build workspace packages
+        run: pnpm build
       - name: Unit and integration tests
         run: pnpm test
+
+  postgres-rls:
+    name: PostgreSQL RLS integration
+    runs-on: ubuntu-latest
+    needs: guardrails
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: caredesk
+          POSTGRES_PASSWORD: caredesk
+          POSTGRES_DB: caredesk_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U caredesk -d caredesk_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_ADMIN_URL: postgresql://caredesk:caredesk@127.0.0.1:5432/caredesk_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run migrations and RLS security integration tests
+        run: pnpm --filter @caredesk/db rls-test:ci
 
   e2e:
     name: Playwright end-to-end
     runs-on: ubuntu-latest
-    needs: check
+    needs: guardrails
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -67,6 +158,16 @@ jobs:
         run: pnpm --filter @caredesk/web exec playwright install --with-deps chromium
       - name: Run end-to-end tests
         run: pnpm --filter @caredesk/web test:e2e
+      - name: Upload Playwright report and failure evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 14
 
   secret-scan:
     name: Secret scan
@@ -79,3 +180,34 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  required-quality-gates:
+    name: Format, lint, typecheck, test, build
+    if: ${{ always() }}
+    needs:
+      - guardrails
+      - static
+      - compile
+      - test
+      - postgres-rls
+      - e2e
+      - secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every quality gate to succeed
+        env:
+          GUARDRAILS_RESULT: ${{ needs.guardrails.result }}
+          STATIC_RESULT: ${{ needs.static.result }}
+          COMPILE_RESULT: ${{ needs.compile.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          POSTGRES_RLS_RESULT: ${{ needs.postgres-rls.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
+        run: |
+          test "$GUARDRAILS_RESULT" = success
+          test "$STATIC_RESULT" = success
+          test "$COMPILE_RESULT" = success
+          test "$TEST_RESULT" = success
+          test "$POSTGRES_RLS_RESULT" = success
+          test "$E2E_RESULT" = success
+          test "$SECRET_SCAN_RESULT" = success
