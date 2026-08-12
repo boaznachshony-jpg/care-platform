@@ -123,3 +123,19 @@ layer, that tenant A cannot:
 
 It cleans up after itself and uses synthetic data only (Constitution §16/§25).
 Run it after any change to a policy, a tenant-owned table, or `withTenant()`.
+
+### Disposable CI execution
+
+CI can exercise the same policies without creating a production-style login.
+Start an empty disposable Postgres 17 service on loopback, then run:
+
+```bash
+DATABASE_ADMIN_URL=postgresql://caredesk:caredesk@127.0.0.1:5432/caredesk_ci pnpm --filter @caredesk/db rls-test:ci
+```
+
+The adapter refuses non-loopback hosts, creates the NOLOGIN compatibility role
+names expected by Supabase-oriented migrations, applies every production
+migration, and then runs assertions under `SET LOCAL ROLE caredesk_app`, which
+remains `NOBYPASSRLS`. It does not disable or weaken RLS.
+The normal `pnpm db:rls-test` command remains strict and requires a direct
+`caredesk_app` application connection plus a separate owner connection.

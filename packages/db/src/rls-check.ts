@@ -1,313 +1,453 @@
 import { randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
 import { createPool, withTenant } from './pool.js';
 
-/**
- * Live RLS isolation check against the real database (ADR-002 acceptance
- * evidence). Seeds two synthetic tenants, then proves — through the RLS
- * layer, using set_config('app.tenant_id') — that tenant A can neither read
- * nor mutate tenant B's rows, and that a cross-tenant FK insert is rejected.
- *
- * Two pools on purpose:
- *   - `appPool` (DATABASE_URL) connects as `caredesk_app`, the least-privilege
- *     role the application really uses. Every isolation assertion runs on it,
- *     so the test exercises the production path rather than an approximation.
- *   - `adminPool` (DATABASE_ADMIN_URL) connects as the owner and does only
- *     setup and teardown. `caredesk_app` deliberately cannot insert tenants or
- *     delete rows, so seeding and cleanup have to be somebody else's job.
- *
- * Idempotent-ish: it inserts fresh random-UUID rows each run and cleans them
- * up at the end. Synthetic data only (Constitution §16/§25).
- */
+const NORMALIZED_TABLES = [
+  'care_recipient',
+  'employer',
+  'caregiver',
+  'employment_case',
+  'task',
+  'timeline_event',
+  'document',
+  'document_version',
+  'audit_event',
+] as const;
+
+const MUTABLE_TABLES = [
+  'care_recipient',
+  'employer',
+  'caregiver',
+  'employment_case',
+  'task',
+  'document',
+] as const;
+
+const APPEND_ONLY_TABLES = ['timeline_event', 'document_version', 'audit_event'] as const;
+
+const ALL_TENANT_TABLES = [
+  'family_account',
+  'tenant_membership',
+  'permission_grant',
+  'care_recipient',
+  'employer',
+  'caregiver',
+  'employment_case',
+  'organization',
+  'contact',
+  'contact_channel',
+  'case_contact_role',
+  'task',
+  'timeline_event',
+  'audit_event',
+  'document',
+  'document_version',
+  'tenant_workspace',
+  'workspace_file',
+  'product_subscription',
+  'billing_setup_intent',
+  'product_billing_charge',
+] as const;
+
+interface Fixture {
+  readonly tenant: string;
+  readonly user: string;
+  readonly membership: string;
+  readonly recipient: string;
+  readonly employer: string;
+  readonly caregiver: string;
+  readonly employmentCase: string;
+  readonly task: string;
+  readonly timelineEvent: string;
+  readonly document: string;
+  readonly documentVersion: string;
+  readonly auditEvent: string;
+}
+
+function fixture(): Fixture {
+  return {
+    tenant: randomUUID(),
+    user: randomUUID(),
+    membership: randomUUID(),
+    recipient: randomUUID(),
+    employer: randomUUID(),
+    caregiver: randomUUID(),
+    employmentCase: randomUUID(),
+    task: randomUUID(),
+    timelineEvent: randomUUID(),
+    document: randomUUID(),
+    documentVersion: randomUUID(),
+    auditEvent: randomUUID(),
+  };
+}
+
+function ids(row: Fixture): Record<(typeof NORMALIZED_TABLES)[number], string> {
+  return {
+    care_recipient: row.recipient,
+    employer: row.employer,
+    caregiver: row.caregiver,
+    employment_case: row.employmentCase,
+    task: row.task,
+    timeline_event: row.timelineEvent,
+    document: row.document,
+    document_version: row.documentVersion,
+    audit_event: row.auditEvent,
+  };
+}
+
+async function withAppRoleWithoutTenant<T>(
+  pool: ReturnType<typeof createPool>,
+  work: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    await client.query('set local role caredesk_app');
+    const result = await work(client);
+    await client.query('commit');
+    return result;
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function seed(admin: ReturnType<typeof createPool>, row: Fixture, label: string) {
+  await admin.query('insert into tenant (id, data_region) values ($1, $2)', [
+    row.tenant,
+    'synthetic',
+  ]);
+  await admin.query(
+    `insert into app_user (id, auth_subject, display_name, email)
+     values ($1, $2, $3, $4)`,
+    [row.user, `rls-${row.user}`, `Synthetic User ${label}`, `${row.user}@example.invalid`],
+  );
+  await admin.query(
+    `insert into tenant_membership (id, tenant_id, user_id, role)
+     values ($1, $2, $3, 'owner')`,
+    [row.membership, row.tenant, row.user],
+  );
+  await admin.query(
+    `insert into family_account (tenant_id, display_name, primary_contact_membership_id)
+     values ($1, $2, $3)`,
+    [row.tenant, `Synthetic Family ${label}`, row.membership],
+  );
+  await admin.query(
+    `insert into permission_grant
+       (tenant_id, membership_id, resource_type, permission, granted_by, reason)
+     values ($1, $2, 'employment_case', 'manage', $3, 'rls-check')`,
+    [row.tenant, row.membership, row.user],
+  );
+  await admin.query(
+    `insert into care_recipient (id, tenant_id, full_name)
+     values ($1, $2, $3)`,
+    [row.recipient, row.tenant, `Synthetic Recipient ${label}`],
+  );
+  await admin.query(
+    `insert into employer (id, tenant_id, full_name, relationship_to_recipient)
+     values ($1, $2, $3, 'family')`,
+    [row.employer, row.tenant, `Synthetic Employer ${label}`],
+  );
+  await admin.query(
+    `insert into caregiver (id, tenant_id, legal_name, nationality)
+     values ($1, $2, $3, 'Synthetic')`,
+    [row.caregiver, row.tenant, `Synthetic Caregiver ${label}`],
+  );
+  await admin.query(
+    `insert into employment_case
+       (id, tenant_id, care_recipient_id, employer_id, caregiver_id, start_date,
+        primary_manager_membership_id)
+     values ($1, $2, $3, $4, $5, '2026-01-01', $6)`,
+    [row.employmentCase, row.tenant, row.recipient, row.employer, row.caregiver, row.membership],
+  );
+  await admin.query(
+    `insert into task (id, tenant_id, employment_case_id, title, due_at)
+     values ($1, $2, $3, $4, now() + interval '1 day')`,
+    [row.task, row.tenant, row.employmentCase, `Synthetic Task ${label}`],
+  );
+  await admin.query(
+    `insert into timeline_event
+       (id, tenant_id, employment_case_id, event_type_key, summary_key, occurred_at)
+     values ($1, $2, $3, 'rls.probe', 'rls.probe', now())`,
+    [row.timelineEvent, row.tenant, row.employmentCase],
+  );
+  await admin.query(
+    `insert into document
+       (id, tenant_id, employment_case_id, document_type, owner_type, owner_id,
+        compliance_status, expires_at)
+     values ($1, $2, $3, 'passport', 'caregiver', $4, 'valid', now() + interval '30 days')`,
+    [row.document, row.tenant, row.employmentCase, row.caregiver],
+  );
+  await admin.query(
+    `insert into document_version
+       (id, tenant_id, document_id, version_number, storage_key, media_type, size_bytes)
+     values ($1, $2, $3, 1, $4, 'application/octet-stream', 1)`,
+    [row.documentVersion, row.tenant, row.document, `synthetic/${row.documentVersion}`],
+  );
+  await admin.query('update document set current_version_id = $1 where id = $2', [
+    row.documentVersion,
+    row.document,
+  ]);
+  await admin.query(
+    `insert into audit_event
+       (id, tenant_id, actor_id, action, resource_type, resource_id, occurred_at,
+        correlation_id)
+     values ($1, $2, $3, 'rls.probe', 'employment_case', $4, now(), 'rls-check')`,
+    [row.auditEvent, row.tenant, row.user, row.employmentCase],
+  );
+}
+
 async function main(): Promise<void> {
   const appUrl = process.env.DATABASE_URL;
   const adminUrl = process.env.DATABASE_ADMIN_URL;
   if (!appUrl || !adminUrl) {
-    console.error(
-      'Both DATABASE_URL (caredesk_app) and DATABASE_ADMIN_URL (owner) must be set. See database/README.md.',
-    );
-    process.exit(1);
+    throw new Error('DATABASE_URL and DATABASE_ADMIN_URL are both required.');
   }
 
-  const pool = createPool(appUrl);
-  const adminPool = createPool(adminUrl);
-  const tenantA = randomUUID();
-  const tenantB = randomUUID();
-  const recipientA = randomUUID();
-  const recipientB = randomUUID();
+  const ciRoleSwitch = process.env.RLS_TEST_MODE === 'ci-role-switch';
+  const pool = createPool(appUrl, !ciRoleSwitch);
+  const admin = createPool(adminUrl, !ciRoleSwitch);
+  const a = fixture();
+  const b = fixture();
   const failures: string[] = [];
-  const pass = (msg: string): void => console.log(`  PASS  ${msg}`);
-  const fail = (msg: string): void => {
-    failures.push(msg);
-    console.log(`  FAIL  ${msg}`);
+  const pass = (message: string) => console.log(`  PASS  ${message}`);
+  const fail = (message: string) => {
+    failures.push(message);
+    console.log(`  FAIL  ${message}`);
+  };
+  const expectRejected = async (message: string, work: () => Promise<unknown>) => {
+    try {
+      await work();
+      fail(`${message} was allowed`);
+    } catch {
+      pass(`${message} is rejected`);
+    }
   };
 
   try {
-    // 0. The application connection must not be able to bypass what follows.
-    //    Every assertion below is meaningless if DATABASE_URL points at a role
-    //    holding BYPASSRLS — which is exactly how the first implementation of
-    //    this schema passed inspection while isolating nothing.
-    {
-      const result = await pool.query<{ current_user: string; bypassrls: boolean }>(
-        'select current_user, (select rolbypassrls from pg_roles where rolname = current_user) as bypassrls',
-      );
-      const row = result.rows[0];
-      if (row?.current_user === 'caredesk_app' && row.bypassrls === false) {
-        pass('application connects as caredesk_app with NOBYPASSRLS');
-      } else {
-        fail(
-          `application connects as "${row?.current_user}" with bypassrls=${row?.bypassrls} — expected caredesk_app / false`,
+    const connection = await pool.query<{ current_user: string; bypassrls: boolean }>(
+      `select current_user,
+              (select rolbypassrls from pg_roles where rolname = current_user) as bypassrls`,
+    );
+    const connected = connection.rows[0];
+    if (ciRoleSwitch) {
+      await withAppRoleWithoutTenant(pool, async (client) => {
+        const role = await client.query<{ current_user: string; bypassrls: boolean }>(
+          `select current_user,
+                  (select rolbypassrls from pg_roles where rolname = current_user) as bypassrls`,
         );
-      }
-    }
-
-    // Seed two tenants + one care_recipient each. Tenants go in on the admin
-    // pool (caredesk_app has SELECT-only on `tenant`), but each care_recipient
-    // is inserted through withTenant on the app pool, so even seeding obeys RLS.
-    for (const [tenant, recipient, name] of [
-      [tenantA, recipientA, 'Synthetic Recipient A'],
-      [tenantB, recipientB, 'Synthetic Recipient B'],
-    ] as const) {
-      await adminPool.query('insert into tenant (id, data_region) values ($1, $2)', [
-        tenant,
-        'synthetic',
-      ]);
-      await withTenant(pool, tenant, async (client) => {
-        await client.query(
-          'insert into care_recipient (id, tenant_id, full_name, sensitivity) values ($1, $2, $3, $4)',
-          [recipient, tenant, name, 'care_sensitive'],
-        );
+        const active = role.rows[0];
+        if (active?.current_user === 'caredesk_app' && active.bypassrls === false) {
+          pass('CI assertions switch to caredesk_app with NOBYPASSRLS');
+        } else {
+          fail(`CI role switch produced ${JSON.stringify(active)}`);
+        }
       });
+    } else if (connected?.current_user === 'caredesk_app' && connected.bypassrls === false) {
+      pass('application connects directly as caredesk_app with NOBYPASSRLS');
+    } else {
+      fail(
+        `application connection is ${JSON.stringify(connected)}, expected caredesk_app/NOBYPASSRLS`,
+      );
     }
 
-    // 1. Tenant A sees exactly its own recipient, not B's.
-    await withTenant(pool, tenantA, async (client) => {
+    await seed(admin, a, 'A');
+    await seed(admin, b, 'B');
+    const aIds = ids(a);
+    const bIds = ids(b);
+
+    await withTenant(pool, a.tenant, async (client) => {
       const tenants = await client.query<{ id: string }>('select id from tenant');
-      const tenantIds = tenants.rows.map((row) => row.id);
-      if (tenantIds.length === 1 && tenantIds[0] === tenantA) {
-        pass('tenant A sees only its own tenant reference row');
+      const tenantIds = tenants.rows.map(({ id }) => id);
+      if (tenantIds.length === 1 && tenantIds[0] === a.tenant) {
+        pass('tenant reference lookup returns only the active tenant context');
       } else {
-        fail(`tenant A tenant reference SELECT leaked rows: ${JSON.stringify(tenantIds)}`);
+        fail(`tenant reference lookup exposed ${JSON.stringify(tenantIds)}`);
       }
 
-      const rows = await client.query<{ id: string }>('select id from care_recipient');
-      const ids = rows.rows.map((r) => r.id);
-      if (ids.includes(recipientA) && !ids.includes(recipientB)) {
-        pass('tenant A SELECT returns only tenant A rows');
-      } else {
-        fail(`tenant A SELECT leaked rows: ${JSON.stringify(ids)}`);
-      }
-    });
-
-    // 2. Tenant A cannot UPDATE tenant B's row (zero rows affected, not an error).
-    await withTenant(pool, tenantA, async (client) => {
-      const res = await client.query('update care_recipient set city = $1 where id = $2', [
-        'hacked',
-        recipientB,
-      ]);
-      if (res.rowCount === 0) {
-        pass('tenant A UPDATE of tenant B row affects zero rows');
-      } else {
-        fail(`tenant A UPDATE affected ${res.rowCount} of tenant B's rows`);
+      for (const table of NORMALIZED_TABLES) {
+        const rows = await client.query<{ id: string }>(`select id from ${table} order by id`);
+        const visible = rows.rows.map(({ id }) => id);
+        if (visible.includes(aIds[table]) && !visible.includes(bIds[table])) {
+          pass(`${table}: tenant A reads only its own normalized row`);
+        } else {
+          fail(`${table}: tenant A saw ${JSON.stringify(visible)}`);
+        }
       }
     });
 
-    // 3. Tenant A cannot DELETE tenant B's row.
-    await withTenant(pool, tenantA, async (client) => {
-      const res = await client.query('delete from care_recipient where id = $1', [recipientB]);
-      if (res.rowCount === 0) {
-        pass('tenant A DELETE of tenant B row affects zero rows');
-      } else {
-        fail(`tenant A DELETE affected ${res.rowCount} of tenant B's rows`);
-      }
-    });
-
-    // 4. Tenant A cannot INSERT a row labelled as tenant B (this is what the
-    //    policies' WITH CHECK clause exists to stop — USING alone allows it).
-    await withTenant(pool, tenantA, async (client) => {
-      try {
-        await client.query(
-          'insert into care_recipient (id, tenant_id, full_name) values ($1, $2, $3)',
-          [randomUUID(), tenantB, 'Smuggled Into Tenant B'],
+    await withAppRoleWithoutTenant(pool, async (client) => {
+      for (const table of NORMALIZED_TABLES) {
+        const result = await client.query<{ count: string }>(
+          `select count(*)::text as count from ${table}`,
         );
-        fail('tenant A INSERT with tenant B tenant_id was NOT rejected');
-      } catch {
-        pass('tenant A INSERT with tenant B tenant_id is rejected by WITH CHECK');
+        if (result.rows[0]?.count === '0') {
+          pass(`${table}: missing tenant context fails closed`);
+        } else {
+          fail(`${table}: missing tenant context exposed ${result.rows[0]?.count} rows`);
+        }
       }
     });
 
-    // 5. Cross-tenant FK: an employment_case in tenant A referencing tenant B's
-    //    recipient must be rejected by the composite same-tenant FK.
-    await withTenant(pool, tenantA, async (client) => {
-      const employerId = randomUUID();
-      const caregiverId = randomUUID();
-      await client.query(
-        'insert into employer (id, tenant_id, full_name, relationship_to_recipient) values ($1,$2,$3,$4)',
-        [employerId, tenantA, 'Synthetic Employer A', 'child'],
-      );
-      await client.query(
-        'insert into caregiver (id, tenant_id, legal_name, nationality) values ($1,$2,$3,$4)',
-        [caregiverId, tenantA, 'Synthetic Caregiver A', 'Philippines'],
-      );
-      try {
-        await client.query(
-          `insert into employment_case
-             (id, tenant_id, care_recipient_id, employer_id, caregiver_id, start_date)
-           values ($1,$2,$3,$4,$5,$6)`,
-          [randomUUID(), tenantA, recipientB, employerId, caregiverId, '2026-02-01'],
+    for (const table of MUTABLE_TABLES) {
+      await withTenant(pool, a.tenant, async (client) => {
+        const update = await client.query(
+          `update ${table} set tenant_id = tenant_id where id = $1`,
+          [bIds[table]],
         );
-        fail('cross-tenant employment_case insert was NOT rejected');
-      } catch {
-        pass('cross-tenant employment_case insert is rejected by composite FK');
-      }
-    });
-    // 6. Every tenant-owned table must have RLS both enabled AND forced.
-    //    A new table that forgets `force` looks protected but is not, which is
-    //    exactly the defect migrations 0004/0005 were written to fix.
-    {
-      const expected = [
-        'family_account',
-        'tenant_membership',
-        'permission_grant',
-        'care_recipient',
-        'employer',
-        'caregiver',
-        'employment_case',
-        'organization',
-        'contact',
-        'contact_channel',
-        'case_contact_role',
-        'task',
-        'timeline_event',
-        'audit_event',
-        'document',
-        'document_version',
-        'tenant_workspace',
-        'workspace_file',
-        'product_subscription',
-        'billing_setup_intent',
-        'product_billing_charge',
-      ];
-      const result = await pool.query<{ relname: string; ok: boolean }>(
-        `select relname, (relrowsecurity and relforcerowsecurity) as ok
-           from pg_class
-          where relkind = 'r' and relname = any($1)`,
-        [expected],
+        const remove = await client.query(`delete from ${table} where id = $1`, [bIds[table]]);
+        if (update.rowCount === 0 && remove.rowCount === 0) {
+          pass(`${table}: cross-tenant update/delete affects zero rows`);
+        } else {
+          fail(
+            `${table}: cross-tenant mutation affected update=${update.rowCount}, delete=${remove.rowCount}`,
+          );
+        }
+      });
+      await expectRejected(`${table}: rewriting an owned row to tenant B`, () =>
+        withTenant(pool, a.tenant, (client) =>
+          client.query(`update ${table} set tenant_id = $1 where id = $2`, [b.tenant, aIds[table]]),
+        ),
       );
-      const byName = new Map(result.rows.map((row) => [row.relname, row.ok]));
-      const unprotected = expected.filter((name) => byName.get(name) !== true);
-      if (unprotected.length === 0) {
-        pass(`RLS enabled and forced on all ${expected.length} tenant-owned tables`);
+    }
+
+    for (const table of APPEND_ONLY_TABLES) {
+      await expectRejected(`${table}: application update`, () =>
+        withTenant(pool, a.tenant, (client) =>
+          client.query(`update ${table} set tenant_id = tenant_id where id = $1`, [aIds[table]]),
+        ),
+      );
+      await expectRejected(`${table}: application delete`, () =>
+        withTenant(pool, a.tenant, (client) =>
+          client.query(`delete from ${table} where id = $1`, [aIds[table]]),
+        ),
+      );
+    }
+
+    await expectRejected('care_recipient insert labelled as tenant B', () =>
+      withTenant(pool, a.tenant, (client) =>
+        client.query('insert into care_recipient (id, tenant_id, full_name) values ($1, $2, $3)', [
+          randomUUID(),
+          b.tenant,
+          'Smuggled recipient',
+        ]),
+      ),
+    );
+
+    const policies = await admin.query<{
+      tablename: string;
+      has_using: boolean;
+      has_check: boolean;
+      forced: boolean;
+    }>(
+      `select c.relname as tablename,
+              p.polqual is not null as has_using,
+              p.polwithcheck is not null as has_check,
+              c.relrowsecurity and c.relforcerowsecurity as forced
+         from pg_class c
+         join pg_policy p on p.polrelid = c.oid
+        where c.relnamespace = 'public'::regnamespace
+          and c.relname = any($1)`,
+      [NORMALIZED_TABLES],
+    );
+    const policyByTable = new Map(policies.rows.map((row) => [row.tablename, row]));
+    for (const table of NORMALIZED_TABLES) {
+      const policy = policyByTable.get(table);
+      if (policy?.has_using && policy.has_check && policy.forced) {
+        pass(`${table}: forced RLS policy has USING and WITH CHECK`);
       } else {
-        fail(`RLS not enabled+forced on: ${unprotected.join(', ')}`);
+        fail(`${table}: incomplete RLS policy ${JSON.stringify(policy)}`);
       }
     }
 
-    // 7. The app role must not be able to reshape the schema.
-    await withTenant(pool, tenantA, async (client) => {
+    const protection = await admin.query<{ relname: string; protected: boolean }>(
+      `select relname, relrowsecurity and relforcerowsecurity as protected
+         from pg_class
+        where relkind = 'r' and relname = any($1)`,
+      [[...ALL_TENANT_TABLES, 'tenant', 'app_user', 'schema_migrations']],
+    );
+    const protectionByTable = new Map(protection.rows.map((row) => [row.relname, row.protected]));
+    const unprotected = [...ALL_TENANT_TABLES, 'tenant', 'app_user', 'schema_migrations'].filter(
+      (table) => protectionByTable.get(table) !== true,
+    );
+    if (unprotected.length === 0) {
+      pass('all tenant-owned and control tables retain enabled, forced RLS');
+    } else {
+      fail(`tables without enabled, forced RLS: ${unprotected.join(', ')}`);
+    }
+
+    const browserGrants = await admin.query<{ object_name: string; grantee: string }>(
+      `select table_name as object_name, grantee
+         from information_schema.role_table_grants
+        where table_schema = 'public' and grantee in ('anon', 'authenticated')
+       union all
+       select routine_name as object_name, grantee
+         from information_schema.role_routine_grants
+        where specific_schema = 'public'
+          and grantee in ('anon', 'authenticated', 'PUBLIC')`,
+    );
+    if (browserGrants.rowCount === 0) {
+      pass('browser-facing roles retain no direct public table or function grants');
+    } else {
+      fail(`browser-facing grants remain: ${JSON.stringify(browserGrants.rows)}`);
+    }
+
+    await expectRejected('family_account cross-tenant primary membership', () =>
+      admin.query(
+        'update family_account set primary_contact_membership_id = $1 where tenant_id = $2',
+        [b.membership, a.tenant],
+      ),
+    );
+    await expectRejected('permission_grant cross-tenant membership', () =>
+      admin.query('update permission_grant set membership_id = $1 where tenant_id = $2', [
+        b.membership,
+        a.tenant,
+      ]),
+    );
+    await expectRejected('employment_case cross-tenant manager membership', () =>
+      admin.query('update employment_case set primary_manager_membership_id = $1 where id = $2', [
+        b.membership,
+        a.employmentCase,
+      ]),
+    );
+
+    await withTenant(pool, a.tenant, async (client) => {
       try {
         await client.query('create table rls_probe_should_fail (id int)');
-        fail('caredesk_app was able to CREATE TABLE');
+        fail('caredesk_app was able to create a table');
       } catch {
-        pass('caredesk_app cannot create tables');
+        pass('caredesk_app cannot reshape the schema');
       }
     });
-
-    // 8. The audit trail must be append-only for the application. An audit log
-    //    the application can rewrite is not evidence of anything.
-    await withTenant(pool, tenantA, async (client) => {
-      await client.query(
-        `insert into audit_event
-           (tenant_id, actor_id, action, resource_type, resource_id, occurred_at, correlation_id)
-         values ($1, null, 'rls.probe', 'system', 'probe', now(), 'rls-check')`,
-        [tenantA],
-      );
-      const updated = await client
-        .query('update audit_event set action = $1 where tenant_id = $2', ['tampered', tenantA])
-        .then(() => 'allowed')
-        .catch(() => 'denied');
-      const deleted = await client
-        .query('delete from audit_event where tenant_id = $1', [tenantA])
-        .then(() => 'allowed')
-        .catch(() => 'denied');
-
-      if (updated === 'denied' && deleted === 'denied') {
-        pass('audit_event is append-only for caredesk_app (no update, no delete)');
-      } else {
-        fail(`audit_event is mutable by caredesk_app: update=${updated}, delete=${deleted}`);
-      }
-    });
-
-    // 9. Supabase's browser-facing roles must not have direct access to the
-    //    public schema. Authentication uses Supabase, but all CareDesk data
-    //    access goes through the API and its caredesk_app role.
-    {
-      const tableGrants = await pool.query<{ object_name: string; grantee: string }>(
-        `select table_name as object_name, grantee
-           from information_schema.role_table_grants
-          where table_schema = 'public'
-            and grantee in ('anon', 'authenticated')`,
-      );
-      const routineGrants = await pool.query<{ object_name: string; grantee: string }>(
-        `select routine_name as object_name, grantee
-           from information_schema.role_routine_grants
-          where specific_schema = 'public'
-            and grantee in ('anon', 'authenticated', 'PUBLIC')`,
-      );
-      if (tableGrants.rowCount === 0 && routineGrants.rowCount === 0) {
-        pass('Supabase anon/authenticated roles have no public table or function grants');
-      } else {
-        fail(
-          `browser-facing grants remain: ${JSON.stringify({
-            tables: tableGrants.rows,
-            routines: routineGrants.rows,
-          })}`,
-        );
-      }
-    }
-
-    // 10. Global/control tables are also protected even though the API reaches
-    //     them only through narrow SECURITY DEFINER functions.
-    {
-      const expected = ['tenant', 'app_user', 'schema_migrations'];
-      const result = await pool.query<{ relname: string; ok: boolean }>(
-        `select relname, (relrowsecurity and relforcerowsecurity) as ok
-           from pg_class
-          where relkind = 'r' and relname = any($1)`,
-        [expected],
-      );
-      const byName = new Map(result.rows.map((row) => [row.relname, row.ok]));
-      const unprotected = expected.filter((name) => byName.get(name) !== true);
-      if (unprotected.length === 0) {
-        pass('RLS enabled and forced on all global/control tables');
-      } else {
-        fail(`global/control tables without forced RLS: ${unprotected.join(', ')}`);
-      }
-    }
   } finally {
-    // Teardown runs on the admin pool: caredesk_app deliberately cannot delete
-    // rows or drop tables, which is the property assertions 7 and 8 rely on.
-    await adminPool.query('drop table if exists rls_probe_should_fail');
-    for (const tenant of [tenantA, tenantB]) {
-      await adminPool.query('delete from audit_event where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from timeline_event where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from task where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from case_contact_role where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from contact_channel where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from contact where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from organization where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from employment_case where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from caregiver where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from employer where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from care_recipient where tenant_id = $1', [tenant]);
-      await adminPool.query('delete from tenant where id = $1', [tenant]);
+    await admin.query('drop table if exists rls_probe_should_fail');
+    for (const row of [a, b]) {
+      await admin.query('delete from audit_event where tenant_id = $1', [row.tenant]);
+      await admin.query('update document set current_version_id = null where tenant_id = $1', [
+        row.tenant,
+      ]);
+      await admin.query('delete from document_version where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from document where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from timeline_event where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from task where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from employment_case where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from caregiver where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from employer where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from care_recipient where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from permission_grant where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from family_account where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from tenant_membership where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from app_user where id = $1', [row.user]);
+      await admin.query('delete from tenant where id = $1', [row.tenant]);
     }
     await pool.end();
-    await adminPool.end();
+    await admin.end();
   }
 
   if (failures.length > 0) {
-    console.error(`\nRLS check FAILED: ${failures.length} problem(s).`);
-    process.exit(1);
+    throw new Error(`RLS check failed: ${failures.length} problem(s).`);
   }
   console.log('\nRLS isolation check passed.');
 }

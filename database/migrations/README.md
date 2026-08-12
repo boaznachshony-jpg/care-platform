@@ -14,8 +14,13 @@ full business schema — starting with the identity/tenancy tables from
 created until ADR-002 is Accepted.
 
 The closed-pilot sequence currently runs through
-`0019_backfill_self_service_accounts.sql`.
+`0020_sprint_zero_database_hardening.sql`.
 Applied files are immutable; every later change receives the next number.
+
+Future encrypted/typed sensitive-record work is gated by
+[`sensitive-record-migration-requirements.md`](sensitive-record-migration-requirements.md).
+Sprint 0 intentionally adds no future-roadmap tables and no plaintext snapshot
+columns.
 
 ## Running locally
 
