@@ -1,10 +1,10 @@
 # CareDesk Source of Truth
 
-Status: **Draft — pending Product Owner approval**
+Status: **Architecture authority order approved for Sprint 0**
 Owner: Product Owner
-Approved by: _(unassigned)_
-Approved at: _(pending)_
-Last reconciled: 2026-07-23
+Approved by: Product Owner and Data and Domain Architecture (architecture freeze)
+Approved at: 2026-08-12
+Last reconciled: 2026-08-12
 
 ## Purpose
 
@@ -14,36 +14,44 @@ reference material.
 
 ## Authority order
 
-1. **CareDesk Product Specification v1.0**
+1. **Explicit Product Owner decisions and accepted ADRs**
+   Govern a named decision within their scope. The Sprint 0 architecture freeze
+   and ADR-006 control persistence authority and migration even where older
+   implementation or milestone text differs. Later decisions must be recorded
+   through the same change-control process; informal prompts do not override.
+2. **CareDesk Product Specification v1.0**
    File: `/CareDesk_Product_Specification_v1.0.docx`
    Governs product scope, personas, modules, journeys, permissions, and general
    acceptance criteria.
-2. **AI Coding Constitution v1.0**
+3. **AI Coding Constitution v1.0**
    Files: `/CareDesk_AI_Coding_Constitution_v1.0.docx` and the equivalent
    `/CareDesk_AI_Coding_Constitution_v1.0 (1).md`
    Governs engineering constraints, security, testing, and AI-agent behavior.
    If the two formats differ, the DOCX is authoritative until a controlled
    parity check is completed.
-3. **Accepted Architecture Decision Records**
-   Govern the specific decision named by each ADR. Proposed ADRs guide planning
-   but do not override an accepted higher-authority document.
-4. **Database Blueprint**
+4. **Database Blueprint and approved architecture migration specifications**
    Governs canonical entity names, relationships, status enums, tenancy
-   boundaries, data ownership, and migration mapping.
-5. **Rules & Workflow Engine Specification**
+   boundaries, data ownership, and migration mapping. ADR-006,
+   `architecture/strangler-migration.md`, and
+   `architecture/legacy-data-inventory.md` are the approved Sprint 0
+   interpretation of the current persistence transition.
+5. **Synchronization Matrix**
+   Governs cross-artifact change impact, canonical shared vocabulary, and the
+   prohibition on extending transitional `MvpProfile` as a product model.
+6. **Rules & Workflow Engine Specification**
    Governs rule lifecycle, legal-source metadata, workflow state, and the
    boundary between deterministic rules, orchestration, and AI.
-6. **Design System & Component Catalog**
+7. **Design System & Component Catalog**
    Governs design tokens, interaction states, RTL, accessibility, and reusable
    UI components.
-7. **User Stories & Acceptance Criteria**
+8. **User Stories & Acceptance Criteria**
    Governs deliverable behavior for the covered slice. It may clarify but not
    expand MVP scope.
-8. **AI Review Constitution**
+9. **AI Review Constitution**
    Governs review evidence and completion gates for AI-generated changes.
-9. **Repository Bootstrap Plan**
+10. **Repository Bootstrap Plan and BUILD_STATUS history**
    Governs Milestone 0 sequencing and foundation deliverables.
-10. **Master prompts and prototype references**
+11. **Master prompts and prototype references**
     Implementation aids only. They never override the documents above.
 
 ## Historical references
@@ -68,6 +76,16 @@ A shared term or enum change is incomplete until the owner updates every
 affected artifact identified by `SYNC_MATRIX.md`, adds a migration note when
 applicable, updates tests and examples, and records the change in the pull
 request. Silent divergence is prohibited.
+
+## Frozen persistence authority
+
+- Normalized PostgreSQL aggregates are the canonical target.
+- `EmploymentCase` is the central employment aggregate.
+- `tenant_workspace` and `MvpProfile` are transitional compatibility only.
+- `document` and `document_version` are the canonical document model.
+- A datum has one declared writer in a migration phase; undefined dual writes
+  are prohibited.
+- Sensitive identifiers are not migrated into plaintext columns.
 
 ## Unverified regulatory content
 
