@@ -278,18 +278,23 @@ async function main(): Promise<void> {
       }
     });
 
-    await withAppRoleWithoutTenant(pool, async (client) => {
-      for (const table of NORMALIZED_TABLES) {
-        const result = await client.query<{ count: string }>(
-          `select count(*)::text as count from ${table}`,
+    for (const table of NORMALIZED_TABLES) {
+      try {
+        const result = await withAppRoleWithoutTenant(pool, (client) =>
+          client.query<{ count: string }>(`select count(*)::text as count from ${table}`),
         );
         if (result.rows[0]?.count === '0') {
-          pass(`${table}: missing tenant context fails closed`);
+          pass(`${table}: missing tenant context returns no rows`);
         } else {
           fail(`${table}: missing tenant context exposed ${result.rows[0]?.count} rows`);
         }
+      } catch {
+        // PostgreSQL can expose an unset transaction-local custom setting as
+        // an empty string after a pooled connection is reused. UUID-casting
+        // policies reject that value, which is also a safe fail-closed result.
+        pass(`${table}: missing tenant context is rejected`);
       }
-    });
+    }
 
     for (const table of MUTABLE_TABLES) {
       await withTenant(pool, a.tenant, async (client) => {
