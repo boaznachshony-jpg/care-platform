@@ -1,9 +1,9 @@
 # CareDesk Synchronization Matrix
 
-Status: **Draft — pending Product Owner approval**
-Approved by: _(unassigned)_
-Approved at: _(pending)_
-Last updated: 2026-07-23
+Status: **Architecture vocabulary approved for Sprint 0**
+Approved by: Product Owner and Data and Domain Architecture
+Approved at: 2026-08-12
+Last updated: 2026-08-12
 
 This matrix prevents product, database, UI, rules, workflows, API contracts,
 permissions, and tests from drifting apart.
@@ -23,6 +23,8 @@ permissions, and tests from drifting apart.
 | Permission | Product Spec, Database Blueprint, authorization policy, RLS, UI affordance, tests |
 | AI capability | Product Spec, ADR-003, AI guardrails, redaction policy, review checklist, tests |
 | ADR acceptance | Source-of-truth index, affected specifications, bootstrap plan, implementation issue |
+| Persistence authority or migration phase | ADR-006, Strangler Migration, data inventory, API/repository boundary, reconciliation evidence, rollback plan, BUILD_STATUS |
+| Legacy workspace field | Data inventory, canonical aggregate mapping, sensitivity classification, transformation/version, sunset impact |
 
 ## Canonical shared vocabulary
 
@@ -43,6 +45,24 @@ permissions, and tests from drifting apart.
 | Actual payment record | `PaymentRecord` | Generic `Payment` |
 | Rule identity | `RuleDefinition` | Rule containing mutable effective values |
 | Effective rule content | `RuleVersion` | Overwriting a Rule |
+| Canonical employment persistence | Normalized PostgreSQL aggregate rooted at `EmploymentCase` | `tenant_workspace`, `MvpProfile`, MVP client as aggregate root |
+| Canonical document persistence | `Document` and immutable `DocumentVersion` | `workspace_file`, file embedded in workspace snapshot |
+
+## Transitional compatibility rule
+
+`MvpProfile`, `MvpClient`, `tenant_workspace`, and `workspace_file` are legacy
+compatibility surfaces. New product fields must not be added to `MvpProfile` or
+the workspace payload. New domain data must be designed in its normalized
+aggregate with ownership, tenancy, sensitivity, lifecycle, and migration rules.
+
+A compatibility-only exception requires an accepted amendment to ADR-006 that
+names the exact field, reason, write authority, canonical destination, and
+removal condition. An exception cannot make the legacy snapshot the sole
+source for a new product capability.
+
+Undefined dual writes are prohibited. Every migration PR must name exactly one
+write authority per datum and phase, plus its read authority, reconciliation
+method, rollback boundary, and cutover evidence.
 
 ## Canonical status enums
 

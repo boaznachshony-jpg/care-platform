@@ -17,10 +17,10 @@ pg.types.setTypeParser(DATE_OID, (value: string) => value);
  * require TLS but don't pin a CA here (the managed endpoint is trusted);
  * tighten to a pinned CA before production.
  */
-export function createPool(connectionString: string): Pool {
+export function createPool(connectionString: string, ssl = true): Pool {
   return new Pool({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: ssl ? { rejectUnauthorized: false } : false,
     max: 5,
   });
 }
