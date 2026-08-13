@@ -15,6 +15,7 @@ import type {
   TimelineService,
   WorkspaceRepository,
   WorkspaceFileRepository,
+  VisaRenewalEvaluationRepository,
 } from '@caredesk/application';
 import {
   AddContactToCase,
@@ -43,6 +44,9 @@ import {
   DeleteWorkspaceFile,
   UploadCaseDocument,
   UpdateFamilyMemberRole,
+  StartVisaRenewalWorkflow,
+  GetVisaRenewalWorkflow,
+  ListVisaRenewalWorkflows,
 } from '@caredesk/application';
 import {
   createPool,
@@ -58,6 +62,10 @@ import {
   PgTimelineService,
   PgWorkspaceRepository,
   PgWorkspaceFileRepository,
+  PgVisaRenewalRepository,
+  PgVisaRenewalSideEffects,
+  PgVisaRenewalEvaluationRepository,
+  PgIdempotencyRepository,
 } from '@caredesk/db';
 import {
   InMemoryActorResolver,
@@ -80,6 +88,7 @@ import {
   DisabledProductBillingGateway,
   SystemClock,
   UuidIdGenerator,
+  InMemoryVisaRenewalRepository,
 } from '@caredesk/infrastructure';
 import type { Pool } from 'pg';
 import type { Env } from './env.js';
@@ -111,6 +120,8 @@ const ROLE_PERMISSIONS = {
     'membership:manage',
     'billing:read',
     'billing:manage',
+    'workflow:start',
+    'workflow:read',
   ],
   manager: [
     'employment_case:create',
@@ -127,6 +138,8 @@ const ROLE_PERMISSIONS = {
     'workspace:update',
     'membership:read',
     'billing:read',
+    'workflow:start',
+    'workflow:read',
   ],
   viewer: [
     'employment_case:read',
@@ -137,6 +150,7 @@ const ROLE_PERMISSIONS = {
     'workspace:read',
     'membership:read',
     'billing:read',
+    'workflow:read',
   ],
   family_member: [
     'employment_case:read',
@@ -149,6 +163,7 @@ const ROLE_PERMISSIONS = {
     'workspace:read',
     'membership:read',
     'billing:read',
+    'workflow:read',
   ],
 } as const;
 
@@ -195,6 +210,10 @@ export interface Container {
   completeProductBillingSetup: CompleteProductBillingSetup;
   collectDueProductSubscriptions: CollectDueProductSubscriptions;
   cancelProductSubscription: CancelProductSubscription;
+  startVisaRenewal: StartVisaRenewalWorkflow;
+  getVisaRenewal: GetVisaRenewalWorkflow;
+  listVisaRenewals: ListVisaRenewalWorkflows;
+  visaRenewalEvaluation: VisaRenewalEvaluationRepository;
   readiness(): Promise<{
     ready: boolean;
     reasons: string[];
@@ -239,6 +258,26 @@ export function buildContainer(env: Env): Container {
   let workspaceFileRepository: WorkspaceFileRepository;
   let familyMembershipRepository: FamilyMembershipRepository;
   let billingRepository: BillingRepository;
+  const memoryVisaRenewals = new InMemoryVisaRenewalRepository();
+  const visaRenewalRepository = pool ? new PgVisaRenewalRepository(pool) : memoryVisaRenewals;
+  const visaIdempotency = pool ? new PgIdempotencyRepository(pool) : memoryVisaRenewals;
+  const visaRenewalEvaluation: VisaRenewalEvaluationRepository = pool
+    ? new PgVisaRenewalEvaluationRepository(pool)
+    : {
+        async evaluate(asOf) {
+          return {
+            ruleDefinitionId: '00000000-0000-0000-0000-000000000000',
+            ruleVersionId: '00000000-0000-0000-0000-000000000000',
+            status: 'unavailable',
+            asOf,
+            dueDate: null,
+            priority: null,
+            explanationKey: 'visa_renewal.rule_unavailable',
+            sourceReferences: [],
+            reviewRequired: true,
+          };
+        },
+      };
 
   if (pool) {
     repository = new PgCaseFoundationRepository(pool);
@@ -428,6 +467,15 @@ export function buildContainer(env: Env): Container {
       chargingStartsAt: null,
     },
   };
+  const visaDeps = {
+    authorization,
+    audit,
+    clock,
+    ids,
+    workflows: visaRenewalRepository,
+    idempotency: visaIdempotency,
+    ...(pool ? { sideEffects: new PgVisaRenewalSideEffects(pool) } : {}),
+  };
 
   return {
     auth,
@@ -479,6 +527,10 @@ export function buildContainer(env: Env): Container {
     completeProductBillingSetup: new CompleteProductBillingSetup(billingDeps),
     collectDueProductSubscriptions: new CollectDueProductSubscriptions(billingDeps),
     cancelProductSubscription: new CancelProductSubscription(billingDeps),
+    startVisaRenewal: new StartVisaRenewalWorkflow(visaDeps),
+    getVisaRenewal: new GetVisaRenewalWorkflow(visaDeps),
+    listVisaRenewals: new ListVisaRenewalWorkflows(visaDeps),
+    visaRenewalEvaluation,
     async readiness() {
       const checks: Record<string, 'ok' | 'unconfigured' | 'unreachable' | 'migration-required'> = {
         database: pool ? 'ok' : 'unconfigured',
@@ -498,13 +550,15 @@ export function buildContainer(env: Env): Container {
             workspace_file_table: string | null;
             family_members_function: string | null;
             billing_table: string | null;
+            workflow_table: string | null;
           }>(
             `select
                to_regprocedure('public.resolve_caredesk_actor(text)')::text as actor_resolver,
                to_regclass('public.tenant_workspace')::text as workspace_table,
                to_regclass('public.workspace_file')::text as workspace_file_table,
                to_regprocedure('public.list_caredesk_family_members(uuid)')::text as family_members_function,
-               to_regclass('public.product_subscription')::text as billing_table`,
+               to_regclass('public.product_subscription')::text as billing_table,
+               to_regclass('public.workflow_instance')::text as workflow_table`,
           );
           const row = result.rows[0];
           if (
@@ -512,7 +566,8 @@ export function buildContainer(env: Env): Container {
             !row.workspace_table ||
             !row.workspace_file_table ||
             !row.family_members_function ||
-            !row.billing_table
+            !row.billing_table ||
+            !row.workflow_table
           ) {
             reasons.push('Required pilot database migrations are missing');
             checks.database = 'migration-required';

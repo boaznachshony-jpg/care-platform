@@ -4,6 +4,7 @@ import type {
   StartVisaRenewalRecord,
   VisaRenewalRepository,
   VisaRenewalSideEffects,
+  VisaRenewalEvaluationRepository,
   VisaRenewalWorkflow,
   VisaRuleEvaluation,
   VisaWorkflowAssignment,
@@ -202,6 +203,45 @@ export class PgVisaRenewalRepository implements VisaRenewalRepository {
       );
       return Promise.all(result.rows.map((row) => hydrate(client, row)));
     });
+  }
+}
+
+/** Reads only professionally activated, source-backed rule versions. */
+export class PgVisaRenewalEvaluationRepository implements VisaRenewalEvaluationRepository {
+  constructor(private readonly pool: Pool) {}
+  async evaluate(asOf: string): Promise<VisaRuleEvaluation> {
+    const result = await this.pool.query<{
+      definition_id: string;
+      version_id: string;
+      explanation_key: string;
+      source_reference: string;
+    }>(
+      `select d.id as definition_id, v.id as version_id,
+              d.description_key as explanation_key, s.source_reference
+         from visa_rule_version v
+         join visa_rule_definition d on d.id = v.rule_definition_id
+         join visa_rule_source s on s.rule_version_id = v.id
+        where v.status = 'active'
+          and (v.effective_from is null or v.effective_from <= $1::date)
+          and (v.effective_to is null or v.effective_to >= $1::date)
+        order by v.version desc, s.source_reference`,
+      [asOf],
+    );
+    const first = result.rows[0];
+    const versionIds = new Set(result.rows.map((row) => row.version_id));
+    return {
+      ruleDefinitionId: first?.definition_id ?? '00000000-0000-0000-0000-000000000000',
+      ruleVersionId: first?.version_id ?? '00000000-0000-0000-0000-000000000000',
+      status: !first ? 'unavailable' : versionIds.size === 1 ? 'active' : 'conflicting',
+      asOf,
+      dueDate: null,
+      priority: null,
+      explanationKey: first?.explanation_key ?? 'visa_renewal.rule_unavailable',
+      sourceReferences: result.rows
+        .filter((row) => row.version_id === first?.version_id)
+        .map((row) => row.source_reference),
+      reviewRequired: !first || versionIds.size !== 1,
+    };
   }
 }
 
