@@ -75,3 +75,8 @@ export interface VisaRenewalSideEffects {
     sensitivity: SensitivityClass;
   }): Promise<void>;
 }
+
+/** Resolves governed rule output server-side; callers can never supply legal truth. */
+export interface VisaRenewalEvaluationRepository {
+  evaluate(asOf: string): Promise<VisaRuleEvaluation>;
+}

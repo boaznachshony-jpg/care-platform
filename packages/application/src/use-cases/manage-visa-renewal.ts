@@ -5,6 +5,7 @@ import type {
   IdGenerator,
   IdempotencyRepository,
   VisaRenewalRepository,
+  VisaRenewalSideEffects,
   VisaRuleEvaluation,
   VisaWorkflowAssignment,
   VisaRenewalWorkflow,
@@ -34,6 +35,7 @@ type StartDeps = {
   ids: IdGenerator;
   workflows: VisaRenewalRepository;
   idempotency: IdempotencyRepository;
+  sideEffects?: VisaRenewalSideEffects;
 };
 
 function assertRaci(assignments: readonly VisaWorkflowAssignment[]): void {
@@ -90,16 +92,29 @@ export class StartVisaRenewalWorkflow {
       evaluation: input.evaluation,
       assignments: input.assignments,
     });
-    await this.deps.audit.record({
-      tenantId: actor.tenantId,
-      actorId: actor.userId,
-      action: 'visa_renewal.workflow_started',
-      resourceType: 'workflow_instance',
-      resourceId: workflow.id,
-      correlationId: actor.correlationId,
-      occurredAt: now,
-      sensitivity: 'identity_sensitive',
-    });
+    if (this.deps.sideEffects) {
+      await this.deps.sideEffects.record({
+        tenantId: actor.tenantId,
+        employmentCaseId: caseId,
+        workflowId: workflow.id,
+        actorId: actor.userId,
+        correlationId: actor.correlationId,
+        occurredAt: now,
+        action: 'visa_renewal.workflow_started',
+        sensitivity: 'identity_sensitive',
+      });
+    } else {
+      await this.deps.audit.record({
+        tenantId: actor.tenantId,
+        actorId: actor.userId,
+        action: 'visa_renewal.workflow_started',
+        resourceType: 'workflow_instance',
+        resourceId: workflow.id,
+        correlationId: actor.correlationId,
+        occurredAt: now,
+        sensitivity: 'identity_sensitive',
+      });
+    }
     await this.deps.idempotency.saveIdempotency(actor.tenantId, {
       operation: 'visa_renewal.start',
       key: input.idempotencyKey,
@@ -107,6 +122,21 @@ export class StartVisaRenewalWorkflow {
       response: workflow,
     });
     return workflow;
+  }
+}
+
+export class ListVisaRenewalWorkflows {
+  constructor(
+    private readonly deps: Pick<StartDeps, 'authorization' | 'audit' | 'clock' | 'workflows'>,
+  ) {}
+  async execute(actor: Actor, caseId: string): Promise<VisaRenewalWorkflow[]> {
+    await authorizeOrThrow(this.deps, actor, {
+      resourceType: 'workflow',
+      action: 'read',
+      caseId,
+      sensitivity: 'identity_sensitive',
+    });
+    return this.deps.workflows.listByCase(actor.tenantId, caseId);
   }
 }
 

@@ -13,6 +13,7 @@ import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerFamilyAccessRoutes } from './routes/family-access.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerSupportRequestRoutes } from './routes/support-requests.js';
+import { registerVisaRenewalRoutes } from './routes/visa-renewals.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
 import { InMemoryRateLimiter } from './rate-limit.js';
 
@@ -154,6 +155,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerWorkspaceRoutes(app, container);
   registerFamilyAccessRoutes(app, container, env);
   registerBillingRoutes(app, container, env);
+  registerVisaRenewalRoutes(app, container);
   registerSupportRequestRoutes(app, env, supportRateLimiter);
 
   return app;
