@@ -11,3 +11,4 @@ export * from './workspace-repository.js';
 export * from './workspace-file-repository.js';
 export * from './family-membership-repository.js';
 export * from './billing-repository.js';
+export * from './visa-renewal-repository.js';
