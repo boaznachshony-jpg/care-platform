@@ -47,6 +47,14 @@ const ALL_TENANT_TABLES = [
   'product_subscription',
   'billing_setup_intent',
   'product_billing_charge',
+  'employment_authorization',
+  'workflow_instance',
+  'workflow_rule_evaluation',
+  'workflow_evaluation_source',
+  'workflow_step',
+  'workflow_assignment',
+  'workflow_blocker',
+  'idempotency_record',
 ] as const;
 
 interface Fixture {
