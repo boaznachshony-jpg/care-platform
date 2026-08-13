@@ -20,6 +20,7 @@ import type {
   BillingPlanResponse,
   BillingCheckoutResponse,
   StartBillingSetupRequest,
+  StartVisaRenewalRequest,
 } from '@caredesk/schemas';
 import { getBrowserAuthClient } from '../auth/client.js';
 
@@ -143,6 +144,57 @@ export function listEmploymentCases(): Promise<EmploymentCaseResponse[]> {
 }
 
 const casePath = (caseId: string): string => `/cases/${encodeURIComponent(caseId)}`;
+
+export interface VisaRenewalWorkflowResponse {
+  id: string;
+  employmentCaseId: string;
+  templateVersionId: string;
+  currentAuthorizationId: string;
+  status: 'not_started' | 'active' | 'blocked' | 'completed' | 'cancelled';
+  evaluation: {
+    status: 'active' | 'unverified' | 'conflicting' | 'unavailable';
+    asOf: string;
+    dueDate: string | null;
+    priority: 'low' | 'normal' | 'high' | 'urgent' | null;
+    explanationKey: string;
+    sourceReferences: readonly string[];
+    reviewRequired: boolean;
+  };
+  assignments: readonly {
+    stepKey: string;
+    raciRole: 'responsible' | 'accountable' | 'consulted' | 'informed';
+    assigneeType: 'user' | 'contact';
+    assigneeId: string;
+  }[];
+  blockers: readonly {
+    code:
+      | 'missing_primary_licensed_bureau_contact'
+      | 'overlapping_authorization'
+      | 'unverified_evidence'
+      | 'professional_review_required';
+    stepKey: string;
+    ownerAssignmentId: string | null;
+    nextReviewAt: string | null;
+  }[];
+  linkedRenewedAuthorizationId: string | null;
+  linkedDocumentVersionId: string | null;
+  completedAt: string | null;
+}
+
+export function listVisaRenewals(caseId: string): Promise<VisaRenewalWorkflowResponse[]> {
+  return request(`${casePath(caseId)}/visa-renewals`);
+}
+
+export function startVisaRenewal(
+  caseId: string,
+  input: StartVisaRenewalRequest,
+): Promise<VisaRenewalWorkflowResponse> {
+  return request(`${casePath(caseId)}/visa-renewals`, {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
+}
 
 export function listCaseContacts(caseId: string): Promise<CaseContactResponse[]> {
   return request(`${casePath(caseId)}/contacts`);

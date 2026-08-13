@@ -4965,3 +4965,68 @@ input[type='number'] {
     padding: 22px;
   }
 }
+
+/* Visa renewal extends the employment case with the existing card/form language. */
+.visa-renewal {
+  margin-block: 2rem;
+  padding-block: 1.5rem;
+  border-block: 1px solid #dce5f1;
+}
+.visa-renewal__eyebrow {
+  margin: 0;
+  color: #1559c7;
+  font-weight: 800;
+}
+.visa-renewal__header h2 {
+  margin-block-start: 0.25rem;
+}
+.visa-workflow-card,
+.visa-renewal-start {
+  margin-block: 1rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid #dce5f1;
+  border-radius: 18px;
+  background: white;
+}
+.visa-workflow-card__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.visa-workflow-card__title h3 {
+  margin: 0;
+}
+.visa-workflow-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+.visa-workflow-summary > div {
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: #f5f8fc;
+}
+.visa-workflow-summary dt {
+  font-weight: 800;
+}
+.visa-workflow-summary dd {
+  margin-inline-start: 0;
+  margin-block-start: 0.35rem;
+}
+.visa-id {
+  overflow-wrap: anywhere;
+}
+.visa-renewal-start summary {
+  min-height: 44px;
+  cursor: pointer;
+  color: #1559c7;
+  font-weight: 800;
+}
+.visa-renewal-start form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  align-items: end;
+}

@@ -34,6 +34,8 @@ import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
 import { BillingPage } from './pages/BillingPage.js';
 import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
 import { ContactPage } from './pages/ContactPage.js';
+import { CasePage } from './pages/CasePage.js';
+import { OpenCasePage } from './pages/OpenCasePage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -99,6 +101,8 @@ function AuthenticatedApp() {
         <Route path="/app" element={<ClientsPage />} />
         <Route path="/family" element={<FamilyAccessPage />} />
         <Route path="/billing" element={<BillingPage />} />
+        <Route path="/cases/new" element={<OpenCasePage />} />
+        <Route path="/cases/:caseId" element={<CasePage />} />
         <Route
           path="/clients/:clientId"
           element={
@@ -275,7 +279,10 @@ function AuthenticatedApp() {
 
 function ApplicationEntry() {
   const { pathname } = useLocation();
-  const isPrivatePath = pathname.startsWith('/clients/') || authenticatedEntrypoints.has(pathname);
+  const isPrivatePath =
+    pathname.startsWith('/clients/') ||
+    pathname.startsWith('/cases/') ||
+    authenticatedEntrypoints.has(pathname);
   return isPrivatePath ? <AuthenticatedApp /> : <Navigate to="/" replace />;
 }
 
