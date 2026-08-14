@@ -26,8 +26,10 @@ const workflow = {
   completedAt: null,
 };
 
+const apiUrl = (path: string): string => `http://127.0.0.1:4000${path}`;
+
 test.beforeEach(async ({ page }) => {
-  await page.route('**/cases/case-1', (route) =>
+  await page.route(apiUrl('/cases/case-1'), (route) =>
     route.fulfill({
       json: {
         id: 'case-1',
@@ -56,13 +58,16 @@ test.beforeEach(async ({ page }) => {
       },
     }),
   );
-  await page.route(/\/cases\/case-1\/(tasks|documents|contacts|timeline)$/, (route) =>
-    route.fulfill({ json: [] }),
+  await page.route(
+    /^http:\/\/127\.0\.0\.1:4000\/cases\/case-1\/(tasks|documents|contacts|timeline)$/,
+    (route) => route.fulfill({ json: [] }),
   );
 });
 
 test('visa renewal happy path shows governed workflow detail', async ({ page }) => {
-  await page.route('**/cases/case-1/visa-renewals', (route) => route.fulfill({ json: [workflow] }));
+  await page.route(apiUrl('/cases/case-1/visa-renewals'), (route) =>
+    route.fulfill({ json: [workflow] }),
+  );
   await page.goto('/cases/case-1');
   await expect(page.getByRole('heading', { name: 'חידוש אשרת עבודה' })).toBeVisible();
   await expect(page.getByText('פעיל ומגובה במקור')).toBeVisible();
@@ -70,7 +75,7 @@ test('visa renewal happy path shows governed workflow detail', async ({ page }) 
 });
 
 test('visa renewal blocked path exposes unverified evidence', async ({ page }) => {
-  await page.route('**/cases/case-1/visa-renewals', (route) =>
+  await page.route(apiUrl('/cases/case-1/visa-renewals'), (route) =>
     route.fulfill({
       json: [
         {
