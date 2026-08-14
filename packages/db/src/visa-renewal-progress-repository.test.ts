@@ -54,6 +54,8 @@ describe('PgVisaRenewalProgressRepository', () => {
       priorAuthorizationId: '00000000-0000-4000-8000-000000000005',
       renewedAuthorizationId: '00000000-0000-4000-8000-000000000006',
       documentVersionId: '00000000-0000-4000-8000-000000000007',
+      validFrom: '2026-08-01',
+      validUntil: '2027-07-31',
       linkedBy: '00000000-0000-4000-8000-000000000008',
       linkedAt: '2026-08-14T10:00:00.000Z',
     });
@@ -62,6 +64,31 @@ describe('PgVisaRenewalProgressRepository', () => {
     expect(insert?.sql).toContain("dv.verification_status = 'verified'");
     expect(insert?.sql).toContain('prior.employment_case_id = $3');
     expect(insert?.sql).not.toMatch(/update employment_authorization/);
+    expect(
+      db.calls.some(({ sql }) => sql.includes('insert into authorization_overlap_review')),
+    ).toBe(true);
+    expect(db.calls.some(({ sql }) => sql.includes("ea.status in ('current','renewed')"))).toBe(
+      true,
+    );
+    expect(
+      db.calls.find(({ sql }) => sql.includes('insert into authorization_overlap_review'))?.sql,
+    ).toContain('returning id');
+  });
+
+  it('resolves an overlap only inside the named case and workflow', async () => {
+    const db = fakePool();
+    const repository = new PgVisaRenewalProgressRepository(db.pool);
+    await repository.resolveOverlapReview({
+      ...ids,
+      reviewId: ids.id,
+      resolutionCode: 'reviewed',
+      reviewedBy: '00000000-0000-4000-8000-000000000008',
+      reviewedAt: '2026-08-14T10:00:00.000Z',
+    });
+    const update =
+      db.calls.find(({ sql }) => sql.includes('update authorization_overlap_review'))?.sql ?? '';
+    expect(update).toContain('employment_case_id = $6');
+    expect(update).toContain('workflow_instance_id = $7');
   });
 
   it('completes only the linked task after steps, evidence, and reviews pass', async () => {

@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { AuthorizationError, VisaRenewalValidationError } from '@caredesk/application';
-import { startVisaRenewalRequestSchema } from '@caredesk/schemas';
+import {
+  completeVisaRenewalRequestSchema,
+  linkRenewedAuthorizationRequestSchema,
+  resolveAuthorizationOverlapRequestSchema,
+  startVisaRenewalRequestSchema,
+  visaRenewalContactActivityRequestSchema,
+} from '@caredesk/schemas';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { sendError, sendValidationError } from './http-errors.js';
@@ -12,9 +18,34 @@ interface CaseParams {
 interface WorkflowParams extends CaseParams {
   workflowId: string;
 }
+interface ReviewParams extends WorkflowParams {
+  reviewId: string;
+}
 
 function requestHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+function idempotencyKey(headers: Record<string, unknown>): string | null {
+  const value = headers['idempotency-key'];
+  return typeof value === 'string' && value.length > 0 && value.length <= 200 ? value : null;
+}
+
+function mutationError(
+  request: Parameters<typeof sendError>[0],
+  reply: Parameters<typeof sendError>[1],
+  error: unknown,
+) {
+  if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
+  if (error instanceof VisaRenewalValidationError) {
+    const status =
+      error.code === 'IDEMPOTENCY_KEY_REUSED'
+        ? 409
+        : error.code === 'WORKFLOW_NOT_FOUND'
+          ? 404
+          : 422;
+    return sendError(request, reply, status, error.code);
+  }
+  throw error;
 }
 
 /** Tenant authority comes exclusively from request.actor, never request data. */
@@ -89,6 +120,111 @@ export function registerVisaRenewalRoutes(app: FastifyInstance, container: Conta
       } catch (error) {
         if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
         throw error;
+      }
+    },
+  );
+
+  app.post<{ Params: WorkflowParams }>(
+    '/cases/:caseId/visa-renewals/:workflowId/contact-activities',
+    options,
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      const parsed = visaRenewalContactActivityRequestSchema.safeParse(request.body);
+      if (!parsed.success) return sendValidationError(request, reply, parsed.error);
+      const key = idempotencyKey(request.headers);
+      if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
+      try {
+        reply
+          .status(201)
+          .send(
+            await container.recordVisaRenewalContact.execute(
+              actor,
+              request.params.caseId,
+              request.params.workflowId,
+              { ...parsed.data, idempotencyKey: key, requestHash: requestHash(parsed.data) },
+            ),
+          );
+      } catch (error) {
+        return mutationError(request, reply, error);
+      }
+    },
+  );
+
+  app.post<{ Params: WorkflowParams }>(
+    '/cases/:caseId/visa-renewals/:workflowId/renewed-authorization',
+    options,
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      const parsed = linkRenewedAuthorizationRequestSchema.safeParse(request.body);
+      if (!parsed.success) return sendValidationError(request, reply, parsed.error);
+      const key = idempotencyKey(request.headers);
+      if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
+      try {
+        reply
+          .status(201)
+          .send(
+            await container.linkRenewedVisaAuthorization.execute(
+              actor,
+              request.params.caseId,
+              request.params.workflowId,
+              { ...parsed.data, idempotencyKey: key, requestHash: requestHash(parsed.data) },
+            ),
+          );
+      } catch (error) {
+        return mutationError(request, reply, error);
+      }
+    },
+  );
+
+  app.post<{ Params: ReviewParams }>(
+    '/cases/:caseId/visa-renewals/:workflowId/overlap-reviews/:reviewId/resolve',
+    options,
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      const parsed = resolveAuthorizationOverlapRequestSchema.safeParse(request.body);
+      if (!parsed.success) return sendValidationError(request, reply, parsed.error);
+      const key = idempotencyKey(request.headers);
+      if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
+      try {
+        reply.send(
+          await container.resolveVisaAuthorizationOverlap.execute(
+            actor,
+            request.params.caseId,
+            request.params.workflowId,
+            request.params.reviewId,
+            { ...parsed.data, idempotencyKey: key, requestHash: requestHash(parsed.data) },
+          ),
+        );
+      } catch (error) {
+        return mutationError(request, reply, error);
+      }
+    },
+  );
+
+  app.post<{ Params: WorkflowParams }>(
+    '/cases/:caseId/visa-renewals/:workflowId/complete',
+    options,
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      const parsed = completeVisaRenewalRequestSchema.safeParse(request.body);
+      if (!parsed.success) return sendValidationError(request, reply, parsed.error);
+      const key = idempotencyKey(request.headers);
+      if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
+      try {
+        reply.send(
+          await container.completeVisaRenewal.execute(
+            actor,
+            request.params.caseId,
+            request.params.workflowId,
+            { ...parsed.data, idempotencyKey: key, requestHash: requestHash(parsed.data) },
+          ),
+        );
+      } catch (error) {
+        return mutationError(request, reply, error);
       }
     },
   );
