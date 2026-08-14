@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TASK_PRIORITIES } from '@caredesk/domain';
+import { isoDateSchema } from './date.js';
 
 export const createTaskRequestSchema = z.object({
   title: z.string().trim().min(2).max(160),
@@ -12,13 +13,7 @@ export const createTaskRequestSchema = z.object({
    * string is normalised away first — otherwise leaving this optional field
    * blank fails the regex and blocks the whole form.
    */
-  dueDate: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'ISO date (YYYY-MM-DD) required')
-      .optional(),
-  ),
+  dueDate: z.preprocess((value) => (value === '' ? undefined : value), isoDateSchema.optional()),
 });
 
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
