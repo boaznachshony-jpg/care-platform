@@ -716,5 +716,75 @@
         "summary": "A document was uploaded to the case"
       }
     }
+  },
+  "visaRenewal": {
+    "eyebrow": "Governed workflow",
+    "heading": "Work visa renewal",
+    "loading": "Loading renewal workflows…",
+    "unauthorized": "You are not authorized to view renewal workflows for this case.",
+    "loadFailed": "Renewal workflows cannot be loaded right now.",
+    "retry": "Try again",
+    "emptyTitle": "No renewal workflow yet",
+    "emptyBody": "Start a workflow using the approved template and authorization details.",
+    "workflowLabel": "Visa renewal workflow",
+    "workflowTitle": "Renewal workflow",
+    "currentStep": "Current step",
+    "ruleStatus": "Rule status",
+    "evidence": "Evidence and sources",
+    "evidenceVerified": "{{count}} documented sources",
+    "evidenceMissing": "No verified sources attached",
+    "reviewRequired": "Professional review is required before this workflow can proceed.",
+    "blockers": "Blockers",
+    "noBlockers": "No active blockers.",
+    "nextReview": "Next review:",
+    "assignments": "Assignments and RACI",
+    "renewedAuthorization": "Renewed authorization linkage",
+    "linked": "Linked renewed authorization:",
+    "document": "Document:",
+    "notLinked": "No renewed authorization has been linked yet.",
+    "notAvailable": "Not available",
+    "startHeading": "Start a renewal workflow",
+    "startHelp": "Use only approved identifiers provided for this case. Rules are evaluated by the server; no legal deadline is calculated in the browser.",
+    "templateVersion": "Template version ID",
+    "currentAuthorization": "Current authorization ID",
+    "asOf": "Rule evaluation date",
+    "stepKey": "Initial step key",
+    "responsible": "Responsible user ID",
+    "accountable": "Accountable user ID",
+    "invalidIdentifier": "Enter a valid UUID",
+    "invalidDate": "Enter a valid date",
+    "start": "Start workflow",
+    "starting": "Starting…",
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "blocked": "Blocked",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "rule": {
+      "active": "Active and source-backed",
+      "unverified": "Unverified",
+      "conflicting": "Conflicting sources",
+      "unavailable": "Unavailable"
+    },
+    "raci": {
+      "responsible": "Responsible",
+      "accountable": "Accountable",
+      "consulted": "Consulted",
+      "informed": "Informed"
+    },
+    "blocker": {
+      "missing_primary_licensed_bureau_contact": "Primary licensed bureau contact is missing",
+      "overlapping_authorization": "An overlapping authorization exists",
+      "unverified_evidence": "Evidence is not verified",
+      "professional_review_required": "Professional review is required"
+    },
+    "startError": {
+      "conflict": "This request conflicts with an earlier action. Refresh and try again.",
+      "unverified": "Cannot start: the rule or sources are unverified and require review.",
+      "unauthorized": "You are not authorized to start a renewal workflow for this case.",
+      "error": "The workflow cannot be started right now. Try again."
+    }
   }
 }

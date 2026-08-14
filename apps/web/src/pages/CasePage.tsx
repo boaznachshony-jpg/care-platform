@@ -8,6 +8,7 @@ import { CaseContactsSection } from './case/CaseContactsSection.js';
 import { CaseDocumentsSection } from './case/CaseDocumentsSection.js';
 import { CaseTasksSection } from './case/CaseTasksSection.js';
 import { CaseTimelineSection } from './case/CaseTimelineSection.js';
+import { VisaRenewalSection } from './case/VisaRenewalSection.js';
 
 type CaseState =
   | { kind: 'loading' }
@@ -80,6 +81,8 @@ export function CasePage() {
         <dt>{t('case.startDate')}</dt>
         <dd dir="ltr">{data.startDate}</dd>
       </dl>
+
+      <VisaRenewalSection caseId={data.id} />
 
       <CaseTasksSection caseId={data.id} />
       <CaseDocumentsSection caseId={data.id} />

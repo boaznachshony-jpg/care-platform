@@ -288,7 +288,12 @@
       "superseded": "הוחלף"
     }
   },
-  "common": { "back": "חזרה", "continue": "המשך", "select": "בחירה", "notProvided": "טרם הוזן" },
+  "common": {
+    "back": "חזרה",
+    "continue": "המשך",
+    "select": "בחירה",
+    "notProvided": "טרם הוזן"
+  },
   "profile": {
     "recipientIdNumber": "מספר תעודת זהות של מקבל הטיפול",
     "idError": "מספר תעודת הזהות אינו תקין.",
@@ -710,6 +715,76 @@
       "uploaded": {
         "summary": "הועלה מסמך חדש לתיק"
       }
+    }
+  },
+  "visaRenewal": {
+    "eyebrow": "תהליך מפוקח",
+    "heading": "חידוש אשרת עבודה",
+    "loading": "טוענים את תהליכי החידוש…",
+    "unauthorized": "אין לך הרשאה לצפות בתהליכי החידוש בתיק זה.",
+    "loadFailed": "לא ניתן לטעון את תהליכי החידוש כרגע.",
+    "retry": "ניסיון נוסף",
+    "emptyTitle": "טרם התחיל תהליך חידוש",
+    "emptyBody": "אפשר להתחיל תהליך לפי פרטי התבנית והאישור המאושרים.",
+    "workflowLabel": "תהליך חידוש אשרה",
+    "workflowTitle": "תהליך חידוש",
+    "currentStep": "השלב הנוכחי",
+    "ruleStatus": "מצב הכלל",
+    "evidence": "ראיות ומקורות",
+    "evidenceVerified": "{{count}} מקורות מתועדים",
+    "evidenceMissing": "לא צורפו מקורות מאומתים",
+    "reviewRequired": "נדרשת בדיקה מקצועית לפני המשך התהליך.",
+    "blockers": "חסמים",
+    "noBlockers": "אין חסמים פעילים.",
+    "nextReview": "בדיקה הבאה:",
+    "assignments": "אחריות והקצאות (RACI)",
+    "renewedAuthorization": "קישור לאישור המחודש",
+    "linked": "אישור מחודש מקושר:",
+    "document": "מסמך:",
+    "notLinked": "עדיין לא קושר אישור מחודש.",
+    "notAvailable": "לא זמין",
+    "startHeading": "התחלת תהליך חידוש",
+    "startHelp": "השתמשו רק במזהים שאושרו ונמסרו עבור התיק. המערכת מעריכה את הכללים בצד השרת; היא אינה מחשבת מועד משפטי בדפדפן.",
+    "templateVersion": "מזהה גרסת תבנית",
+    "currentAuthorization": "מזהה האישור הנוכחי",
+    "asOf": "תאריך הערכת הכללים",
+    "stepKey": "מפתח שלב פתיחה",
+    "responsible": "מזהה האחראי לביצוע",
+    "accountable": "מזהה בעל האחריות הכוללת",
+    "invalidIdentifier": "נדרש מזהה UUID תקין",
+    "invalidDate": "נדרש תאריך תקין",
+    "start": "התחלת התהליך",
+    "starting": "מתחילים…",
+    "status": {
+      "pending": "ממתין",
+      "active": "פעיל",
+      "blocked": "חסום",
+      "completed": "הושלם",
+      "cancelled": "בוטל"
+    },
+    "rule": {
+      "active": "פעיל ומגובה במקור",
+      "unverified": "לא מאומת",
+      "conflicting": "מקורות סותרים",
+      "unavailable": "לא זמין"
+    },
+    "raci": {
+      "responsible": "אחראי לביצוע",
+      "accountable": "אחריות כוללת",
+      "consulted": "נועצים בו",
+      "informed": "מיודע"
+    },
+    "blocker": {
+      "missing_primary_licensed_bureau_contact": "חסר איש קשר ראשי בלשכה מורשית",
+      "overlapping_authorization": "נמצא אישור חופף",
+      "unverified_evidence": "הראיות טרם אומתו",
+      "professional_review_required": "נדרשת בדיקה מקצועית"
+    },
+    "startError": {
+      "conflict": "הבקשה מתנגשת בפעולה קודמת. רעננו את הרשימה ונסו שוב.",
+      "unverified": "לא ניתן להתחיל: הכלל או המקורות טרם אומתו ודורשים בדיקה.",
+      "unauthorized": "אין לך הרשאה להתחיל תהליך חידוש בתיק זה.",
+      "error": "לא ניתן להתחיל את התהליך כרגע. נסו שוב."
     }
   }
 }
