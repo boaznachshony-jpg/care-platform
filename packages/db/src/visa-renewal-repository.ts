@@ -3,6 +3,7 @@ import type {
   IdempotencyRepository,
   StartVisaRenewalRecord,
   VisaRenewalRepository,
+  VisaRenewalProgressRepository,
   VisaRenewalSideEffects,
   VisaRenewalEvaluationRepository,
   VisaRenewalWorkflow,
@@ -324,6 +325,182 @@ export class PgVisaRenewalSideEffects implements VisaRenewalSideEffects {
           event.sensitivity,
         ],
       );
+    });
+  }
+}
+
+/** Writes each remaining workflow transition in a tenant-scoped transaction. */
+export class PgVisaRenewalProgressRepository implements VisaRenewalProgressRepository {
+  constructor(private readonly pool: Pool) {}
+
+  async recordContactActivity(
+    input: Parameters<VisaRenewalProgressRepository['recordContactActivity']>[0],
+  ): Promise<void> {
+    await withTenant(this.pool, input.tenantId, (client) =>
+      client.query(
+        `insert into workflow_contact_activity
+          (id, tenant_id, employment_case_id, workflow_instance_id, workflow_step_id,
+           organization_id, contact_id, channel, occurred_at, purpose, outcome,
+           follow_up_at, confirmation_status, sensitivity, visibility, recorded_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [
+          input.id,
+          input.tenantId,
+          input.employmentCaseId,
+          input.workflowId,
+          input.workflowStepId,
+          input.organizationId,
+          input.contactId,
+          input.channel,
+          input.occurredAt,
+          input.purpose,
+          input.outcome,
+          input.followUpAt,
+          input.confirmationStatus,
+          input.sensitivity,
+          input.visibility,
+          input.recordedBy,
+        ],
+      ),
+    );
+  }
+
+  async linkRenewedAuthorization(
+    input: Parameters<VisaRenewalProgressRepository['linkRenewedAuthorization']>[0],
+  ): Promise<void> {
+    await withTenant(this.pool, input.tenantId, async (client) => {
+      const linked = await client.query(
+        `insert into employment_authorization_link
+          (id, tenant_id, employment_case_id, workflow_instance_id,
+           prior_authorization_id, renewed_authorization_id, document_version_id,
+           linked_by, linked_at)
+         select $1,$2,$3,wi.id,$5,$6,$7,$8,$9
+           from workflow_instance wi
+           join employment_authorization prior
+             on prior.tenant_id = wi.tenant_id and prior.id = $5
+           join employment_authorization renewed
+             on renewed.tenant_id = wi.tenant_id and renewed.id = $6
+           join document_version dv on dv.tenant_id = wi.tenant_id and dv.id = $7
+          where wi.tenant_id = $2 and wi.id = $4
+            and wi.employment_case_id = $3
+            and prior.employment_case_id = $3
+            and renewed.employment_case_id = $3
+            and dv.verification_status = 'verified'`,
+        [
+          input.id,
+          input.tenantId,
+          input.employmentCaseId,
+          input.workflowId,
+          input.priorAuthorizationId,
+          input.renewedAuthorizationId,
+          input.documentVersionId,
+          input.linkedBy,
+          input.linkedAt,
+        ],
+      );
+      if (linked.rowCount !== 1)
+        throw new Error('Renewed authorization linkage is invalid or unverified.');
+      await client.query(
+        `update workflow_instance
+            set linked_renewed_authorization_id = $1,
+                linked_document_version_id = $2, updated_at = $3, version = version + 1
+          where tenant_id = $4 and id = $5`,
+        [
+          input.renewedAuthorizationId,
+          input.documentVersionId,
+          input.linkedAt,
+          input.tenantId,
+          input.workflowId,
+        ],
+      );
+    });
+  }
+
+  async openOverlapReview(
+    input: Parameters<VisaRenewalProgressRepository['openOverlapReview']>[0],
+  ): Promise<void> {
+    await withTenant(this.pool, input.tenantId, (client) =>
+      client.query(
+        `insert into authorization_overlap_review
+          (id, tenant_id, employment_case_id, workflow_instance_id,
+           first_authorization_id, second_authorization_id)
+         values ($1,$2,$3,$4,$5,$6)`,
+        [
+          input.id,
+          input.tenantId,
+          input.employmentCaseId,
+          input.workflowId,
+          input.firstAuthorizationId,
+          input.secondAuthorizationId,
+        ],
+      ),
+    );
+  }
+
+  async complete(input: Parameters<VisaRenewalProgressRepository['complete']>[0]): Promise<void> {
+    await withTenant(this.pool, input.tenantId, async (client) => {
+      const completed = await client.query(
+        `with eligible as (
+           select wi.id
+             from workflow_instance wi
+             join employment_authorization_link al
+               on al.tenant_id = wi.tenant_id and al.workflow_instance_id = wi.id
+             join document_version dv
+               on dv.tenant_id = al.tenant_id and dv.id = al.document_version_id
+            where wi.tenant_id = $2 and wi.id = $4 and wi.employment_case_id = $3
+              and wi.status in ('active', 'blocked')
+              and dv.verification_status = 'verified'
+              and not exists (select 1 from workflow_step ws
+                where ws.tenant_id = wi.tenant_id and ws.workflow_instance_id = wi.id
+                  and ws.status not in ('completed', 'cancelled'))
+              and not exists (select 1 from authorization_overlap_review ar
+                where ar.tenant_id = wi.tenant_id and ar.workflow_instance_id = wi.id
+                  and ar.status <> 'resolved')
+         ), workflow_update as (
+           update workflow_instance wi set status = 'completed', completed_at = $10,
+                  updated_at = $10, version = version + 1
+             from eligible e where wi.id = e.id returning wi.id
+         ), task_update as (
+           update task t set status = 'completed', completed_at = $10,
+                  completed_by = $8, updated_at = $10, updated_by = $8,
+                  version = version + 1
+             from workflow_update wu
+            where t.tenant_id = $2 and t.id = $5 and t.employment_case_id = $3
+              and t.workflow_instance_id = wu.id and t.status <> 'completed'
+           returning t.id
+         ), timeline_insert as (
+           insert into timeline_event
+             (id, tenant_id, employment_case_id, event_type_key, summary_key,
+              occurred_at, source_type, source_id, sensitivity)
+           select $6,$2,$3,'visa_renewal.workflow_completed',
+                  'visa_renewal.workflow_completed',$10,'workflow',$4,
+                  'identity_sensitive' from task_update returning id
+         ), audit_insert as (
+           insert into audit_event
+             (id, tenant_id, actor_id, action, resource_type, resource_id,
+              occurred_at, correlation_id, sensitivity)
+           select $7,$2,$8,'visa_renewal.workflow_completed','workflow_instance',$4,
+                  $10,$9,'identity_sensitive' from timeline_insert returning id
+         )
+         insert into workflow_completion
+           (id, tenant_id, employment_case_id, workflow_instance_id, completed_task_id,
+            timeline_event_id, audit_event_id, completed_by, completed_at, correlation_id)
+         select $1,$2,$3,$4,$5,$6,$7,$8,$10,$9 from audit_insert`,
+        [
+          input.id,
+          input.tenantId,
+          input.employmentCaseId,
+          input.workflowId,
+          input.taskId,
+          input.timelineEventId,
+          input.auditEventId,
+          input.completedBy,
+          input.correlationId,
+          input.completedAt,
+        ],
+      );
+      if (completed.rowCount !== 1)
+        throw new Error('Visa renewal is not eligible for synchronized completion.');
     });
   }
 }

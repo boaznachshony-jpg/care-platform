@@ -63,6 +63,67 @@ export interface VisaRenewalRepository {
   listByCase(tenantId: string, employmentCaseId: string): Promise<VisaRenewalWorkflow[]>;
 }
 
+export interface VisaRenewalContactActivityRecord {
+  id: string;
+  tenantId: string;
+  employmentCaseId: string;
+  workflowId: string;
+  workflowStepId: string | null;
+  organizationId: string | null;
+  contactId: string | null;
+  channel: 'phone' | 'email' | 'whatsapp' | 'meeting' | 'letter' | 'sms' | 'portal';
+  occurredAt: string;
+  purpose: string;
+  outcome: string;
+  followUpAt: string | null;
+  confirmationStatus: 'not_requested' | 'pending' | 'confirmed';
+  sensitivity: SensitivityClass;
+  visibility: 'tenant' | 'case';
+  recordedBy: string;
+}
+
+export interface RenewedAuthorizationLinkRecord {
+  id: string;
+  tenantId: string;
+  employmentCaseId: string;
+  workflowId: string;
+  priorAuthorizationId: string;
+  renewedAuthorizationId: string;
+  documentVersionId: string;
+  linkedBy: string;
+  linkedAt: string;
+}
+
+export interface AuthorizationOverlapReviewRecord {
+  id: string;
+  tenantId: string;
+  employmentCaseId: string;
+  workflowId: string;
+  firstAuthorizationId: string;
+  secondAuthorizationId: string;
+}
+
+export interface CompleteVisaRenewalRecord {
+  id: string;
+  tenantId: string;
+  employmentCaseId: string;
+  workflowId: string;
+  taskId: string;
+  timelineEventId: string;
+  auditEventId: string;
+  completedBy: string;
+  completedAt: string;
+  correlationId: string;
+}
+
+/** Atomic persistence commands used by the remaining Visa Renewal use cases. */
+export interface VisaRenewalProgressRepository {
+  recordContactActivity(input: VisaRenewalContactActivityRecord): Promise<void>;
+  linkRenewedAuthorization(input: RenewedAuthorizationLinkRecord): Promise<void>;
+  openOverlapReview(input: AuthorizationOverlapReviewRecord): Promise<void>;
+  complete(input: CompleteVisaRenewalRecord): Promise<void>;
+}
+
 export interface VisaRenewalSideEffects {
   record(event: {
     tenantId: string;

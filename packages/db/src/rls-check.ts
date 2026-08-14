@@ -55,6 +55,10 @@ const ALL_TENANT_TABLES = [
   'workflow_assignment',
   'workflow_blocker',
   'idempotency_record',
+  'workflow_contact_activity',
+  'employment_authorization_link',
+  'authorization_overlap_review',
+  'workflow_completion',
 ] as const;
 
 interface Fixture {
