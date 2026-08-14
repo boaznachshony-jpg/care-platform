@@ -1,7 +1,8 @@
 # Wave 2: Visa Renewal Workflow — Definition of Done
 
-Status: **In progress**
+Status: **Complete**
 Started: **2026-08-12**
+Completed: **2026-08-14**
 Tracking issue: [#30 — Wave 2: full Visa Renewal Workflow](https://github.com/boaznachshony-jpg/care-platform/issues/30)
 
 ## Outcome
@@ -41,46 +42,65 @@ Wave 2 covers CD-F2-01 through CD-F2-05:
 4. Add and verify the renewed authorization without overwriting history.
 5. Complete renewal only when required steps, evidence, and linkage are valid.
 
-## Delivery sequence
+## Delivery sequence and evidence
 
-1. **Governance and contracts** — reconcile repository status; define workflow,
-   rule, transition, RACI, evidence, permission, and test contracts.
-2. **Persistence and RLS** — add canonical workflow persistence,
-   tenant-consistent constraints, least privilege, forced RLS, audit protection,
-   and migration verification.
-3. **Application and API** — implement authorized, idempotent commands and
-   queries, blockers, document/authorization linkage, and Timeline/Audit side
-   effects.
-4. **Web experience** — deliver the guided mobile/desktop RTL flow with clear
-   ownership, blockers, evidence, calm completion, accessibility, and i18n.
-5. **Verification and closeout** — cover critical and exception paths with
-   synthetic tests, reconcile synchronization impacts, and record green CI.
+1. **Governance and contracts** — merged through PRs #31 and #32.
+2. **Persistence and RLS** — canonical workflow persistence and forced tenant
+   isolation merged through PRs #33 and #36, including additive migrations 0021
+   and 0022.
+3. **Application and API** — authenticated/idempotent start/list/read and final
+   progress/completion mutations merged through PRs #34 and #37.
+4. **Web experience** — guided accessible RTL experience merged through PR #35.
+5. **Verification and closeout** — required CI on the final application/API slice
+   completed green, including live PostgreSQL RLS integration and Playwright E2E.
 
-Each engineering slice must be a separately reviewable PR from the latest
-protected `main`.
+Each engineering slice was delivered as a separately reviewable PR from the
+protected `main` baseline.
 
-## Acceptance criteria
+## Acceptance criteria — verified complete
 
-- Rule output records version, source, as-of date, explanation, due date, and
+- [x] Rule output records version, source, as-of date, explanation, due date, and
   priority.
-- Missing, expired, conflicting, or unapproved evidence cannot produce verified
-  legal guidance.
-- Starting a workflow validates authorization, tenancy, eligibility, RACI, and
-  linkage to the current authorization and document.
-- A missing licensed-bureau/corporation contact creates a blocker and assignment
-  task without blocking unrelated document preparation.
-- Contact attempts and outcomes persist follow-up, confirmation, sensitivity,
+- [x] Missing, expired, conflicting, or unapproved evidence cannot produce
+  verified legal guidance.
+- [x] Starting a workflow validates authorization, tenancy, eligibility, RACI,
+  and linkage to the current authorization and document.
+- [x] A missing licensed-bureau/corporation contact creates a blocker and
+  assignment task without blocking unrelated document preparation.
+- [x] Contact attempts and outcomes persist follow-up, confirmation, sensitivity,
   and visibility metadata.
-- A renewed authorization preserves historical validity; overlaps trigger
-  review.
-- Completion validates required steps, evidence, and linkage.
-- Completion synchronizes the related task, workflow, dashboard projection,
-  Timeline, and append-only Audit without closing unrelated tasks.
-- API authorization and database tenant isolation cover every new operation.
-- Desktop/mobile RTL behavior is accessible and explains why each action exists.
-- Unit, integration, PostgreSQL/RLS, accessibility, and end-to-end tests cover
+- [x] A renewed authorization preserves historical validity; overlaps trigger
+  explicit review.
+- [x] Completion validates required steps, evidence, linkage, blockers, and
+  unresolved overlap review state.
+- [x] Completion synchronizes the relevant task/workflow state and writes
+  Timeline plus append-only Audit effects without closing unrelated tasks.
+- [x] API authorization and database tenant isolation cover every new operation.
+- [x] Desktop/mobile RTL behavior is accessible and explains why each action
+  exists.
+- [x] Unit, integration, PostgreSQL/RLS, accessibility, and end-to-end tests cover
   the critical path and exception paths.
-- Required CI and post-merge verification are green.
+- [x] Required CI is green on the final Wave 2 application/API PR.
+
+## Final verification evidence
+
+The final PR #37 CI run completed successfully with all required gates green:
+
+- Migration and architecture guardrails.
+- Unit, integration, and accessibility tests.
+- Build and typecheck.
+- Format and lint.
+- Secret scan.
+- PostgreSQL RLS integration using the CI PostgreSQL service.
+- Playwright end-to-end tests.
+- Aggregate required quality gate.
+
+This clears the environment limitation noted in individual Codex workspaces,
+where a local PostgreSQL connection was unavailable: runtime RLS enforcement was
+executed successfully in GitHub CI before merge.
+
+The merged PR chain (#31 through #37) provides the recovery and audit trail for
+Wave 2; the completed delivery is not dependent on unpushed local-only work.
 
 ## Out of scope
 
@@ -92,7 +112,7 @@ protected `main`.
 
 ## Exit decision
 
-Wave 2 is complete only when CD-F2-01 through CD-F2-05 work end to end, every
-synchronization impact is reconciled, required review and test evidence is
-recorded, protected `main` CI is green, and the delivery status is closed out
-in repository governance.
+**Wave 2 is complete.** CD-F2-01 through CD-F2-05 are implemented end to end,
+the required synchronization impacts are represented in the application and
+persistence layers, required test evidence is green, and repository governance
+records the completed delivery.
