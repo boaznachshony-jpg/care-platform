@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DOCUMENT_TYPES, SENSITIVITY_CLASSES } from '@caredesk/domain';
+import { isoDateSchema } from './date.js';
 
 /**
  * Milestone 1 uploads carry the file inline as base64. Real multipart/form-data
@@ -38,13 +39,7 @@ export const uploadDocumentRequestSchema = z.object({
    * string is normalised away first — otherwise leaving this optional field
    * blank fails the regex and silently blocks the whole form.
    */
-  expiresOn: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'ISO date (YYYY-MM-DD) required')
-      .optional(),
-  ),
+  expiresOn: z.preprocess((value) => (value === '' ? undefined : value), isoDateSchema.optional()),
 });
 
 export type UploadDocumentRequest = z.infer<typeof uploadDocumentRequestSchema>;

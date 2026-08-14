@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { RACI_ROLES } from '@caredesk/domain';
+import { isoDateSchema } from './date.js';
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'ISO date (YYYY-MM-DD) required');
 export const visaRenewalAssignmentSchema = z.object({
   stepKey: z.string().trim().min(1).max(80),
   raciRole: z.enum(RACI_ROLES),
@@ -11,7 +11,7 @@ export const visaRenewalAssignmentSchema = z.object({
 export const startVisaRenewalRequestSchema = z.object({
   templateVersionId: z.string().uuid(),
   currentAuthorizationId: z.string().uuid(),
-  asOf: isoDate,
+  asOf: isoDateSchema,
   assignments: z.array(visaRenewalAssignmentSchema).min(2),
 });
 export type StartVisaRenewalRequest = z.infer<typeof startVisaRenewalRequestSchema>;
@@ -34,12 +34,16 @@ export const visaRenewalContactActivityRequestSchema = z
   .refine((value) => value.organizationId || value.contactId, {
     message: 'An organization or contact is required',
     path: ['organizationId'],
+  })
+  .refine((value) => !value.followUpAt || value.followUpAt >= value.occurredAt, {
+    message: 'followUpAt must be on or after occurredAt',
+    path: ['followUpAt'],
   });
 export const linkRenewedAuthorizationRequestSchema = z
   .object({
     documentVersionId: z.string().uuid(),
-    validFrom: isoDate,
-    validTo: isoDate,
+    validFrom: isoDateSchema,
+    validTo: isoDateSchema,
   })
   .refine((value) => value.validTo >= value.validFrom, {
     message: 'validTo must be on or after validFrom',

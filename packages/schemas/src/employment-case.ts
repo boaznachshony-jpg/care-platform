@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isoDateSchema } from './date.js';
 
 /**
  * Milestone 1 open-case contract. Deliberately excludes identity-sensitive
@@ -23,7 +24,7 @@ export const openEmploymentCaseRequestSchema = z.object({
     nationality: z.string().trim().min(2).max(60),
     primaryLanguage: z.string().trim().max(60).optional(),
   }),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'ISO date (YYYY-MM-DD) required'),
+  startDate: isoDateSchema,
 });
 
 export type OpenEmploymentCaseRequest = z.infer<typeof openEmploymentCaseRequestSchema>;
