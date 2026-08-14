@@ -367,8 +367,24 @@ export class PgVisaRenewalProgressRepository implements VisaRenewalProgressRepos
 
   async linkRenewedAuthorization(
     input: Parameters<VisaRenewalProgressRepository['linkRenewedAuthorization']>[0],
-  ): Promise<void> {
-    await withTenant(this.pool, input.tenantId, async (client) => {
+  ): Promise<{ overlapReviewIds: string[] }> {
+    return withTenant(this.pool, input.tenantId, async (client) => {
+      const authorization = await client.query(
+        `insert into employment_authorization
+          (id, tenant_id, employment_case_id, status, valid_from, valid_until)
+         select $1,$2,$3,'renewed',$4,$5
+          where exists (select 1 from workflow_instance
+            where tenant_id = $2 and id = $6 and employment_case_id = $3)`,
+        [
+          input.renewedAuthorizationId,
+          input.tenantId,
+          input.employmentCaseId,
+          input.validFrom,
+          input.validUntil,
+          input.workflowId,
+        ],
+      );
+      if (authorization.rowCount !== 1) throw new Error('Renewed authorization target is invalid.');
       const linked = await client.query(
         `insert into employment_authorization_link
           (id, tenant_id, employment_case_id, workflow_instance_id,
@@ -413,6 +429,32 @@ export class PgVisaRenewalProgressRepository implements VisaRenewalProgressRepos
           input.workflowId,
         ],
       );
+      const overlaps = await client.query<{ id: string }>(
+        `insert into authorization_overlap_review
+          (id, tenant_id, employment_case_id, workflow_instance_id,
+           first_authorization_id, second_authorization_id)
+         select gen_random_uuid(),$2,$3,$4,ea.id,$6
+           from employment_authorization ea
+          where ea.tenant_id = $2 and ea.employment_case_id = $3 and ea.id <> $6
+            and ea.status in ('current','renewed')
+            and coalesce(ea.valid_until, 'infinity'::date) >= $10::date
+            and coalesce($11::date, 'infinity'::date) >= coalesce(ea.valid_from, '-infinity'::date)
+         on conflict do nothing returning id`,
+        [
+          input.id,
+          input.tenantId,
+          input.employmentCaseId,
+          input.workflowId,
+          input.priorAuthorizationId,
+          input.renewedAuthorizationId,
+          input.documentVersionId,
+          input.linkedBy,
+          input.linkedAt,
+          input.validFrom,
+          input.validUntil,
+        ],
+      );
+      return { overlapReviewIds: overlaps.rows.map((row) => row.id) };
     });
   }
 
@@ -437,6 +479,31 @@ export class PgVisaRenewalProgressRepository implements VisaRenewalProgressRepos
     );
   }
 
+  async resolveOverlapReview(
+    input: Parameters<VisaRenewalProgressRepository['resolveOverlapReview']>[0],
+  ): Promise<void> {
+    await withTenant(this.pool, input.tenantId, async (client) => {
+      const resolved = await client.query(
+        `update authorization_overlap_review
+            set status = 'resolved', resolution_code = $1, reviewed_by = $2,
+                reviewed_at = $3, updated_at = $3, version = version + 1
+          where tenant_id = $4 and id = $5 and employment_case_id = $6
+            and workflow_instance_id = $7 and status <> 'resolved'`,
+        [
+          input.resolutionCode,
+          input.reviewedBy,
+          input.reviewedAt,
+          input.tenantId,
+          input.reviewId,
+          input.employmentCaseId,
+          input.workflowId,
+        ],
+      );
+      if (resolved.rowCount !== 1)
+        throw new Error('Overlap review was not found or already resolved.');
+    });
+  }
+
   async complete(input: Parameters<VisaRenewalProgressRepository['complete']>[0]): Promise<void> {
     await withTenant(this.pool, input.tenantId, async (client) => {
       const completed = await client.query(
@@ -450,12 +517,24 @@ export class PgVisaRenewalProgressRepository implements VisaRenewalProgressRepos
             where wi.tenant_id = $2 and wi.id = $4 and wi.employment_case_id = $3
               and wi.status in ('active', 'blocked')
               and dv.verification_status = 'verified'
+              and exists (select 1 from workflow_rule_evaluation ev
+                where ev.tenant_id = wi.tenant_id and ev.workflow_instance_id = wi.id
+                  and ev.status = 'active' and ev.review_required = false)
+              and exists (select 1 from employment_authorization renewed
+                where renewed.tenant_id = wi.tenant_id
+                  and renewed.id = al.renewed_authorization_id
+                  and renewed.status in ('current', 'renewed')
+                  and renewed.valid_from is not null and renewed.valid_until is not null)
               and not exists (select 1 from workflow_step ws
                 where ws.tenant_id = wi.tenant_id and ws.workflow_instance_id = wi.id
                   and ws.status not in ('completed', 'cancelled'))
               and not exists (select 1 from authorization_overlap_review ar
                 where ar.tenant_id = wi.tenant_id and ar.workflow_instance_id = wi.id
                   and ar.status <> 'resolved')
+              and not exists (select 1 from workflow_blocker wb
+                join workflow_step blocked_step on blocked_step.tenant_id = wb.tenant_id
+                  and blocked_step.id = wb.workflow_step_id
+                where blocked_step.workflow_instance_id = wi.id and wb.resolved_at is null)
          ), workflow_update as (
            update workflow_instance wi set status = 'completed', completed_at = $10,
                   updated_at = $10, version = version + 1

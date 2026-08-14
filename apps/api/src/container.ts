@@ -47,6 +47,10 @@ import {
   StartVisaRenewalWorkflow,
   GetVisaRenewalWorkflow,
   ListVisaRenewalWorkflows,
+  RecordVisaRenewalContactActivity,
+  LinkRenewedVisaAuthorization,
+  ResolveVisaAuthorizationOverlap,
+  CompleteVisaRenewalWorkflow,
 } from '@caredesk/application';
 import {
   createPool,
@@ -66,6 +70,7 @@ import {
   PgVisaRenewalSideEffects,
   PgVisaRenewalEvaluationRepository,
   PgIdempotencyRepository,
+  PgVisaRenewalProgressRepository,
 } from '@caredesk/db';
 import {
   InMemoryActorResolver,
@@ -122,6 +127,8 @@ const ROLE_PERMISSIONS = {
     'billing:manage',
     'workflow:start',
     'workflow:read',
+    'workflow:update',
+    'workflow:complete',
   ],
   manager: [
     'employment_case:create',
@@ -140,6 +147,8 @@ const ROLE_PERMISSIONS = {
     'billing:read',
     'workflow:start',
     'workflow:read',
+    'workflow:update',
+    'workflow:complete',
   ],
   viewer: [
     'employment_case:read',
@@ -213,6 +222,10 @@ export interface Container {
   startVisaRenewal: StartVisaRenewalWorkflow;
   getVisaRenewal: GetVisaRenewalWorkflow;
   listVisaRenewals: ListVisaRenewalWorkflows;
+  recordVisaRenewalContact: RecordVisaRenewalContactActivity;
+  linkRenewedVisaAuthorization: LinkRenewedVisaAuthorization;
+  resolveVisaAuthorizationOverlap: ResolveVisaAuthorizationOverlap;
+  completeVisaRenewal: CompleteVisaRenewalWorkflow;
   visaRenewalEvaluation: VisaRenewalEvaluationRepository;
   readiness(): Promise<{
     ready: boolean;
@@ -474,6 +487,7 @@ export function buildContainer(env: Env): Container {
     ids,
     workflows: visaRenewalRepository,
     idempotency: visaIdempotency,
+    progress: pool ? new PgVisaRenewalProgressRepository(pool) : memoryVisaRenewals,
     ...(pool ? { sideEffects: new PgVisaRenewalSideEffects(pool) } : {}),
   };
 
@@ -530,6 +544,10 @@ export function buildContainer(env: Env): Container {
     startVisaRenewal: new StartVisaRenewalWorkflow(visaDeps),
     getVisaRenewal: new GetVisaRenewalWorkflow(visaDeps),
     listVisaRenewals: new ListVisaRenewalWorkflows(visaDeps),
+    recordVisaRenewalContact: new RecordVisaRenewalContactActivity(visaDeps),
+    linkRenewedVisaAuthorization: new LinkRenewedVisaAuthorization(visaDeps),
+    resolveVisaAuthorizationOverlap: new ResolveVisaAuthorizationOverlap(visaDeps),
+    completeVisaRenewal: new CompleteVisaRenewalWorkflow(visaDeps),
     visaRenewalEvaluation,
     async readiness() {
       const checks: Record<string, 'ok' | 'unconfigured' | 'unreachable' | 'migration-required'> = {

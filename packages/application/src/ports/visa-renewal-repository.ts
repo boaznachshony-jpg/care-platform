@@ -90,6 +90,8 @@ export interface RenewedAuthorizationLinkRecord {
   priorAuthorizationId: string;
   renewedAuthorizationId: string;
   documentVersionId: string;
+  validFrom: string;
+  validUntil: string;
   linkedBy: string;
   linkedAt: string;
 }
@@ -101,6 +103,16 @@ export interface AuthorizationOverlapReviewRecord {
   workflowId: string;
   firstAuthorizationId: string;
   secondAuthorizationId: string;
+}
+
+export interface ResolveAuthorizationOverlapReviewRecord {
+  tenantId: string;
+  employmentCaseId: string;
+  workflowId: string;
+  reviewId: string;
+  resolutionCode: string;
+  reviewedBy: string;
+  reviewedAt: string;
 }
 
 export interface CompleteVisaRenewalRecord {
@@ -119,8 +131,11 @@ export interface CompleteVisaRenewalRecord {
 /** Atomic persistence commands used by the remaining Visa Renewal use cases. */
 export interface VisaRenewalProgressRepository {
   recordContactActivity(input: VisaRenewalContactActivityRecord): Promise<void>;
-  linkRenewedAuthorization(input: RenewedAuthorizationLinkRecord): Promise<void>;
+  linkRenewedAuthorization(
+    input: RenewedAuthorizationLinkRecord,
+  ): Promise<{ overlapReviewIds: string[] }>;
   openOverlapReview(input: AuthorizationOverlapReviewRecord): Promise<void>;
+  resolveOverlapReview(input: ResolveAuthorizationOverlapReviewRecord): Promise<void>;
   complete(input: CompleteVisaRenewalRecord): Promise<void>;
 }
 
