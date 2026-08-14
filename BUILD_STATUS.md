@@ -1,7 +1,8 @@
 # CareDesk build status
 
-Status date: **2026-08-12**
+Status date: **2026-08-14**
 
+Current Wave 2 baseline: `main` after merged PRs #31 through #37
 Sprint 0 closeout baseline: `main` after merged PRs #25, #26, #27, and #28
 Previous architecture-review baseline (retained for history): `main` at `0c6acee`
 Previous recovery baseline (retained for history): `main` at `3eaee63`
@@ -9,7 +10,7 @@ Previous recovery baseline (retained for history): `main` at `3eaee63`
 ## Sprint 0 status
 
 **Complete.** Sprint 0 delivered the engineering and governance foundation required
-before the next product-delivery phase. The next delivery phase is **Wave 2**.
+before product workflow delivery.
 
 The completed scope comprised four coordinated tracks:
 
@@ -26,11 +27,20 @@ The completed scope comprised four coordinated tracks:
   integration, desktop/mobile end-to-end tests, secret scanning, and a required
   aggregate quality gate.
 
-Sprint 0 was originally described as a documentation-only architecture freeze.
-That description is retained only as historical planning context: the delivered
-Sprint 0 expanded through the separately reviewed and merged PRs #25–#28 and
-included application, database migration, security, test, and CI changes. This
-governance closeout PR itself remains documentation-only.
+## Wave 2 status
+
+**Complete.** Wave 2 delivered the governed Visa Renewal workflow end to end.
+The implementation now includes versioned rule/evidence contracts, canonical
+workflow persistence, forced tenant RLS, authenticated/idempotent API commands,
+contact activity, renewed-authorization linkage without history overwrite,
+overlap-review handling, completion validation, synchronized task/Timeline/Audit
+side effects, and accessible RTL Web presentation.
+
+Wave 2 was delivered through separately reviewed PRs #31 through #37. The final
+application/API slice was merged in PR #37. Its protected CI run completed with
+all required jobs green, including migration/architecture guardrails, unit and
+integration tests, build/typecheck, format/lint, secret scan, live PostgreSQL RLS
+integration, Playwright end-to-end, and the aggregate quality gate.
 
 ## Canonical architecture decisions
 
@@ -50,20 +60,25 @@ governance closeout PR itself remains documentation-only.
 ## Recovery summary
 
 The repository is substantially ahead of the older milestone documentation.
-Milestone 0 and Sprint 0 are complete, and the product is already a working
-pilot candidate; the project must not be bootstrapped again. The current
-baseline contains a React web application, Fastify API, PostgreSQL/Supabase
-persistence, tenant isolation, authentication, billing, case management,
-documents, family access, support requests, payroll records,
-national-insurance tracking, and automated tests.
+Milestone 0, Sprint 0, and Wave 2 are complete; the project must not be
+bootstrapped again. The current baseline contains a React web application,
+Fastify API, PostgreSQL/Supabase persistence, tenant isolation, authentication,
+billing, case management, documents, family access, support requests, payroll
+records, national-insurance tracking, the full governed Visa Renewal workflow,
+and automated tests.
 
 ## Included in this E2E candidate
 
 - Responsive RTL shell for desktop, tablet, and mobile.
 - Dashboard, tasks, employee, documents, timeline, payroll, settings, and case flows.
+- Governed Visa Renewal start/list/read/progress/completion flows.
+- Persisted contact activity and follow-up metadata.
+- Renewed-authorization linkage that preserves prior authorization history.
+- Explicit overlap-review lifecycle.
+- Completion validation with synchronized workflow/task/Timeline/Audit effects.
 - Vercel-compatible Fastify default export.
 - Workspace dependency builds before Web/API builds.
-- Unit, integration, accessibility, and Playwright E2E coverage.
+- Unit, integration, accessibility, PostgreSQL RLS, and Playwright E2E coverage.
 - CI jobs for quality checks, E2E, RLS integration, and secret scanning.
 - CORS configuration for the production Web domain.
 - Supabase authentication and authenticated workspace recovery.
@@ -77,43 +92,49 @@ national-insurance tracking, and automated tests.
 
 ## Current delivery state
 
-| Area                                     | State                                                                         |
-| ---------------------------------------- | ----------------------------------------------------------------------------- |
-| Repository foundation and CI             | Complete                                                                      |
-| Sprint 0 architecture and governance     | Complete                                                                      |
-| Database and RLS hardening               | Complete                                                                      |
-| API and security hardening               | Complete                                                                      |
-| QA and CI guardrails                     | Complete                                                                      |
-| Web and API application shells           | Complete                                                                      |
-| Authentication and workspace persistence | Implemented                                                                   |
-| Employment case foundation               | Implemented                                                                   |
-| Contacts, tasks, timeline, and documents | Implemented                                                                   |
-| Family access                            | Implemented                                                                   |
-| Billing                                  | Implemented                                                                   |
-| Payroll record workflow                  | Implemented; professional validation still blocks authoritative calculations  |
-| Visa renewal                             | Date capture and follow-up tasks implemented; full persisted workflow is next |
-| External AI                              | Disabled by design pending privacy approval                                   |
+| Area                                     | State                                                                        |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| Repository foundation and CI             | Complete                                                                     |
+| Sprint 0 architecture and governance     | Complete                                                                     |
+| Database and RLS hardening               | Complete                                                                     |
+| API and security hardening               | Complete                                                                     |
+| QA and CI guardrails                     | Complete                                                                     |
+| Web and API application shells           | Complete                                                                     |
+| Authentication and workspace persistence | Implemented                                                                  |
+| Employment case foundation               | Implemented                                                                  |
+| Contacts, tasks, timeline, and documents | Implemented                                                                  |
+| Family access                            | Implemented                                                                  |
+| Billing                                  | Implemented                                                                  |
+| Payroll record workflow                  | Implemented; professional validation still blocks authoritative calculations |
+| Visa renewal                             | Wave 2 complete end to end                                                   |
+| External AI                              | Disabled by design pending privacy approval                                  |
 
-## Next delivery phase
+## Delivery outlook
 
-**Wave 2** is the next product-delivery phase. Its detailed scope and acceptance
-criteria must be governed by the Source of Truth, accepted ADRs, and the
-synchronization matrix.
+Wave 2 is closed. Any next product-delivery phase must be separately governed by
+`docs/SOURCE_OF_TRUTH.md`, accepted ADRs, the synchronization matrix, and an
+explicit Definition of Done before implementation begins.
 
-The previously recorded Milestone 2 visa-renewal slice remains useful historical
-planning context, but it does not override the approved Wave 2 plan.
+The previously recorded milestone descriptions remain historical planning
+context and do not override the current repository state.
 
 ## Verification status
 
-PRs #25, #26, #27, and #28 were merged to `main`. Post-merge CI on `main`
-completed successfully, including the required quality gates introduced during
-Sprint 0. The post-merge Vercel checks for both the Web and API projects also
-reported success.
+PRs #31 through #37 were merged to `main` for Wave 2. The final PR #37 protected
+CI run completed successfully. Verified green jobs included:
 
-This closeout changes governance documentation only. Formatting, terminology,
-cross-document status, and Markdown consistency were reviewed; no application
-code, database migration, CI configuration, dependency, or production
-configuration is modified.
+- Migration and architecture guardrails.
+- Unit, integration, and accessibility tests.
+- Build and typecheck.
+- Format and lint.
+- Secret scan.
+- PostgreSQL RLS integration against a live CI database.
+- Playwright end-to-end tests.
+- Required aggregate quality gate.
+
+The Wave 2 implementation therefore has both code history and recoverable Git
+history in the merged PR chain; no Wave 2 closeout work depends on an unpushed
+local-only checkout.
 
 ## Before real personal data
 
