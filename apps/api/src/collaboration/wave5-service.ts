@@ -30,6 +30,19 @@ type WorkerContext = {
   workerId: string;
 };
 
+interface PayrollCloseRow {
+  id: string;
+  payroll_month: string;
+  payment_date: string;
+  payment_method: 'bank_transfer' | 'cash' | 'check' | 'other';
+  evidence_document_id: string | null;
+}
+
+interface PaymentAcknowledgementRow {
+  payroll_month_close_id: string;
+  acknowledged_at: Date;
+}
+
 /**
  * PostgreSQL-backed Wave 5 application boundary. Every statement runs after
  * setting the canonical RLS transaction context. Worker ids and case ids are
@@ -237,12 +250,12 @@ export class Wave5Service {
   async workerHome(context: WorkerContext) {
     return this.tenantTx(context.tenantId, async (client) => {
       const [closes, acknowledgements, requests, documents] = await Promise.all([
-        client.query(
+        client.query<PayrollCloseRow>(
           `select id, payroll_month, payment_date, payment_method, evidence_document_id
           from payroll_month_close where employment_case_id=$1`,
           [context.caseId],
         ),
-        client.query(
+        client.query<PaymentAcknowledgementRow>(
           `select payroll_month_close_id, acknowledged_at from worker_payment_acknowledgement where worker_portal_access_id=$1`,
           [context.accessId],
         ),
@@ -257,12 +270,12 @@ export class Wave5Service {
         ),
       ]);
       const ack = new Map(
-        acknowledgements.rows.map((row: any) => [row.payroll_month_close_id, row.acknowledged_at]),
+        acknowledgements.rows.map((row) => [row.payroll_month_close_id, row.acknowledged_at]),
       );
       // The durable close currently owns date/method/evidence but not the
       // calculated net amount. Returning null is deliberate: never fabricate
       // a financial figure until the canonical payroll store exposes it.
-      const payments = closes.rows.map((row: any) => ({
+      const payments = closes.rows.map((row) => ({
         closeId: row.id,
         month: row.payroll_month,
         amountPaid: null,

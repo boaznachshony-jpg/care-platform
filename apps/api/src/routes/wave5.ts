@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
@@ -45,7 +45,7 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
   if (!service) return;
   const employer = { preHandler: makeAuthenticate(container.auth, container.actorResolver) };
   const worker = {
-    preHandler: async (request: FastifyRequest, reply: any) => {
+    preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
       const session = await workerIdentity(request, container);
       if (!session) return sendError(request, reply, 401, 'UNAUTHENTICATED');
       const context = await service.workerContext(session.userId);
