@@ -37,4 +37,29 @@ describe('ResendEmailProvider', () => {
       ).send(email),
     ).resolves.toMatchObject({ status: 'failed', failureCategory: 'timeout' });
   });
+
+  it('accepts a successful response with malformed provider JSON without duplicate retries', async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('malformed JSON');
+      },
+    });
+    await expect(
+      new ResendEmailProvider(
+        { apiKey: 'server-only-key', fromEmail: 'support@example.test' },
+        request,
+      ).send(email),
+    ).resolves.toEqual({ status: 'accepted', provider: 'resend' });
+  });
+
+  it('ignores an invalid provider message id', async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 123 }) });
+    await expect(
+      new ResendEmailProvider(
+        { apiKey: 'server-only-key', fromEmail: 'support@example.test' },
+        request,
+      ).send(email),
+    ).resolves.toEqual({ status: 'accepted', provider: 'resend' });
+  });
 });
