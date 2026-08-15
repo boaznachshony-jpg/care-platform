@@ -49,4 +49,28 @@ describe('database security migration contracts', () => {
     expect(close).toMatch(/grant select, insert on payroll_month_close/iu);
     expect(close).not.toMatch(/grant[^;]*(?:update|delete)[^;]*on payroll_month_close/iu);
   });
+
+  it('protects every Wave 5 fact with canonical RLS and same-tenant relationships', async () => {
+    const wave5 = await migration('0025_wave5_collaboration_engagement.sql');
+    for (const table of [
+      'case_responsibility_assignment',
+      'worker_portal_access',
+      'worker_portal_invitation',
+      'worker_payment_acknowledgement',
+      'worker_request',
+      'communication_preference',
+      'notification_intent',
+      'notification_delivery_attempt',
+    ]) {
+      expect(wave5).toContain(`'${table}'`);
+    }
+    expect(wave5).toMatch(/enable row level security/iu);
+    expect(wave5).toMatch(/force row level security/iu);
+    expect(wave5).toContain("current_setting(''app.tenant_id'', true)::uuid");
+    expect(wave5).toMatch(/worker_ack_access_fk/iu);
+    expect(wave5).toMatch(/grant select, insert on worker_payment_acknowledgement/iu);
+    expect(wave5).not.toMatch(
+      /grant[^;]*(?:update|delete)[^;]*on worker_payment_acknowledgement/iu,
+    );
+  });
 });

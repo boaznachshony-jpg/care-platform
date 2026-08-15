@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../env.js';
 import { sendError, sendValidationError } from './http-errors.js';
 import type { RateLimiter } from '../rate-limit.js';
+import { ResendEmailProvider } from '../engagement/resend-email-provider.js';
 
 const MAX_MESSAGE_LENGTH = 500;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
@@ -70,33 +71,22 @@ export function registerSupportRequestRoutes(
       `Tracking ID: ${request.correlationId}`,
     ].join('\n');
 
-    try {
-      const providerResponse = (await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${env.RESEND_API_KEY}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: `CareDesk <${env.SUPPORT_FROM_EMAIL}>`,
-          to: [env.SUPPORT_DESTINATION_EMAIL],
-          reply_to: replyEmail,
-          subject: `CareDesk – ${category}`,
-          text,
-          html: `<h2>${category}</h2><p><strong>Reply address:</strong> ${escapeHtml(replyEmail)}</p><p>${escapeHtml(message).replaceAll('\n', '<br>')}</p><hr><small>Tracking ID: ${escapeHtml(request.correlationId)}</small>`,
-        }),
-      })) as unknown as { ok: boolean; status: number };
-
-      if (!providerResponse.ok) {
-        request.log.error(
-          { correlationId: request.correlationId, providerStatus: providerResponse.status },
-          'support provider rejected request',
-        );
-        sendError(request, reply, 502, 'SUPPORT_DELIVERY_FAILED');
-        return;
-      }
-    } catch {
-      request.log.error({ correlationId: request.correlationId }, 'support provider unavailable');
+    const provider = new ResendEmailProvider({
+      apiKey: env.RESEND_API_KEY,
+      fromEmail: env.SUPPORT_FROM_EMAIL,
+    });
+    const delivery = await provider.send({
+      to: env.SUPPORT_DESTINATION_EMAIL,
+      replyTo: replyEmail,
+      subject: `CareDesk – ${category}`,
+      text,
+      html: `<h2>${category}</h2><p><strong>Reply address:</strong> ${escapeHtml(replyEmail)}</p><p>${escapeHtml(message).replaceAll('\n', '<br>')}</p><hr><small>Tracking ID: ${escapeHtml(request.correlationId)}</small>`,
+    });
+    if (delivery.status !== 'accepted') {
+      request.log.error(
+        { correlationId: request.correlationId, failureCategory: delivery.failureCategory },
+        'support provider unavailable',
+      );
       sendError(request, reply, 502, 'SUPPORT_DELIVERY_FAILED');
       return;
     }
