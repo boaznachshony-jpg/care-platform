@@ -1,5 +1,10 @@
 # Wave 5 — collaboration and engagement
 
+> Completion status (2026-08-15): this architecture describes the Wave 5
+> foundation, not completed user-facing functionality. See
+> `docs/governance/wave-5-definition-of-done.md` for the exact gap inventory and
+> current close decision.
+
 ## Phase 0: exact baseline and gaps
 
 Wave 5 was based on merge `50e66f2` (PR #41). The Wave 4 document-intake,
@@ -60,4 +65,3 @@ Transactional template keys introduced for orchestration are
 `worker_payment_available`, `worker_payment_acknowledged`, and
 `important_attention`. Template version is persisted with every intent and
 attempt.
-

@@ -833,5 +833,39 @@
       "notReturned": "המטפל/ת לא חזר/ה",
       "replace": "המשפחה רוצה להחליף מטפל/ת"
     }
+  },
+  "worker": {
+    "title": "האזור שלי",
+    "accessError": "אין גישה פעילה לאזור המטפל. ייתכן שההזמנה פגה או שהגישה בוטלה.",
+    "loading": "טוענים את האזור האישי…",
+    "navigation": "ניווט באזור המטפל",
+    "nav": {
+      "home": "בית",
+      "payments": "תשלומים",
+      "vacation": "חופשה",
+      "documents": "מסמכים",
+      "requests": "בקשות",
+      "profile": "פרופיל"
+    },
+    "hello": "שלום",
+    "latestPayment": "התשלום האחרון",
+    "amountUnavailable": "הסכום טרם זמין במקור השכר",
+    "noPayments": "אין תשלומים סגורים להצגה",
+    "vacation": "חופשה",
+    "balanceUnavailable": "אין עדיין יתרה מאושרת להצגה",
+    "requests": "בקשות",
+    "documents": "מסמכים",
+    "payments": "התשלומים שלי",
+    "ackDisclaimer": "האישור מעיד רק שראית או קיבלת את רישום התשלום. הוא אינו אישור לנכונות החישוב, ויתור על זכויות או סילוק סופי.",
+    "acknowledge": "ראיתי / קיבלתי את רישום התשלום",
+    "acknowledged": "אושר על ידך בתאריך",
+    "used": "נוצלו",
+    "planned": "מתוכננים",
+    "noDocuments": "אין מסמכים שאושרו לצפייתך",
+    "requestMessage": "מה ברצונך לבקש?",
+    "submitRequest": "שליחת בקשה",
+    "preferences": "שפה והעדפות תקשורת",
+    "emailAvailable": "דוא״ל זמין בהתאם להעדפה שלך.",
+    "phoneUnavailable": "WhatsApp ו-SMS אינם מוגדרים כעת ולא יישלחו."
   }
 }

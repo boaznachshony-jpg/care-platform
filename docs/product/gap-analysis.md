@@ -231,6 +231,11 @@ Feature development may continue on synthetic data. Each new slice must:
   messages.
 # 15-capability traffic light after Wave 4 (2026-08-15)
 
+> Wave 5 completion review: Family Collaboration and Worker Portal are ORANGE,
+> not production-complete. WhatsApp-first engagement remains RED because no
+> approved provider is configured. The exact evidence and remaining gates are
+> maintained in `docs/governance/wave-5-definition-of-done.md`.
+
 | # | Capability | Status |
 |---:|---|---|
 | 1 | Case foundation | 🟢 Implemented |

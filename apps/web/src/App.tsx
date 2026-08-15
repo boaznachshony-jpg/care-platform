@@ -35,6 +35,7 @@ import { BillingPage } from './pages/BillingPage.js';
 import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
 import { ContactPage } from './pages/ContactPage.js';
 import { CasePage } from './pages/CasePage.js';
+import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -50,6 +51,7 @@ const authenticatedEntrypoints = new Set([
   '/family',
   '/billing',
   '/contact',
+  '/worker',
 ]);
 
 function ClientHome() {
@@ -97,6 +99,7 @@ function AuthenticatedApp() {
       loading={<AuthLoadingPage />}
     >
       <Routes>
+        <Route path="/worker" element={<WorkerPortalPage />} />
         <Route path="/app" element={<ClientsPage />} />
         <Route path="/family" element={<FamilyAccessPage />} />
         <Route path="/billing" element={<BillingPage />} />

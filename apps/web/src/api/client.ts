@@ -98,7 +98,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const hasBody = init?.body !== undefined;
   const authClient = getBrowserAuthClient();
   const accessToken = authClient
@@ -132,15 +132,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function openEmploymentCase(
   input: OpenEmploymentCaseRequest,
 ): Promise<EmploymentCaseResponse> {
-  return request('/cases', { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest('/cases', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function getEmploymentCase(caseId: string): Promise<EmploymentCaseResponse> {
-  return request(`/cases/${encodeURIComponent(caseId)}`);
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}`);
 }
 
 export function listEmploymentCases(): Promise<EmploymentCaseResponse[]> {
-  return request('/cases');
+  return apiRequest('/cases');
 }
 
 const casePath = (caseId: string): string => `/cases/${encodeURIComponent(caseId)}`;
@@ -182,14 +182,14 @@ export interface VisaRenewalWorkflowResponse {
 }
 
 export function listVisaRenewals(caseId: string): Promise<VisaRenewalWorkflowResponse[]> {
-  return request(`${casePath(caseId)}/visa-renewals`);
+  return apiRequest(`${casePath(caseId)}/visa-renewals`);
 }
 
 export function startVisaRenewal(
   caseId: string,
   input: StartVisaRenewalRequest,
 ): Promise<VisaRenewalWorkflowResponse> {
-  return request(`${casePath(caseId)}/visa-renewals`, {
+  return apiRequest(`${casePath(caseId)}/visa-renewals`, {
     method: 'POST',
     headers: { 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify(input),
@@ -197,49 +197,49 @@ export function startVisaRenewal(
 }
 
 export function listCaseContacts(caseId: string): Promise<CaseContactResponse[]> {
-  return request(`${casePath(caseId)}/contacts`);
+  return apiRequest(`${casePath(caseId)}/contacts`);
 }
 
 export function addCaseContact(
   caseId: string,
   input: AddContactRequest,
 ): Promise<{ contactId: string }> {
-  return request(`${casePath(caseId)}/contacts`, {
+  return apiRequest(`${casePath(caseId)}/contacts`, {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
 export function listCaseTasks(caseId: string): Promise<TaskResponse[]> {
-  return request(`${casePath(caseId)}/tasks`);
+  return apiRequest(`${casePath(caseId)}/tasks`);
 }
 
 export function createCaseTask(caseId: string, input: CreateTaskRequest): Promise<TaskResponse> {
-  return request(`${casePath(caseId)}/tasks`, {
+  return apiRequest(`${casePath(caseId)}/tasks`, {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
 export function completeCaseTask(caseId: string, taskId: string): Promise<TaskResponse> {
-  return request(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}/complete`, {
+  return apiRequest(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}/complete`, {
     method: 'POST',
   });
 }
 
 export function listCaseTimeline(caseId: string): Promise<TimelineEventResponse[]> {
-  return request(`${casePath(caseId)}/timeline`);
+  return apiRequest(`${casePath(caseId)}/timeline`);
 }
 
 export function listCaseDocuments(caseId: string): Promise<DocumentResponse[]> {
-  return request(`${casePath(caseId)}/documents`);
+  return apiRequest(`${casePath(caseId)}/documents`);
 }
 
 export function uploadCaseDocument(
   caseId: string,
   input: UploadDocumentRequest,
 ): Promise<DocumentResponse> {
-  return request(`${casePath(caseId)}/documents`, {
+  return apiRequest(`${casePath(caseId)}/documents`, {
     method: 'POST',
     body: JSON.stringify(input),
   });
@@ -254,15 +254,15 @@ export function getCaseDocumentDownloadUrl(
   caseId: string,
   documentId: string,
 ): Promise<DocumentDownloadUrlResponse> {
-  return request(`${casePath(caseId)}/documents/${encodeURIComponent(documentId)}/download-url`);
+  return apiRequest(`${casePath(caseId)}/documents/${encodeURIComponent(documentId)}/download-url`);
 }
 
 export function getWorkspace(): Promise<WorkspaceResponse> {
-  return request('/workspace');
+  return apiRequest('/workspace');
 }
 
 export function saveWorkspace(input: SaveWorkspaceRequest): Promise<WorkspaceResponse> {
-  return request('/workspace', { method: 'PUT', body: JSON.stringify(input) });
+  return apiRequest('/workspace', { method: 'PUT', body: JSON.stringify(input) });
 }
 
 const workspaceFilePath = (clientId: string, documentId: string) =>
@@ -273,7 +273,7 @@ export function uploadWorkspaceFile(
   documentId: string,
   input: UploadWorkspaceFileRequest,
 ): Promise<{ version: number; sizeBytes: number }> {
-  return request(workspaceFilePath(clientId, documentId), {
+  return apiRequest(workspaceFilePath(clientId, documentId), {
     method: 'PUT',
     body: JSON.stringify(input),
   });
@@ -283,50 +283,50 @@ export function getWorkspaceFileUrl(
   clientId: string,
   documentId: string,
 ): Promise<WorkspaceFileUrlResponse> {
-  return request(workspaceFilePath(clientId, documentId));
+  return apiRequest(workspaceFilePath(clientId, documentId));
 }
 
 export function deleteWorkspaceFile(clientId: string, documentId: string): Promise<void> {
-  return request(workspaceFilePath(clientId, documentId), { method: 'DELETE' });
+  return apiRequest(workspaceFilePath(clientId, documentId), { method: 'DELETE' });
 }
 
 export function listFamilyMembers(): Promise<FamilyAccessResponse> {
-  return request('/family/members');
+  return apiRequest('/family/members');
 }
 
 export function inviteFamilyMember(
   input: InviteFamilyMemberRequest,
 ): Promise<FamilyMemberResponse> {
-  return request('/family/invitations', { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest('/family/invitations', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function updateFamilyMemberRole(
   membershipId: string,
   input: UpdateFamilyMemberRoleRequest,
 ): Promise<FamilyMemberResponse> {
-  return request(`/family/members/${encodeURIComponent(membershipId)}`, {
+  return apiRequest(`/family/members/${encodeURIComponent(membershipId)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
   });
 }
 
 export function revokeFamilyMember(membershipId: string): Promise<void> {
-  return request(`/family/members/${encodeURIComponent(membershipId)}`, { method: 'DELETE' });
+  return apiRequest(`/family/members/${encodeURIComponent(membershipId)}`, { method: 'DELETE' });
 }
 
 export function getBillingSubscription(): Promise<BillingPlanResponse> {
-  return request('/billing/subscription');
+  return apiRequest('/billing/subscription');
 }
 
 export function startBillingPaymentMethodSetup(
   input: StartBillingSetupRequest,
 ): Promise<BillingCheckoutResponse> {
-  return request('/billing/payment-method/setup', {
+  return apiRequest('/billing/payment-method/setup', {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
 export function cancelBillingSubscription(): Promise<void> {
-  return request('/billing/subscription', { method: 'DELETE' });
+  return apiRequest('/billing/subscription', { method: 'DELETE' });
 }

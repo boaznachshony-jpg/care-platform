@@ -1,0 +1,201 @@
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { apiRequest } from '../api/client.js';
+
+type Portal = {
+  payments: Array<{
+    closeId: string;
+    month: string;
+    amountPaid: number | null;
+    paymentDate: string;
+    acknowledgement: 'pending' | 'acknowledged';
+    acknowledgedAt?: string;
+  }>;
+  leave: { availableBalance: number | null; used: number; planned: number };
+  requests: Array<{ id: string; request_type: string; message: string; status: string }>;
+  documents: Array<{ id: string; document_type: string }>;
+};
+
+export function WorkerPortalPage() {
+  const { t } = useTranslation();
+  const [data, setData] = useState<Portal | null>(null);
+  const [error, setError] = useState(false);
+  const [tab, setTab] = useState('home');
+  const [message, setMessage] = useState('');
+  const load = () =>
+    apiRequest<Portal>('/worker/portal')
+      .then(setData)
+      .catch(() => setError(true));
+  useEffect(() => {
+    void apiRequest<Portal>('/worker/portal')
+      .then(setData)
+      .catch(() => setError(true));
+  }, []);
+  if (error)
+    return (
+      <main className="worker-portal">
+        <h1>{t('worker.title')}</h1>
+        <p role="alert">{t('worker.accessError')}</p>
+      </main>
+    );
+  if (!data)
+    return (
+      <main className="worker-portal" aria-busy="true">
+        {t('worker.loading')}
+      </main>
+    );
+  const latest = data.payments[0];
+  return (
+    <main className="worker-portal">
+      <header>
+        <span className="worker-brand">CareDesk</span>
+        <h1>{t('worker.title')}</h1>
+      </header>
+      <nav aria-label={t('worker.navigation')}>
+        {['home', 'payments', 'vacation', 'documents', 'requests', 'profile'].map((key) => (
+          <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+            {t(`worker.nav.${key}`)}
+          </button>
+        ))}
+      </nav>
+      {tab === 'home' && (
+        <section>
+          <h2>{t('worker.hello')}</h2>
+          <div className="worker-grid">
+            <article>
+              <h3>{t('worker.latestPayment')}</h3>
+              <p>
+                {latest
+                  ? `${latest.month} — ${latest.amountPaid === null ? t('worker.amountUnavailable') : `₪${latest.amountPaid}`}`
+                  : t('worker.noPayments')}
+              </p>
+            </article>
+            <article>
+              <h3>{t('worker.vacation')}</h3>
+              <p>
+                {data.leave.availableBalance === null
+                  ? t('worker.balanceUnavailable')
+                  : data.leave.availableBalance}
+              </p>
+            </article>
+            <article>
+              <h3>{t('worker.requests')}</h3>
+              <p>
+                {data.requests.filter((r) => !['resolved', 'cancelled'].includes(r.status)).length}
+              </p>
+            </article>
+            <article>
+              <h3>{t('worker.documents')}</h3>
+              <p>{data.documents.length}</p>
+            </article>
+          </div>
+        </section>
+      )}
+      {tab === 'payments' && (
+        <section>
+          <h2>{t('worker.payments')}</h2>
+          {data.payments.length === 0 ? (
+            <p>{t('worker.noPayments')}</p>
+          ) : (
+            data.payments.map((p) => (
+              <article key={p.closeId} className="worker-card">
+                <strong>{p.month}</strong>
+                <p>
+                  {p.amountPaid === null ? t('worker.amountUnavailable') : `₪${p.amountPaid}`} ·{' '}
+                  {p.paymentDate}
+                </p>
+                {p.acknowledgement === 'pending' ? (
+                  <>
+                    <p className="legal-note">{t('worker.ackDisclaimer')}</p>
+                    <button
+                      onClick={async () => {
+                        await apiRequest(`/worker/payments/${p.closeId}/acknowledgements`, {
+                          method: 'POST',
+                        });
+                        load();
+                      }}
+                    >
+                      {t('worker.acknowledge')}
+                    </button>
+                  </>
+                ) : (
+                  <p>
+                    {t('worker.acknowledged')} {p.acknowledgedAt}
+                  </p>
+                )}
+              </article>
+            ))
+          )}
+        </section>
+      )}
+      {tab === 'vacation' && (
+        <section>
+          <h2>{t('worker.vacation')}</h2>
+          <p>
+            {data.leave.availableBalance === null
+              ? t('worker.balanceUnavailable')
+              : `${data.leave.availableBalance}`}
+          </p>
+          <p>
+            {t('worker.used')}: {data.leave.used} · {t('worker.planned')}: {data.leave.planned}
+          </p>
+        </section>
+      )}
+      {tab === 'documents' && (
+        <section>
+          <h2>{t('worker.documents')}</h2>
+          {data.documents.length ? (
+            data.documents.map((d) => (
+              <article className="worker-card" key={d.id}>
+                {d.document_type}
+              </article>
+            ))
+          ) : (
+            <p>{t('worker.noDocuments')}</p>
+          )}
+        </section>
+      )}
+      {tab === 'requests' && (
+        <section>
+          <h2>{t('worker.requests')}</h2>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await apiRequest('/worker/requests', {
+                method: 'POST',
+                body: JSON.stringify({ type: 'general', message }),
+              });
+              setMessage('');
+              load();
+            }}
+          >
+            <label>
+              {t('worker.requestMessage')}
+              <textarea
+                required
+                maxLength={1000}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </label>
+            <button>{t('worker.submitRequest')}</button>
+          </form>
+          {data.requests.map((r) => (
+            <article className="worker-card" key={r.id}>
+              <strong>{r.request_type}</strong>
+              <p>{r.message}</p>
+              <small>{r.status}</small>
+            </article>
+          ))}
+        </section>
+      )}
+      {tab === 'profile' && (
+        <section>
+          <h2>{t('worker.preferences')}</h2>
+          <p>{t('worker.emailAvailable')}</p>
+          <p>{t('worker.phoneUnavailable')}</p>
+        </section>
+      )}
+    </main>
+  );
+}
