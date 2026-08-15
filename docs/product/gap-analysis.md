@@ -1,5 +1,9 @@
 # Repository and Specification Gap Analysis
 
+## Wave 3 status (2026-08-15)
+
+The exact Product Intelligence gaps and reuse decisions are recorded in `docs/architecture/product-intelligence.md`. All six requested surfaces have an implementation; hosted CI evidence remains the closeout gap. No Wave 4 worker-portal acknowledgement was implemented.
+
 Status: **Reconciled with the deployed pilot baseline**
 Audit date: 2026-08-10
 

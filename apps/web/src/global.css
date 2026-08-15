@@ -5030,3 +5030,131 @@ input[type='number'] {
   gap: 1rem;
   align-items: end;
 }
+
+/* Wave 3 product intelligence: compact, readable and RTL-safe. */
+.attention-list,
+.payroll-intelligence,
+.monthly-close,
+.forecast-card {
+  display: grid;
+  gap: 16px;
+}
+.attention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border-inline-start: 5px solid #5b78a5;
+  background: #f7f9fc;
+  border-radius: 12px;
+}
+.attention-item.critical,
+.attention-item.high {
+  border-inline-start-color: #b93b3b;
+  background: #fff5f4;
+}
+.attention-item p {
+  margin-block: 6px;
+}
+.health-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 24px;
+}
+.score-ring {
+  display: grid;
+  place-content: center;
+  width: 112px;
+  aspect-ratio: 1;
+  border: 10px solid #28725a;
+  border-radius: 50%;
+  text-align: center;
+}
+.score-ring strong {
+  font-size: 2rem;
+}
+.health-card li {
+  margin-block: 8px;
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.metric-grid > div {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  background: #f4f7fb;
+  border-radius: 12px;
+}
+.metric-grid strong {
+  font-size: 1.3rem;
+}
+.bar-chart {
+  display: grid;
+  gap: 10px;
+}
+.bar-row {
+  display: grid;
+  grid-template-columns: 70px minmax(80px, 1fr) 110px 60px;
+  align-items: center;
+  gap: 10px;
+}
+.bar-row > div {
+  height: 18px;
+  background: #e4e9f1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.bar-row i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, #1559c7, #1559c7 8px, #4c81d2 8px, #4c81d2 16px);
+}
+.forecast-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px;
+}
+.forecast-strip > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #dce5f1;
+  border-radius: 10px;
+}
+.forecast-strip span {
+  font-size: 0.75rem;
+}
+.payroll-intelligence table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.payroll-intelligence th,
+.payroll-intelligence td {
+  padding: 8px;
+  border-bottom: 1px solid #dce5f1;
+  text-align: start;
+}
+@media (max-width: 620px) {
+  .health-card {
+    grid-template-columns: 1fr;
+  }
+  .attention-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .bar-row {
+    grid-template-columns: 55px 1fr;
+  }
+  .bar-row strong,
+  .bar-row small {
+    grid-column: 2;
+  }
+  .payroll-intelligence details {
+    overflow: auto;
+  }
+}

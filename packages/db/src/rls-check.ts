@@ -59,6 +59,7 @@ const ALL_TENANT_TABLES = [
   'employment_authorization_link',
   'authorization_overlap_review',
   'workflow_completion',
+  'payroll_month_close',
 ] as const;
 
 interface Fixture {

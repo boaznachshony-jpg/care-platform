@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@caredesk/application": "workspace:*",
     "@caredesk/design-tokens": "workspace:*",
     "@caredesk/domain": "workspace:*",
     "@caredesk/i18n": "workspace:*",

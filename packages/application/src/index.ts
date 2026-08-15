@@ -33,3 +33,4 @@ export * from './use-cases/manage-workspace-files.js';
 export * from './use-cases/manage-family-access.js';
 export * from './use-cases/manage-product-billing.js';
 export * from './use-cases/manage-visa-renewal.js';
+export * from './product-intelligence.js';

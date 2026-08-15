@@ -423,6 +423,19 @@ export interface MvpPayrollRecord {
   savedAt: string;
 }
 
+export interface MvpMonthlyClose {
+  id: string;
+  payrollRecordId: string;
+  month: string;
+  status: 'closed';
+  paymentDate: string;
+  paymentMethod: 'bank_transfer' | 'cash' | 'check' | 'other';
+  evidenceDocumentId?: string;
+  closedAt: string;
+  /** Worker acknowledgement is intentionally not claimed before the worker portal exists. */
+  workerAcknowledgement: 'not_supported';
+}
+
 export type EmploymentExpenseFrequency = 'monthly' | 'quarterly' | 'annual' | 'one_time';
 export type EmploymentExpenseStatus = 'upcoming' | 'paid';
 
@@ -459,6 +472,7 @@ const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
 const PAYROLL_STORAGE_NAME = 'caredesk.mvp.payroll.v1';
 const EMPLOYMENT_EXPENSES_STORAGE_NAME = 'caredesk.mvp.employment-expenses.v1';
 const TASKS_STORAGE_NAME = 'caredesk.mvp.tasks.v1';
+const MONTHLY_CLOSE_STORAGE_NAME = 'caredesk.mvp.monthly-close.v1';
 
 function readList<T>(key: string): T[] {
   if (!isBrowser()) return [];
@@ -558,6 +572,27 @@ export function readMvpPayroll(): MvpPayrollRecord[] {
 
 export function saveMvpPayroll(records: MvpPayrollRecord[]): void {
   saveList(PAYROLL_STORAGE_NAME, records);
+}
+
+export function readMvpMonthlyCloses(): MvpMonthlyClose[] {
+  return readList<MvpMonthlyClose>(MONTHLY_CLOSE_STORAGE_NAME);
+}
+
+/** Idempotent by payroll month. A close receipt is immutable in the MVP store. */
+export function closeMvpPayrollMonth(
+  input: Omit<MvpMonthlyClose, 'id' | 'status' | 'closedAt' | 'workerAcknowledgement'>,
+): MvpMonthlyClose {
+  const existing = readMvpMonthlyCloses().find((close) => close.month === input.month);
+  if (existing) return existing;
+  const close: MvpMonthlyClose = {
+    ...input,
+    id: crypto.randomUUID(),
+    status: 'closed',
+    closedAt: new Date().toISOString(),
+    workerAcknowledgement: 'not_supported',
+  };
+  saveList(MONTHLY_CLOSE_STORAGE_NAME, [...readMvpMonthlyCloses(), close]);
+  return close;
 }
 
 export function readMvpEmploymentExpenses(): MvpEmploymentExpense[] {

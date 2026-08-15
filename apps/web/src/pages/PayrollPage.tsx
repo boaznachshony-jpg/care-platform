@@ -15,6 +15,7 @@ import {
   type MvpEmploymentExpense,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
+import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
@@ -718,6 +719,7 @@ export function PayrollPage() {
           </ul>
         </div>
       ) : null}
+      <PayrollIntelligence records={records} expenses={expenses} baseSalary={profile.baseSalary} />
       <section className="card payroll-sequence-card" aria-labelledby="payroll-sequence-title">
         <div className="section-heading">
           <div>

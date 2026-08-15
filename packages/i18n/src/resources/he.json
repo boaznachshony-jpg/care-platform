@@ -422,6 +422,18 @@
     "reset": "התחלת התיק מחדש",
     "delete": "מחיקת התיק"
   },
+  "intelligence": {
+    "now": "עכשיו",
+    "attention": "דורש טיפול",
+    "empty": "אין כרגע פעולות נוספות שדורשות טיפול",
+    "handle": "לטיפול עכשיו",
+    "today": "היום",
+    "inDays": "בעוד {{count}} ימים",
+    "overdueDays": "באיחור של {{count}} ימים",
+    "health": "מצב תיק ההעסקה",
+    "healthDisclaimer": "מדד שלמות המבוסס על המידע בתיק; אינו אישור לעמידה בדין.",
+    "actionsToPerfect": "השלימו {{count}} פעולות כדי להגיע ל־100"
+  },
   "dashboard": {
     "eyebrow": "מרכז הבקרה האישי",
     "greeting": "שלום {{name}}",

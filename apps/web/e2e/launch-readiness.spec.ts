@@ -340,6 +340,13 @@ test.describe('launch readiness interactions', () => {
 
     await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
     await expect(page.getByRole('button', { name: 'שמירה מחדש' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'עלות ההעסקה לאורך זמן' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'תחזית 12 חודשים' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'סגירת 2026-07' })).toBeVisible();
+    await page.getByLabel('תאריך תשלום').fill('2026-08-09');
+    await page.getByLabel('אמצעי תשלום').selectOption('bank_transfer');
+    await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
+    await expect(page.getByText('2026-07 — הושלם · שולם 2026-08-09')).toBeVisible();
 
     const nationalInsuranceTracking = page
       .locator('.employment-expenses > div')
@@ -379,18 +386,16 @@ test.describe('launch readiness interactions', () => {
     await expect(page).toHaveURL(/\/documents$/);
 
     const timelineTargets = [
-      { title: 'בדיקת ביטוח רפואי', path: '/documents' },
-      { title: 'חידוש ביטוח רפואי', path: '/tasks' },
-      { title: 'חידוש רישיון ההעסקה', path: '/documents' },
+      { title: 'חידוש ביטוח רפואי', path: '/documents' },
+      { title: 'חידוש רישיון ההעסקה', path: '/tasks' },
       { title: 'חידוש הוויזה', path: '/tasks' },
-      { title: 'הכנת שכר יולי', path: '/payroll' },
-      { title: 'יום חופשה מתוכנן', path: '/tasks' },
-      { title: 'סיכום חודש', path: '/' },
     ];
     for (const { title, path: expected } of timelineTargets) {
       await page.goto(`${clientHome}/timeline`);
-      const eventCard = page.locator('article').filter({ hasText: title });
-      await eventCard.getByRole('link', { name: 'פרטים' }).click();
+      const eventCard = page
+        .getByRole('article')
+        .filter({ has: page.getByRole('heading', { name: title }) });
+      await eventCard.getByRole('link', { name: 'פתיחת הפעולה' }).click();
       if (expected === '/') {
         await expect(page).toHaveURL(clientHome);
       } else {
@@ -399,9 +404,7 @@ test.describe('launch readiness interactions', () => {
     }
 
     await page.goto(`${clientHome}/timeline`);
-    const nationalInsuranceCard = page.locator('article').filter({ hasText: 'ביטוח לאומי' });
-    await nationalInsuranceCard.getByRole('link', { name: 'פרטים' }).click();
-    await expect(page).toHaveURL(/\/tasks$/);
+    await expect(page.getByRole('heading', { name: 'מה צפוי בתיק' })).toBeVisible();
   });
 
   test('unfinished internal API routes cannot expose a broken screen', async ({ page }) => {

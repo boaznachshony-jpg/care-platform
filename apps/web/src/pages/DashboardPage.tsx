@@ -2,11 +2,28 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import {
+  clientIdFromPath,
+  readMvpDocuments,
+  readMvpMonthlyCloses,
+  readMvpPayroll,
+  readMvpTasks,
+} from '../storage/mvp-storage.js';
+import { productIntelligence } from '../product-intelligence.js';
 
 export function DashboardPage() {
   const path = useClientPath();
   const { t } = useTranslation();
   const [profile] = useMvpProfile();
+  const intelligence = productIntelligence({
+    clientId: clientIdFromPath() ?? 'legacy',
+    today: new Date().toISOString().slice(0, 10),
+    profile,
+    tasks: readMvpTasks(),
+    documents: readMvpDocuments(),
+    payroll: readMvpPayroll(),
+    closes: readMvpMonthlyCloses(),
+  });
   const missingCount = [
     !profile.employerName.trim(),
     !profile.recipientName.trim(),
@@ -36,6 +53,63 @@ export function DashboardPage() {
         <span className={`status-chip ${status}`}>
           {t(status === 'missing' ? 'dashboard.statusMissing' : 'dashboard.statusAttention')}
         </span>
+      </section>
+      <section className="card intelligence-attention" aria-labelledby="attention-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{t('intelligence.now')}</p>
+            <h2 id="attention-title">{t('intelligence.attention')}</h2>
+          </div>
+        </div>
+        {intelligence.timeline.length ? (
+          <div className="attention-list">
+            {intelligence.timeline.slice(0, 3).map((item) => (
+              <article className={`attention-item ${item.severity}`} key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.reason}</p>
+                  <small>
+                    {item.daysUntilDue < 0
+                      ? t('intelligence.overdueDays', { count: Math.abs(item.daysUntilDue) })
+                      : item.daysUntilDue === 0
+                        ? t('intelligence.today')
+                        : t('intelligence.inDays', { count: item.daysUntilDue })}
+                  </small>
+                </div>
+                {item.actionTarget ? (
+                  <Link className="primary-button" to={path(item.actionTarget)}>
+                    {t('intelligence.handle')}
+                  </Link>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="success-box">{t('intelligence.empty')}</p>
+        )}
+      </section>
+      <section className="card health-card" aria-labelledby="health-title">
+        <div className="score-ring" aria-label={`${intelligence.health.score} מתוך 100`}>
+          <strong>{intelligence.health.score}</strong>
+          <span>/100</span>
+        </div>
+        <div>
+          <h2 id="health-title">{t('intelligence.health')}</h2>
+          <p>{t('intelligence.healthDisclaimer')}</p>
+          <ul>
+            {intelligence.health.factors.map((factor) => (
+              <li key={factor.id}>
+                <span aria-hidden="true">{factor.status === 'good' ? '✓' : '!'}</span>{' '}
+                {factor.title}: {factor.explanation}
+              </li>
+            ))}
+          </ul>
+          {intelligence.health.actionsRemaining ? (
+            <strong>
+              {t('intelligence.actionsToPerfect', { count: intelligence.health.actionsRemaining })}
+            </strong>
+          ) : null}
+        </div>
       </section>
       <section className={`status-card ${status === 'missing' ? 'warning' : 'attention'}`}>
         <div className="status-icon" aria-hidden="true">

@@ -166,7 +166,8 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await expect(page.getByRole('heading', { name: 'שלום בועז בדיקה' })).toBeVisible();
   await expect(page.getByText('מטופל בדיקה')).toBeVisible();
   await expect(page.getByText('Caregiver Test')).toBeVisible();
-  await expect(page.getByText('דורש טיפול', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'דורש טיפול', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'מצב תיק ההעסקה' })).toBeVisible();
   await page.goto(`${clientBase}/tasks`);
   const insuranceTask = page.locator('.list-task').filter({ hasText: 'חידוש ביטוח רפואי' });
   await expect(insuranceTask).toContainText('30.06.2027');
@@ -253,6 +254,9 @@ test('mobile navigation keeps payroll accessible', async ({ page }) => {
     .click();
   await expect(page).toHaveURL(/\/payroll$/);
   await expect(page.getByRole('heading', { name: 'רישום שכר חודשי' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'עלות ההעסקה לאורך זמן' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'תחזית 12 חודשים' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'כל החודשים הושלמו' })).toBeVisible();
 });
 
 const productRoutes = [
@@ -262,7 +266,7 @@ const productRoutes = [
   ['/trust', 'מסרים לבניית אמון'],
   ['/glossary', 'מושגים חשובים'],
   ['/documents', 'כל המסמכים במקום אחד'],
-  ['/timeline', 'המועדים הבאים'],
+  ['/timeline', 'מה צפוי בתיק'],
   ['/payroll', 'רישום שכר חודשי'],
   ['/settings', 'פרטים והעדפות'],
   ['/contact', 'יצירת קשר ועזרה'],
@@ -332,7 +336,7 @@ test('connects every primary screen through visible navigation and action links'
       ['פרטי המטפל', '/employee', 'Caregiver Test'],
       ['מסרים לבניית אמון', '/trust', 'מסרים לבניית אמון'],
       ['מושגים חשובים', '/glossary', 'מושגים חשובים'],
-      ['ציר זמן', '/timeline', 'המועדים הבאים'],
+      ['ציר זמן', '/timeline', 'מה צפוי בתיק'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה ויצירת קשר', '/contact', 'יצירת קשר ועזרה'],
     ] as const;
@@ -352,7 +356,7 @@ test('connects every primary screen through visible navigation and action links'
       ['עובד', '/employee', 'Caregiver Test'],
       ['מושגים', '/glossary', 'מושגים חשובים'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
-      ['ציר זמן', '/timeline', 'המועדים הבאים'],
+      ['ציר זמן', '/timeline', 'מה צפוי בתיק'],
       ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה', '/contact', 'יצירת קשר ועזרה'],
@@ -429,8 +433,8 @@ test('opens the relevant workflow from timeline details', async ({ page }) => {
 
   await page
     .getByRole('article')
-    .filter({ hasText: 'בדיקת ביטוח רפואי' })
-    .getByRole('link', { name: 'פרטים' })
+    .filter({ has: page.getByRole('heading', { name: 'חידוש ביטוח רפואי' }) })
+    .getByRole('link', { name: 'פתיחת הפעולה' })
     .click();
 
   await expect(page).toHaveURL(/\/documents$/);
