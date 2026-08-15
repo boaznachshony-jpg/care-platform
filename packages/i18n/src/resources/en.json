@@ -833,5 +833,39 @@
       "notReturned": "Caregiver did not return",
       "replace": "Family wants to replace caregiver"
     }
+  },
+  "worker": {
+    "title": "My CareDesk",
+    "accessError": "There is no active worker access. The invitation may have expired or access may have been revoked.",
+    "loading": "Loading your portal…",
+    "navigation": "Worker portal navigation",
+    "nav": {
+      "home": "Home",
+      "payments": "Payments",
+      "vacation": "Vacation",
+      "documents": "Documents",
+      "requests": "Requests",
+      "profile": "Profile"
+    },
+    "hello": "Hello",
+    "latestPayment": "Latest payment",
+    "amountUnavailable": "Amount is not yet available from payroll",
+    "noPayments": "No closed payments to show",
+    "vacation": "Vacation",
+    "balanceUnavailable": "No governed balance is available yet",
+    "requests": "Requests",
+    "documents": "Documents",
+    "payments": "My payments",
+    "ackDisclaimer": "This confirms only that you saw or received the payment record. It does not approve the calculation, waive rights, or constitute final settlement.",
+    "acknowledge": "I saw / received this payment record",
+    "acknowledged": "Acknowledged on",
+    "used": "Used",
+    "planned": "Planned",
+    "noDocuments": "No documents have been authorized for you",
+    "requestMessage": "What would you like to request?",
+    "submitRequest": "Submit request",
+    "preferences": "Language and communication preferences",
+    "emailAvailable": "Email is available according to your preference.",
+    "phoneUnavailable": "WhatsApp and SMS are not configured and will not be sent."
   }
 }

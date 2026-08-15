@@ -102,6 +102,7 @@ import { SupabaseInvitationService } from './auth/supabase-invitation-service.js
 import { SupabaseDocumentStorage } from './storage/supabase-document-storage.js';
 import { MirroredDocumentStorage } from './storage/mirrored-document-storage.js';
 import { CardcomProductBillingGateway } from './billing/cardcom-gateway.js';
+import { Wave5Service } from './collaboration/wave5-service.js';
 
 /**
  * Closed-pilot family role-to-permission map (ADR-004). `family_member` is a
@@ -190,6 +191,7 @@ const DEV_TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const DEV_USER_ID = '00000000-0000-4000-8000-000000000002';
 
 export interface Container {
+  wave5?: Wave5Service;
   auth: AuthService;
   actorResolver: ActorResolver;
   audit: AuditService;
@@ -492,6 +494,7 @@ export function buildContainer(env: Env): Container {
   };
 
   return {
+    ...(pool ? { wave5: new Wave5Service(pool) } : {}),
     auth,
     actorResolver,
     audit,

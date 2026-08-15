@@ -153,3 +153,14 @@ Smart Document Intake contracts, least-privilege Action AI, eight “Something c
 wizards, and the governed rules evaluator. Durable review/commit evidence has forced tenant
 RLS. Production OCR/AI remains externally configuration-gated; manual workflows remain usable.
 See `docs/architecture/wave-4-automation-ai.md` and the Wave 4 Definition of Done.
+
+# Wave 5 completion pass (2026-08-15)
+
+Baseline `4f4273e` includes merged PR #42. The completion audit found that the
+Wave 5 database/application foundation was not yet reachable as an end-to-end
+product. This pass adds the worker authorization bootstrap, authenticated
+portal projection/mutations, and a distinct mobile-first worker shell, but the
+honest release status remains **ORANGE / not ready to close**. Required employer
+UX, signed worker downloads, complete notification persistence, live RLS,
+Playwright, and Vercel preview evidence are still outstanding. See
+`docs/governance/wave-5-definition-of-done.md`.
