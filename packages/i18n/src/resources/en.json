@@ -834,6 +834,24 @@
       "replace": "Family wants to replace caregiver"
     }
   },
+  "completion": {
+    "health": "Employment file health",
+    "disclaimer": "This score describes the completeness of stored case facts. It is not legal certification or professional advice.",
+    "actionsRemaining_one": "Complete one action to improve the file",
+    "actionsRemaining_other": "Complete {{count}} actions to improve the file",
+    "assistant": "Assistant for this case",
+    "question": "What would you like to check?",
+    "ask": "Check my CareDesk file",
+    "aiLabel": "AI-assisted case answer",
+    "facts": "Case facts used",
+    "createTasks": "Review and create tasks",
+    "createReview": "Create review request",
+    "reviews": "Professional review requests",
+    "noReviews": "No review requests are open.",
+    "manualReview": "Request a review",
+    "reviewReason": "The case needs professional review",
+    "reviewSummary": "Please review the relevant case evidence. No professional has been assigned yet."
+  },
   "worker": {
     "title": "My CareDesk",
     "accessError": "There is no active worker access. The invitation may have expired or access may have been revoked.",

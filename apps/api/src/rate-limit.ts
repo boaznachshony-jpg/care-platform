@@ -3,6 +3,19 @@ export interface RateLimitDecision {
   retryAfterSeconds?: number;
 }
 
+/** Typed route metadata shared by Fastify route declarations and the enforcing pre-handler. */
+export interface RouteRateLimit {
+  max: number;
+  timeWindow: number;
+  bucket: string;
+}
+
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    rateLimit?: RouteRateLimit;
+  }
+}
+
 /** Provider-neutral port. A Redis/KV implementation can replace this without route changes. */
 export interface RateLimiter {
   readonly kind: 'memory' | 'distributed';

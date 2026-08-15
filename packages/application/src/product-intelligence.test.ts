@@ -57,6 +57,7 @@ describe('product intelligence projections', () => {
         points: 0,
         weight: 20,
         explanation: 'Missing',
+        provenance: { sourceType: 'document' as const, sourceIds: [] },
       },
     ];
     expect(projectCaseHealth(factors)).toMatchObject({ score: 0, actionsRemaining: 1 });
