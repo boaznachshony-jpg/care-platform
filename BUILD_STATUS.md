@@ -2,6 +2,10 @@
 
 Status date: **2026-08-14**
 
+## Wave 3 — Product Intelligence
+
+Implementation baseline: `d3d15cc` (PRs #31–#39 verified in local history). Shared Timeline, attention, explainable score, payroll analytics, 12-month forecast and monthly-close implementation is present. Hosted PostgreSQL, Playwright and CI evidence must be green before closeout; Wave 3 is therefore not yet marked complete.
+
 Current Wave 2 baseline: `main` after merged PRs #31 through #37
 Sprint 0 closeout baseline: `main` after merged PRs #25, #26, #27, and #28
 Previous architecture-review baseline (retained for history): `main` at `0c6acee`

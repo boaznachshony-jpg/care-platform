@@ -1,132 +1,79 @@
-/* eslint-disable no-restricted-syntax */
+/* eslint-disable no-restricted-syntax -- legacy MVP Hebrew-first surface; localization extraction is tracked */
 import { Link } from 'react-router-dom';
-import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import {
+  clientIdFromPath,
+  readMvpDocuments,
+  readMvpMonthlyCloses,
+  readMvpPayroll,
+  readMvpTasks,
+} from '../storage/mvp-storage.js';
+import { productIntelligence } from '../product-intelligence.js';
 
-type TimelineEvent = [
-  date: string,
-  title: string,
-  description: string,
-  tone: string,
-  detailsPath: string,
-];
+const labels = {
+  overdue: 'באיחור',
+  today: 'היום',
+  this_week: 'השבוע',
+  later_this_month: 'בהמשך החודש',
+  upcoming: 'בהמשך',
+} as const;
 
-const fixedEvents: TimelineEvent[] = [
-  ['09 אוג׳', 'הכנת שכר יולי', 'פעולה חודשית', 'blue', '/payroll'],
-  ['15 אוג׳', 'יום חופשה מתוכנן', 'מידע', 'green', '/tasks'],
-  ['31 אוג׳', 'סיכום חודש', 'בדיקה אוטומטית', 'neutral', '/'],
-];
-
-const shortMonths = [
-  'ינו׳',
-  'פבר׳',
-  'מרץ',
-  'אפר׳',
-  'מאי',
-  'יוני',
-  'יולי',
-  'אוג׳',
-  'ספט׳',
-  'אוק׳',
-  'נוב׳',
-  'דצמ׳',
-];
-
-function shortDate(value: string): string {
-  const [, month, day] = value.split('-').map(Number);
-  return `${day} ${shortMonths[(month ?? 1) - 1]}`;
-}
-
-export function TimelinePage({
-  today,
-  employmentStartDate,
-}: { today?: Date; employmentStartDate?: string } = {}) {
+export function TimelinePage({ today }: { today?: Date; employmentStartDate?: string } = {}) {
   const path = useClientPath();
   const [profile] = useMvpProfile();
-  const effectiveEmploymentStartDate = employmentStartDate ?? profile.employmentStartDate;
-  const quarterlyInsurance = createQuarterlyInsuranceTask(today);
-  const events: TimelineEvent[] = [
-    ...(effectiveEmploymentStartDate
-      ? ([
-          [
-            shortDate(effectiveEmploymentStartDate),
-            'בדיקת ביטוח רפואי',
-            'החל ממועד תחילת ההעסקה',
-            'amber',
-            '/documents',
-          ],
-        ] satisfies TimelineEvent[])
-      : []),
-    ...(profile.licenseRenewalDate
-      ? ([
-          [
-            shortDate(profile.licenseRenewalDate),
-            'חידוש רישיון ההעסקה',
-            'המועד שהוגדר ברשימת ההקמה',
-            'amber',
-            '/documents',
-          ],
-        ] satisfies TimelineEvent[])
-      : []),
-    ...(profile.medicalInsuranceExpiryDate
-      ? ([
-          [
-            shortDate(profile.medicalInsuranceExpiryDate),
-            'חידוש ביטוח רפואי',
-            'מועד סיום הכיסוי שהוגדר בתיק',
-            'amber',
-            '/tasks',
-          ],
-        ] satisfies TimelineEvent[])
-      : []),
-    ...(profile.visaRenewalDate
-      ? ([
-          [
-            shortDate(profile.visaRenewalDate),
-            'חידוש הוויזה',
-            'המועד שהוגדר ברשימת ההקמה',
-            'purple',
-            '/tasks',
-          ],
-        ] satisfies TimelineEvent[])
-      : []),
-    ...fixedEvents,
-    [
-      shortDate(
-        quarterlyInsurance.preparationOnly
-          ? quarterlyInsurance.periodEnd
-          : quarterlyInsurance.deadlineDate,
-      ),
-      quarterlyInsurance.title,
-      `${quarterlyInsurance.paymentWindow} · ${quarterlyInsurance.statusLabel}`,
-      quarterlyInsurance.status === 'overdue' ? 'amber' : 'purple',
-      '/tasks',
-    ],
-  ];
-
+  const projection = productIntelligence({
+    clientId: clientIdFromPath() ?? 'legacy',
+    today: (today ?? new Date()).toISOString().slice(0, 10),
+    profile,
+    tasks: readMvpTasks(),
+    documents: readMvpDocuments(),
+    payroll: readMvpPayroll(),
+    closes: readMvpMonthlyCloses(),
+  }).timeline;
   return (
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">ציר זמן</p>
-          <h1>המועדים הבאים</h1>
-          <p>מבט כרונולוגי פשוט על פעולות, תשלומים ותוקפים.</p>
+          <p className="eyebrow">ציר זמן ציות</p>
+          <h1>מה צפוי בתיק</h1>
+          <p>
+            מועדים שנגזרו רק ממשימות ומנתונים שנשמרו בתיק. אין כאן מועדים משפטיים שהמערכת המציאה.
+          </p>
         </div>
       </header>
-      <section className="timeline">
-        {events.map(([date, title, description, tone, detailsPath]) => (
-          <article key={title}>
-            <div className="timeline-date">{date}</div>
-            <span className={`timeline-dot ${tone}`} />
-            <div className="timeline-content">
-              <h3>{title}</h3>
-              <p>{description}</p>
-              <Link to={path(detailsPath)}>פרטים</Link>
-            </div>
-          </article>
-        ))}
-      </section>
+      {projection.length === 0 ? (
+        <p className="success-box">אין כרגע מועדים פתוחים להצגה.</p>
+      ) : (
+        (Object.keys(labels) as (keyof typeof labels)[]).map((group) => {
+          const items = projection.filter((item) => item.group === group);
+          return items.length ? (
+            <section className="card" key={group} aria-labelledby={`timeline-${group}`}>
+              <h2 id={`timeline-${group}`}>{labels[group]}</h2>
+              <div className="timeline">
+                {items.map((item) => (
+                  <article key={item.id}>
+                    <time className="timeline-date" dateTime={item.dueDate}>
+                      {item.dueDate}
+                    </time>
+                    <span className={`timeline-dot ${item.severity}`} aria-hidden="true" />
+                    <div className="timeline-content">
+                      <h3>{item.title}</h3>
+                      <p>{item.reason}</p>
+                      <small>
+                        מקור: {item.sourceType} · {item.provenance.sourceId}
+                      </small>
+                      {item.actionTarget ? (
+                        <Link to={path(item.actionTarget)}>פתיחת הפעולה</Link>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null;
+        })
+      )}
     </div>
   );
 }

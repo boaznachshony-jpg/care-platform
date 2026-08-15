@@ -40,4 +40,13 @@ describe('database security migration contracts', () => {
     expect(role).toMatch(/alter role caredesk_app nobypassrls/iu);
     expect(role).not.toMatch(/alter role caredesk_app bypassrls/iu);
   });
+
+  it('makes monthly-close evidence tenant-scoped, same-tenant and append-only', async () => {
+    const close = await migration('0023_monthly_payroll_close.sql');
+    expect(close).toMatch(/payroll_month_close_case_same_tenant/iu);
+    expect(close).toMatch(/force row level security/iu);
+    expect(close).toMatch(/using[\s\S]*with check/iu);
+    expect(close).toMatch(/grant select, insert on payroll_month_close/iu);
+    expect(close).not.toMatch(/grant[^;]*(?:update|delete)[^;]*on payroll_month_close/iu);
+  });
 });

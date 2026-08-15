@@ -422,6 +422,18 @@
     "reset": "Start case again",
     "delete": "Delete case"
   },
+  "intelligence": {
+    "now": "Now",
+    "attention": "Needs attention",
+    "empty": "There are currently no additional actions that need attention",
+    "handle": "Handle now",
+    "today": "Today",
+    "inDays": "In {{count}} days",
+    "overdueDays": "{{count}} days overdue",
+    "health": "Employment file health",
+    "healthDisclaimer": "A completeness indicator based on file data; not legal compliance certification.",
+    "actionsToPerfect": "Complete {{count}} actions to reach 100"
+  },
   "dashboard": {
     "eyebrow": "Personal control center",
     "greeting": "Hello {{name}}",
