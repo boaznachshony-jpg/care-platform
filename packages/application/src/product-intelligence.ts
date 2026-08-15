@@ -76,6 +76,8 @@ export interface HealthFactor {
   explanation: string;
   recommendedAction?: string;
   actionTarget?: string;
+  /** Stable, inspectable origin for this deterministic factor. */
+  provenance: { sourceType: AttentionFact['sourceType'] | 'profile'; sourceIds: string[] };
 }
 
 export function projectCaseHealth(factors: readonly HealthFactor[]) {

@@ -17,6 +17,7 @@ import { registerVisaRenewalRoutes } from './routes/visa-renewals.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
 import { InMemoryRateLimiter } from './rate-limit.js';
 import { registerWave5Routes } from './routes/wave5.js';
+import { registerProductDifferentiationRoutes } from './routes/product-differentiation.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -159,6 +160,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerVisaRenewalRoutes(app, container);
   registerSupportRequestRoutes(app, env, supportRateLimiter);
   registerWave5Routes(app, container);
+  registerProductDifferentiationRoutes(app, container);
 
   return app;
 }

@@ -330,3 +330,65 @@ export function startBillingPaymentMethodSetup(
 export function cancelBillingSubscription(): Promise<void> {
   return apiRequest('/billing/subscription', { method: 'DELETE' });
 }
+
+export interface CaseHealthResponse {
+  score: number;
+  actionsRemaining: number;
+  disclaimer: string;
+  factors: Array<{
+    id: string;
+    title: string;
+    status: 'good' | 'attention' | 'not_applicable';
+    points: number;
+    weight: number;
+    explanation: string;
+    recommendedAction?: string;
+    actionTarget?: string;
+    provenance: { sourceType: string; sourceIds: string[] };
+  }>;
+}
+export interface AssistantResponse {
+  answer: string;
+  groundingLabel: string;
+  factsUsed: Array<{ factPath: string; label: string }>;
+  uncertainties: Array<{ code: string; message: string }>;
+  proposedChecklist?: string[];
+  escalation?: { required: boolean; reason: string };
+}
+export interface ProfessionalReviewResponse {
+  id: string;
+  category: string;
+  reason: string;
+  summary: string;
+  source: string;
+  status: string;
+  createdAt: string;
+}
+export const getCaseHealth = (caseId: string) =>
+  apiRequest<CaseHealthResponse>(`${casePath(caseId)}/health`);
+export const askCaseAssistant = (
+  caseId: string,
+  question: string,
+  intent: 'travel_check' | 'missing_file_facts' | 'explain_attention' | 'checklist',
+) =>
+  apiRequest<AssistantResponse>(`${casePath(caseId)}/assistant`, {
+    method: 'POST',
+    body: JSON.stringify({ question, intent }),
+  });
+export const confirmAssistantChecklist = (caseId: string, items: string[]) =>
+  apiRequest(`${casePath(caseId)}/assistant/checklist-confirmations`, {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify({ items }),
+  });
+export const listProfessionalReviews = (caseId: string) =>
+  apiRequest<ProfessionalReviewResponse[]>(`${casePath(caseId)}/professional-reviews`);
+export const createProfessionalReview = (
+  caseId: string,
+  input: { category: string; reason: string; summary: string; source: string },
+) =>
+  apiRequest<ProfessionalReviewResponse>(`${casePath(caseId)}/professional-reviews`, {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });

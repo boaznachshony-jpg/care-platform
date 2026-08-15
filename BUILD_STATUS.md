@@ -2,6 +2,16 @@
 
 Status date: **2026-08-14**
 
+## P1 Product Differentiation Completion Wave (2026-08-15)
+
+Baseline `b3be5ed` contains merged PR #43 and all Wave 3–5 foundations. The exact pre-code gap
+analysis, methodology, governance, privacy flow, provider gates, escalation lifecycle and honest
+15-capability review are recorded in
+`docs/architecture/product-differentiation-completion.md`. This change adds factor provenance,
+authenticated case-health and grounded-assistant APIs, confirmed checklist execution, and forced-
+RLS professional-review persistence. External AI/OCR is not approved or configured; those
+capabilities remain ORANGE, and this document does not relabel their foundations as complete.
+
 ## Wave 3 — Product Intelligence
 
 Implementation baseline: `d3d15cc` (PRs #31–#39 verified in local history). Shared Timeline, attention, explainable score, payroll analytics, 12-month forecast and monthly-close implementation is present. Hosted PostgreSQL, Playwright and CI evidence must be green before closeout; Wave 3 is therefore not yet marked complete.

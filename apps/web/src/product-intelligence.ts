@@ -65,6 +65,7 @@ export function productIntelligence(input: {
         : 'קיומו טרם אושר',
       recommendedAction: 'עדכון פרטי העסקה',
       actionTarget: '/settings',
+      provenance: { sourceType: 'profile', sourceIds: ['employmentAgreementConfirmed'] },
     },
     ...(['licenseRenewalDate', 'visaRenewalDate'] as const).map((key) => ({
       id: key,
@@ -75,6 +76,7 @@ export function productIntelligence(input: {
       explanation: input.profile[key] ? 'מועד שמור בתיק' : 'לא נשמר מועד',
       recommendedAction: 'עדכון מועד',
       actionTarget: '/settings',
+      provenance: { sourceType: 'profile' as const, sourceIds: [key] },
     })),
     {
       id: 'insurance',
@@ -93,6 +95,7 @@ export function productIntelligence(input: {
         : 'לא אושר רישום ביטוח',
       recommendedAction: 'עדכון ביטוח',
       actionTarget: '/documents',
+      provenance: { sourceType: 'insurance', sourceIds: ['medicalInsuranceExpiryDate'] },
     },
     {
       id: 'overdue',
@@ -105,6 +108,12 @@ export function productIntelligence(input: {
       explanation: 'מבוסס רק על משימות עם מועד שמור',
       recommendedAction: 'טיפול במשימות',
       actionTarget: '/tasks',
+      provenance: {
+        sourceType: 'task',
+        sourceIds: facts
+          .filter((fact) => fact.status === 'open')
+          .map((fact) => fact.provenance.sourceId),
+      },
     },
   ];
   return {
