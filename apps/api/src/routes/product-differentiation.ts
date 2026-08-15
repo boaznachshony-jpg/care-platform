@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import {
   projectCaseHealth,
@@ -10,6 +10,7 @@ import { withTenant } from '@caredesk/db';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { sendError, sendValidationError } from './http-errors.js';
+import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
 
 const caseParams = z.object({ caseId: z.string().uuid() });
 const reviewBody = z.object({
@@ -47,13 +48,43 @@ interface ReviewRow {
   updatedAt: string;
 }
 
+const MINUTE_MS = 60_000;
+export const PRODUCT_DIFFERENTIATION_RATE_LIMITS = {
+  health: { max: 60, timeWindow: MINUTE_MS, bucket: 'health' },
+  assistant: { max: 10, timeWindow: MINUTE_MS, bucket: 'assistant' },
+  checklistConfirmation: { max: 20, timeWindow: MINUTE_MS, bucket: 'checklist' },
+  reviewList: { max: 60, timeWindow: MINUTE_MS, bucket: 'review-list' },
+  reviewCreate: { max: 10, timeWindow: MINUTE_MS, bucket: 'review-create' },
+} as const satisfies Record<string, RouteRateLimit>;
+
+/**
+ * Uses the repository's provider-neutral limiter after authentication. The key
+ * is scoped to tenant and user so one family cannot consume another's quota;
+ * IP is only a fail-closed fallback if this hook is ever ordered incorrectly.
+ */
+function makeProductRateLimit(limiter: RateLimiter, policy: RouteRateLimit): preHandlerHookHandler {
+  return async (request, reply) => {
+    const principal = request.actor
+      ? `${request.actor.tenantId}:${request.actor.userId}`
+      : `unauthenticated:${request.ip}`;
+    const decision = await limiter.consume(
+      `product-differentiation:${policy.bucket}:${principal}`,
+      policy.max,
+      policy.timeWindow,
+    );
+    if (decision.allowed) return;
+    if (decision.retryAfterSeconds) reply.header('retry-after', decision.retryAfterSeconds);
+    sendError(request, reply, 429, 'RATE_LIMITED');
+  };
+}
+
 /** Authenticated completion-wave APIs. Case authorization always precedes data access. */
 export function registerProductDifferentiationRoutes(
   app: FastifyInstance,
   container: Container,
+  rateLimiter: RateLimiter,
 ): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
-  const options = { preHandler: authenticate };
   const memoryReviews = new Map<string, ReviewRow>();
   const idempotency = new Map<string, unknown>();
 
@@ -70,7 +101,13 @@ export function registerProductDifferentiationRoutes(
 
   app.get<{ Params: { caseId: string } }>(
     '/cases/:caseId/health',
-    options,
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.health },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(rateLimiter, PRODUCT_DIFFERENTIATION_RATE_LIMITS.health),
+      ],
+    },
     async (request, reply) => {
       const params = caseParams.safeParse(request.params);
       if (!params.success) return sendValidationError(request, reply, params.error);
@@ -130,7 +167,13 @@ export function registerProductDifferentiationRoutes(
 
   app.post<{ Params: { caseId: string } }>(
     '/cases/:caseId/assistant',
-    options,
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.assistant },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(rateLimiter, PRODUCT_DIFFERENTIATION_RATE_LIMITS.assistant),
+      ],
+    },
     async (request, reply) => {
       const params = caseParams.safeParse(request.params);
       const body = assistantBody.safeParse(request.body);
@@ -241,7 +284,16 @@ export function registerProductDifferentiationRoutes(
 
   app.post<{ Params: { caseId: string } }>(
     '/cases/:caseId/assistant/checklist-confirmations',
-    options,
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.checklistConfirmation },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(
+          rateLimiter,
+          PRODUCT_DIFFERENTIATION_RATE_LIMITS.checklistConfirmation,
+        ),
+      ],
+    },
     async (request, reply) => {
       const params = caseParams.safeParse(request.params);
       const body = checklistBody.safeParse(request.body);
@@ -267,7 +319,13 @@ export function registerProductDifferentiationRoutes(
 
   app.get<{ Params: { caseId: string } }>(
     '/cases/:caseId/professional-reviews',
-    options,
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewList },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(rateLimiter, PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewList),
+      ],
+    },
     async (request, reply) => {
       const params = caseParams.safeParse(request.params);
       if (!params.success) return sendValidationError(request, reply, params.error);
@@ -294,7 +352,13 @@ export function registerProductDifferentiationRoutes(
 
   app.post<{ Params: { caseId: string } }>(
     '/cases/:caseId/professional-reviews',
-    options,
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewCreate },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(rateLimiter, PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewCreate),
+      ],
+    },
     async (request, reply) => {
       const params = caseParams.safeParse(request.params);
       const body = reviewBody.safeParse(request.body);
