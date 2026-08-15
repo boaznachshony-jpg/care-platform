@@ -229,3 +229,24 @@ Feature development may continue on synthetic data. Each new slice must:
 - keep all user-facing strings in the i18n resources;
 - introduce no real personal data anywhere, including fixtures and commit
   messages.
+# 15-capability traffic light after Wave 4 (2026-08-15)
+
+| # | Capability | Status |
+|---:|---|---|
+| 1 | Case foundation | 🟢 Implemented |
+| 2 | Tasks and reminders | 🟢 Implemented |
+| 3 | Private documents/versioning | 🟢 Implemented |
+| 4 | Compliance Timeline | 🟢 Implemented |
+| 5 | Decision Dashboard/attention | 🟢 Implemented |
+| 6 | CareDesk Score | 🟢 Implemented |
+| 7 | Payroll Analytics | 🟢 Implemented |
+| 8 | 12-month Future Cost | 🟢 Implemented |
+| 9 | Monthly Close | 🟢 Implemented |
+| 10 | Visa Renewal workflow | 🟢 Implemented |
+| 11 | Smart Document Intake | 🟡 Partial — review/validation/persistence implemented; production OCR externally configured |
+| 12 | Case-aware Action AI | 🟡 Infrastructure/UI — mock provider; production connection requires approval |
+| 13 | Event Wizards | 🟡 Partial — reusable catalog and travel plan; canonical commit adapters are next |
+| 14 | Regulation Engine | 🟡 Partial — governed deterministic engine; authoritative content expansion pending review |
+| 15 | Human Escalation/worker channels/marketplace | 🔴 Future Wave |
+
+The roadmap remains 15 points. Red or yellow items are not represented as legally complete.

@@ -798,5 +798,40 @@
       "unauthorized": "You are not authorized to start a renewal workflow for this case.",
       "error": "The workflow cannot be started right now. Try again."
     }
+  },
+  "automation": {
+    "safeLabel": "Safe, reviewable assistance",
+    "title": "Less work, with your confirmation",
+    "intro": "CareDesk proposes actions for review. Nothing is saved without confirmation.",
+    "somethingChanged": "Something changed",
+    "travelCheck": "What should I check before travel?",
+    "chooseEvent": "What changed?",
+    "back": "Back",
+    "departureDate": "Departure date",
+    "returnDate": "Return date",
+    "dateOrderError": "Return must be after departure.",
+    "createPlan": "Create review plan",
+    "cancel": "Cancel",
+    "planTitle": "Proposed action plan",
+    "noApprovedRule": "No approved travel rule was found. Re-entry requirements cannot be determined safely.",
+    "checkDocuments": "Check passport, visa and insurance validity",
+    "reviewTasks": "Review open tasks and workflows",
+    "professionalReview": "Verify with a professional",
+    "confirmTasks": "Confirm and create tasks",
+    "cancelNoSave": "Cancel without saving",
+    "assistantTitle": "Case-aware travel check",
+    "aiGenerated": "AI-assisted suggestion",
+    "assistantUnavailable": "An external AI provider is not configured. You can continue manually.",
+    "manualAlternative": "Continue manually",
+    "events": {
+      "travel": "Caregiver plans vacation or travel",
+      "resigned": "Caregiver resigned",
+      "termination": "Family intends to terminate employment",
+      "hospitalized": "Care recipient hospitalized",
+      "died": "Care recipient died",
+      "institution": "Move to institution or nursing home",
+      "notReturned": "Caregiver did not return",
+      "replace": "Family wants to replace caregiver"
+    }
   }
 }

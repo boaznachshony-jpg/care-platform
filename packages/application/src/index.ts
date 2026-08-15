@@ -34,3 +34,6 @@ export * from './use-cases/manage-family-access.js';
 export * from './use-cases/manage-product-billing.js';
 export * from './use-cases/manage-visa-renewal.js';
 export * from './product-intelligence.js';
+export * from './automation/document-intake.js';
+export * from './automation/case-assistant.js';
+export * from './automation/event-wizard.js';

@@ -145,3 +145,11 @@ local-only checkout.
 Production authentication/MFA, managed PostgreSQL, encrypted document storage,
 backup/restore drills, monitoring, rate limiting, and professional payroll/legal
 validation are still mandatory.
+
+# Wave 4 update (2026-08-15)
+
+Wave 4 automation foundations and task UI are implemented on the PR #40 baseline: reviewed
+Smart Document Intake contracts, least-privilege Action AI, eight “Something changed” event
+wizards, and the governed rules evaluator. Durable review/commit evidence has forced tenant
+RLS. Production OCR/AI remains externally configuration-gated; manual workflows remain usable.
+See `docs/architecture/wave-4-automation-ai.md` and the Wave 4 Definition of Done.

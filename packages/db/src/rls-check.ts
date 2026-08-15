@@ -60,6 +60,8 @@ const ALL_TENANT_TABLES = [
   'authorization_overlap_review',
   'workflow_completion',
   'payroll_month_close',
+  'document_intake_review',
+  'event_action_plan',
 ] as const;
 
 interface Fixture {
