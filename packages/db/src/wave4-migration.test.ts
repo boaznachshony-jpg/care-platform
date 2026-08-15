@@ -10,7 +10,7 @@ describe('Wave 4 automation persistence', () => {
     expect(sql).toContain(`alter table ${table} force row level security`);
     expect(sql).toMatch(
       new RegExp(
-        `policy ${table}_tenant_isolation[\\s\\S]*using \\(tenant_id = app.current_tenant_id\\(\\)\\)[\\s\\S]*with check`,
+        `policy ${table}_tenant_isolation[\\s\\S]*using \\(tenant_id = current_setting\\('app\\.tenant_id', true\\)::uuid\\)[\\s\\S]*with check \\(tenant_id = current_setting\\('app\\.tenant_id', true\\)::uuid\\)`,
         'i',
       ),
     );

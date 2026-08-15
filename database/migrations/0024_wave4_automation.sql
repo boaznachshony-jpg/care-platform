@@ -42,10 +42,12 @@ create table event_action_plan (
 alter table document_intake_review enable row level security;
 alter table document_intake_review force row level security;
 create policy document_intake_review_tenant_isolation on document_intake_review
-  using (tenant_id = app.current_tenant_id()) with check (tenant_id = app.current_tenant_id());
+  using (tenant_id = current_setting('app.tenant_id', true)::uuid)
+  with check (tenant_id = current_setting('app.tenant_id', true)::uuid);
 alter table event_action_plan enable row level security;
 alter table event_action_plan force row level security;
 create policy event_action_plan_tenant_isolation on event_action_plan
-  using (tenant_id = app.current_tenant_id()) with check (tenant_id = app.current_tenant_id());
+  using (tenant_id = current_setting('app.tenant_id', true)::uuid)
+  with check (tenant_id = current_setting('app.tenant_id', true)::uuid);
 grant select, insert, update on document_intake_review to caredesk_app;
 grant select, insert on event_action_plan to caredesk_app;

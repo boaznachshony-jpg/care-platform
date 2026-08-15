@@ -24,6 +24,7 @@ const MUTABLE_TABLES = [
 ] as const;
 
 const APPEND_ONLY_TABLES = ['timeline_event', 'document_version', 'audit_event'] as const;
+const WAVE4_TABLES = ['document_intake_review', 'event_action_plan'] as const;
 
 const ALL_TENANT_TABLES = [
   'family_account',
@@ -77,6 +78,8 @@ interface Fixture {
   readonly document: string;
   readonly documentVersion: string;
   readonly auditEvent: string;
+  readonly documentIntakeReview: string;
+  readonly eventActionPlan: string;
 }
 
 function fixture(): Fixture {
@@ -93,6 +96,8 @@ function fixture(): Fixture {
     document: randomUUID(),
     documentVersion: randomUUID(),
     auditEvent: randomUUID(),
+    documentIntakeReview: randomUUID(),
+    eventActionPlan: randomUUID(),
   };
 }
 
@@ -212,6 +217,20 @@ async function seed(admin: ReturnType<typeof createPool>, row: Fixture, label: s
      values ($1, $2, $3, 'rls.probe', 'employment_case', $4, now(), 'rls-check')`,
     [row.auditEvent, row.tenant, row.user, row.employmentCase],
   );
+  await admin.query(
+    `insert into document_intake_review
+       (tenant_id, id, employment_case_id, document_id, document_version_id,
+        classification, review_state)
+     values ($1, $2, $3, $4, $5, 'passport', 'validated')`,
+    [row.tenant, row.documentIntakeReview, row.employmentCase, row.document, row.documentVersion],
+  );
+  await admin.query(
+    `insert into event_action_plan
+       (tenant_id, id, employment_case_id, event_type, event_date, status, answers,
+        idempotency_key)
+     values ($1, $2, $3, 'caregiver_travel', '2027-01-01', 'confirmed', '{}', $4)`,
+    [row.tenant, row.eventActionPlan, row.employmentCase, `rls-${row.eventActionPlan}`],
+  );
 }
 
 async function main(): Promise<void> {
@@ -291,7 +310,79 @@ async function main(): Promise<void> {
           fail(`${table}: tenant A saw ${JSON.stringify(visible)}`);
         }
       }
+
+      for (const table of WAVE4_TABLES) {
+        const rows = await client.query<{ tenant_id: string }>(`select tenant_id from ${table}`);
+        if (rows.rows.length === 1 && rows.rows[0]?.tenant_id === a.tenant) {
+          pass(`${table}: tenant A reads only its own row`);
+        } else {
+          fail(`${table}: tenant A saw ${JSON.stringify(rows.rows)}`);
+        }
+      }
     });
+
+    await withTenant(pool, a.tenant, async (client) => {
+      const reviewId = randomUUID();
+      const planId = randomUUID();
+      await client.query(
+        `insert into document_intake_review
+           (tenant_id, id, employment_case_id, document_id, document_version_id,
+            classification, review_state)
+         values ($1, $2, $3, $4, $5, 'passport', 'validated')`,
+        [a.tenant, reviewId, a.employmentCase, a.document, a.documentVersion],
+      );
+      await client.query(
+        `insert into event_action_plan
+           (tenant_id, id, employment_case_id, event_type, status, answers, idempotency_key)
+         values ($1, $2, $3, 'caregiver_travel', 'confirmed', '{}', $4)`,
+        [a.tenant, planId, a.employmentCase, `rls-same-${planId}`],
+      );
+      pass('Wave 4 tables: same-tenant inserts succeed');
+    });
+
+    for (const table of WAVE4_TABLES) {
+      await expectRejected(`${table}: cross-tenant insert`, () =>
+        withTenant(pool, a.tenant, (client) =>
+          table === 'document_intake_review'
+            ? client.query(
+                `insert into document_intake_review
+                   (tenant_id, employment_case_id, document_id, document_version_id,
+                    classification, review_state)
+                 values ($1, $2, $3, $4, 'passport', 'validated')`,
+                [b.tenant, b.employmentCase, b.document, b.documentVersion],
+              )
+            : client.query(
+                `insert into event_action_plan
+                   (tenant_id, employment_case_id, event_type, status, answers, idempotency_key)
+                 values ($1, $2, 'caregiver_travel', 'confirmed', '{}', $3)`,
+                [b.tenant, b.employmentCase, `rls-cross-${randomUUID()}`],
+              ),
+        ),
+      );
+    }
+
+    await withTenant(pool, a.tenant, async (client) => {
+      const update = await client.query(
+        `update document_intake_review set review_state = 'cancelled' where id = $1`,
+        [b.documentIntakeReview],
+      );
+      if (update.rowCount === 0)
+        pass('document_intake_review: cross-tenant update affects zero rows');
+      else fail(`document_intake_review: cross-tenant update affected ${update.rowCount} rows`);
+    });
+
+    await expectRejected('event_action_plan: application update', () =>
+      withTenant(pool, a.tenant, (client) =>
+        client.query(`update event_action_plan set status = 'cancelled' where id = $1`, [
+          a.eventActionPlan,
+        ]),
+      ),
+    );
+    await expectRejected('event_action_plan: application delete', () =>
+      withTenant(pool, a.tenant, (client) =>
+        client.query(`delete from event_action_plan where id = $1`, [a.eventActionPlan]),
+      ),
+    );
 
     for (const table of NORMALIZED_TABLES) {
       try {
@@ -370,10 +461,18 @@ async function main(): Promise<void> {
          join pg_policy p on p.polrelid = c.oid
         where c.relnamespace = 'public'::regnamespace
           and c.relname = any($1)`,
-      [NORMALIZED_TABLES],
+      [[...NORMALIZED_TABLES, ...WAVE4_TABLES]],
     );
     const policyByTable = new Map(policies.rows.map((row) => [row.tablename, row]));
     for (const table of NORMALIZED_TABLES) {
+      const policy = policyByTable.get(table);
+      if (policy?.has_using && policy.has_check && policy.forced) {
+        pass(`${table}: forced RLS policy has USING and WITH CHECK`);
+      } else {
+        fail(`${table}: incomplete RLS policy ${JSON.stringify(policy)}`);
+      }
+    }
+    for (const table of WAVE4_TABLES) {
       const policy = policyByTable.get(table);
       if (policy?.has_using && policy.has_check && policy.forced) {
         pass(`${table}: forced RLS policy has USING and WITH CHECK`);
@@ -444,6 +543,8 @@ async function main(): Promise<void> {
   } finally {
     await admin.query('drop table if exists rls_probe_should_fail');
     for (const row of [a, b]) {
+      await admin.query('delete from event_action_plan where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from document_intake_review where tenant_id = $1', [row.tenant]);
       await admin.query('delete from audit_event where tenant_id = $1', [row.tenant]);
       await admin.query('update document set current_version_id = null where tenant_id = $1', [
         row.tenant,
