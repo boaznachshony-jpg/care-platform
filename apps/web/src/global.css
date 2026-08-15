@@ -5158,3 +5158,73 @@ input[type='number'] {
     overflow: auto;
   }
 }
+/* Wave 4 task-oriented automation: review first, never a blank chatbot. */
+.automation-panel {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 1px solid #b8d5cf;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #f4fbf9, #fff);
+}
+.automation-panel h2,
+.automation-panel h3 {
+  margin-block: 0.35rem;
+}
+.automation-label {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #dff2ed;
+  color: #175b4d;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.automation-actions,
+.event-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
+.event-grid button {
+  flex: 1 1 13rem;
+  min-height: 3rem;
+}
+.automation-panel button {
+  padding: 0.65rem 0.9rem;
+  border: 1px solid #558c81;
+  border-radius: 0.6rem;
+  background: white;
+  cursor: pointer;
+}
+.automation-panel .automation-primary {
+  background: #176b5a;
+  color: white;
+}
+.automation-panel form {
+  display: grid;
+  gap: 0.8rem;
+  max-width: 32rem;
+}
+.automation-panel label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+.automation-panel input {
+  padding: 0.65rem;
+  font: inherit;
+}
+.automation-uncertain {
+  border-inline-start: 4px solid #b77800;
+  padding: 0.7rem;
+  background: #fff7e6;
+}
+@media (max-width: 600px) {
+  .automation-actions {
+    display: grid;
+  }
+  .event-grid {
+    display: grid;
+  }
+}
