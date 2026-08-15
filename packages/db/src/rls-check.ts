@@ -63,6 +63,14 @@ const ALL_TENANT_TABLES = [
   'payroll_month_close',
   'document_intake_review',
   'event_action_plan',
+  'case_responsibility_assignment',
+  'worker_portal_access',
+  'worker_portal_invitation',
+  'worker_payment_acknowledgement',
+  'worker_request',
+  'communication_preference',
+  'notification_intent',
+  'notification_delivery_attempt',
 ] as const;
 
 interface Fixture {
