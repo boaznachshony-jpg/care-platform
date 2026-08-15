@@ -32,6 +32,7 @@ const nav = [
   ['/documents', '▣', 'מסמכים'],
   ['/timeline', '◷', 'ציר זמן'],
   ['/payroll', '₪', 'שכר'],
+  ['/binder', '▤', 'תיק חירום'],
   ['/contact', '✉', 'עזרה'],
 ] as const;
 
@@ -47,6 +48,7 @@ const mobileMoreNav = [
   ['/trust', '♥', 'מסרים לבניית אמון'],
   ['/glossary', 'ⓘ', 'מושגים חשובים'],
   ['/timeline', '◷', 'ציר זמן'],
+  ['/binder', '▤', 'תיק חירום'],
   ['/settings', '⚙', 'הגדרות'],
   ['/contact', '✉', 'עזרה ויצירת קשר'],
 ] as const;

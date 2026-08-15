@@ -129,30 +129,151 @@ export interface ForecastExpense {
   frequency: 'monthly' | 'quarterly' | 'annual' | 'one_time';
   dueDate?: string;
 }
+export interface FutureCostScenario {
+  salaryChange?: { effectiveMonth: string; amount: number };
+  insuranceRenewal?: { month: string; amount: number };
+  oneTimeExpense?: { month: string; amount: number; label: string };
+}
+export interface FutureCostActual {
+  month: string;
+  amount: number;
+  sourceId: string;
+}
 export function projectFutureCost(input: {
   startMonth: string;
   baseSalary?: number;
   expenses: readonly ForecastExpense[];
+  actuals?: readonly FutureCostActual[];
+  scenario?: FutureCostScenario;
 }) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.startMonth))
+    throw new Error('startMonth must be YYYY-MM');
+  const amounts = [
+    input.baseSalary,
+    ...input.expenses.map((expense) => expense.amount),
+    ...(input.actuals ?? []).map((actual) => actual.amount),
+    input.scenario?.salaryChange?.amount,
+    input.scenario?.insuranceRenewal?.amount,
+    input.scenario?.oneTimeExpense?.amount,
+  ].filter((amount): amount is number => amount !== undefined);
+  if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0))
+    throw new Error('Forecast amounts must be finite and non-negative');
+  const roundMoney = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
   const start = new Date(`${input.startMonth}-01T00:00:00Z`);
-  const safeBase =
-    Number.isFinite(input.baseSalary) && (input.baseSalary ?? 0) >= 0 ? input.baseSalary! : 0;
+  const safeBase = input.baseSalary ?? 0;
   const months = Array.from({ length: 12 }, (_, offset) => {
     const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + offset, 1));
     const month = date.toISOString().slice(0, 7);
-    const known = input.expenses
+    const actual = input.actuals?.find((item) => item.month === month);
+    const knownExpenses = input.expenses
       .filter((e) => e.dueDate?.startsWith(month))
       .reduce((sum, e) => sum + e.amount, 0);
     const recurring = input.expenses
       .filter((e) => e.frequency === 'monthly')
       .reduce((sum, e) => sum + e.amount, 0);
-    return { month, known, projected: safeBase + recurring, total: known + safeBase + recurring };
+    const scenarioSalary =
+      input.scenario?.salaryChange && month >= input.scenario.salaryChange.effectiveMonth
+        ? input.scenario.salaryChange.amount
+        : safeBase;
+    const scenarioItems = [
+      ...(input.scenario?.insuranceRenewal?.month === month
+        ? [
+            {
+              id: 'scenario_insurance',
+              label: 'Insurance renewal scenario',
+              amount: input.scenario.insuranceRenewal.amount,
+            },
+          ]
+        : []),
+      ...(input.scenario?.oneTimeExpense?.month === month
+        ? [
+            {
+              id: 'scenario_one_time',
+              label: input.scenario.oneTimeExpense.label,
+              amount: input.scenario.oneTimeExpense.amount,
+            },
+          ]
+        : []),
+    ];
+    const scenarioTotal = scenarioItems.reduce((sum, item) => sum + item.amount, 0);
+    const components = actual
+      ? [
+          {
+            id: actual.sourceId,
+            label: 'Closed payroll',
+            amount: actual.amount,
+            source: 'closed_payroll',
+            explanation: 'Canonical closed payroll record',
+            status: 'ACTUAL' as const,
+          },
+        ]
+      : [
+          ...(input.baseSalary === undefined
+            ? [
+                {
+                  id: 'salary_unknown',
+                  label: 'Salary',
+                  amount: null,
+                  source: 'salary_configuration',
+                  explanation: 'No current salary is stored',
+                  status: 'UNKNOWN' as const,
+                },
+              ]
+            : [
+                {
+                  id: 'base_salary',
+                  label: 'Salary',
+                  amount: scenarioSalary,
+                  source:
+                    input.scenario?.salaryChange &&
+                    month >= input.scenario.salaryChange.effectiveMonth
+                      ? 'planning_scenario'
+                      : 'salary_configuration',
+                  explanation: 'Current configured salary; repeated without statutory assumptions',
+                  status: 'FORECAST' as const,
+                },
+              ]),
+          ...input.expenses
+            .filter((e) => e.frequency === 'monthly' || e.dueDate?.startsWith(month))
+            .map((e) => ({
+              id: e.id,
+              label: e.label,
+              amount: e.amount,
+              source: 'employment_expense',
+              explanation:
+                e.frequency === 'monthly'
+                  ? 'Stored recurring employment cost'
+                  : 'Stored dated employment cost',
+              status: 'FORECAST' as const,
+            })),
+          ...scenarioItems.map((item) => ({
+            ...item,
+            source: 'planning_scenario',
+            explanation: 'Planning-only value; canonical records are unchanged',
+            status: 'FORECAST' as const,
+          })),
+        ];
+    const projected = roundMoney(scenarioSalary + recurring);
+    const forecastTotal = roundMoney(projected + knownExpenses + scenarioTotal);
+    return {
+      month,
+      actual: actual ? roundMoney(actual.amount) : 0,
+      known: roundMoney(knownExpenses + scenarioTotal),
+      projected: actual ? 0 : projected,
+      total: actual ? roundMoney(actual.amount) : forecastTotal,
+      status: actual ? ('ACTUAL' as const) : ('FORECAST' as const),
+      components,
+    };
   });
-  const total = months.reduce((sum, month) => sum + month.total, 0);
+  const total = roundMoney(months.reduce((sum, month) => sum + month.total, 0));
   return {
     months,
     total,
-    average: total / 12,
+    next3MonthsTotal: roundMoney(months.slice(0, 3).reduce((sum, month) => sum + month.total, 0)),
+    average: roundMoney(total / 12),
+    reserveRecommendation: roundMoney(total / 12),
+    guidance: 'planning_guidance_not_financial_advice' as const,
+    unknowns: input.baseSalary === undefined ? ['base_salary'] : [],
     assumptions: [
       ...(safeBase
         ? [

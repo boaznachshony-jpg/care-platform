@@ -1,6 +1,16 @@
 # CareDesk build status
 
-Status date: **2026-08-14**
+Status date: **2026-08-15**
+
+## Wave 6 financial planning and binder pass (2026-08-15)
+
+Future Cost now distinguishes closed-payroll actuals from forecasts and unknown values, exposes
+inspectable components, rejects unsafe amounts, and provides three-month/annual totals plus clearly
+labelled planning reserve guidance. An authenticated Emergency Binder route adds reviewed presets,
+explicit document selection and RTL A4 print/PDF output. Human Escalation remains honestly ORANGE:
+PR #44 request persistence exists, but no provider marketplace or assignment is claimed. The gap
+analysis and secure-export prerequisites are in
+`docs/architecture/wave-6-financial-binder-escalation.md`.
 
 ## P1 Product Differentiation Completion Wave (2026-08-15)
 

@@ -5224,6 +5224,68 @@ input[type='number'] {
     overflow: auto;
   }
 }
+.binder-page,
+.binder-controls,
+.binder-document {
+  display: grid;
+  gap: 1rem;
+}
+.binder-controls fieldset {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid #dce5f1;
+  border-radius: 12px;
+}
+.binder-controls label {
+  min-height: 44px;
+}
+.sensitive-label {
+  color: #8a3b16;
+  margin-inline-start: 0.5rem;
+}
+.binder-document section {
+  break-inside: avoid;
+  border-block-start: 1px solid #dce5f1;
+  padding-block-start: 1rem;
+}
+.binder-document table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.binder-document th,
+.binder-document td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #dce5f1;
+  text-align: start;
+}
+@media print {
+  .sidebar,
+  .topbar,
+  .mobile-nav,
+  .no-print,
+  .environment-banner {
+    display: none !important;
+  }
+  .app-frame,
+  .app-body,
+  .main-content {
+    display: block;
+    margin: 0;
+    padding: 0;
+  }
+  .binder-document {
+    box-shadow: none;
+    border: 0;
+    font-family: Arial, sans-serif;
+  }
+  .binder-document section {
+    break-inside: avoid-page;
+  }
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+}
 /* Wave 4 task-oriented automation: review first, never a blank chatbot. */
 .automation-panel {
   margin: 1.5rem 0;
