@@ -292,19 +292,21 @@ jobs:
               timestamp: $timestamp
             }')"
 
-          curl --silent \
+          http_status="$(curl --silent \
             --fail \
             --output /dev/null \
+            --write-out "%{http_code}" \
             --max-time 10 \
             --request POST \
             --header "Authorization: Bearer $PIPEDREAM_CI_TOKEN" \
             --header "Content-Type: application/json" \
             --data "$payload" \
             "$PIPEDREAM_CI_WEBHOOK_URL" \
-            2>/dev/null
+            2>/dev/null)"
+          curl_exit="$?"
 
-          if [ "$?" -ne 0 ]; then
-            echo "::warning::Pipedream CI notification failed without affecting CI."
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::warning::Pipedream CI notification failed without affecting CI (curl exit $curl_exit, HTTP ${http_status:-000})."
           fi
 
           exit 0
