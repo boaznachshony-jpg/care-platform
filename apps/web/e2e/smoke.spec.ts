@@ -41,9 +41,15 @@ const completedProfile = {
 };
 
 async function seedCompletedProfile(page: import('@playwright/test').Page) {
+  await installCanonicalProductIntelligence(page);
   await page.evaluate((profile) => {
     localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
   }, completedProfile);
+  // Re-enter through the client list so the legacy profile migration creates a
+  // real client context before any canonical case-scoped API request is made.
+  await page.goto('/app');
+  await page.waitForURL(/\/clients\/[^/]+$/);
+  return page.url();
 }
 
 async function completeClientOnboarding(
@@ -430,8 +436,13 @@ test('creates, persists, completes and restores a task', async ({ page }) => {
 });
 
 test('opens the relevant workflow from timeline details', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/timeline');
+  const clientBase = await seedCompletedProfile(page);
+  const timelineResponse = page.waitForResponse(
+    (response) =>
+      /\/cases\/[^/]+\/timeline(?:\?.*)?$/.test(response.url()) && response.status() === 200,
+  );
+  await page.goto(`${clientBase}/timeline`);
+  await timelineResponse;
 
   const canonicalTimeline = page.getByRole('region', { name: 'ציר זמן קנוני' });
   const insuranceRenewal = canonicalTimeline
@@ -440,7 +451,7 @@ test('opens the relevant workflow from timeline details', async ({ page }) => {
   await expect(insuranceRenewal).toBeVisible();
   await insuranceRenewal.getByRole('link', { name: 'פתיחת הפעולה' }).click();
 
-  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page).toHaveURL(new RegExp(`${new URL(clientBase).pathname}/documents$`));
   await expect(page.getByRole('heading', { name: 'כל המסמכים במקום אחד' })).toBeVisible();
 });
 

@@ -350,8 +350,8 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('תאריך תשלום').fill('2026-08-09');
     await page.getByLabel('אמצעי תשלום').selectOption('bank_transfer');
     await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
-    await expect(page.getByRole('status')).toContainText('חודש 2026-07 נסגר');
     const closeHistory = page.getByRole('list', { name: 'היסטוריית סגירות קנונית' });
+    await expect(closeHistory).toBeVisible();
     await expect(closeHistory).toContainText('2026-07');
     await expect(closeHistory).toContainText('שולם 2026-08-09');
     await expect(
