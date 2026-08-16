@@ -1613,11 +1613,11 @@ export function PayrollPage() {
         )}
       </section>
       {records.length > 0 ? (
-        <section className="card">
+        <section className="card" aria-labelledby="annual-payroll-history-title">
           <div className="section-heading">
             <div>
               <p className="eyebrow">דוח תקופתי</p>
-              <h2>שכר מצטבר והיסטוריה שנתית</h2>
+              <h2 id="annual-payroll-history-title">שכר מצטבר והיסטוריה שנתית</h2>
               <p>
                 הסכומים בדוח מחושבים מרשומות השכר החודשיות ששמרתם. הסכום השנתי לתשלום הוא החיבור
                 המדויק של הסכום לתשלום בכל חודש.

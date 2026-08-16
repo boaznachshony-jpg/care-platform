@@ -61,7 +61,11 @@ test.describe('persistent profile and reminder preferences', () => {
     await expect(quietStart).toHaveValue('22:30');
     await expect(quietEnd).toHaveValue('07:15');
 
-    const stored = await page.evaluate(() => localStorage.getItem('caredesk.mvp.profile.v1'));
+    const stored = await page.evaluate(() => {
+      const clientId = window.location.pathname.match(/^\/clients\/([^/]+)/)?.[1];
+      if (!clientId) throw new Error('active client context is required');
+      return localStorage.getItem(`caredesk.mvp.profile.v1.client.${decodeURIComponent(clientId)}`);
+    });
     expect(stored).toMatch(/^caredesk-encrypted-v1:/);
     expect(stored).not.toContain('מעסיק מעודכן');
   });

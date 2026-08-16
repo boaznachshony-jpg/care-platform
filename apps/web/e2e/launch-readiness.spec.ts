@@ -153,18 +153,18 @@ test.describe('launch readiness interactions', () => {
   test('offers the caregiver completion shortcut when trust details are missing', async ({
     page,
   }) => {
-    const { clientHome } = await seedCompletedProfile(page);
-    await page.evaluate(() => {
-      const profile = JSON.parse(localStorage.getItem('caredesk.mvp.profile.v1') ?? '{}');
-      localStorage.setItem(
-        'caredesk.mvp.profile.v1',
-        JSON.stringify({ ...profile, caregiverCountry: '', caregiverLanguage: '' }),
-      );
-    });
+    await installCanonicalProductIntelligence(page);
+    const clientHome = await enterSeededClient(
+      page,
+      { ...completedProfile, caregiverCountry: '', caregiverLanguage: '' },
+      { clearStorage: true },
+    );
     await page.goto(`${clientHome}/trust`);
 
-    await page.getByRole('link', { name: 'השלמת הפרטים' }).click();
-    await expect(page).toHaveURL(/\/employee$/);
+    const completion = page.getByRole('link', { name: 'השלמת הפרטים' });
+    await expect(completion).toBeVisible();
+    await completion.click();
+    await expect(page).toHaveURL(`${clientHome}/employee`);
   });
 
   test('secondary task and document controls respond correctly', async ({ page }) => {
@@ -392,7 +392,10 @@ test.describe('launch readiness interactions', () => {
 
     await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
     await page.reload();
-    await expect(page.getByText('2026-07', { exact: true })).toBeVisible();
+    const annualHistory = page.getByRole('region', {
+      name: 'שכר מצטבר והיסטוריה שנתית',
+    });
+    await expect(annualHistory.getByText('2026-07', { exact: true })).toBeVisible();
     await page.getByLabel('שנת הדוח').selectOption('2026');
     await page.getByRole('button', { name: 'עריכת החודש' }).click();
     await expect(page.getByLabel('חודש שכר')).toHaveValue('2026-07');
