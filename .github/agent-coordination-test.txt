@@ -1,1 +1,0 @@
-Agent coordination guard fixture. This file exists only to make the governance change set explicit in repository history and may be removed after the guard is proven on CI.
