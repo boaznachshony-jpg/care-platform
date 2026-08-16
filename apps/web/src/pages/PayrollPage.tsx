@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
@@ -155,6 +156,7 @@ function withNationalInsuranceTracking(
 }
 
 export function PayrollPage() {
+  const { clientId } = useParams<{ clientId: string }>();
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
@@ -719,7 +721,12 @@ export function PayrollPage() {
           </ul>
         </div>
       ) : null}
-      <PayrollIntelligence records={records} expenses={expenses} baseSalary={profile.baseSalary} />
+      <PayrollIntelligence
+        records={records}
+        expenses={expenses}
+        baseSalary={profile.baseSalary}
+        caseId={clientId}
+      />
       <section className="card payroll-sequence-card" aria-labelledby="payroll-sequence-title">
         <div className="section-heading">
           <div>

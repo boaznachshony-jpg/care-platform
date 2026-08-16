@@ -1,25 +1,39 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { listCaseTimeline } from '../api/client.js';
 import { TimelinePage } from './TimelinePage.js';
 
-describe('TimelinePage product-intelligence projection', () => {
-  it('does not fabricate deadlines when the case has no persisted facts', () => {
-    render(
-      <MemoryRouter>
-        <TimelinePage today={new Date('2026-08-15T12:00:00Z')} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('אין כרגע מועדים פתוחים להצגה.')).toBeVisible();
-    expect(screen.queryByText('הכנת שכר יולי')).not.toBeInTheDocument();
-  });
+vi.mock('../api/client.js', () => ({ listCaseTimeline: vi.fn() }));
+const renderPage = () =>
+  render(
+    <MemoryRouter initialEntries={['/clients/11111111-1111-4111-8111-111111111111/timeline']}>
+      <Routes>
+        <Route path="/clients/:clientId/timeline" element={<TimelinePage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
 
-  it('explains that entries come only from stored case data', () => {
-    render(
-      <MemoryRouter>
-        <TimelinePage today={new Date('2026-08-15T12:00:00Z')} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText(/מועדים שנגזרו רק ממשימות ומנתונים שנשמרו בתיק/)).toBeVisible();
+describe('TimelinePage canonical API projection', () => {
+  beforeEach(() => vi.mocked(listCaseTimeline).mockReset());
+  it('shows the canonical empty state without fabricating deadlines', async () => {
+    vi.mocked(listCaseTimeline).mockResolvedValue([]);
+    renderPage();
+    expect(await screen.findByText('אין כרגע אירועים להצגה.')).toBeVisible();
+  });
+  it('renders a canonical event and explains the Audit separation', async () => {
+    vi.mocked(listCaseTimeline).mockResolvedValue([
+      {
+        id: 'event-1',
+        eventTypeKey: 'payroll.month_closed',
+        summaryKey: 'Payroll month closed.',
+        occurredAt: '2026-08-15T12:00:00.000Z',
+        actorDisplay: null,
+        sensitivity: 'financial_sensitive',
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByText('Payroll month closed.')).toBeVisible();
+    expect(screen.getByText(/פרטי אבטחה וספקים נשמרים בנפרד/)).toBeVisible();
   });
 });

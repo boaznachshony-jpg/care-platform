@@ -1,29 +1,20 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
-import {
-  clientIdFromPath,
-  readMvpDocuments,
-  readMvpMonthlyCloses,
-  readMvpPayroll,
-  readMvpTasks,
-} from '../storage/mvp-storage.js';
-import { productIntelligence } from '../product-intelligence.js';
+import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 
 export function DashboardPage() {
   const path = useClientPath();
   const { t } = useTranslation();
   const [profile] = useMvpProfile();
-  const intelligence = productIntelligence({
-    clientId: clientIdFromPath() ?? 'legacy',
-    today: new Date().toISOString().slice(0, 10),
-    profile,
-    tasks: readMvpTasks(),
-    documents: readMvpDocuments(),
-    payroll: readMvpPayroll(),
-    closes: readMvpMonthlyCloses(),
-  });
+  const { clientId } = useParams<{ clientId: string }>();
+  const [health, setHealth] = useState<CaseHealthResponse>();
+  useEffect(() => {
+    if (clientId) void getCaseHealth(clientId).then(setHealth);
+  }, [clientId]);
   const missingCount = [
     !profile.employerName.trim(),
     !profile.recipientName.trim(),
@@ -61,52 +52,51 @@ export function DashboardPage() {
             <h2 id="attention-title">{t('intelligence.attention')}</h2>
           </div>
         </div>
-        {intelligence.timeline.length ? (
+        {health?.factors.some((factor) => factor.status === 'attention') ? (
           <div className="attention-list">
-            {intelligence.timeline.slice(0, 3).map((item) => (
-              <article className={`attention-item ${item.severity}`} key={item.id}>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.reason}</p>
-                  <small>
-                    {item.daysUntilDue < 0
-                      ? t('intelligence.overdueDays', { count: Math.abs(item.daysUntilDue) })
-                      : item.daysUntilDue === 0
-                        ? t('intelligence.today')
-                        : t('intelligence.inDays', { count: item.daysUntilDue })}
-                  </small>
-                </div>
-                {item.actionTarget ? (
-                  <Link className="primary-button" to={path(item.actionTarget)}>
-                    {t('intelligence.handle')}
-                  </Link>
-                ) : null}
-              </article>
-            ))}
+            {health.factors
+              .filter((factor) => factor.status === 'attention')
+              .slice(0, 3)
+              .map((item) => (
+                <article className="attention-item high" key={item.id}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.explanation}</p>
+                    <small>
+                      {item.provenance.sourceType}: {item.provenance.sourceIds.join(', ')}
+                    </small>
+                  </div>
+                  {item.actionTarget && item.recommendedAction ? (
+                    <Link className="primary-button" to={path(item.actionTarget)}>
+                      {item.recommendedAction}
+                    </Link>
+                  ) : null}
+                </article>
+              ))}
           </div>
         ) : (
           <p className="success-box">{t('intelligence.empty')}</p>
         )}
       </section>
       <section className="card health-card" aria-labelledby="health-title">
-        <div className="score-ring" aria-label={`${intelligence.health.score} מתוך 100`}>
-          <strong>{intelligence.health.score}</strong>
+        <div className="score-ring" aria-label={`${health?.score ?? 0} מתוך 100`}>
+          <strong>{health?.score ?? '…'}</strong>
           <span>/100</span>
         </div>
         <div>
           <h2 id="health-title">{t('intelligence.health')}</h2>
           <p>{t('intelligence.healthDisclaimer')}</p>
           <ul>
-            {intelligence.health.factors.map((factor) => (
+            {(health?.factors ?? []).map((factor) => (
               <li key={factor.id}>
                 <span aria-hidden="true">{factor.status === 'good' ? '✓' : '!'}</span>{' '}
                 {factor.title}: {factor.explanation}
               </li>
             ))}
           </ul>
-          {intelligence.health.actionsRemaining ? (
+          {health?.actionsRemaining ? (
             <strong>
-              {t('intelligence.actionsToPerfect', { count: intelligence.health.actionsRemaining })}
+              {t('intelligence.actionsToPerfect', { count: health.actionsRemaining })}
             </strong>
           ) : null}
         </div>

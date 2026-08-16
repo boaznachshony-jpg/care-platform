@@ -366,6 +366,36 @@ export interface ProfessionalReviewResponse {
 }
 export const getCaseHealth = (caseId: string) =>
   apiRequest<CaseHealthResponse>(`${casePath(caseId)}/health`);
+export interface CanonicalPayrollClose {
+  id: string;
+  payrollReference: string;
+  month: string;
+  paymentDate: string;
+  paymentMethod: 'bank_transfer' | 'cash' | 'check' | 'other';
+  total: number | null;
+  baseSalary: number | null;
+  additions: number | null;
+  deductions: number | null;
+  closedAt: string;
+}
+export const listCanonicalPayrollCloses = (caseId: string) =>
+  apiRequest<CanonicalPayrollClose[]>(`${casePath(caseId)}/payroll-month-closes`);
+export const closeCanonicalPayrollMonth = (
+  caseId: string,
+  input: Omit<
+    CanonicalPayrollClose,
+    'id' | 'closedAt' | 'total' | 'baseSalary' | 'additions' | 'deductions'
+  > & { total: number; baseSalary: number; additions: number; deductions: number },
+  idempotencyKey: string,
+) =>
+  apiRequest<{ close: CanonicalPayrollClose; replayed: boolean }>(
+    `${casePath(caseId)}/payroll-month-closes`,
+    {
+      method: 'POST',
+      headers: { 'idempotency-key': idempotencyKey },
+      body: JSON.stringify(input),
+    },
+  );
 export const askCaseAssistant = (
   caseId: string,
   question: string,

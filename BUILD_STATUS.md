@@ -2,6 +2,14 @@
 
 Status date: **2026-08-16**
 
+## Wave 3 canonical Product Intelligence closure candidate (2026-08-16)
+
+- Timeline, Dashboard and CareDesk Score now consume authenticated, case-scoped canonical API contracts.
+- Monthly Close persists only through PostgreSQL with manager authorization, durable idempotency, a human Timeline event and minimal Audit evidence.
+- Closed payroll actual snapshots are server-reconstructable for Future Cost; historical receipts without snapshots remain explicitly `UNKNOWN`.
+- Open payroll/scenario inputs remain isolated in MVP storage pending a canonical payroll-entry aggregate; no monthly-close state is written there.
+- Strict classification and remaining hosted verification are recorded in `docs/governance/wave-3-canonical-product-intelligence-closure.md`.
+
 ## Wave 5 canonical collaboration closure candidate (2026-08-16)
 
 - Employer assignment, task ownership and request handling are wired to authenticated canonical APIs with durable replay receipts and Timeline/Audit effects.
