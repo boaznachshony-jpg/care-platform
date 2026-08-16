@@ -22,6 +22,32 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Agent coordination guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test -s AGENTS.md
+          test -s AGENT_STATUS.md
+          grep -q '^# CareDesk Agent Coordination Protocol' AGENTS.md
+          grep -q '^# CareDesk Agent Coordination Dashboard' AGENT_STATUS.md
+          grep -q 'PLANNED.*ACTIVE.*BLOCKED.*IN_REVIEW.*MERGED_VERIFYING.*DONE.*CANCELLED' AGENT_STATUS.md
+          grep -q '^| Workstream | Issue | Owner/Agent | Branch | PR | Status | Depends on | Parallel safe | Blocker | Next action |$' AGENT_STATUS.md
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git fetch origin main --quiet
+            git cat-file -e "${PR_HEAD_SHA}^{commit}"
+            MAIN_SHA="$(git rev-parse origin/main)"
+            MERGE_BASE="$(git merge-base "$PR_HEAD_SHA" origin/main)"
+            if [ "$MERGE_BASE" != "$MAIN_SHA" ]; then
+              echo "::error::Agent branch is stale. Synchronize the PR branch with the latest origin/main before merge."
+              echo "PR head: $PR_HEAD_SHA"
+              echo "Latest main: $MAIN_SHA"
+              echo "Merge base: $MERGE_BASE"
+              exit 1
+            fi
+          fi
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 11.16.0
