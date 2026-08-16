@@ -11,6 +11,7 @@ import { CaseTimelineSection } from './case/CaseTimelineSection.js';
 import { VisaRenewalSection } from './case/VisaRenewalSection.js';
 import { AutomationPanel } from './case/AutomationPanel.js';
 import { ProductCompletionPanel } from './case/ProductCompletionPanel.js';
+import { CollaborationPanel } from './case/CollaborationPanel.js';
 
 type CaseState =
   | { kind: 'loading' }
@@ -88,6 +89,7 @@ export function CasePage() {
       <ProductCompletionPanel caseId={data.id} />
 
       <VisaRenewalSection caseId={data.id} />
+      <CollaborationPanel caseId={data.id} />
 
       <CaseTasksSection caseId={data.id} />
       <CaseDocumentsSection caseId={data.id} />

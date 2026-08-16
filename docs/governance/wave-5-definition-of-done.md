@@ -69,3 +69,19 @@ evidence remain outstanding. CareDesk must not proceed to Wave 6 yet.
 13. WhatsApp-first engagement — RED
 14. Human Escalation — ORANGE
 15. Emergency Binder — RED
+
+## Canonical closure implementation (2026-08-16)
+
+The closure branch replaces the gaps above with authenticated manager collaboration controls for
+responsibility, supported task assignment and worker-request handling. These mutations use the
+server-derived actor tenant, durable `idempotency_record` receipts and coupled human Timeline /
+minimal Audit effects. Worker document download now rechecks active portal access and explicit
+visibility before returning a five-minute storage-signed URL; the storage key is never serialized.
+Worker locale and email-channel preference updates are canonical and similarly idempotent and
+evidence-bearing. Unsupported phone preference combinations are rejected and WhatsApp/SMS remain
+disabled.
+
+This implementation does **not** activate a phone provider, add provider credentials, or write new
+product state to browser storage. Wave 5 is not declared complete by this branch alone: completion
+still requires the pull request's hosted CI, CodeQL, live PostgreSQL and preview-deployment checks
+to finish successfully after push.

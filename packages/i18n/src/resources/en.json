@@ -884,6 +884,9 @@
     "submitRequest": "Submit request",
     "preferences": "Language and communication preferences",
     "emailAvailable": "Email is available according to your preference.",
-    "phoneUnavailable": "WhatsApp and SMS are not configured and will not be sent."
+    "phoneUnavailable": "WhatsApp and SMS are not configured and will not be sent.",
+    "download": "Download securely",
+    "language": "Language",
+    "savePreferences": "Save preferences"
   }
 }

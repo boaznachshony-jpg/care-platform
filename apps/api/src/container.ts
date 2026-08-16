@@ -494,7 +494,7 @@ export function buildContainer(env: Env): Container {
   };
 
   return {
-    ...(pool ? { wave5: new Wave5Service(pool) } : {}),
+    ...(pool ? { wave5: new Wave5Service(pool, storage) } : {}),
     auth,
     actorResolver,
     audit,
