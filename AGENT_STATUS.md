@@ -16,6 +16,7 @@ This dashboard is the shared coordination state for concurrent engineering agent
 | Workstream | Issue | Owner/Agent | Branch | PR | Status | Depends on | Parallel safe | Blocker | Next action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Current delivery coordination | — | Orchestrator | `main` | — | ACTIVE | — | n/a | None recorded | Assign each new task through an Issue and update this row set before parallel implementation |
+| Wave 3 canonical Product Intelligence closure | — | Codex primary | `codex/finalize-wave-3-closure-for-product-intelligence` | #48 | BLOCKED | — | no | Local Playwright Chromium executable is unavailable; final three-root-cause patch is unpushed pending full E2E | Install the pinned Playwright browser, run the full suite, then push once if green |
 
 ## Required status values
 

@@ -12,6 +12,7 @@ import { VisaRenewalSection } from './case/VisaRenewalSection.js';
 import { AutomationPanel } from './case/AutomationPanel.js';
 import { ProductCompletionPanel } from './case/ProductCompletionPanel.js';
 import { CollaborationPanel } from './case/CollaborationPanel.js';
+import { CanonicalPayrollIntelligence } from './case/CanonicalPayrollIntelligence.js';
 
 type CaseState =
   | { kind: 'loading' }
@@ -87,6 +88,7 @@ export function CasePage() {
 
       <AutomationPanel />
       <ProductCompletionPanel caseId={data.id} />
+      <CanonicalPayrollIntelligence caseId={data.id} />
 
       <VisaRenewalSection caseId={data.id} />
       <CollaborationPanel caseId={data.id} />

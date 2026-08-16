@@ -1,30 +1,28 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test } from '@playwright/test';
+import { enterSeededClient } from './fixtures/seeded-client.js';
 
 test('renders every payroll component bilingually on a centered A4 page', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium', 'A single Chromium PDF is sufficient.');
 
-  await page.goto('/app');
-  await page.evaluate(() => {
-    localStorage.clear();
-    localStorage.setItem(
-      'caredesk.mvp.profile.v1',
-      JSON.stringify({
-        employerName: 'מעסיק בדיקת הדפסה',
-        employerIdNumber: '123456782',
-        recipientName: 'מטופל בדיקת הדפסה',
-        caregiverName: 'Dilnoza Test',
-        employmentStartDate: '2026-01-15',
-        onboardingCompleted: true,
-        baseSalary: 7200,
-        salaryEffectiveDate: '2026-01-15',
-        saturdayRate: 450,
-      }),
-    );
-  });
-  await page.goto('/payroll');
+  const clientHome = await enterSeededClient(
+    page,
+    {
+      employerName: 'מעסיק בדיקת הדפסה',
+      employerIdNumber: '123456782',
+      recipientName: 'מטופל בדיקת הדפסה',
+      caregiverName: 'Dilnoza Test',
+      employmentStartDate: '2026-01-15',
+      onboardingCompleted: true,
+      baseSalary: 7200,
+      salaryEffectiveDate: '2026-01-15',
+      saturdayRate: 450,
+    },
+    { clearStorage: true },
+  );
+  await page.goto(`${clientHome}/payroll`);
 
   await page.getByLabel('חודש שכר').fill('2026-07');
   await page.getByRole('button', { name: 'המשך' }).click();

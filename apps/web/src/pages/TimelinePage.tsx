@@ -1,78 +1,60 @@
-/* eslint-disable no-restricted-syntax -- legacy MVP Hebrew-first surface; localization extraction is tracked */
+/* eslint-disable no-restricted-syntax -- Hebrew-first canonical timeline surface */
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
-import { useMvpProfile } from '../hooks/use-mvp-profile.js';
-import {
-  clientIdFromPath,
-  readMvpDocuments,
-  readMvpMonthlyCloses,
-  readMvpPayroll,
-  readMvpTasks,
-} from '../storage/mvp-storage.js';
-import { productIntelligence } from '../product-intelligence.js';
+import { listCaseTimeline, type CanonicalTimelineEvent } from '../api/client.js';
 
-const labels = {
-  overdue: 'באיחור',
-  today: 'היום',
-  this_week: 'השבוע',
-  later_this_month: 'בהמשך החודש',
-  upcoming: 'בהמשך',
-} as const;
-
-export function TimelinePage({ today }: { today?: Date; employmentStartDate?: string } = {}) {
+export function TimelinePage() {
   const path = useClientPath();
-  const [profile] = useMvpProfile();
-  const projection = productIntelligence({
-    clientId: clientIdFromPath() ?? 'legacy',
-    today: (today ?? new Date()).toISOString().slice(0, 10),
-    profile,
-    tasks: readMvpTasks(),
-    documents: readMvpDocuments(),
-    payroll: readMvpPayroll(),
-    closes: readMvpMonthlyCloses(),
-  }).timeline;
+  const { clientId } = useParams<{ clientId: string }>();
+  const [events, setEvents] = useState<CanonicalTimelineEvent[]>();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!clientId) {
+      setFailed(true);
+      return;
+    }
+    listCaseTimeline(clientId)
+      .then(setEvents)
+      .catch(() => setFailed(true));
+  }, [clientId]);
   return (
     <div className="page-stack">
       <header className="page-header">
         <div>
           <p className="eyebrow">ציר זמן ציות</p>
-          <h1>מה צפוי בתיק</h1>
-          <p>
-            מועדים שנגזרו רק ממשימות ומנתונים שנשמרו בתיק. אין כאן מועדים משפטיים שהמערכת המציאה.
-          </p>
+          <h1>מה קרה בתיק</h1>
+          <p>אירועים אנושיים מהתיק הקנוני; פרטי אבטחה וספקים נשמרים בנפרד ביומן הביקורת.</p>
         </div>
       </header>
-      {projection.length === 0 ? (
-        <p className="success-box">אין כרגע מועדים פתוחים להצגה.</p>
+      {failed ? (
+        <p role="alert">לא ניתן לטעון את ציר הזמן הקנוני.</p>
+      ) : events === undefined ? (
+        <p>טוען…</p>
+      ) : events.length === 0 ? (
+        <p className="success-box">אין כרגע אירועים להצגה.</p>
       ) : (
-        (Object.keys(labels) as (keyof typeof labels)[]).map((group) => {
-          const items = projection.filter((item) => item.group === group);
-          return items.length ? (
-            <section className="card" key={group} aria-labelledby={`timeline-${group}`}>
-              <h2 id={`timeline-${group}`}>{labels[group]}</h2>
-              <div className="timeline">
-                {items.map((item) => (
-                  <article key={item.id}>
-                    <time className="timeline-date" dateTime={item.dueDate}>
-                      {item.dueDate}
-                    </time>
-                    <span className={`timeline-dot ${item.severity}`} aria-hidden="true" />
-                    <div className="timeline-content">
-                      <h3>{item.title}</h3>
-                      <p>{item.reason}</p>
-                      <small>
-                        מקור: {item.sourceType} · {item.provenance.sourceId}
-                      </small>
-                      {item.actionTarget ? (
-                        <Link to={path(item.actionTarget)}>פתיחת הפעולה</Link>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null;
-        })
+        <section className="card" aria-label="ציר זמן קנוני">
+          <div className="timeline">
+            {events.map((event) => (
+              <article key={event.id}>
+                <time className="timeline-date" dateTime={event.occurredAt}>
+                  {event.occurredAt.slice(0, 10)}
+                </time>
+                <span className="timeline-dot info" aria-hidden="true" />
+                <div className="timeline-content">
+                  <h3>{event.summaryKey}</h3>
+                  <p>{event.eventTypeKey}</p>
+                  {event.actorDisplay ? <small>{event.actorDisplay}</small> : null}
+                  {event.actionTarget ? (
+                    <Link to={path(event.actionTarget)}>פתיחת הפעולה</Link>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
