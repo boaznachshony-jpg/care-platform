@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
@@ -17,6 +17,7 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
+import { listPayrollEntries, savePayrollEntry } from '../api/client.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
@@ -187,6 +188,53 @@ export function PayrollPage() {
   });
   const [sequence, setSequence] = useState<PayrollSequenceState | null>(null);
   const [sequenceSummary, setSequenceSummary] = useState<PayrollSequenceState | null>(null);
+  const canonicalCaseId =
+    clientId && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(clientId) ? clientId : null;
+
+  useEffect(() => {
+    if (!canonicalCaseId) return;
+    let active = true;
+    void listPayrollEntries(canonicalCaseId)
+      .then((entries) => {
+        if (!active) return;
+        const canonical = entries.map<MvpPayrollRecord>((entry) => ({
+          id: entry.id,
+          month: entry.month,
+          baseSalary: entry.baseSalary,
+          contractBaseSalary: entry.baseSalary,
+          workDays: entry.workDays,
+          vacationDays: entry.vacationDays,
+          sickDays: entry.sickDays,
+          absenceDays: entry.otherAbsenceDays,
+          paidSaturdays: entry.paidRestDays,
+          saturdayRate: entry.restDayRate,
+          paidHolidays: entry.paidHolidays,
+          saturdayPay: entry.paidRestDays * entry.restDayRate,
+          holidayPay: entry.holidayPay,
+          vacationPay: entry.vacationPay,
+          sickPay: entry.sickPay,
+          pocketMoney: entry.pocketMoney,
+          employerContributions: entry.employerContributions,
+          otherAddition: 0,
+          additionalPayments: entry.additionalPayments.map((payment) => ({
+            ...payment,
+            id: crypto.randomUUID(),
+          })),
+          medicalInsuranceDeduction: entry.deductions,
+          housingDeduction: 0,
+          advances: entry.advances,
+          agreedDeduction: entry.agreedDeductions,
+          total: entry.total,
+          savedAt: entry.updatedAt,
+          canonicalVersion: entry.version,
+        }));
+        setRecords(canonical);
+      })
+      .catch(() => setMessage('לא ניתן לטעון כרגע את רישומי השכר מהשרת.'));
+    return () => {
+      active = false;
+    };
+  }, [canonicalCaseId]);
 
   const validationTerms: Partial<Record<keyof typeof values, string[]>> = {
     month: ['חודש שכר'],
@@ -476,7 +524,7 @@ export function PayrollPage() {
     setStep(1);
   }
 
-  function savePayroll(continueSequence = false) {
+  async function savePayroll(continueSequence = false) {
     const errorsByStep = [1, 2, 3, 4].map((stepNumber) => ({
       stepNumber,
       errors: validateStep(stepNumber),
@@ -540,7 +588,51 @@ export function PayrollPage() {
       ? records.map((record) => (record.month === saved.month ? saved : record))
       : [saved, ...records];
     const nextExpenses = withNationalInsuranceTracking(expenses, saved.month);
-    saveMvpPayroll(next);
+    if (canonicalCaseId) {
+      try {
+        const result = await savePayrollEntry(
+          canonicalCaseId,
+          saved.month,
+          {
+            baseSalary: saved.baseSalary,
+            workDays: saved.workDays,
+            paidRestDays: saved.paidSaturdays,
+            restDayRate: saved.saturdayRate ?? 0,
+            paidHolidays: saved.paidHolidays ?? 0,
+            holidayPay: saved.holidayPay ?? 0,
+            vacationDays: saved.vacationDays ?? 0,
+            vacationPay: saved.vacationPay ?? 0,
+            sickDays: saved.sickDays ?? 0,
+            sickPay: saved.sickPay ?? 0,
+            otherAbsenceDays: saved.absenceDays ?? 0,
+            employerContributions: saved.employerContributions ?? 0,
+            additionalPayments: savedAdditionalPayments.map(({ description, amount }) => ({
+              description,
+              amount,
+            })),
+            pocketMoney: saved.pocketMoney,
+            deductions: (saved.medicalInsuranceDeduction ?? 0) + (saved.housingDeduction ?? 0),
+            advances: saved.advances,
+            agreedDeductions: saved.agreedDeduction,
+            total: saved.total,
+            status: 'draft',
+            ...(existing?.canonicalVersion ? { version: existing.canonicalVersion } : {}),
+          },
+          crypto.randomUUID(),
+        );
+        saved.id = result.entry.id;
+        saved.savedAt = result.entry.updatedAt;
+        saved.canonicalVersion = result.entry.version;
+      } catch {
+        setMessage('שמירת השכר בשרת נכשלה. לא נשמר עותק מקומי חלופי.');
+        setPayrollSaved(false);
+        return;
+      }
+    } else {
+      // Compatibility-only for pre-case routes. Authorized case routes never
+      // dual-write and always use PostgreSQL as their durable authority.
+      saveMvpPayroll(next);
+    }
     saveMvpEmploymentExpenses(nextExpenses);
     setRecords(next);
     setExpenses(nextExpenses);

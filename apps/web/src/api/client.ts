@@ -427,3 +427,48 @@ export const createProfessionalReview = (
     headers: { 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify(input),
   });
+
+export interface PayrollEntryResponse {
+  id: string;
+  month: string;
+  baseSalary: number;
+  workDays: number;
+  paidRestDays: number;
+  restDayRate: number;
+  paidHolidays: number;
+  holidayPay: number;
+  vacationDays: number;
+  vacationPay: number;
+  sickDays: number;
+  sickPay: number;
+  otherAbsenceDays: number;
+  employerContributions: number;
+  additionalPayments: Array<{ description: string; amount: number }>;
+  pocketMoney: number;
+  deductions: number;
+  advances: number;
+  agreedDeductions: number;
+  total: number;
+  status: 'draft' | 'final';
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export type SavePayrollEntryRequest = Omit<
+  PayrollEntryResponse,
+  'id' | 'month' | 'createdAt' | 'updatedAt' | 'version'
+> & { version?: number };
+export function listPayrollEntries(caseId: string): Promise<PayrollEntryResponse[]> {
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}/payroll-entries`);
+}
+export function savePayrollEntry(
+  caseId: string,
+  month: string,
+  input: SavePayrollEntryRequest,
+  idempotencyKey: string,
+): Promise<{ entry: PayrollEntryResponse; replayed: boolean }> {
+  return apiRequest(
+    `/cases/${encodeURIComponent(caseId)}/payroll-entries/${encodeURIComponent(month)}`,
+    { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
+  );
+}
