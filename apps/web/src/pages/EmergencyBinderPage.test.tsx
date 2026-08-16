@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EmergencyBinderPage } from './EmergencyBinderPage.js';
 
 vi.mock('../hooks/use-mvp-profile.js', () => ({
