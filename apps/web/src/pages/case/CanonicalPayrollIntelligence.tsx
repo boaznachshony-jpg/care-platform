@@ -115,7 +115,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       {closes === undefined ? (
         <p>טוען…</p>
       ) : closes.length ? (
-        <ul>
+        <ul aria-label="היסטוריית סגירות קנונית">
           {closes.map((close) => (
             <li key={close.id}>
               <strong>

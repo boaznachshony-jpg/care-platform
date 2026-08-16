@@ -40,7 +40,12 @@ async function seedCompletedProfile(page: Page) {
     localStorage.clear();
     localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
   }, completedProfile);
-  return canonical;
+  await page.goto('/app');
+  if (new URL(page.url()).pathname === '/app') {
+    await page.getByRole('button', { name: 'כניסה לתיק' }).click();
+  }
+  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
+  return { ...canonical, clientHome: page.url() };
 }
 
 test.describe('launch readiness interactions', () => {
@@ -199,8 +204,8 @@ test.describe('launch readiness interactions', () => {
   test('skip link, text size controls and notification shortcut are operational', async ({
     page,
   }) => {
-    await seedCompletedProfile(page);
-    await page.goto('/app');
+    const { clientHome } = await seedCompletedProfile(page);
+    await page.goto(clientHome);
 
     await expect(page.getByRole('link', { name: 'דלג לתוכן' })).toHaveAttribute(
       'href',
@@ -408,10 +413,8 @@ test.describe('launch readiness interactions', () => {
   });
 
   test('all dashboard and timeline shortcuts lead to their intended screens', async ({ page }) => {
-    await seedCompletedProfile(page);
-    await page.goto('/app');
-    await expect(page).toHaveURL(/\/clients\/[^/]+$/);
-    const clientHome = page.url();
+    const { clientHome } = await seedCompletedProfile(page);
+    await page.goto(clientHome);
 
     await page.getByRole('link', { name: 'בדיקת הפרטים' }).click();
     await expect(page).toHaveURL(/\/settings$/);

@@ -48,7 +48,10 @@ async function seedCompletedProfile(page: import('@playwright/test').Page) {
   // Re-enter through the client list so the legacy profile migration creates a
   // real client context before any canonical case-scoped API request is made.
   await page.goto('/app');
-  await page.waitForURL(/\/clients\/[^/]+$/);
+  if (new URL(page.url()).pathname === '/app') {
+    await page.getByRole('button', { name: 'כניסה לתיק' }).click();
+  }
+  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
   return page.url();
 }
 
@@ -206,11 +209,9 @@ test('mobile controls remain readable and touch friendly', async ({ page }) => {
 });
 
 test('mobile layouts stay symmetrical at the largest text size', async ({ page }) => {
-  await seedCompletedProfile(page);
+  const clientHome = await seedCompletedProfile(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => localStorage.setItem('caredesk.ui.font-scale.v1', '1.3'));
-  await page.goto('/app');
-  const clientHome = page.url();
   const routes = [
     '',
     '/tasks',
@@ -252,9 +253,9 @@ test('mobile layouts stay symmetrical at the largest text size', async ({ page }
 });
 
 test('mobile navigation keeps payroll accessible', async ({ page }) => {
-  await seedCompletedProfile(page);
+  const clientHome = await seedCompletedProfile(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/app');
+  await page.goto(clientHome);
   await expect(page.getByRole('navigation', { name: 'ניווט תחתון' })).toContainText('שכר');
   await page
     .getByRole('navigation', { name: 'ניווט תחתון' })
@@ -309,8 +310,8 @@ test('public contact form sends a limited message without exposing the destinati
 
 for (const [route, heading] of productRoutes) {
   test(`renders ${route} after onboarding`, async ({ page }) => {
-    await seedCompletedProfile(page);
-    await page.goto(route);
+    const clientHome = await seedCompletedProfile(page);
+    await page.goto(route === '/app' ? clientHome : `${clientHome}${route}`);
     await expect(page.getByRole('main')).toContainText(heading);
     await expect(page.getByRole('main')).toBeVisible();
   });
@@ -319,10 +320,8 @@ for (const [route, heading] of productRoutes) {
 test('connects every primary screen through visible navigation and action links', async ({
   page,
 }, testInfo) => {
-  await seedCompletedProfile(page);
-  await page.goto('/app');
-  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
-  const clientHome = page.url();
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(clientHome);
 
   if (testInfo.project.name === 'mobile-chromium') {
     const directConnections = [
@@ -473,8 +472,8 @@ test('shows the quarterly national insurance payment window and deadline', async
 });
 
 test('enlarges text globally and preserves the preference after reload', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/app');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(clientHome);
   await page.getByRole('button', { name: 'הגדלת טקסט' }).click();
   await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.15');
   await page.reload();
@@ -483,9 +482,11 @@ test('enlarges text globally and preserves the preference after reload', async (
 
 test('notification bell opens the list of open tasks', async ({ page }) => {
   await seedCompletedProfile(page);
-  await page.addInitScript(() => {
+  await page.evaluate(() => {
+    const clientId = window.location.pathname.match(/^\/clients\/([^/]+)/)?.[1];
+    if (!clientId) throw new Error('seeded client context is required');
     localStorage.setItem(
-      'caredesk.mvp.tasks.v1',
+      `caredesk.mvp.tasks.v1.client.${decodeURIComponent(clientId)}`,
       JSON.stringify([
         {
           id: 'notification-task',
@@ -498,7 +499,7 @@ test('notification bell opens the list of open tasks', async ({ page }) => {
       ]),
     );
   });
-  await page.goto('/app');
+  await page.reload();
 
   await page
     .getByRole('link', {
@@ -562,12 +563,12 @@ test('walks through all payroll steps', async ({ page }) => {
 });
 
 test('returns from the first payroll step to the dashboard', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/payroll');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/payroll`);
 
   await page.getByRole('link', { name: 'חזרה לדף הבית' }).click();
 
-  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
+  await expect(page).toHaveURL(clientHome);
   await expect(page.getByRole('heading', { name: /שלום/ })).toBeVisible();
 });
 
