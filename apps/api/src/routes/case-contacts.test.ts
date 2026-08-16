@@ -149,8 +149,10 @@ describe('case timeline route', () => {
       headers: AUTH,
     });
     expect(timeline.statusCode).toBe(200);
-    const keys = timeline.json().map((event: { eventTypeKey: string }) => event.eventTypeKey);
+    const events = timeline.json() as Array<{ eventTypeKey: string; actionTarget?: string }>;
+    const keys = events.map((event) => event.eventTypeKey);
     expect(keys[0]).toBe('timeline.task.created');
+    expect(events[0]?.actionTarget).toBe('/tasks');
     expect(keys).toContain('timeline.case.opened');
   });
 });

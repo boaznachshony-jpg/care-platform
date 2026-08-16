@@ -13,6 +13,15 @@ interface TaskParams extends CaseParams {
   taskId: string;
 }
 
+function timelineActionTarget(
+  eventTypeKey: string,
+): '/documents' | '/tasks' | '/payroll' | undefined {
+  if (eventTypeKey.includes('document') || eventTypeKey.includes('insurance')) return '/documents';
+  if (eventTypeKey.includes('payroll')) return '/payroll';
+  if (eventTypeKey.includes('task') || eventTypeKey.includes('renewal')) return '/tasks';
+  return undefined;
+}
+
 /**
  * Case-scoped collections: contacts, tasks, and the timeline. Every route
  * authenticates, then the use case performs the deny-by-default authorization
@@ -103,7 +112,13 @@ export function registerCaseSubResourceRoutes(app: FastifyInstance, container: C
     const actor = request.actor;
     if (!actor) return;
     try {
-      reply.send(await container.listTimeline.execute(actor, request.params.caseId));
+      const events = await container.listTimeline.execute(actor, request.params.caseId);
+      reply.send(
+        events.map((event) => ({
+          ...event,
+          actionTarget: timelineActionTarget(event.eventTypeKey),
+        })),
+      );
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
       throw error;

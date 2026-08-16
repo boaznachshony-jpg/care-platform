@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test, type Page } from '@playwright/test';
+import { installCanonicalProductIntelligence } from './fixtures/canonical-product-intelligence.js';
 
 const completedProfile = {
   employerName: 'מעסיק בדיקת השקה',
@@ -33,11 +34,13 @@ const completedProfile = {
 };
 
 async function seedCompletedProfile(page: Page) {
+  const canonical = await installCanonicalProductIntelligence(page);
   await page.goto('/app');
   await page.evaluate((profile) => {
     localStorage.clear();
     localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
   }, completedProfile);
+  return canonical;
 }
 
 test.describe('launch readiness interactions', () => {
@@ -274,7 +277,8 @@ test.describe('launch readiness interactions', () => {
   });
 
   test('uses every monthly payroll input and persists the annual record', async ({ page }) => {
-    await seedCompletedProfile(page);
+    await page.clock.setFixedTime(new Date('2026-07-15T12:00:00.000Z'));
+    const canonical = await seedCompletedProfile(page);
     await page.goto('/payroll');
 
     const month = page.getByLabel('חודש שכר');
@@ -347,6 +351,29 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('אמצעי תשלום').selectOption('bank_transfer');
     await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
     await expect(page.getByText('2026-07 — הושלם · שולם 2026-08-09')).toBeVisible();
+    await expect(
+      page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
+    ).toContainText('בפועל');
+    expect(canonical.closeMutationCount()).toBe(1);
+
+    const replayRequest = canonical.lastCloseRequest();
+    expect(replayRequest).toBeDefined();
+    const replayed = await page.evaluate(async (request) => {
+      const response = await fetch(request!.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': request!.key },
+        body: JSON.stringify(request!.input),
+      });
+      return response.json() as Promise<{ replayed: boolean }>;
+    }, replayRequest);
+    expect(replayed.replayed).toBe(true);
+    expect(canonical.closeMutationCount()).toBe(1);
+
+    await page.reload();
+    await expect(page.getByText('2026-07 — הושלם · שולם 2026-08-09')).toBeVisible();
+    await expect(
+      page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
+    ).toContainText('בפועל');
 
     const nationalInsuranceTracking = page
       .locator('.employment-expenses > div')
@@ -404,7 +431,7 @@ test.describe('launch readiness interactions', () => {
     }
 
     await page.goto(`${clientHome}/timeline`);
-    await expect(page.getByRole('heading', { name: 'מה צפוי בתיק' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'מה קרה בתיק' })).toBeVisible();
   });
 
   test('unfinished internal API routes cannot expose a broken screen', async ({ page }) => {

@@ -227,7 +227,12 @@ export function completeCaseTask(caseId: string, taskId: string): Promise<TaskRe
   });
 }
 
-export function listCaseTimeline(caseId: string): Promise<TimelineEventResponse[]> {
+export type CanonicalTimelineEvent = TimelineEventResponse & {
+  /** Server-derived allowlisted destination; never an arbitrary browser URL. */
+  actionTarget?: '/documents' | '/tasks' | '/payroll';
+};
+
+export function listCaseTimeline(caseId: string): Promise<CanonicalTimelineEvent[]> {
   return apiRequest(`${casePath(caseId)}/timeline`);
 }
 

@@ -1,12 +1,14 @@
 /* eslint-disable no-restricted-syntax -- Hebrew-first canonical timeline surface */
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type { TimelineEventResponse } from '@caredesk/schemas';
-import { listCaseTimeline } from '../api/client.js';
+import { Link } from 'react-router-dom';
+import { useClientPath } from '../hooks/use-client-path.js';
+import { listCaseTimeline, type CanonicalTimelineEvent } from '../api/client.js';
 
 export function TimelinePage() {
+  const path = useClientPath();
   const { clientId } = useParams<{ clientId: string }>();
-  const [events, setEvents] = useState<TimelineEventResponse[]>();
+  const [events, setEvents] = useState<CanonicalTimelineEvent[]>();
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     if (!clientId) {
@@ -45,6 +47,9 @@ export function TimelinePage() {
                   <h3>{event.summaryKey}</h3>
                   <p>{event.eventTypeKey}</p>
                   {event.actorDisplay ? <small>{event.actorDisplay}</small> : null}
+                  {event.actionTarget ? (
+                    <Link to={path(event.actionTarget)}>פתיחת הפעולה</Link>
+                  ) : null}
                 </div>
               </article>
             ))}

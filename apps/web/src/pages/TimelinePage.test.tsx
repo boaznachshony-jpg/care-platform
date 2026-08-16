@@ -30,10 +30,15 @@ describe('TimelinePage canonical API projection', () => {
         occurredAt: '2026-08-15T12:00:00.000Z',
         actorDisplay: null,
         sensitivity: 'financial_sensitive',
+        actionTarget: '/payroll',
       },
     ]);
     renderPage();
     expect(await screen.findByText('Payroll month closed.')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'פתיחת הפעולה' })).toHaveAttribute(
+      'href',
+      '/clients/11111111-1111-4111-8111-111111111111/payroll',
+    );
     expect(screen.getByText(/פרטי אבטחה וספקים נשמרים בנפרד/)).toBeVisible();
   });
 });

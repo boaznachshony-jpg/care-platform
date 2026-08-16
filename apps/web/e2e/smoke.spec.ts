@@ -1,7 +1,9 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test } from '@playwright/test';
+import { installCanonicalProductIntelligence } from './fixtures/canonical-product-intelligence.js';
 
 test.beforeEach(async ({ page }) => {
+  await installCanonicalProductIntelligence(page);
   await page.goto('/app');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -266,7 +268,7 @@ const productRoutes = [
   ['/trust', 'מסרים לבניית אמון'],
   ['/glossary', 'מושגים חשובים'],
   ['/documents', 'כל המסמכים במקום אחד'],
-  ['/timeline', 'מה צפוי בתיק'],
+  ['/timeline', 'מה קרה בתיק'],
   ['/payroll', 'רישום שכר חודשי'],
   ['/settings', 'פרטים והעדפות'],
   ['/contact', 'יצירת קשר ועזרה'],
@@ -336,7 +338,7 @@ test('connects every primary screen through visible navigation and action links'
       ['פרטי המטפל', '/employee', 'Caregiver Test'],
       ['מסרים לבניית אמון', '/trust', 'מסרים לבניית אמון'],
       ['מושגים חשובים', '/glossary', 'מושגים חשובים'],
-      ['ציר זמן', '/timeline', 'מה צפוי בתיק'],
+      ['ציר זמן', '/timeline', 'מה קרה בתיק'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה ויצירת קשר', '/contact', 'יצירת קשר ועזרה'],
     ] as const;
@@ -356,7 +358,7 @@ test('connects every primary screen through visible navigation and action links'
       ['עובד', '/employee', 'Caregiver Test'],
       ['מושגים', '/glossary', 'מושגים חשובים'],
       ['מסמכים', '/documents', 'כל המסמכים במקום אחד'],
-      ['ציר זמן', '/timeline', 'מה צפוי בתיק'],
+      ['ציר זמן', '/timeline', 'מה קרה בתיק'],
       ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה', '/contact', 'יצירת קשר ועזרה'],
