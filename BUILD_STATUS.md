@@ -1,6 +1,17 @@
 # CareDesk build status
 
-Status date: **2026-08-15**
+Status date: **2026-08-16**
+
+## Post-Wave 6 verified capability review (2026-08-16)
+
+Baseline `81ef692` is merged PR #45. Required CI, both CodeQL analyses and both Vercel production
+deployments were verified successful before planning. A strict repository-layer review found **0
+COMPLETE, 14 PARTIAL, 1 FOUNDATION ONLY and 0 NOT IMPLEMENTED** among the agreed broad product
+capabilities. Historical GREEN labels describe delivered slices, not current end-to-end completion.
+The evidence matrix, exact gaps, proposed **Wave 5 closure — canonical collaboration and evidence**,
+acceptance criteria and Definition of Done are in
+`docs/governance/next-delivery-wave-gap-analysis.md`. That proposed wave is not implemented or
+complete.
 
 ## Wave 6 financial planning and binder pass (2026-08-15)
 
