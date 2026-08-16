@@ -884,6 +884,9 @@
     "submitRequest": "שליחת בקשה",
     "preferences": "שפה והעדפות תקשורת",
     "emailAvailable": "דוא״ל זמין בהתאם להעדפה שלך.",
-    "phoneUnavailable": "WhatsApp ו-SMS אינם מוגדרים כעת ולא יישלחו."
+    "phoneUnavailable": "WhatsApp ו-SMS אינם מוגדרים כעת ולא יישלחו.",
+    "download": "הורדה מאובטחת",
+    "language": "שפה",
+    "savePreferences": "שמירת העדפות"
   }
 }

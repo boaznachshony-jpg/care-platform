@@ -22,6 +22,7 @@ export function WorkerPortalPage() {
   const [error, setError] = useState(false);
   const [tab, setTab] = useState('home');
   const [message, setMessage] = useState('');
+  const [locale, setLocale] = useState<'he' | 'en'>('he');
   const load = () =>
     apiRequest<Portal>('/worker/portal')
       .then(setData)
@@ -148,6 +149,16 @@ export function WorkerPortalPage() {
             data.documents.map((d) => (
               <article className="worker-card" key={d.id}>
                 {d.document_type}
+                <button
+                  onClick={async () => {
+                    const link = await apiRequest<{ url: string }>(
+                      `/worker/documents/${d.id}/download`,
+                    );
+                    window.location.assign(link.url);
+                  }}
+                >
+                  {t('worker.download')}
+                </button>
               </article>
             ))
           ) : (
@@ -163,6 +174,7 @@ export function WorkerPortalPage() {
               e.preventDefault();
               await apiRequest('/worker/requests', {
                 method: 'POST',
+                headers: { 'idempotency-key': crypto.randomUUID() },
                 body: JSON.stringify({ type: 'general', message }),
               });
               setMessage('');
@@ -192,7 +204,34 @@ export function WorkerPortalPage() {
       {tab === 'profile' && (
         <section>
           <h2>{t('worker.preferences')}</h2>
-          <p>{t('worker.emailAvailable')}</p>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              await apiRequest('/worker/preferences', {
+                method: 'PUT',
+                headers: { 'idempotency-key': crypto.randomUUID() },
+                body: JSON.stringify({
+                  locale,
+                  channel: 'email',
+                  whatsappConsent: 'unknown',
+                  smsConsent: 'unknown',
+                }),
+              });
+            }}
+          >
+            <label>
+              {t('worker.language')}
+              <select
+                value={locale}
+                onChange={(event) => setLocale(event.target.value as 'he' | 'en')}
+              >
+                <option value="he">עברית</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <p>{t('worker.emailAvailable')}</p>
+            <button>{t('worker.savePreferences')}</button>
+          </form>
           <p>{t('worker.phoneUnavailable')}</p>
         </section>
       )}

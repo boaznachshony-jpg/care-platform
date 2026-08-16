@@ -2,6 +2,13 @@
 
 Status date: **2026-08-16**
 
+## Wave 5 canonical collaboration closure candidate (2026-08-16)
+
+- Employer assignment, task ownership and request handling are wired to authenticated canonical APIs with durable replay receipts and Timeline/Audit effects.
+- Worker-visible documents use active server-derived portal access and short-lived signed links; communication locale/email preferences persist canonically.
+- WhatsApp and SMS remain fail-closed. No provider delivery is claimed and no new product writes use MVP/local storage.
+- Closure remains pending until the branch CI, live PostgreSQL, Playwright, CodeQL and Web/API preview checks are verified.
+
 ## Post-Wave 6 verified capability review (2026-08-16)
 
 Baseline `81ef692` is merged PR #45. Required CI, both CodeQL analyses and both Vercel production

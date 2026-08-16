@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { projectSharedLeave } from '@caredesk/application';
+import { projectSharedLeave, type DocumentStorage } from '@caredesk/application';
 
 export const WORKER_REQUEST_TRANSITIONS = {
   submitted: ['in_review', 'approved', 'rejected', 'resolved', 'cancelled'],
@@ -49,7 +49,40 @@ interface PaymentAcknowledgementRow {
  * always resolved from the authenticated user's active portal relationship.
  */
 export class Wave5Service {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly storage: DocumentStorage,
+  ) {}
+
+  private requestHash(value: unknown): string {
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
+
+  private async idempotent<T>(
+    client: PoolClient,
+    tenantId: string,
+    operation: string,
+    key: string,
+    input: unknown,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const hash = this.requestHash(input);
+    const existing = await client.query<{ request_hash: string; response: T }>(
+      `select request_hash,response from idempotency_record where operation=$1 and idempotency_key=$2 for update`,
+      [operation, key],
+    );
+    if (existing.rows[0]) {
+      if (existing.rows[0].request_hash !== hash) throw new Error('idempotency_conflict');
+      return existing.rows[0].response;
+    }
+    const response = await work();
+    await client.query(
+      `insert into idempotency_record (tenant_id,operation,idempotency_key,request_hash,response)
+       values ($1,$2,$3,$4,$5)`,
+      [tenantId, operation, key, hash, JSON.stringify(response)],
+    );
+    return response;
+  }
 
   private async tenantTx<T>(
     tenantId: string,
@@ -108,6 +141,11 @@ export class Wave5Service {
 
   async collaboration(actor: Actor, caseId: string) {
     return this.tenantTx(actor.tenantId, async (client) => {
+      const allowed = await client.query(
+        `select 1 from tenant_membership where tenant_id=$1 and user_id=$2 and status='active' and role in ('owner','manager')`,
+        [actor.tenantId, actor.userId],
+      );
+      if (!allowed.rowCount) throw new Error('manager_required');
       const [members, responsibilities, tasks, requests] = await Promise.all([
         client.query(
           `select tm.id, tm.role, tm.status, coalesce(au.display_name, au.email, '—') display_name
@@ -144,6 +182,7 @@ export class Wave5Service {
     caseId: string,
     responsibility: string,
     assigneeId: string | null,
+    idempotencyKey: string,
   ) {
     return this.tenantTx(actor.tenantId, async (client) => {
       const allowed = await client.query(
@@ -159,26 +198,95 @@ export class Wave5Service {
         );
         if (!valid.rowCount) throw new Error('invalid_assignee');
       }
-      await client.query(
-        `update case_responsibility_assignment set effective_to=now()
+      return this.idempotent(
+        client,
+        actor.tenantId,
+        'wave5.responsibility',
+        idempotencyKey,
+        { caseId, responsibility, assigneeId },
+        async () => {
+          const caseExists = await client.query(`select 1 from employment_case where id=$1`, [
+            caseId,
+          ]);
+          if (!caseExists.rowCount) throw new Error('case_not_found');
+          await client.query(
+            `update case_responsibility_assignment set effective_to=now()
         where employment_case_id=$1 and responsibility=$2 and effective_to is null`,
-        [caseId, responsibility],
-      );
-      if (!assigneeId) return null;
-      const result = await client.query(
-        `insert into case_responsibility_assignment
+            [caseId, responsibility],
+          );
+          if (!assigneeId) return { assignment: null };
+          const result = await client.query(
+            `insert into case_responsibility_assignment
         (tenant_id, employment_case_id, responsibility, assignee_membership_id, assigned_by)
         values ($1,$2,$3,$4,$5) returning *`,
-        [actor.tenantId, caseId, responsibility, assigneeId, actor.userId],
-      );
-      await client.query(
-        `insert into audit_event (tenant_id, actor_id, action, resource_type, resource_id,
+            [actor.tenantId, caseId, responsibility, assigneeId, actor.userId],
+          );
+          await client.query(
+            `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,
+         source_type,source_id,sensitivity) values ($1,$2,'responsibility.changed',
+         'Responsibility assignment changed.','responsibility_assignment',$3,'general')`,
+            [actor.tenantId, caseId, result.rows[0].id],
+          );
+          await client.query(
+            `insert into audit_event (tenant_id, actor_id, action, resource_type, resource_id,
         occurred_at, correlation_id, purpose, change_summary, sensitivity)
         values ($1,$2,'responsibility.assigned','employment_case',$3,now(),$4,'case_management',
         'Responsibility owner changed.','general')`,
-        [actor.tenantId, actor.userId, caseId, `wave5:${randomUUID()}`],
+            [actor.tenantId, actor.userId, caseId, `wave5:${randomUUID()}`],
+          );
+          return { assignment: result.rows[0] };
+        },
       );
-      return result.rows[0];
+    });
+  }
+
+  async assignTask(
+    actor: Actor,
+    caseId: string,
+    taskId: string,
+    assigneeId: string | null,
+    key: string,
+  ) {
+    return this.tenantTx(actor.tenantId, async (client) => {
+      const role = await client.query(
+        `select 1 from tenant_membership where tenant_id=$1 and user_id=$2 and status='active' and role in ('owner','manager')`,
+        [actor.tenantId, actor.userId],
+      );
+      if (!role.rowCount) throw new Error('manager_required');
+      if (
+        assigneeId &&
+        !(
+          await client.query(`select 1 from tenant_membership where id=$1 and status='active'`, [
+            assigneeId,
+          ])
+        ).rowCount
+      )
+        throw new Error('invalid_assignee');
+      return this.idempotent(
+        client,
+        actor.tenantId,
+        'wave5.task_assignment',
+        key,
+        { caseId, taskId, assigneeId },
+        async () => {
+          const row = (
+            await client.query(
+              `update task set assignee_membership_id=$3,updated_at=now() where id=$1 and employment_case_id=$2 returning id,assignee_membership_id`,
+              [taskId, caseId, assigneeId],
+            )
+          ).rows[0];
+          if (!row) throw new Error('task_not_found');
+          await client.query(
+            `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'task.assigned','Task responsibility changed.','task',$3,'general')`,
+            [actor.tenantId, caseId, taskId],
+          );
+          await client.query(
+            `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'task.assigned','task',$3,now(),$4,'case_management','Task responsibility changed.','general')`,
+            [actor.tenantId, actor.userId, taskId, `wave5:${key}`],
+          );
+          return row;
+        },
+      );
     });
   }
 
@@ -319,11 +427,11 @@ export class Wave5Service {
   async createRequest(
     context: WorkerContext,
     input: { type: string; message: string; startDate?: string; endDate?: string },
+    key: string,
   ) {
-    return this.tenantTx(
-      context.tenantId,
-      async (client) =>
-        (
+    return this.tenantTx(context.tenantId, async (client) =>
+      this.idempotent(client, context.tenantId, 'wave5.worker_request', key, input, async () => {
+        const request = (
           await client.query(
             `insert into worker_request
       (tenant_id,employment_case_id,worker_portal_access_id,request_type,message,start_date,end_date)
@@ -338,30 +446,181 @@ export class Wave5Service {
               input.endDate ?? null,
             ],
           )
-        ).rows[0],
+        ).rows[0];
+        await client.query(
+          `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'worker_request.submitted','Worker submitted a request.','worker_request',$3,'general')`,
+          [context.tenantId, context.caseId, request.id],
+        );
+        await client.query(
+          `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'worker_request.submitted','worker_request',$3,now(),$4,'worker_portal','Worker request submitted.','general')`,
+          [context.tenantId, context.userId, request.id, `wave5:${key}`],
+        );
+        const manager = (
+          await client.query<{ id: string }>(
+            `select id from tenant_membership where tenant_id=$1 and status='active' and role in ('owner','manager') order by created_at limit 1`,
+            [context.tenantId],
+          )
+        ).rows[0];
+        if (manager)
+          await client.query(
+            `insert into notification_intent (tenant_id,recipient_type,recipient_id,event_type,template_key,template_version,locale,authenticated_path,idempotency_key) values ($1,'family_member',$2,'worker_request.submitted','worker_request.submitted',1,'he',$3,$4) on conflict (tenant_id,idempotency_key) do nothing`,
+            [context.tenantId, manager.id, `/cases/${context.caseId}`, `worker-request:${key}`],
+          );
+        return request;
+      }),
     );
   }
 
-  async updateRequest(actor: Actor, requestId: string, status: string, assigneeId?: string) {
+  async updateRequest(
+    actor: Actor,
+    requestId: string,
+    status: string,
+    key: string,
+    assigneeId?: string,
+  ) {
     return this.tenantTx(actor.tenantId, async (client) => {
       const role = await client.query(
         `select 1 from tenant_membership where tenant_id=$1 and user_id=$2 and status='active' and role in ('owner','manager')`,
         [actor.tenantId, actor.userId],
       );
       if (!role.rowCount) throw new Error('manager_required');
-      const current = await client.query<{ status: keyof typeof WORKER_REQUEST_TRANSITIONS }>(
-        `select status from worker_request where id=$1 for update`,
-        [requestId],
+      return this.idempotent(
+        client,
+        actor.tenantId,
+        'wave5.request_handling',
+        key,
+        { requestId, status, assigneeId },
+        async () => {
+          if (
+            assigneeId &&
+            !(
+              await client.query(
+                `select 1 from tenant_membership where id=$1 and status='active'`,
+                [assigneeId],
+              )
+            ).rowCount
+          )
+            throw new Error('invalid_assignee');
+          const current = await client.query<{
+            status: keyof typeof WORKER_REQUEST_TRANSITIONS;
+            employment_case_id: string;
+          }>(`select status,employment_case_id from worker_request where id=$1 for update`, [
+            requestId,
+          ]);
+          const from = current.rows[0]?.status;
+          if (!from || !(WORKER_REQUEST_TRANSITIONS[from] as readonly string[]).includes(status))
+            throw new Error('invalid_transition');
+          const updated = (
+            await client.query(
+              `update worker_request set status=$2,assigned_membership_id=coalesce($3,assigned_membership_id),updated_at=now() where id=$1 returning *`,
+              [requestId, status, assigneeId ?? null],
+            )
+          ).rows[0];
+          await client.query(
+            `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'worker_request.handled','Worker request status changed.','worker_request',$3,'general')`,
+            [actor.tenantId, current.rows[0]!.employment_case_id, requestId],
+          );
+          await client.query(
+            `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'worker_request.handled','worker_request',$3,now(),$4,'case_management','Worker request status changed.','general')`,
+            [actor.tenantId, actor.userId, requestId, `wave5:${key}`],
+          );
+          return updated;
+        },
       );
-      const from = current.rows[0]?.status;
-      if (!from || !(WORKER_REQUEST_TRANSITIONS[from] as readonly string[]).includes(status))
-        throw new Error('invalid_transition');
-      return (
-        await client.query(
-          `update worker_request set status=$2,assigned_membership_id=coalesce($3,assigned_membership_id),updated_at=now() where id=$1 returning *`,
-          [requestId, status, assigneeId ?? null],
+    });
+  }
+
+  async workerDocument(context: WorkerContext, documentId: string) {
+    const record = await this.tenantTx(context.tenantId, async (client) => {
+      // Recheck active access in the same transaction as authorization so revocation is immediate.
+      const active = await client.query(
+        `select 1 from worker_portal_access where id=$1 and user_id=$2 and status='active'`,
+        [context.accessId, context.userId],
+      );
+      if (!active.rowCount) throw new Error('worker_access_denied');
+      const row = (
+        await client.query<{ storage_key: string }>(
+          `select v.storage_key from document d join document_version v on v.id=d.current_version_id and v.tenant_id=d.tenant_id where d.id=$1 and d.employment_case_id=$2 and d.status='active' and d.worker_visibility in ('worker_view','worker_action')`,
+          [documentId, context.caseId],
         )
       ).rows[0];
+      if (!row) throw new Error('document_not_found');
+      await client.query(
+        `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'worker_document.accessed','document',$3,now(),$4,'worker_portal','Authorized worker document link issued.','sensitive')`,
+        [context.tenantId, context.userId, documentId, `worker-document:${randomUUID()}`],
+      );
+      return row;
+    });
+    return { url: await this.storage.getSignedUrl(record.storage_key, 300), expiresInSeconds: 300 };
+  }
+
+  async preference(context: WorkerContext) {
+    return this.tenantTx(
+      context.tenantId,
+      async (client) =>
+        (
+          await client.query(
+            `select preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent from communication_preference where participant_type='worker' and participant_id=$1`,
+            [context.accessId],
+          )
+        ).rows[0] ?? {
+          preferred_locale: 'he',
+          preferred_channel: 'email',
+          email_enabled: true,
+          whatsapp_enabled: false,
+          sms_enabled: false,
+          whatsapp_consent: 'unknown',
+          sms_consent: 'unknown',
+        },
+    );
+  }
+
+  async updatePreference(
+    context: WorkerContext,
+    input: {
+      locale: 'he' | 'en';
+      channel: 'email';
+      whatsappConsent: 'unknown' | 'revoked';
+      smsConsent: 'unknown' | 'revoked';
+    },
+    key: string,
+  ) {
+    return this.tenantTx(context.tenantId, async (client) => {
+      const active = await client.query(
+        `select 1 from worker_portal_access where id=$1 and user_id=$2 and status='active'`,
+        [context.accessId, context.userId],
+      );
+      if (!active.rowCount) throw new Error('worker_access_denied');
+      return this.idempotent(
+        client,
+        context.tenantId,
+        'wave5.worker_preference',
+        key,
+        input,
+        async () => {
+          const row = (
+            await client.query(
+              `insert into communication_preference (tenant_id,participant_type,participant_id,preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent,consent_source,consent_recorded_at,revoked_at) values ($1,'worker',$2,$3,'email',true,false,false,$4,$5,'worker_portal',now(),case when $4='revoked' or $5='revoked' then now() end) on conflict (tenant_id,participant_type,participant_id) do update set preferred_locale=excluded.preferred_locale,preferred_channel='email',email_enabled=true,whatsapp_enabled=false,sms_enabled=false,whatsapp_consent=excluded.whatsapp_consent,sms_consent=excluded.sms_consent,consent_source='worker_portal',consent_recorded_at=now(),revoked_at=excluded.revoked_at,updated_at=now() returning preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent`,
+              [
+                context.tenantId,
+                context.accessId,
+                input.locale,
+                input.whatsappConsent,
+                input.smsConsent,
+              ],
+            )
+          ).rows[0];
+          await client.query(
+            `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'communication.preference_changed','Worker communication preference changed.','worker_portal_access',$3,'general')`,
+            [context.tenantId, context.caseId, context.accessId],
+          );
+          await client.query(
+            `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'communication.preference_changed','worker_portal_access',$3,now(),$4,'worker_portal','Communication preference changed.','general')`,
+            [context.tenantId, context.userId, context.accessId, `wave5:${key}`],
+          );
+          return row;
+        },
+      );
     });
   }
 }

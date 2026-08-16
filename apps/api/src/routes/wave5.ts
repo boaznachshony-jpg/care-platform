@@ -5,6 +5,10 @@ import { makeAuthenticate } from '../plugins/authenticate.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const id = z.string().uuid();
+const idempotencyKey = (request: FastifyRequest) => {
+  const value = request.headers['idempotency-key'];
+  return typeof value === 'string' && value.length >= 8 && value.length <= 200 ? value : null;
+};
 const responsibility = z.enum([
   'case_management',
   'payroll',
@@ -60,7 +64,11 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
     async (request, reply) => {
       if (!request.actor || !id.safeParse(request.params.caseId).success)
         return sendError(request, reply, 400, 'VALIDATION_ERROR');
-      reply.send(await service.collaboration(request.actor, request.params.caseId));
+      try {
+        reply.send(await service.collaboration(request.actor, request.params.caseId));
+      } catch {
+        return sendError(request, reply, 403, 'FORBIDDEN');
+      }
     },
   );
   app.put<{ Params: { caseId: string } }>(
@@ -71,6 +79,8 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
       const body = z.object({ assigneeMembershipId: id.nullable() }).safeParse(request.body);
       if (!params.success) return sendValidationError(request, reply, params.error);
       if (!body.success) return sendValidationError(request, reply, body.error);
+      const key = idempotencyKey(request);
+      if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
       try {
         reply.send(
           await service.assignResponsibility(
@@ -78,6 +88,31 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
             params.data.caseId,
             params.data.kind,
             body.data.assigneeMembershipId,
+            key,
+          ),
+        );
+      } catch {
+        return sendError(request, reply, 403, 'FORBIDDEN');
+      }
+    },
+  );
+  app.put<{ Params: { caseId: string; taskId: string } }>(
+    '/cases/:caseId/tasks/:taskId/assignee',
+    employer,
+    async (request, reply) => {
+      const params = z.object({ caseId: id, taskId: id }).safeParse(request.params);
+      const body = z.object({ assigneeMembershipId: id.nullable() }).safeParse(request.body);
+      const key = idempotencyKey(request);
+      if (!params.success || !body.success || !key)
+        return sendError(request, reply, 400, 'VALIDATION_ERROR');
+      try {
+        reply.send(
+          await service.assignTask(
+            request.actor!,
+            params.data.caseId,
+            params.data.taskId,
+            body.data.assigneeMembershipId,
+            key,
           ),
         );
       } catch {
@@ -134,12 +169,15 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
   app.post('/worker/requests', worker, async (request, reply) => {
     const body = requestBody.safeParse(request.body);
     if (!body.success) return sendValidationError(request, reply, body.error);
+    const key = idempotencyKey(request);
+    if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
     reply
       .status(201)
       .send(
         await service.createRequest(
           (await service.workerContext(request.workerUserId!))!,
           body.data,
+          key,
         ),
       );
   });
@@ -156,11 +194,14 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
       if (!id.safeParse(request.params.requestId).success || !body.success)
         return sendError(request, reply, 400, 'VALIDATION_ERROR');
       try {
+        const key = idempotencyKey(request);
+        if (!key) return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
         reply.send(
           await service.updateRequest(
             request.actor!,
             request.params.requestId,
             body.data.status,
+            key,
             body.data.assigneeMembershipId,
           ),
         );
@@ -169,4 +210,40 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
       }
     },
   );
+  app.get<{ Params: { documentId: string } }>(
+    '/worker/documents/:documentId/download',
+    worker,
+    async (request, reply) => {
+      if (!id.safeParse(request.params.documentId).success)
+        return sendError(request, reply, 400, 'VALIDATION_ERROR');
+      const context = await service.workerContext(request.workerUserId!);
+      try {
+        reply.send(await service.workerDocument(context!, request.params.documentId));
+      } catch {
+        return sendError(request, reply, 404, 'NOT_FOUND');
+      }
+    },
+  );
+  app.get('/worker/preferences', worker, async (request, reply) => {
+    const context = await service.workerContext(request.workerUserId!);
+    reply.send(await service.preference(context!));
+  });
+  app.put('/worker/preferences', worker, async (request, reply) => {
+    const body = z
+      .object({
+        locale: z.enum(['he', 'en']),
+        channel: z.literal('email'),
+        whatsappConsent: z.enum(['unknown', 'revoked']),
+        smsConsent: z.enum(['unknown', 'revoked']),
+      })
+      .safeParse(request.body);
+    const key = idempotencyKey(request);
+    if (!body.success || !key) return sendError(request, reply, 400, 'VALIDATION_ERROR');
+    const context = await service.workerContext(request.workerUserId!);
+    try {
+      reply.send(await service.updatePreference(context!, body.data, key));
+    } catch {
+      return sendError(request, reply, 403, 'FORBIDDEN');
+    }
+  });
 }
