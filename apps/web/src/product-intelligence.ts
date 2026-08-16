@@ -155,6 +155,9 @@ export function payrollIntelligence(
   const forecast = projectFutureCost({
     startMonth,
     baseSalary: baseSalary ?? undefined,
+    actuals: records
+      .filter((record) => closes.some((close) => close.month === record.month))
+      .map((record) => ({ month: record.month, amount: record.total, sourceId: record.id })),
     expenses: expenses
       .filter((e) => e.amountEntered !== false)
       .map((e) => ({

@@ -145,6 +145,15 @@ export function PayrollIntelligence({
             <span>ממוצע צפוי</span>
             <strong>{money.format(forecast.average)}</strong>
           </div>
+          <div>
+            <span>שלושת החודשים הקרובים</span>
+            <strong>{money.format(forecast.next3MonthsTotal)}</strong>
+          </div>
+          <div>
+            <span>מומלץ לשמור בצד בכל חודש</span>
+            <strong>{money.format(forecast.reserveRecommendation)}</strong>
+            <small>הכוונת תכנון בלבד — לא ייעוץ פיננסי</small>
+          </div>
         </div>
         {forecast.assumptions.length ? (
           <details>
@@ -162,13 +171,24 @@ export function PayrollIntelligence({
         )}
         <div className="forecast-strip" aria-label="תחזית חודשית">
           {forecast.months.map((m) => (
-            <div key={m.month}>
-              <small>{m.month}</small>
-              <strong>{money.format(m.total)}</strong>
-              <span>
-                ידוע {money.format(m.known)} · מוקרן {money.format(m.projected)}
-              </span>
-            </div>
+            <details key={m.month}>
+              <summary>
+                <small>{m.month}</small> <strong>{money.format(m.total)}</strong>{' '}
+                <span>{m.status === 'ACTUAL' ? 'בפועל' : 'תחזית'}</span>
+              </summary>
+              <ul>
+                {m.components.map((component) => (
+                  <li key={component.id}>
+                    <strong>{component.label}</strong> —{' '}
+                    {component.amount === null ? 'לא ידוע' : money.format(component.amount)}
+                    <small>
+                      {' '}
+                      · {component.explanation} · {component.status}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </details>
           ))}
         </div>
       </section>

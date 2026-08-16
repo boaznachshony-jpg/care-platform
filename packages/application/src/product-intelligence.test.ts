@@ -120,4 +120,27 @@ describe('product intelligence projections', () => {
     expect(Number.isFinite(result.total)).toBe(true);
     expect(result.assumptions).toHaveLength(2);
   });
+
+  it('uses closed payroll as actual and keeps scenarios planning-only', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [],
+      actuals: [{ month: '2028-01', amount: 91.235, sourceId: 'payroll-1' }],
+      scenario: {
+        salaryChange: { effectiveMonth: '2028-03', amount: 120 },
+        oneTimeExpense: { month: '2028-04', amount: 30, label: 'Planned equipment' },
+      },
+    });
+    expect(result.months[0]).toMatchObject({ status: 'ACTUAL', total: 91.24, projected: 0 });
+    expect(result.months[2]).toMatchObject({ status: 'FORECAST', projected: 120, total: 120 });
+    expect(result.months[3]).toMatchObject({ known: 30, total: 150 });
+    expect(result.guidance).toBe('planning_guidance_not_financial_advice');
+  });
+
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])('rejects unsafe amount %s', (amount) => {
+    expect(() =>
+      projectFutureCost({ startMonth: '2028-01', baseSalary: amount, expenses: [] }),
+    ).toThrow('finite and non-negative');
+  });
 });

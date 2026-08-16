@@ -36,6 +36,7 @@ import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
 import { ContactPage } from './pages/ContactPage.js';
 import { CasePage } from './pages/CasePage.js';
 import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
+import { EmergencyBinderPage } from './pages/EmergencyBinderPage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -52,6 +53,7 @@ const authenticatedEntrypoints = new Set([
   '/billing',
   '/contact',
   '/worker',
+  '/binder',
 ]);
 
 function ClientHome() {
@@ -100,6 +102,14 @@ function AuthenticatedApp() {
     >
       <Routes>
         <Route path="/worker" element={<WorkerPortalPage />} />
+        <Route
+          path="/binder"
+          element={
+            <ClientApp>
+              <EmergencyBinderPage />
+            </ClientApp>
+          }
+        />
         <Route path="/app" element={<ClientsPage />} />
         <Route path="/family" element={<FamilyAccessPage />} />
         <Route path="/billing" element={<BillingPage />} />
@@ -181,6 +191,14 @@ function AuthenticatedApp() {
           element={
             <ClientApp>
               <SettingsPage />
+            </ClientApp>
+          }
+        />
+        <Route
+          path="/clients/:clientId/binder"
+          element={
+            <ClientApp>
+              <EmergencyBinderPage />
             </ClientApp>
           }
         />
