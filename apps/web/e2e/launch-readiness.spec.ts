@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test, type Page } from '@playwright/test';
 import { installCanonicalProductIntelligence } from './fixtures/canonical-product-intelligence.js';
+import { enterSeededClient } from './fixtures/seeded-client.js';
 
 const completedProfile = {
   employerName: 'מעסיק בדיקת השקה',
@@ -35,17 +36,8 @@ const completedProfile = {
 
 async function seedCompletedProfile(page: Page) {
   const canonical = await installCanonicalProductIntelligence(page);
-  await page.goto('/app');
-  await page.evaluate((profile) => {
-    localStorage.clear();
-    localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
-  }, completedProfile);
-  await page.goto('/app');
-  if (new URL(page.url()).pathname === '/app') {
-    await page.getByRole('button', { name: 'כניסה לתיק' }).click();
-  }
-  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
-  return { ...canonical, clientHome: page.url() };
+  const clientHome = await enterSeededClient(page, completedProfile, { clearStorage: true });
+  return { ...canonical, clientHome };
 }
 
 test.describe('launch readiness interactions', () => {
@@ -111,8 +103,8 @@ test.describe('launch readiness interactions', () => {
   });
 
   test('updates and persists every editable caregiver field', async ({ page }) => {
-    await seedCompletedProfile(page);
-    await page.goto('/employee');
+    const { clientHome } = await seedCompletedProfile(page);
+    await page.goto(`${clientHome}/employee`);
 
     await page.getByRole('button', { name: 'עריכת פרטים' }).click();
     await page.getByLabel('שם המטפל או המטפלת').fill('Nargiza');
@@ -138,8 +130,8 @@ test.describe('launch readiness interactions', () => {
     context,
   }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await seedCompletedProfile(page);
-    await page.goto('/employee');
+    const { clientHome } = await seedCompletedProfile(page);
+    await page.goto(`${clientHome}/employee`);
 
     await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
     await expect(page).toHaveURL(/\/trust$/);
@@ -161,7 +153,7 @@ test.describe('launch readiness interactions', () => {
   test('offers the caregiver completion shortcut when trust details are missing', async ({
     page,
   }) => {
-    await seedCompletedProfile(page);
+    const { clientHome } = await seedCompletedProfile(page);
     await page.evaluate(() => {
       const profile = JSON.parse(localStorage.getItem('caredesk.mvp.profile.v1') ?? '{}');
       localStorage.setItem(
@@ -169,7 +161,7 @@ test.describe('launch readiness interactions', () => {
         JSON.stringify({ ...profile, caregiverCountry: '', caregiverLanguage: '' }),
       );
     });
-    await page.goto('/trust');
+    await page.goto(`${clientHome}/trust`);
 
     await page.getByRole('link', { name: 'השלמת הפרטים' }).click();
     await expect(page).toHaveURL(/\/employee$/);
@@ -177,8 +169,8 @@ test.describe('launch readiness interactions', () => {
 
   test('secondary task and document controls respond correctly', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-08-01T12:00:00'));
-    await seedCompletedProfile(page);
-    await page.goto('/tasks');
+    const { clientHome } = await seedCompletedProfile(page);
+    await page.goto(`${clientHome}/tasks`);
 
     await page.getByRole('button', { name: /משימה חדשה/ }).click();
     await page.getByRole('button', { name: 'סגירה' }).click();
@@ -195,7 +187,7 @@ test.describe('launch readiness interactions', () => {
       page.getByRole('link', { name: 'מעבר לאתר הביטוח הלאומי לדיווח ולתשלום' }),
     ).toHaveAttribute('href', /btl\.gov\.il/);
 
-    await page.goto('/documents');
+    await page.goto(`${clientHome}/documents`);
     await page.getByRole('button', { name: /הוספת מסמך/ }).click();
     await page.getByRole('button', { name: 'סגירה' }).click();
     await expect(page.getByRole('heading', { name: 'הוספת מסמך' })).not.toBeVisible();
@@ -236,8 +228,8 @@ test.describe('launch readiness interactions', () => {
         value: MockNotification,
       });
     });
-    await seedCompletedProfile(page);
-    await page.goto('/settings');
+    const { clientHome } = await seedCompletedProfile(page);
+    await page.goto(`${clientHome}/settings`);
 
     await page.getByLabel('שם המעסיק').fill('מעסיק מעודכן להשקה');
     await page.locator('#settings-employer-id').fill('123');
@@ -284,7 +276,7 @@ test.describe('launch readiness interactions', () => {
   test('uses every monthly payroll input and persists the annual record', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-07-15T12:00:00.000Z'));
     const canonical = await seedCompletedProfile(page);
-    await page.goto('/payroll');
+    await page.goto(`${canonical.clientHome}/payroll`);
 
     const month = page.getByLabel('חודש שכר');
     await month.fill('2026-07');

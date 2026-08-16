@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test } from '@playwright/test';
 import { installCanonicalProductIntelligence } from './fixtures/canonical-product-intelligence.js';
+import { enterSeededClient } from './fixtures/seeded-client.js';
 
 test.beforeEach(async ({ page }) => {
   await installCanonicalProductIntelligence(page);
@@ -42,17 +43,7 @@ const completedProfile = {
 
 async function seedCompletedProfile(page: import('@playwright/test').Page) {
   await installCanonicalProductIntelligence(page);
-  await page.evaluate((profile) => {
-    localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
-  }, completedProfile);
-  // Re-enter through the client list so the legacy profile migration creates a
-  // real client context before any canonical case-scoped API request is made.
-  await page.goto('/app');
-  if (new URL(page.url()).pathname === '/app') {
-    await page.getByRole('button', { name: 'כניסה לתיק' }).click();
-  }
-  await expect(page).toHaveURL(/\/clients\/[^/]+$/);
-  return page.url();
+  return enterSeededClient(page, completedProfile);
 }
 
 async function completeClientOnboarding(
@@ -387,8 +378,8 @@ test('connects every primary screen through visible navigation and action links'
 });
 
 test('connects trust tips and the general glossary in both directions', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/trust');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/trust`);
   await page.getByRole('link', { name: 'למושגים חשובים' }).click();
   await expect(page).toHaveURL(/\/glossary$/);
   await expect(page.getByRole('heading', { name: 'מעסיק' })).toBeVisible();
@@ -401,8 +392,8 @@ test('connects trust tips and the general glossary in both directions', async ({
 });
 
 test('creates, persists, completes and restores a task', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/tasks');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/tasks`);
   await page.getByRole('button', { name: /משימה חדשה/ }).click();
   await page.getByLabel('מה צריך לבצע?').fill('בדיקת ביטוח רפואי');
   await page.getByLabel('מועד יעד').fill('2026-08-03');
@@ -456,8 +447,8 @@ test('opens the relevant workflow from timeline details', async ({ page }) => {
 
 test('shows the quarterly national insurance payment window and deadline', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-10T12:00:00'));
-  await seedCompletedProfile(page);
-  await page.goto('/tasks');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/tasks`);
 
   const card = page.getByRole('region', { name: 'משימת ביטוח לאומי רבעונית' });
   await expect(card).toContainText('תשלום ביטוח לאומי לרבעון יולי – ספטמבר');
@@ -511,8 +502,8 @@ test('notification bell opens the list of open tasks', async ({ page }) => {
 });
 
 test('walks through all payroll steps', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/payroll');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/payroll`);
   const next = page.getByRole('button', { name: 'המשך' });
   const payrollMonth = await page.getByLabel('חודש שכר').inputValue();
   await next.click();
@@ -573,8 +564,8 @@ test('returns from the first payroll step to the dashboard', async ({ page }) =>
 });
 
 test('tracks quarterly and annual employment expenses', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/payroll');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/payroll`);
   await expect(page.getByRole('heading', { name: 'תשלומים תקופתיים של ההעסקה' })).toBeVisible();
   await page.getByLabel('סוג התשלום').selectOption({ label: 'ביטוח לאומי' });
   await page.getByLabel('תדירות').selectOption('quarterly');
@@ -605,8 +596,8 @@ test('tracks quarterly and annual employment expenses', async ({ page }) => {
 });
 
 test('adds, opens, edits and persists a realistic image document', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/documents');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/documents`);
   await expect(page.getByText('עדיין לא נוספו מסמכים')).toBeVisible();
   await page.getByRole('button', { name: '↑ הוספת מסמך' }).click();
   await page.getByLabel('שם המסמך').fill('דרכון בדיקה');
@@ -638,20 +629,19 @@ test('adds, opens, edits and persists a realistic image document', async ({ page
 });
 
 test('requires an explicit salary source before payroll', async ({ page }) => {
-  await page.evaluate((profile) => {
-    localStorage.setItem(
-      'caredesk.mvp.profile.v1',
-      JSON.stringify({ ...profile, baseSalary: null, salaryEffectiveDate: '' }),
-    );
-  }, completedProfile);
-  await page.goto('/payroll');
+  const clientHome = await enterSeededClient(page, {
+    ...completedProfile,
+    baseSalary: null,
+    salaryEffectiveDate: '',
+  });
+  await page.goto(`${clientHome}/payroll`);
   await expect(page.getByRole('heading', { name: 'הגדרת מקור השכר' })).toBeVisible();
   await expect(page.getByText('טרם הוגדר')).toBeVisible();
 });
 
 test('saves Uzbekistan as caregiver country and shows Uzbek trust messages', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/employee');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/employee`);
   await expect(page.getByText('אוזבקיסטן · תחילת העסקה 2026-01-15')).toBeVisible();
   await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
   await expect(page.getByText('ארץ מוצא: אוזבקיסטן · שפה שנבחרה: אוזבקית')).toBeVisible();
@@ -659,8 +649,8 @@ test('saves Uzbekistan as caregiver country and shows Uzbek trust messages', asy
 });
 
 test('notification master switch disables reminder timing', async ({ page }) => {
-  await seedCompletedProfile(page);
-  await page.goto('/settings');
+  const clientHome = await seedCompletedProfile(page);
+  await page.goto(`${clientHome}/settings`);
   const masterSwitch = page.getByRole('checkbox', { name: 'הפעלת כל ההתראות' });
   const reminderSelect = page.getByLabel('כמה זמן מראש להזכיר?');
   await masterSwitch.uncheck();

@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { expect, test, type Page } from '@playwright/test';
+import { enterSeededClient } from './fixtures/seeded-client.js';
 
 const completedProfile = {
   employerName: 'מעסיק בדיקה',
@@ -22,12 +23,10 @@ const completedProfile = {
 };
 
 async function seedCompletedProfile(page: Page) {
-  await page.goto('/app');
-  await page.evaluate((profile) => {
-    localStorage.clear();
-    localStorage.setItem('caredesk.mvp.profile.v1', JSON.stringify(profile));
-  }, completedProfile);
+  return enterSeededClient(page, completedProfile, { clearStorage: true });
 }
+
+const clientHome = (page: Page) => page.url().match(/^.*\/clients\/[^/]+/)?.[0] ?? '';
 
 test.describe('persistent profile and reminder preferences', () => {
   test.beforeEach(async ({ page }) => {
@@ -37,7 +36,7 @@ test.describe('persistent profile and reminder preferences', () => {
   test('persists edited profile data, all reminder choices and quiet hours after reload', async ({
     page,
   }) => {
-    await page.goto('/settings');
+    await page.goto(`${clientHome(page)}/settings`);
 
     const employerName = page.getByLabel('שם המעסיק');
     const reminderLead = page.getByLabel('כמה זמן מראש להזכיר?');
@@ -68,7 +67,7 @@ test.describe('persistent profile and reminder preferences', () => {
   });
 
   test('master switch disables reminder timing and persists both states', async ({ page }) => {
-    await page.goto('/settings');
+    await page.goto(`${clientHome(page)}/settings`);
     const masterSwitch = page.getByRole('checkbox', { name: 'הפעלת כל ההתראות' });
     const reminderLead = page.getByLabel('כמה זמן מראש להזכיר?');
 
@@ -92,7 +91,7 @@ test.describe('persistent profile and reminder preferences', () => {
 test.describe('task management', () => {
   test.beforeEach(async ({ page }) => {
     await seedCompletedProfile(page);
-    await page.goto('/tasks');
+    await page.goto(`${clientHome(page)}/tasks`);
   });
 
   test('creates, edits, completes and persists a task after reload', async ({ page }) => {
@@ -136,7 +135,7 @@ test.describe('task management', () => {
 test.describe('document validation and persistence', () => {
   test.beforeEach(async ({ page }) => {
     await seedCompletedProfile(page);
-    await page.goto('/documents');
+    await page.goto(`${clientHome(page)}/documents`);
     await page.getByRole('button', { name: /הוספת מסמך/ }).click();
     await page.getByLabel('שם המסמך').fill('אשרת עבודה');
     await page.getByLabel('תוקף המסמך').fill('2028-12-31');
@@ -197,7 +196,7 @@ test.describe('document validation and persistence', () => {
 
 test('shows Uzbekistan context and Uzbek trust-building messages', async ({ page }) => {
   await seedCompletedProfile(page);
-  await page.goto('/trust');
+  await page.goto(`${clientHome(page)}/trust`);
 
   await expect(page.getByRole('heading', { name: 'מסרים לבניית אמון' })).toBeVisible();
   await expect(page.getByText('ארץ מוצא: אוזבקיסטן · שפה שנבחרה: אוזבקית')).toBeVisible();
@@ -211,7 +210,7 @@ test('shows Uzbekistan context and Uzbek trust-building messages', async ({ page
 
 test('discarded caregiver edits do not reappear when editing again', async ({ page }) => {
   await seedCompletedProfile(page);
-  await page.goto('/employee');
+  await page.goto(`${clientHome(page)}/employee`);
 
   await page.getByRole('button', { name: 'עריכת פרטים' }).click();
   await page.getByLabel('שם המטפל או המטפלת').fill('שם שלא נשמר');
@@ -223,7 +222,7 @@ test('discarded caregiver edits do not reappear when editing again', async ({ pa
 
 test('settings saved confirmation clears after a new unsaved edit', async ({ page }) => {
   await seedCompletedProfile(page);
-  await page.goto('/settings');
+  await page.goto(`${clientHome(page)}/settings`);
 
   await page.getByRole('button', { name: 'שמירת השינויים' }).click();
   await expect(page.getByText('השינויים נשמרו בהצלחה')).toBeVisible();
