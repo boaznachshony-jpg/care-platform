@@ -29,7 +29,7 @@ export async function installCanonicalProductIntelligence(page: Page) {
   let lastCloseRequest:
     { url: string; key: string; input: Omit<CanonicalClose, 'id' | 'closedAt'> } | undefined;
 
-  await page.route('**/cases/*/timeline', (route) =>
+  await page.route(/\/cases\/[^/]+\/timeline(?:\?.*)?$/, (route) =>
     json(route, [
       {
         id: '10000000-0000-4000-8000-000000000001',
@@ -61,7 +61,7 @@ export async function installCanonicalProductIntelligence(page: Page) {
     ]),
   );
 
-  await page.route('**/cases/*/health', (route) =>
+  await page.route(/\/cases\/[^/]+\/health(?:\?.*)?$/, (route) =>
     json(route, {
       score: 75,
       actionsRemaining: 1,
@@ -82,7 +82,7 @@ export async function installCanonicalProductIntelligence(page: Page) {
     }),
   );
 
-  await page.route('**/cases/*/payroll-month-closes', async (route) => {
+  await page.route(/\/cases\/[^/]+\/payroll-month-closes(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') return json(route, [...closes.values()]);
     if (route.request().method() !== 'POST')
       return json(route, { code: 'METHOD_NOT_ALLOWED' }, 405);

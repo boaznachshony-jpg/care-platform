@@ -25,6 +25,8 @@ export function PayrollIntelligence({
   caseId?: string;
 }) {
   const [closes, setCloses] = useState<MvpMonthlyClose[]>([]);
+  const [closeError, setCloseError] = useState('');
+  const [closeConfirmation, setCloseConfirmation] = useState('');
   const closeKey = useRef(crypto.randomUUID());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash' | 'check' | 'other'>(
@@ -65,27 +67,34 @@ export function PayrollIntelligence({
     .find((r) => !closes.some((c) => c.month === r.month));
   async function closeMonth() {
     if (!caseId || !open || !paymentDate || open.total <= 0) return;
+    setCloseError('');
+    setCloseConfirmation('');
     const deductions =
       (open.medicalInsuranceDeduction ?? 0) +
       (open.housingDeduction ?? 0) +
       open.advances +
       open.agreedDeduction;
     const actualBase = open.baseSalary;
-    await closeCanonicalPayrollMonth(
-      caseId,
-      {
-        payrollReference: open.id,
-        month: open.month,
-        paymentDate,
-        paymentMethod,
-        total: open.total,
-        baseSalary: actualBase,
-        additions: Math.max(0, open.total - actualBase + deductions),
-        deductions,
-      },
-      closeKey.current,
-    );
-    await refreshCloses();
+    try {
+      await closeCanonicalPayrollMonth(
+        caseId,
+        {
+          payrollReference: open.id,
+          month: open.month,
+          paymentDate,
+          paymentMethod,
+          total: open.total,
+          baseSalary: actualBase,
+          additions: Math.max(0, open.total - actualBase + deductions),
+          deductions,
+        },
+        closeKey.current,
+      );
+      await refreshCloses();
+      setCloseConfirmation(`חודש ${open.month} נסגר ונשמר בתיק הקנוני.`);
+    } catch {
+      setCloseError('סגירת החודש נכשלה. הנתונים לא נשמרו; בדקו את הפרטים ונסו שוב.');
+    }
   }
   return (
     <>
@@ -235,6 +244,8 @@ export function PayrollIntelligence({
             <h2>{open ? `סגירת ${open.month}` : 'כל החודשים הושלמו'}</h2>
           </div>
         </div>
+        {closeConfirmation ? <p role="status">{closeConfirmation}</p> : null}
+        {closeError ? <p role="alert">{closeError}</p> : null}
         {open ? (
           <>
             <p>
@@ -282,7 +293,7 @@ export function PayrollIntelligence({
         )}
         <h3>היסטוריית סגירות</h3>
         {closes.length ? (
-          <ul>
+          <ul aria-label="היסטוריית סגירות קנונית">
             {[...closes]
               .sort((a, b) => b.month.localeCompare(a.month))
               .map((c) => (

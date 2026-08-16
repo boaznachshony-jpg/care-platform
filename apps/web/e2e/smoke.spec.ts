@@ -433,11 +433,12 @@ test('opens the relevant workflow from timeline details', async ({ page }) => {
   await seedCompletedProfile(page);
   await page.goto('/timeline');
 
-  await page
+  const canonicalTimeline = page.getByRole('region', { name: 'ציר זמן קנוני' });
+  const insuranceRenewal = canonicalTimeline
     .getByRole('article')
-    .filter({ has: page.getByRole('heading', { name: 'חידוש ביטוח רפואי' }) })
-    .getByRole('link', { name: 'פתיחת הפעולה' })
-    .click();
+    .filter({ hasText: 'חידוש ביטוח רפואי' });
+  await expect(insuranceRenewal).toBeVisible();
+  await insuranceRenewal.getByRole('link', { name: 'פתיחת הפעולה' }).click();
 
   await expect(page).toHaveURL(/\/documents$/);
   await expect(page.getByRole('heading', { name: 'כל המסמכים במקום אחד' })).toBeVisible();

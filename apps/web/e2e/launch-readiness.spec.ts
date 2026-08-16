@@ -350,7 +350,10 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('תאריך תשלום').fill('2026-08-09');
     await page.getByLabel('אמצעי תשלום').selectOption('bank_transfer');
     await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
-    await expect(page.getByText('2026-07 — הושלם · שולם 2026-08-09')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('חודש 2026-07 נסגר');
+    const closeHistory = page.getByRole('list', { name: 'היסטוריית סגירות קנונית' });
+    await expect(closeHistory).toContainText('2026-07');
+    await expect(closeHistory).toContainText('שולם 2026-08-09');
     await expect(
       page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
     ).toContainText('בפועל');
@@ -370,7 +373,11 @@ test.describe('launch readiness interactions', () => {
     expect(canonical.closeMutationCount()).toBe(1);
 
     await page.reload();
-    await expect(page.getByText('2026-07 — הושלם · שולם 2026-08-09')).toBeVisible();
+    const persistedCloseHistory = page.getByRole('list', {
+      name: 'היסטוריית סגירות קנונית',
+    });
+    await expect(persistedCloseHistory).toContainText('2026-07');
+    await expect(persistedCloseHistory).toContainText('שולם 2026-08-09');
     await expect(
       page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
     ).toContainText('בפועל');
