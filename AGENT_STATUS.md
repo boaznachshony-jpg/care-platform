@@ -16,8 +16,9 @@ This dashboard is the shared coordination state for concurrent engineering agent
 | Workstream | Issue | Owner/Agent | Branch | PR | Status | Depends on | Parallel safe | Blocker | Next action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Current delivery coordination | — | Orchestrator | `main` | — | ACTIVE | — | n/a | None recorded | Assign each new task through an Issue and update this row set before parallel implementation |
-| Wave 3 canonical Product Intelligence closure | — | Codex primary | `codex/finalize-wave-3-closure-for-product-intelligence` | #48 | DONE | — | no | None | Merged to `main` at `a97f61f`; monitor required CI |
-| Pipedream CI monitoring | #51 | Codex Pipedream CI task | `agent/add-pipedream-ci-monitoring` | #53 | IN_REVIEW | — | yes | None | Review the draft PR and required CI; do not merge until explicitly approved |
+| Wave 3 canonical Product Intelligence closure | — | Codex primary | `codex/finalize-wave-3-closure-for-product-intelligence` | #48 | DONE | — | no | None; merged main CI succeeded at `a97f61f` | Retain as completed dependency evidence |
+| Final capability and production-readiness assessment | — | Codex primary | `codex/final-product-gap-production-readiness` | — | ACTIVE | PR #48 | no | No implementation blocker; production/provider prerequisites documented separately | Validate governance-only diff, commit, and open the governance PR |
+| Pipedream CI monitoring | #51 | Codex Pipedream CI task | `agent/add-pipedream-ci-monitoring` | #53 | IN_REVIEW | — | yes | Pipedream returns HTTP 401 without affecting CI | Align the repository token with Pipedream authentication, rerun CI, and do not merge until explicitly approved |
 
 ## Required status values
 

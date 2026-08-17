@@ -2,20 +2,26 @@
 
 Status date: **2026-08-16**
 
-## Wave 3 canonical Product Intelligence closure candidate (2026-08-16)
+## Wave 3 canonical Product Intelligence closure (2026-08-16)
 
 - Timeline, Dashboard and CareDesk Score now consume authenticated, case-scoped canonical API contracts.
 - Monthly Close persists only through PostgreSQL with manager authorization, durable idempotency, a human Timeline event and minimal Audit evidence.
 - Closed payroll actual snapshots are server-reconstructable for Future Cost; historical receipts without snapshots remain explicitly `UNKNOWN`.
 - Open payroll/scenario inputs remain isolated in MVP storage pending a canonical payroll-entry aggregate; no monthly-close state is written there.
-- Strict classification and remaining hosted verification are recorded in `docs/governance/wave-3-canonical-product-intelligence-closure.md`.
+- PR #48 merged at `a97f61f`; the post-merge CI and Push-on-main workflows succeeded for that exact
+  SHA. Compliance Timeline, Decision Dashboard, CareDesk Score and Monthly Close therefore meet the
+  strict end-to-end definition. Future Cost remains partial while open payroll/scenario inputs use
+  transitional storage. The final 15-capability assessment and remaining launch gates are recorded
+  in `docs/governance/final-product-gap-and-production-readiness.md`.
 
-## Wave 5 canonical collaboration closure candidate (2026-08-16)
+## Wave 5 canonical collaboration implementation (2026-08-16)
 
 - Employer assignment, task ownership and request handling are wired to authenticated canonical APIs with durable replay receipts and Timeline/Audit effects.
 - Worker-visible documents use active server-derived portal access and short-lived signed links; communication locale/email preferences persist canonically.
 - WhatsApp and SMS remain fail-closed. No provider delivery is claimed and no new product writes use MVP/local storage.
-- Closure remains pending until the branch CI, live PostgreSQL, Playwright, CodeQL and Web/API preview checks are verified.
+- The merged implementation has successful post-merge main CI, but strict capability closure is not
+  claimed: focused employer/worker Playwright journeys and production identity/storage configuration
+  remain outstanding. Family Collaboration and Worker Portal are therefore PARTIAL.
 
 ## Post-Wave 6 verified capability review (2026-08-16)
 
