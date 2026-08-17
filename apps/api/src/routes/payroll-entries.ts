@@ -1,9 +1,15 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyRequest,
+  preHandlerHookHandler,
+} from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { PayrollEntryService } from '../payroll-entry-service.js';
+import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
+
 const params = z.object({
   caseId: z.string().uuid(),
   month: z
@@ -39,15 +45,50 @@ const body = z
     version: z.number().int().positive().optional(),
   })
   .strict();
-export function registerPayrollEntryRoutes(app: FastifyInstance, container: Container) {
+
+const MINUTE_MS = 60_000;
+export const PAYROLL_ENTRY_RATE_LIMITS = {
+  list: { max: 60, timeWindow: MINUTE_MS, bucket: 'list' },
+  get: { max: 60, timeWindow: MINUTE_MS, bucket: 'get' },
+  save: { max: 20, timeWindow: MINUTE_MS, bucket: 'save' },
+} as const satisfies Record<string, RouteRateLimit>;
+
+function makePayrollRateLimit(
+  limiter: RateLimiter,
+  policy: RouteRateLimit,
+): preHandlerHookHandler {
+  return async (request, reply) => {
+    const principal = request.actor
+      ? `${request.actor.tenantId}:${request.actor.userId}`
+      : `unauthenticated:${request.ip}`;
+    const decision = await limiter.consume(
+      `payroll-entry:${policy.bucket}:${principal}`,
+      policy.max,
+      policy.timeWindow,
+    );
+    if (decision.allowed) return;
+    if (decision.retryAfterSeconds) reply.header('retry-after', decision.retryAfterSeconds);
+    sendError(request, reply, 429, 'RATE_LIMITED');
+  };
+}
+
+export function registerPayrollEntryRoutes(
+  app: FastifyInstance,
+  container: Container,
+  rateLimiter: RateLimiter,
+) {
   if (!container.pool) return;
   const auth = makeAuthenticate(container.auth, container.actorResolver);
   const service = new PayrollEntryService(container.pool);
   const authorize = async (a: NonNullable<FastifyRequest['actor']>, id: string) =>
     container.getCase.execute(a, id).catch(() => null);
+
   app.get<{ Params: { caseId: string } }>(
     '/cases/:caseId/payroll-entries',
-    { preHandler: auth },
+    {
+      config: { rateLimit: PAYROLL_ENTRY_RATE_LIMITS.list },
+      preHandler: [auth, makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.list)],
+    },
     async (req, reply) => {
       const p = params.safeParse(req.params);
       if (!p.success) return sendValidationError(req, reply, p.error);
@@ -57,9 +98,13 @@ export function registerPayrollEntryRoutes(app: FastifyInstance, container: Cont
       return service.list(req.actor, p.data.caseId);
     },
   );
+
   app.get<{ Params: { caseId: string; month: string } }>(
     '/cases/:caseId/payroll-entries/:month',
-    { preHandler: auth },
+    {
+      config: { rateLimit: PAYROLL_ENTRY_RATE_LIMITS.get },
+      preHandler: [auth, makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.get)],
+    },
     async (req, reply) => {
       const p = params.safeParse(req.params);
       if (!p.success) return sendValidationError(req, reply, p.error);
@@ -71,9 +116,13 @@ export function registerPayrollEntryRoutes(app: FastifyInstance, container: Cont
       return entry;
     },
   );
+
   app.put<{ Params: { caseId: string; month: string } }>(
     '/cases/:caseId/payroll-entries/:month',
-    { preHandler: auth },
+    {
+      config: { rateLimit: PAYROLL_ENTRY_RATE_LIMITS.save },
+      preHandler: [auth, makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.save)],
+    },
     async (req, reply) => {
       const p = params.safeParse(req.params),
         b = body.safeParse(req.body);
