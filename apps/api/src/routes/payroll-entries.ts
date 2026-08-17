@@ -1,4 +1,8 @@
-import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyRequest,
+  preHandlerHookHandler,
+} from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
@@ -49,7 +53,10 @@ export const PAYROLL_ENTRY_RATE_LIMITS = {
   save: { max: 20, timeWindow: MINUTE_MS, bucket: 'save' },
 } as const satisfies Record<string, RouteRateLimit>;
 
-function makePayrollRateLimit(limiter: RateLimiter, policy: RouteRateLimit): preHandlerHookHandler {
+function makePayrollRateLimit(
+  limiter: RateLimiter,
+  policy: RouteRateLimit,
+): preHandlerHookHandler {
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
