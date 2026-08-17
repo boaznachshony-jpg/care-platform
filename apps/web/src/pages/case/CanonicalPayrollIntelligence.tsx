@@ -10,7 +10,7 @@ import {
   type PayrollEntryResponse,
   type SavePayrollEntryRequest,
 } from '../../api/client.js';
-import { readMvpPayroll } from '../../storage/mvp-storage.js';
+import { readMvpPayroll, saveMvpPayroll } from '../../storage/mvp-storage.js';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -65,6 +65,10 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   );
   const [error, setError] = useState('');
   const [migrationConfirmed, setMigrationConfirmed] = useState(false);
+  /** True once a legacy→canonical migration save has been confirmed by the server. */
+  const [migrationSaved, setMigrationSaved] = useState(false);
+  /** True once the legacy localStorage record has been explicitly purged after canonical save. */
+  const [legacyPurged, setLegacyPurged] = useState(false);
   const legacy = readMvpPayroll().find((record) => record.month === month);
   const calculatedTotal = useMemo(
     () =>
@@ -103,6 +107,10 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setDraft(found ? { ...found, version: found.version } : blank());
     setState('idle');
     setError('');
+    // Reset all migration state when the selected month changes.
+    setMigrationConfirmed(false);
+    setMigrationSaved(false);
+    setLegacyPurged(false);
   }, [entries, month]);
   const forecast = projectFutureCost({
     startMonth: month,
@@ -119,6 +127,8 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   async function save() {
     setState('saving');
     setError('');
+    // Capture before the async gap — legacy and migrationConfirmed may change after re-render.
+    const isLegacyMigration = migrationConfirmed && !!legacy;
     try {
       await savePayrollEntry(
         caseId,
@@ -127,6 +137,8 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
         crypto.randomUUID(),
       );
       setState('saved');
+      // Canonical persistence proven — unlock the purge step for legacy records.
+      if (isLegacyMigration) setMigrationSaved(true);
       await refresh();
     } catch (cause) {
       if (cause instanceof ApiRequestError && cause.status === 409) {
@@ -137,6 +149,16 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
         setError('שמירת השכר נכשלה. הנתונים המקומיים לא נחשבים מקור סמכות.');
       }
     }
+  }
+
+  /**
+   * Remove the legacy localStorage record for the current month.
+   * Called only after canonical persistence has been proven (migrationSaved === true).
+   * Constitution §16: no silent loss — user must explicitly trigger this.
+   */
+  function purgeLegacy() {
+    saveMvpPayroll(readMvpPayroll().filter((r) => r.month !== month));
+    setLegacyPurged(true);
   }
   function prepareLegacyMigration() {
     if (!legacy || !migrationConfirmed) return;
@@ -302,6 +324,23 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
             הכנת נתונים להעברה
           </button>
         </aside>
+      ) : null}
+      {migrationSaved && !legacyPurged ? (
+        <aside className="reconciliation-cleanup" aria-labelledby="cleanup-title">
+          <h3 id="cleanup-title">שלב ב׳ — הסרת רישום מקומי</h3>
+          <p>
+            הרישום הקנוני נשמר בשרת בהצלחה. הרישום הישן עדיין קיים באחסון המקומי של הדפדפן. הסירו
+            אותו כדי למנוע כפיל-כתיבה קבוע.
+          </p>
+          <button type="button" onClick={purgeLegacy}>
+            הסרת הרישום הישן מהדפדפן
+          </button>
+        </aside>
+      ) : null}
+      {legacyPurged ? (
+        <p role="status" className="reconciliation-done">
+          הרישום הישן הוסר — הנתון הקנוני בשרת הוא מקור הסמכות היחיד.
+        </p>
       ) : null}
       <h3>עלות עתידית — קדימות מקור סמכות</h3>
       <ul aria-label="תחזית קנונית">
