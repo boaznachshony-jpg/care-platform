@@ -139,11 +139,14 @@ export interface FutureCostActual {
   amount: number;
   sourceId: string;
 }
+export type FutureCostEnteredPayroll = FutureCostActual;
 export function projectFutureCost(input: {
   startMonth: string;
   baseSalary?: number;
   expenses: readonly ForecastExpense[];
   actuals?: readonly FutureCostActual[];
+  /** Canonical payroll_entry facts for months that have not been closed yet. */
+  enteredPayroll?: readonly FutureCostEnteredPayroll[];
   scenario?: FutureCostScenario;
 }) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.startMonth))
@@ -152,6 +155,7 @@ export function projectFutureCost(input: {
     input.baseSalary,
     ...input.expenses.map((expense) => expense.amount),
     ...(input.actuals ?? []).map((actual) => actual.amount),
+    ...(input.enteredPayroll ?? []).map((actual) => actual.amount),
     input.scenario?.salaryChange?.amount,
     input.scenario?.insuranceRenewal?.amount,
     input.scenario?.oneTimeExpense?.amount,
@@ -165,6 +169,7 @@ export function projectFutureCost(input: {
     const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + offset, 1));
     const month = date.toISOString().slice(0, 7);
     const actual = input.actuals?.find((item) => item.month === month);
+    const entered = input.enteredPayroll?.find((item) => item.month === month);
     const knownExpenses = input.expenses
       .filter((e) => e.dueDate?.startsWith(month))
       .reduce((sum, e) => sum + e.amount, 0);
@@ -207,61 +212,77 @@ export function projectFutureCost(input: {
             status: 'ACTUAL' as const,
           },
         ]
-      : [
-          ...(input.baseSalary === undefined
-            ? [
-                {
-                  id: 'salary_unknown',
-                  label: 'Salary',
-                  amount: null,
-                  source: 'salary_configuration',
-                  explanation: 'No current salary is stored',
-                  status: 'UNKNOWN' as const,
-                },
-              ]
-            : [
-                {
-                  id: 'base_salary',
-                  label: 'Salary',
-                  amount: scenarioSalary,
-                  source:
-                    input.scenario?.salaryChange &&
-                    month >= input.scenario.salaryChange.effectiveMonth
-                      ? 'planning_scenario'
-                      : 'salary_configuration',
-                  explanation: 'Current configured salary; repeated without statutory assumptions',
-                  status: 'FORECAST' as const,
-                },
-              ]),
-          ...input.expenses
-            .filter((e) => e.frequency === 'monthly' || e.dueDate?.startsWith(month))
-            .map((e) => ({
-              id: e.id,
-              label: e.label,
-              amount: e.amount,
-              source: 'employment_expense',
-              explanation:
-                e.frequency === 'monthly'
-                  ? 'Stored recurring employment cost'
-                  : 'Stored dated employment cost',
+      : entered
+        ? [
+            {
+              id: entered.sourceId,
+              label: 'Entered payroll',
+              amount: entered.amount,
+              source: 'payroll_entry',
+              explanation: 'Canonical payroll entry for an open month',
+              status: 'ACTUAL' as const,
+            },
+          ]
+        : [
+            ...(input.baseSalary === undefined
+              ? [
+                  {
+                    id: 'salary_unknown',
+                    label: 'Salary',
+                    amount: null,
+                    source: 'salary_configuration',
+                    explanation: 'No current salary is stored',
+                    status: 'UNKNOWN' as const,
+                  },
+                ]
+              : [
+                  {
+                    id: 'base_salary',
+                    label: 'Salary',
+                    amount: scenarioSalary,
+                    source:
+                      input.scenario?.salaryChange &&
+                      month >= input.scenario.salaryChange.effectiveMonth
+                        ? 'planning_scenario'
+                        : 'salary_configuration',
+                    explanation:
+                      'Current configured salary; repeated without statutory assumptions',
+                    status: 'FORECAST' as const,
+                  },
+                ]),
+            ...input.expenses
+              .filter((e) => e.frequency === 'monthly' || e.dueDate?.startsWith(month))
+              .map((e) => ({
+                id: e.id,
+                label: e.label,
+                amount: e.amount,
+                source: 'employment_expense',
+                explanation:
+                  e.frequency === 'monthly'
+                    ? 'Stored recurring employment cost'
+                    : 'Stored dated employment cost',
+                status: 'FORECAST' as const,
+              })),
+            ...scenarioItems.map((item) => ({
+              ...item,
+              source: 'planning_scenario',
+              explanation: 'Planning-only value; canonical records are unchanged',
               status: 'FORECAST' as const,
             })),
-          ...scenarioItems.map((item) => ({
-            ...item,
-            source: 'planning_scenario',
-            explanation: 'Planning-only value; canonical records are unchanged',
-            status: 'FORECAST' as const,
-          })),
-        ];
+          ];
     const projected = roundMoney(scenarioSalary + recurring);
     const forecastTotal = roundMoney(projected + knownExpenses + scenarioTotal);
     return {
       month,
-      actual: actual ? roundMoney(actual.amount) : 0,
+      actual: actual ? roundMoney(actual.amount) : entered ? roundMoney(entered.amount) : 0,
       known: roundMoney(knownExpenses + scenarioTotal),
-      projected: actual ? 0 : projected,
-      total: actual ? roundMoney(actual.amount) : forecastTotal,
-      status: actual ? ('ACTUAL' as const) : ('FORECAST' as const),
+      projected: actual || entered ? 0 : projected,
+      total: actual
+        ? roundMoney(actual.amount)
+        : entered
+          ? roundMoney(entered.amount)
+          : forecastTotal,
+      status: actual || entered ? ('ACTUAL' as const) : ('FORECAST' as const),
       components,
     };
   });

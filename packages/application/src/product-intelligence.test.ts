@@ -138,6 +138,24 @@ describe('product intelligence projections', () => {
     expect(result.guidance).toBe('planning_guidance_not_financial_advice');
   });
 
+  it('prefers a closed snapshot, then canonical entered payroll, then forecast', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [],
+      enteredPayroll: [
+        { month: '2028-01', amount: 110, sourceId: 'open-overridden' },
+        { month: '2028-02', amount: 120, sourceId: 'open-payroll' },
+      ],
+      actuals: [{ month: '2028-01', amount: 90, sourceId: 'closed-payroll' }],
+    });
+    expect(result.months[0]).toMatchObject({ total: 90, status: 'ACTUAL', projected: 0 });
+    expect(result.months[0]?.components[0]?.source).toBe('closed_payroll');
+    expect(result.months[1]).toMatchObject({ total: 120, status: 'ACTUAL', projected: 0 });
+    expect(result.months[1]?.components[0]?.source).toBe('payroll_entry');
+    expect(result.months[2]).toMatchObject({ total: 100, status: 'FORECAST' });
+  });
+
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])('rejects unsafe amount %s', (amount) => {
     expect(() =>
       projectFutureCost({ startMonth: '2028-01', baseSalary: amount, expenses: [] }),
