@@ -54,6 +54,7 @@ vi.mock('@caredesk/application', () => ({
 }));
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mockListPayrollEntries.mockResolvedValue([]);
   mockListCanonicalPayrollCloses.mockResolvedValue([]);
   mockSavePayrollEntry.mockResolvedValue({ entry: {}, replayed: false });
