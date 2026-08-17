@@ -1,8 +1,4 @@
-import type {
-  FastifyInstance,
-  FastifyRequest,
-  preHandlerHookHandler,
-} from 'fastify';
+import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
@@ -53,10 +49,7 @@ export const PAYROLL_ENTRY_RATE_LIMITS = {
   save: { max: 20, timeWindow: MINUTE_MS, bucket: 'save' },
 } as const satisfies Record<string, RouteRateLimit>;
 
-function makePayrollRateLimit(
-  limiter: RateLimiter,
-  policy: RouteRateLimit,
-): preHandlerHookHandler {
+function makePayrollRateLimit(limiter: RateLimiter, policy: RouteRateLimit): preHandlerHookHandler {
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
@@ -87,10 +80,7 @@ export function registerPayrollEntryRoutes(
     '/cases/:caseId/payroll-entries',
     {
       config: { rateLimit: PAYROLL_ENTRY_RATE_LIMITS.list },
-      preHandler: [
-        auth,
-        makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.list),
-      ],
+      preHandler: [auth, makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.list)],
     },
     async (req, reply) => {
       const p = params.safeParse(req.params);
@@ -106,10 +96,7 @@ export function registerPayrollEntryRoutes(
     '/cases/:caseId/payroll-entries/:month',
     {
       config: { rateLimit: PAYROLL_ENTRY_RATE_LIMITS.get },
-      preHandler: [
-        auth,
-        makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.get),
-      ],
+      preHandler: [auth, makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.get)],
     },
     async (req, reply) => {
       const p = params.safeParse(req.params);
@@ -127,10 +114,7 @@ export function registerPayrollEntryRoutes(
     '/cases/:caseId/payroll-entries/:month',
     {
       config: { rateLimit: PAYROLL_ENTRY_RATE_LIMITS.save },
-      preHandler: [
-        auth,
-        makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.save),
-      ],
+      preHandler: [auth, makePayrollRateLimit(rateLimiter, PAYROLL_ENTRY_RATE_LIMITS.save)],
     },
     async (req, reply) => {
       const p = params.safeParse(req.params),
