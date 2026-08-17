@@ -45,9 +45,7 @@ describe('AutomationPanel', () => {
   it('shows travel date form and plan button is disabled until dates are valid', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'משהו השתנה' }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'המטפל/ת מתכננ/ת חופשה או נסיעה' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'המטפל/ת מתכננ/ת חופשה או נסיעה' }));
     expect(screen.getByRole('button', { name: 'יצירת תוכנית לבדיקה' })).toBeDisabled();
   });
 

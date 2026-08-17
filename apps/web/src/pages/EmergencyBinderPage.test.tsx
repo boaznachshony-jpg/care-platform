@@ -23,9 +23,9 @@ vi.mock('../api/client.js', () => ({
       verificationStatus: 'verified',
     },
   ]),
-  listCanonicalPayrollCloses: vi.fn().mockResolvedValue([
-    { id: 'pay-demo-001', month: '2026-07', total: 6500 },
-  ]),
+  listCanonicalPayrollCloses: vi
+    .fn()
+    .mockResolvedValue([{ id: 'pay-demo-001', month: '2026-07', total: 6500 }]),
   listCaseTasks: vi.fn().mockResolvedValue([
     {
       id: 'task-demo-001',
@@ -62,7 +62,7 @@ describe('EmergencyBinderPage', () => {
     render(<EmergencyBinderPage />);
     await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
 
-    fireEvent.change(screen.getAllByRole('combobox')[0], {
+    fireEvent.change(screen.getAllByRole('combobox')[0]!, {
       target: { value: 'case-demo-001' },
     });
 
@@ -73,7 +73,7 @@ describe('EmergencyBinderPage', () => {
     render(<EmergencyBinderPage />);
     await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
 
-    fireEvent.change(screen.getAllByRole('combobox')[0], {
+    fireEvent.change(screen.getAllByRole('combobox')[0]!, {
       target: { value: 'case-demo-001' },
     });
     await waitFor(() => screen.getByText('2026-07'));
@@ -86,25 +86,21 @@ describe('EmergencyBinderPage', () => {
     render(<EmergencyBinderPage />);
     await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
 
-    fireEvent.change(screen.getAllByRole('combobox')[0], {
+    fireEvent.change(screen.getAllByRole('combobox')[0]!, {
       target: { value: 'case-demo-001' },
     });
 
-    await waitFor(() =>
-      expect(screen.getByText(/לא נבחרו מסמכים/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/לא נבחרו מסמכים/)).toBeInTheDocument());
   });
 
   it('shows open tasks in binder when tasks section is selected', async () => {
     render(<EmergencyBinderPage />);
     await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
 
-    fireEvent.change(screen.getAllByRole('combobox')[0], {
+    fireEvent.change(screen.getAllByRole('combobox')[0]!, {
       target: { value: 'case-demo-001' },
     });
 
-    await waitFor(() =>
-      expect(screen.getByText(/חידוש ביטוח/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/חידוש ביטוח/)).toBeInTheDocument());
   });
 });
