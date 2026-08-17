@@ -165,7 +165,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerWave5Routes(app, container);
   registerProductDifferentiationRoutes(app, container, productRateLimiter);
   registerCanonicalProductIntelligenceRoutes(app, container);
-  registerPayrollEntryRoutes(app, container);
+  registerPayrollEntryRoutes(app, container, productRateLimiter);
 
   return app;
 }
