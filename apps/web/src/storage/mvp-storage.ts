@@ -421,6 +421,8 @@ export interface MvpPayrollRecord {
   agreedDeduction: number;
   total: number;
   savedAt: string;
+  /** Server optimistic-lock version; absent only on pre-cutover migration records. */
+  canonicalVersion?: number;
 }
 
 export interface MvpMonthlyClose {
