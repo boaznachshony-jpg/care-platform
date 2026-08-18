@@ -37,4 +37,28 @@ describe('Israeli ID validation', () => {
       expect(isValidIsraeliId(value)).toBe(false);
     },
   );
+
+  // ── Numeric-only enforcement edge cases ───────────────────────────────────
+
+  it('rejects Unicode Arabic-Indic digit strings (not ASCII digits)', () => {
+    // ١٢٣٤٥٦٧٨٩ are Eastern Arabic numerals — must not bypass the numeric-only rule
+    expect(getIsraeliIdValidationError('١٢٣٤٥٦٧٨٩')).toBe('characters');
+  });
+
+  it('rejects inputs containing SQL-injection-style characters', () => {
+    expect(isValidIsraeliId('1; DROP TABLE--')).toBe(false);
+    expect(getIsraeliIdValidationError('1; DROP TABLE--')).toBe('characters');
+  });
+
+  it('rejects a 10-digit number even when leading digit is zero', () => {
+    expect(getIsraeliIdValidationError('0123456782')).toBe('length');
+  });
+
+  it('treats all-zeros as passing the checksum algorithm (sum=0, divisible by 10)', () => {
+    // 000000000: every product is 0, so checksum = 0 which passes.
+    // Documents that this boundary is accepted — callers that need a non-trivial
+    // ID must apply business-level constraints separately.
+    expect(getIsraeliIdValidationError('000000000')).toBeNull();
+    expect(isValidIsraeliId('000000000')).toBe(true);
+  });
 });

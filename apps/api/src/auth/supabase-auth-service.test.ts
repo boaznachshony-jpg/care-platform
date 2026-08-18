@@ -59,4 +59,81 @@ describe('SupabaseAuthService', () => {
     );
     expect(await service.verifySession('token')).toBeNull();
   });
+
+  // ── Auth failure edge cases ───────────────────────────────────────────────
+
+  it.each([403, 500, 503])('fails closed on non-401 HTTP error status %i', async (status) => {
+    const service = new SupabaseAuthService(
+      'https://project.supabase.co',
+      'publishable-key',
+      vi.fn(async () => new Response(null, { status })),
+    );
+    expect(await service.verifySession('token')).toBeNull();
+  });
+
+  it('fails closed when the user id in the response is not a string', async () => {
+    const service = new SupabaseAuthService(
+      'https://project.supabase.co',
+      'publishable-key',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: 12345 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    expect(await service.verifySession(tokenWithClaims({ aal: 'aal2' }))).toBeNull();
+  });
+
+  it('fails closed when the user id is present but empty', async () => {
+    const service = new SupabaseAuthService(
+      'https://project.supabase.co',
+      'publishable-key',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: '' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    expect(await service.verifySession(tokenWithClaims({ aal: 'aal2' }))).toBeNull();
+  });
+
+  it('reflects aal1 as MFA not satisfied', async () => {
+    const service = new SupabaseAuthService(
+      'https://project.supabase.co/',
+      'publishable-key',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: 'user-1' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    const session = await service.verifySession(
+      tokenWithClaims({ iat: 1_700_000_000, exp: 1_700_003_600, aal: 'aal1' }),
+    );
+    expect(session?.mfaSatisfied).toBe(false);
+  });
+
+  it('treats a missing aal claim as MFA not satisfied', async () => {
+    const service = new SupabaseAuthService(
+      'https://project.supabase.co/',
+      'publishable-key',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: 'user-1' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    const session = await service.verifySession(
+      tokenWithClaims({ iat: 1_700_000_000, exp: 1_700_003_600 }),
+    );
+    expect(session?.mfaSatisfied).toBe(false);
+  });
 });
