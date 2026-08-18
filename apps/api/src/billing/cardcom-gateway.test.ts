@@ -122,6 +122,208 @@ describe('CardcomProductBillingGateway', () => {
     ).resolves.toMatchObject({ expiryMonth: 9, expiryYear: 2031 });
   });
 
+  it('marks the charge as auto-recurring when configured', async () => {
+    const calls: Array<{ body: Record<string, unknown> }> = [];
+    const fetcher = vi.fn(async (_: string, init?: RequestInit) => {
+      calls.push({ body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+      return new Response(JSON.stringify({ ResponseCode: 0, TranzactionId: 77001 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    const gateway = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 1000,
+        apiName: 'api-user',
+        apiPassword: 'api-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: true,
+      },
+      fetcher as typeof fetch,
+    );
+    // Seal a token so we can call chargeMonthly directly
+    const setup = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 1000,
+        apiName: 'api-user',
+        apiPassword: 'api-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: false,
+      },
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            ResponseCode: 0,
+            Operation: 'CreateTokenOnly',
+            ReturnValue: 'intent-1',
+            TokenInfo: { Token: 'raw-token', CardMonth: 6, CardYear: 2030 },
+            TranzactionInfo: { Last4CardDigitsString: '9999' },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as typeof fetch,
+    );
+    const verified = await setup.verifyPaymentMethodSetup('setup-id-1');
+    await gateway.chargeMonthly({
+      externalUniqId: 'recurring-test',
+      providerSetupId: verified.providerSetupId,
+      amountAgorot: 3900,
+      billingName: 'Recurring Customer',
+      billingEmail: 'recurring@example.test',
+      sealedToken: verified.sealedToken,
+      expiryMonth: verified.expiryMonth,
+      expiryYear: verified.expiryYear,
+    });
+    expect(calls[0]?.body).toHaveProperty('Advanced.IsAutoRecurringPayment', true);
+  });
+
+  it('throws a CardcomGatewayError when the API returns a non-zero ResponseCode', async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ ResponseCode: 1001, Description: 'Invalid terminal' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const gateway = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 9999,
+        apiName: 'bad-api',
+        apiPassword: 'bad-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: false,
+      },
+      fetcher as typeof fetch,
+    );
+    await expect(
+      gateway.createPaymentMethodSetup({
+        intentId: 'intent-error',
+        billingName: 'Test',
+        billingEmail: 'test@example.test',
+      }),
+    ).rejects.toMatchObject({ name: 'CardcomGatewayError', providerCode: '1001' });
+  });
+
+  it('throws a CardcomGatewayError when the HTTP request itself fails (non-2xx)', async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify({}), { status: 503, headers: { 'content-type': 'application/json' } }),
+    );
+    const gateway = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 1000,
+        apiName: 'api-user',
+        apiPassword: 'api-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: false,
+      },
+      fetcher as typeof fetch,
+    );
+    await expect(
+      gateway.createPaymentMethodSetup({
+        intentId: 'intent-down',
+        billingName: 'Test',
+        billingEmail: 'test@example.test',
+      }),
+    ).rejects.toMatchObject({ name: 'CardcomGatewayError', providerCode: '503' });
+  });
+
+  it('throws INVALID_AMOUNT when the charge amount is zero or negative', async () => {
+    const gateway = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 1000,
+        apiName: 'api-user',
+        apiPassword: 'api-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: false,
+      },
+      vi.fn() as typeof fetch,
+    );
+    await expect(
+      gateway.chargeMonthly({
+        externalUniqId: 'zero-test',
+        providerSetupId: 'setup-id-1',
+        amountAgorot: 0,
+        billingName: 'Test',
+        billingEmail: 'test@example.test',
+        sealedToken: 'any',
+        expiryMonth: 9,
+        expiryYear: 2031,
+      }),
+    ).rejects.toMatchObject({ providerCode: 'INVALID_AMOUNT' });
+  });
+
+  it('throws INVALID_SEALED_TOKEN when the stored token has been tampered with', async () => {
+    // Build a valid sealed token with one gateway, then try to open it with different context
+    const senderGateway = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 1000,
+        apiName: 'api-user',
+        apiPassword: 'api-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: false,
+      },
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            ResponseCode: 0,
+            Operation: 'CreateTokenOnly',
+            ReturnValue: 'intent-1',
+            TokenInfo: { Token: 'real-token', CardMonth: 1, CardYear: 2030 },
+            TranzactionInfo: { Last4CardDigitsString: '1111' },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as typeof fetch,
+    );
+    const verified = await senderGateway.verifyPaymentMethodSetup('original-setup-id');
+    // Tamper: flip one character in the ciphertext segment
+    const [nonce, tag, ciphertext] = verified.sealedToken.split('.');
+    const tampered = [nonce, tag, ciphertext?.slice(0, -1) + 'X'].join('.');
+
+    const attackerGateway = new CardcomProductBillingGateway(
+      {
+        terminalNumber: 1000,
+        apiName: 'api-user',
+        apiPassword: 'api-password',
+        successUrl: 'https://app.example.test/billing?setup=success',
+        failureUrl: 'https://app.example.test/billing?setup=failed',
+        webhookUrl: 'https://api.example.test/billing/webhooks/cardcom',
+        tokenEncryptionKey: key,
+        markAsRecurring: false,
+      },
+      vi.fn() as typeof fetch,
+    );
+    await expect(
+      attackerGateway.chargeMonthly({
+        externalUniqId: 'tamper-test',
+        providerSetupId: verified.providerSetupId,
+        amountAgorot: 3900,
+        billingName: 'Attacker',
+        billingEmail: 'attack@example.test',
+        sealedToken: tampered,
+        expiryMonth: 1,
+        expiryYear: 2030,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('rejects incomplete verified card metadata instead of inventing a last four value', async () => {
     const fetcher = vi.fn(
       async () =>
