@@ -62,17 +62,14 @@ describe('SupabaseAuthService', () => {
 
   // ── Auth failure edge cases ───────────────────────────────────────────────
 
-  it.each([403, 500, 503])(
-    'fails closed on non-401 HTTP error status %i',
-    async (status) => {
-      const service = new SupabaseAuthService(
-        'https://project.supabase.co',
-        'publishable-key',
-        vi.fn(async () => new Response(null, { status })),
-      );
-      expect(await service.verifySession('token')).toBeNull();
-    },
-  );
+  it.each([403, 500, 503])('fails closed on non-401 HTTP error status %i', async (status) => {
+    const service = new SupabaseAuthService(
+      'https://project.supabase.co',
+      'publishable-key',
+      vi.fn(async () => new Response(null, { status })),
+    );
+    expect(await service.verifySession('token')).toBeNull();
+  });
 
   it('fails closed when the user id in the response is not a string', async () => {
     const service = new SupabaseAuthService(
