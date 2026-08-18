@@ -156,17 +156,18 @@ describe('CardcomProductBillingGateway', () => {
         tokenEncryptionKey: key,
         markAsRecurring: false,
       },
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            ResponseCode: 0,
-            Operation: 'CreateTokenOnly',
-            ReturnValue: 'intent-1',
-            TokenInfo: { Token: 'raw-token', CardMonth: 6, CardYear: 2030 },
-            TranzactionInfo: { Last4CardDigitsString: '9999' },
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ResponseCode: 0,
+              Operation: 'CreateTokenOnly',
+              ReturnValue: 'intent-1',
+              TokenInfo: { Token: 'raw-token', CardMonth: 6, CardYear: 2030 },
+              TranzactionInfo: { Last4CardDigitsString: '9999' },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
       ) as typeof fetch,
     );
     const verified = await setup.verifyPaymentMethodSetup('setup-id-1');
@@ -184,11 +185,12 @@ describe('CardcomProductBillingGateway', () => {
   });
 
   it('throws a CardcomGatewayError when the API returns a non-zero ResponseCode', async () => {
-    const fetcher = vi.fn(async () =>
-      new Response(
-        JSON.stringify({ ResponseCode: 1001, Description: 'Invalid terminal' }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ ResponseCode: 1001, Description: 'Invalid terminal' }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
     );
     const gateway = new CardcomProductBillingGateway(
       {
@@ -213,11 +215,12 @@ describe('CardcomProductBillingGateway', () => {
   });
 
   it('throws a CardcomGatewayError when the HTTP request itself fails (non-2xx)', async () => {
-    const fetcher = vi.fn(async () =>
-      new Response(JSON.stringify({}), {
-        status: 503,
-        headers: { 'content-type': 'application/json' },
-      }),
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify({}), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        }),
     );
     const gateway = new CardcomProductBillingGateway(
       {
@@ -282,17 +285,18 @@ describe('CardcomProductBillingGateway', () => {
         tokenEncryptionKey: key,
         markAsRecurring: false,
       },
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            ResponseCode: 0,
-            Operation: 'CreateTokenOnly',
-            ReturnValue: 'intent-1',
-            TokenInfo: { Token: 'real-token', CardMonth: 1, CardYear: 2030 },
-            TranzactionInfo: { Last4CardDigitsString: '1111' },
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ResponseCode: 0,
+              Operation: 'CreateTokenOnly',
+              ReturnValue: 'intent-1',
+              TokenInfo: { Token: 'real-token', CardMonth: 1, CardYear: 2030 },
+              TranzactionInfo: { Last4CardDigitsString: '1111' },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
       ) as typeof fetch,
     );
     const verified = await senderGateway.verifyPaymentMethodSetup('original-setup-id');
