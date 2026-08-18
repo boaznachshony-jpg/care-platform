@@ -126,7 +126,9 @@ describe('BillingPage', () => {
     expect(screen.getByText(/09\/2031/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /remove payment method/i })).toBeInTheDocument();
     // Setup form must not appear when a card is already saved
-    expect(screen.queryByRole('button', { name: /securely connect a card/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /securely connect a card/i }),
+    ).not.toBeInTheDocument();
   });
 
   // ── Cardcom redirect return ───────────────────────────────────────────────
@@ -155,10 +157,14 @@ describe('BillingPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderPage();
     const cancelBtn = await screen.findByRole('button', { name: /remove payment method/i });
-    await act(async () => { fireEvent.click(cancelBtn); });
+    await act(async () => {
+      fireEvent.click(cancelBtn);
+    });
     expect(mocks.cancelBillingSubscription).toHaveBeenCalledTimes(1);
     // Card should be gone after reload
-    expect(await screen.findByRole('button', { name: /securely connect a card/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /securely connect a card/i }),
+    ).toBeInTheDocument();
   });
 
   it('does not call cancelBillingSubscription when the owner dismisses the confirm dialog', async () => {
@@ -183,7 +189,11 @@ describe('BillingPage', () => {
     const nameInput = await screen.findByLabelText(/invoice name/i);
     fireEvent.change(nameInput, { target: { value: 'Test Customer' } });
     fireEvent.click(screen.getByLabelText(/subscription and recurring billing terms/i));
-    await act(async () => { fireEvent.submit(screen.getByRole('button', { name: /securely connect a card/i }).closest('form')!); });
+    await act(async () => {
+      fireEvent.submit(
+        screen.getByRole('button', { name: /securely connect a card/i }).closest('form')!,
+      );
+    });
 
     expect(mocks.startBillingPaymentMethodSetup).toHaveBeenCalledWith(
       expect.objectContaining({ billingName: 'Test Customer', acceptsRecurringCharge: true }),
@@ -197,8 +207,12 @@ describe('BillingPage', () => {
   it('shows an owner-only message when the actor cannot manage billing', async () => {
     mocks.getBillingSubscription.mockResolvedValue({ ...sponsoredPlan, canManage: false });
     await renderPage();
-    expect(await screen.findByText(/only the account owner can manage the payment method/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /securely connect a card/i })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/only the account owner can manage the payment method/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /securely connect a card/i }),
+    ).not.toBeInTheDocument();
   });
 
   // ── Load error ────────────────────────────────────────────────────────────
