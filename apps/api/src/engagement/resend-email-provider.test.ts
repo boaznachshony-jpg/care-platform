@@ -62,4 +62,52 @@ describe('ResendEmailProvider', () => {
       ).send(email),
     ).resolves.toEqual({ status: 'accepted', provider: 'resend' });
   });
+
+  // ── Resend integration edge cases ─────────────────────────────────────────
+
+  // The implementation checks response.ok only; 4xx/5xx all become provider_rejected.
+  it.each([400, 422, 429, 500])(
+    'classifies HTTP %i response (ok=false) as provider_rejected',
+    async () => {
+      const request = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+      await expect(
+        new ResendEmailProvider(
+          { apiKey: 'server-only-key', fromEmail: 'support@example.test' },
+          request,
+        ).send(email),
+      ).resolves.toMatchObject({ status: 'failed', failureCategory: 'provider_rejected' });
+    },
+  );
+
+  it('forwards html and replyTo fields in the Resend request body', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ id: 'provider-2' }) });
+    await new ResendEmailProvider(
+      { apiKey: 'server-only-key', fromEmail: 'support@example.test' },
+      request,
+    ).send({
+      to: 'recipient@example.test',
+      subject: 'Synthetic notice',
+      text: 'Plain text fallback.',
+      html: '<p>HTML body</p>',
+      replyTo: 'noreply@example.test',
+    });
+    const body = JSON.parse(request.mock.calls[0]![1]!.body as string) as Record<string, unknown>;
+    expect(body.html).toBe('<p>HTML body</p>');
+    expect(body.reply_to).toBe('noreply@example.test');
+  });
+
+  it('omits html and reply_to keys when not provided', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ id: 'provider-3' }) });
+    await new ResendEmailProvider(
+      { apiKey: 'server-only-key', fromEmail: 'support@example.test' },
+      request,
+    ).send(email);
+    const body = JSON.parse(request.mock.calls[0]![1]!.body as string) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('html');
+    expect(body).not.toHaveProperty('reply_to');
+  });
 });
