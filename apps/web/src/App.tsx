@@ -37,6 +37,7 @@ import { ContactPage } from './pages/ContactPage.js';
 import { CasePage } from './pages/CasePage.js';
 import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
 import { EmergencyBinderPage } from './pages/EmergencyBinderPage.js';
+import { OpenCasePage } from './pages/OpenCasePage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -54,6 +55,7 @@ const authenticatedEntrypoints = new Set([
   '/contact',
   '/worker',
   '/binder',
+  '/cases/new',
 ]);
 
 function ClientHome() {
@@ -319,7 +321,7 @@ export function App() {
         <Route path="/contact-us" element={<PublicContactPage />} />
         <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
         <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
-        <Route path="/cases/new" element={<Navigate to="/" replace />} />
+        <Route path="/cases/new" element={<OpenCasePage />} />
         <Route path="/cases/not-a-public-route" element={<Navigate to="/" replace />} />
         <Route path="*" element={<ApplicationEntry />} />
       </Routes>
