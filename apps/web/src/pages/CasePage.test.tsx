@@ -14,9 +14,11 @@ const mockGetEmploymentCase = vi.fn();
 vi.mock('../api/client.js', () => {
   class ApiRequestError extends Error {
     status: number;
-    constructor(message: string, status: number) {
-      super(message);
+    code: string;
+    constructor(status: number, code: string) {
+      super(code);
       this.status = status;
+      this.code = code;
     }
   }
   return {
@@ -30,7 +32,8 @@ vi.mock('../api/client.js', () => {
     listVisaRenewals: () => Promise.resolve([]),
     getCaseHealth: () => Promise.resolve({ score: 0, actionsRemaining: 0, factors: [] }),
     listProfessionalReviews: () => Promise.resolve([]),
-    apiRequest: () => Promise.resolve({ members: [], responsibilities: [], tasks: [], requests: [] }),
+    apiRequest: () =>
+      Promise.resolve({ members: [], responsibilities: [], tasks: [], requests: [] }),
     listPayrollEntries: () => Promise.resolve([]),
     listCanonicalPayrollCloses: () => Promise.resolve([]),
     confirmAssistantChecklist: () => Promise.resolve(undefined),
@@ -97,43 +100,33 @@ describe('CasePage', () => {
 
     it('displays the recipient name', async () => {
       renderPage();
-      await waitFor(() =>
-        expect(screen.getByText('מטופל בדיקה')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('מטופל בדיקה')).toBeInTheDocument());
     });
 
     it('displays the employer name', async () => {
       renderPage();
-      await waitFor(() =>
-        expect(screen.getByText('בועז בדיקה')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('בועז בדיקה')).toBeInTheDocument());
     });
 
     it('displays the caregiver legal name', async () => {
       renderPage();
-      await waitFor(() =>
-        expect(screen.getByText('Anna Petrov')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('Anna Petrov')).toBeInTheDocument());
     });
 
     it('calls getEmploymentCase with the caseId from params', async () => {
       renderPage(DEMO_CASE_ID);
-      await waitFor(() =>
-        expect(mockGetEmploymentCase).toHaveBeenCalledWith(DEMO_CASE_ID),
-      );
+      await waitFor(() => expect(mockGetEmploymentCase).toHaveBeenCalledWith(DEMO_CASE_ID));
     });
   });
 
   describe('not found state', () => {
     beforeEach(() => {
-      mockGetEmploymentCase.mockRejectedValue(new ApiRequestError('not found', 404));
+      mockGetEmploymentCase.mockRejectedValue(new ApiRequestError(404, 'not_found'));
     });
 
     it('shows not found error message', async () => {
       renderPage();
-      await waitFor(() =>
-        expect(screen.getByText('התיק לא נמצא')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('התיק לא נמצא')).toBeInTheDocument());
     });
   });
 
@@ -144,9 +137,7 @@ describe('CasePage', () => {
 
     it('shows load failed error message', async () => {
       renderPage();
-      await waitFor(() =>
-        expect(screen.getByText('טעינת התיק נכשלה')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('טעינת התיק נכשלה')).toBeInTheDocument());
     });
   });
 });
