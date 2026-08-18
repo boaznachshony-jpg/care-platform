@@ -183,7 +183,8 @@ describe('BillingPage', () => {
     mocks.startBillingPaymentMethodSetup.mockResolvedValue({
       checkoutUrl: 'https://secure.cardcom.solutions/hosted/setup',
     });
-    const assignSpy = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
+    const assignMock = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign: assignMock });
     await renderPage();
 
     const nameInput = await screen.findByLabelText(/invoice name/i);
@@ -198,8 +199,8 @@ describe('BillingPage', () => {
     expect(mocks.startBillingPaymentMethodSetup).toHaveBeenCalledWith(
       expect.objectContaining({ billingName: 'Test Customer', acceptsRecurringCharge: true }),
     );
-    expect(assignSpy).toHaveBeenCalledWith('https://secure.cardcom.solutions/hosted/setup');
-    assignSpy.mockRestore();
+    expect(assignMock).toHaveBeenCalledWith('https://secure.cardcom.solutions/hosted/setup');
+    vi.unstubAllGlobals();
   });
 
   // ── Non-owner view ────────────────────────────────────────────────────────
