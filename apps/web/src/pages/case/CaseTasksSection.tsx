@@ -6,6 +6,7 @@ import { TASK_PRIORITIES } from '@caredesk/domain';
 import {
   createTaskRequestSchema,
   type CreateTaskRequest,
+  type CreateTaskInput,
   type TaskResponse,
 } from '@caredesk/schemas';
 import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
@@ -29,7 +30,7 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<CreateTaskRequest>({
+  } = useForm<CreateTaskInput, unknown, CreateTaskRequest>({
     resolver: zodResolver(createTaskRequestSchema),
     // Without this the select shows its first option ("low") while the schema
     // default is "normal" — a user who never touches the field would silently
