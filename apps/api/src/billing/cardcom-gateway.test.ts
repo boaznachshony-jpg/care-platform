@@ -187,10 +187,10 @@ describe('CardcomProductBillingGateway', () => {
   it('throws a CardcomGatewayError when the API returns a non-zero ResponseCode', async () => {
     const fetcher = vi.fn(
       async () =>
-        new Response(
-          JSON.stringify({ ResponseCode: 1001, Description: 'Invalid terminal' }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
+        new Response(JSON.stringify({ ResponseCode: 1001, Description: 'Invalid terminal' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
     );
     const gateway = new CardcomProductBillingGateway(
       {
