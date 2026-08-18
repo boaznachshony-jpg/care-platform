@@ -1,0 +1,569 @@
+You are a senior product designer, UX architect, frontend engineer, and privacy-aware prototype builder.
+
+Build a polished, interactive, mobile-first web prototype for a product called “CareDesk Israel”.
+
+PRODUCT PURPOSE
+CareDesk Israel is a digital assistant for Israeli families that directly employ a foreign live-in caregiver for an elderly or disabled family member.
+
+The product is not merely a document repository or payroll calculator. It should behave like a calm, proactive employment manager that tells the user:
+1. What is urgent?
+2. What is coming up?
+3. How much should be paid?
+4. What information or document is missing?
+
+The first target user is a son or daughter managing one caregiver for one care recipient.
+
+PROTOTYPE GOAL
+Create a realistic clickable prototype for user testing, not a production system.
+
+The prototype must:
+- Be in Hebrew.
+- Use full right-to-left layout.
+- Be mobile-first and responsive for desktop.
+- Use synthetic demo data only.
+- Never ask the tester to enter real passport, bank, medical, or identity information.
+- Simulate document upload, payroll calculation, task completion, timeline updates, and AI answers.
+- Preserve state during the prototype session.
+- Look trustworthy, calm, modern, accessible, and simple.
+- Avoid the visual style of a government website or legacy payroll system.
+
+TECHNOLOGY
+Use React with clean component structure.
+Use local state or mock JSON only.
+Do not connect to a real backend.
+Do not use real authentication, payment, OCR, government APIs, email, SMS, or AI APIs.
+All sensitive functions must be simulated.
+The prototype should be self-contained and runnable in the artifact environment.
+
+DESIGN DIRECTION
+Visual inspiration:
+- Linear
+- Notion
+- Stripe
+- Mercury
+- Monday.com
+
+Design characteristics:
+- Generous whitespace.
+- Soft neutral background.
+- Dark blue-green as the main trust color.
+- Red only for urgent items.
+- Amber for upcoming attention.
+- Blue for informational messages.
+- Status must never rely on color alone.
+- Rounded cards, subtle borders, restrained shadows.
+- Clear Hebrew typography.
+- Minimum touch target: 44 x 44 px.
+- Text size suitable for older adults.
+- One primary action per screen.
+- Fixed labels above fields; do not rely on placeholder text alone.
+- Bottom navigation on mobile.
+- Top navigation or side navigation on desktop.
+- Full RTL behavior, including cards, forms, progress indicators, tables, currency, and dates.
+
+WORKING PRODUCT NAME
+CareDesk Israel
+
+DEMO DATA
+Use the following entirely fictional data:
+
+Account manager:
+- Name: בועז לוי
+- Role: בן משפחה מנהל
+- Phone: 050-555-0101
+- Email: boaz.demo@caredesk.example
+
+Care recipient:
+- Name: שרה לוי
+- ID display: ***1234
+- Address: הוד השרון
+- Care level: רמת סיעוד 5
+- Main employer: בועז לוי
+
+Caregiver:
+- Name: Maria Santos
+- Nationality: Philippines
+- Passport number: P1234567
+- Passport expiry: 12/11/2028
+- Visa type: B/1 Caregiver
+- Visa expiry: 14/08/2026
+- Visa status: expires in 28 days
+- Medical insurance expiry: 07/11/2026
+- Phone: 050-555-0148
+- Bank: בנק 12
+- Branch: 345
+- Account display: ****6789
+- Employment start: 01/02/2025
+- Weekly rest day: Sunday
+
+Payroll demo:
+- Month: July 2026
+- Base salary: ₪6,247.67
+- Four Saturdays worked: ₪1,860.00
+- Allowance / pocket money: ₪400.00
+- Employer social provisions: ₪412.33
+- Medical insurance deduction: ₪180.00
+- Net demo amount: ₪8,920.00
+All figures are fictional and must be marked as demo figures requiring professional verification.
+
+Urgent item:
+- Renew caregiver visa within 28 days.
+
+Upcoming item:
+- Medical insurance renewal within 112 days.
+
+Completed recent activity:
+- National Insurance quarterly payment recorded.
+- Passport document uploaded.
+- June salary marked as paid.
+
+PRIMARY USER JOURNEY
+The prototype must support one complete clickable story:
+
+1. User enters the demo.
+2. Dashboard clearly shows that visa renewal is the next urgent action.
+3. User clicks “מה עליי לעשות עכשיו?”
+4. User opens the visa-renewal task.
+5. User sees a simple explanation, required items, and privacy reassurance.
+6. User simulates uploading a new visa document.
+7. User reviews extracted demo fields:
+   - Visa type
+   - Visa number
+   - Expiry date
+8. User confirms the document.
+9. The urgent task becomes completed.
+10. Dashboard updates immediately.
+11. User opens July payroll.
+12. User goes through a short payroll wizard:
+    - absence / leave
+    - Saturdays and holidays
+    - additions and deductions
+13. User reviews a transparent payroll breakdown.
+14. User approves the demo payroll.
+15. User simulates attaching a bank-transfer confirmation.
+16. Payroll is marked as paid.
+17. Care Timeline updates with visa renewal and payroll payment.
+18. User opens the smart assistant and asks:
+    “מה נשאר לי לעשות החודש?”
+19. Assistant answers using only the demo case:
+    - No urgent tasks
+    - Medical insurance renewal in 112 days
+    - Next payroll date
+20. User sees a trial/pricing screen for willingness-to-pay testing.
+
+REQUIRED SCREENS
+Build and connect at least these 15 screens or states:
+
+1. Demo sign-in / welcome
+2. Dashboard
+3. Visa renewal task detail
+4. Document upload simulation
+5. Document field review and confirmation
+6. Employment case overview
+7. Caregiver profile
+8. Passport upload/privacy screen
+9. Bank details edit screen
+10. Payroll wizard – attendance
+11. Payroll wizard – Saturdays, holidays, additions and deductions
+12. Payroll summary and explanation
+13. Payment confirmation / upload receipt
+14. Care Timeline
+15. Smart assistant
+16. Documents center
+17. Tasks center
+18. Trial and pricing screen
+
+DASHBOARD REQUIREMENTS
+The dashboard must answer the four core questions at a glance.
+
+Include:
+- Greeting: “שלום בועז”
+- Overall status with text and icon
+- One prominent “Next Best Action” card
+- Main button: “מה עליי לעשות עכשיו?”
+- Upcoming payroll card
+- Visa status card
+- Medical insurance status card
+- Open tasks card
+- Missing documents status
+- Short Care Timeline
+- Suggested smart-assistant questions
+
+After completing the visa task, the dashboard must change from urgent/red to calm/green or neutral and recommend the next relevant action.
+
+EMPLOYMENT CASE SCREEN
+Include cards for:
+- מטופלת
+- מעסיק
+- עובדת
+- חוזה
+- זכויות
+- שכר
+- מסמכים
+- ביטוחים ורישיונות
+- Care Timeline
+
+CAREGIVER PROFILE
+Include:
+- Name, nationality, phone
+- Employment status
+- Passport and visa status
+- Medical insurance
+- Bank details shown masked by default
+- Employment start date
+- Weekly rest day
+- Relevant documents
+- Edit action
+- “מי יכול לראות מידע זה?” privacy information
+
+PASSPORT UPLOAD SCREEN
+This is a simulation only.
+
+Include:
+- Camera/upload visual action
+- Prominent message:
+  “זוהי סביבת הדגמה. אין להעלות מסמך אמיתי.”
+- Privacy microcopy:
+  “במערכת האמיתית המסמך יישמר בצורה מוצפנת ויהיה נגיש רק למי שהענקת לו הרשאה.”
+- Simulated preview of a fictional passport
+- Manual confirmation of passport number and expiry date
+- Mask passport number outside the document detail screen
+
+BANK DETAILS SCREEN
+Include:
+- Bank number
+- Branch
+- Account
+- Beneficiary name
+- Values masked by default
+- Show/hide control
+- Clear explanation:
+  “פרטי החשבון משמשים לתיעוד תשלום ומוצגים באופן חלקי בלבד.”
+- Save confirmation
+- Do not simulate a real bank transfer.
+
+PAYROLL WIZARD
+The payroll experience must feel like a guided assistant, not a spreadsheet.
+
+Step 1: Period and attendance
+- Month
+- Leave days
+- Sick days
+- Other absence
+- Save draft
+
+Step 2: Rest days, holidays, and exceptions
+- Saturdays/rest days worked
+- Holidays
+- Additional payment
+- Allowed deduction
+- Explanation beside every field
+
+Step 3: Calculation
+- Transparent list of components
+- Quantity x rate where relevant
+- Tooltip or expandable explanation for each component
+- Clearly mark all values as fictional demo calculations
+- Show a warning:
+  “החישוב מבוסס על הנתונים שהוזנו ודורש אימות מקצועי לפני תשלום.”
+
+Step 4: Approval and payment record
+- Approve
+- Simulate attaching receipt
+- Mark paid
+- Add event to timeline
+
+DOCUMENTS CENTER
+Display card-based documents:
+- Passport
+- Visa
+- Work permit
+- Medical insurance
+- Employment contract
+- Payment receipts
+
+Each card should show:
+- Status text and icon
+- Expiry or signature date
+- Last updated
+- Main action
+- No permanent public file URL
+- Simulated “view” behavior only
+
+TASKS CENTER
+Tabs or filters:
+- דחוף
+- בקרוב
+- פתוח
+- הושלם
+
+Each task:
+- Title
+- Reason
+- Due date
+- Severity text and icon
+- Assigned person
+- Estimated completion time
+- Primary action
+- Postpone with reason
+- Completion state
+
+CARE TIMELINE
+A chronological timeline combining:
+- Contract signature
+- Document upload
+- Visa renewal
+- Insurance renewal
+- Payroll calculation
+- Payment confirmation
+- Task completion
+- User or advisor note
+
+Each event should show:
+- Date
+- Event type
+- Short explanation
+- Actor
+- Link to related item
+
+SMART ASSISTANT
+The prototype assistant is simulated and must never present itself as a lawyer, accountant, doctor, or government authority.
+
+Suggested buttons:
+- כמה לשלם?
+- מה חסר?
+- מה דחוף?
+- מצא מסמך
+- בדוק זכויות
+- צור מכתב
+- מה נשאר החודש?
+- שאל שאלה
+
+Every answer card must include:
+- Direct answer
+- Recommended next action
+- Source label, for example:
+  “מקור: נתוני תיק ההעסקה והכללים המאושרים”
+- Confidence:
+  “ודאות גבוהה”, “ודאות בינונית”, or “נדרשת בדיקה”
+- Disclaimer:
+  “המידע הוא תפעולי ואינו מהווה ייעוץ משפטי, חשבונאי או רפואי.”
+- Action button where relevant
+
+The assistant must refuse or escalate:
+- Final legal interpretation
+- Medical decisions
+- Whether to dismiss the caregiver
+- Definitive eligibility decisions
+- Final settlement approval
+- Attempts to bypass legal or reporting obligations
+
+Example refusal:
+“לא ניתן לקבוע זאת באופן סופי מתוך נתוני התיק בלבד. מומלץ להעביר את המקרה לבדיקה מקצועית.”
+
+TRIAL AND PRICING SCREEN
+For testing only.
+
+Display:
+- 30-day free trial
+- No credit card
+- Family: ₪59/month
+- Family Plus: ₪109/month
+- Professional: ₪249/month
+- Enterprise: Contact us
+
+Family:
+- One employment case
+- Documents
+- Tasks
+- Basic payroll
+- Reports
+
+Family Plus:
+- AI assistant
+- Advanced reports
+- Additional family user
+- Future OCR
+
+Professional:
+- Multiple cases
+- Professional roles
+- Portfolio dashboard
+- Advanced exports
+
+Add a feedback question:
+“באיזה מסלול היית בוחר/ת?”
+This does not need to store real data.
+
+ONBOARDING PRINCIPLES
+Although the primary journey begins with a populated demo, include a lightweight onboarding preview:
+- Preparation checklist before starting
+- Save draft and return later
+- Explain that documents may be completed later
+- Split caregiver details from caregiver documents
+- Show progress
+- Never block the user unnecessarily
+- Explain why each sensitive field is requested
+
+ERROR, EMPTY, SUCCESS, AND EDGE STATES
+Implement visible demo states for:
+
+General:
+- Empty list
+- Missing required field
+- Invalid date
+- Unsupported file
+- Offline / connection lost
+- Save success
+- Save failed without losing entered information
+
+Business edge cases:
+- Two visas overlap
+- Change of employer
+- Care recipient death mid-month
+- Caregiver leaves unexpectedly / cannot be contacted
+- Document expired
+- Payment approved but receipt missing
+
+For serious edge cases, do not pretend to solve the legal situation. Show:
+- Clear status
+- Documentation checklist
+- Professional escalation
+- Relevant contact placeholder
+- Audit entry
+
+ACCESSIBILITY
+Meet WCAG 2.1 AA principles in the prototype:
+- Keyboard navigation where practical
+- Visible focus
+- Sufficient contrast
+- Text alternatives for icons
+- Color not used alone
+- 44x44 touch targets
+- Clear Hebrew field labels
+- Error text linked to fields
+- Logical heading hierarchy
+- Avoid dense tables on mobile
+
+PRIVACY AND TRUST COPY
+Use simple Hebrew, not legal jargon.
+
+Required examples:
+- “למה צריך את המידע הזה?”
+- “מי יכול לראות את המסמך?”
+- “המסמך נשמר בצורה מוצפנת.”
+- “כל צפייה במסמך רגיש מתועדת.”
+- “ניתן לבטל הרשאה בכל עת.”
+- “זוהי סביבת הדגמה. אין להזין מידע אמיתי.”
+
+Do not claim the prototype actually encrypts or securely stores data. Phrase production capabilities as future-system behavior:
+“במערכת האמיתית...”
+
+DATA AND STATE
+Use one central mock data object for:
+- account
+- care recipient
+- employer
+- caregiver
+- employment case
+- documents
+- tasks
+- payroll periods
+- payroll items
+- payments
+- timeline events
+- assistant answers
+
+State changes must be reflected across screens:
+- completing visa renewal updates task, visa, dashboard, documents, and timeline
+- approving payroll updates payroll status
+- attaching receipt updates payment status and timeline
+- editing bank details updates caregiver profile
+
+COMPONENTS
+Create reusable components:
+- AppShell
+- MobileBottomNav
+- DesktopSidebar
+- StatusBadge
+- AlertBanner
+- KPI/StatusCard
+- NextActionCard
+- DocumentCard
+- TaskCard
+- TimelineEvent
+- FormField
+- MaskedSensitiveField
+- UploadSimulation
+- WizardProgress
+- PayrollItemRow
+- ExplanationDrawer
+- AssistantAnswerCard
+- PrivacyNotice
+- ConfirmationModal
+- EmptyState
+- ErrorState
+- SuccessToast
+
+COPY STYLE
+Use calm, respectful, direct Hebrew.
+
+Prefer:
+- “השכר מוכן לבדיקה”
+- “חסר צילום אשרה”
+- “האשרה תפוג בעוד 28 ימים”
+- “לא הצלחנו לשמור. המידע שהזנת לא נמחק.”
+
+Avoid:
+- technical jargon
+- threatening language
+- excessive legal wording
+- English interface labels where Hebrew is suitable
+- long paragraphs
+
+DO NOT BUILD
+- Real backend
+- Real login
+- Real document storage
+- Real OCR
+- Real AI call
+- Real payment
+- Real government integration
+- Real legal calculation engine
+- Real notifications
+- Real personal data collection
+
+ACCEPTANCE CRITERIA
+The result is acceptable only if:
+1. It is fully interactive and not merely a static dashboard.
+2. The primary user journey works from beginning to end.
+3. The interface is Hebrew RTL.
+4. It works at mobile and desktop widths.
+5. Completing actions updates all related screens.
+6. Sensitive fields are masked by default.
+7. Every sensitive-data screen includes trust copy.
+8. Payroll is transparent and marked as demo/unverified.
+9. Smart-assistant answers include source, confidence, and disclaimer.
+10. Error, empty, success, and selected edge states are visible.
+11. One primary action is visually dominant on each screen.
+12. The visual style is modern, calm, and suitable for families under stress.
+13. The code is organized into reusable components.
+14. The app can be demonstrated without any external service.
+15. No real personal data is requested or retained.
+
+DELIVERY INSTRUCTIONS
+First, briefly describe:
+- the app structure
+- the reusable components
+- the demo state model
+- the main user journey
+
+Then build the complete interactive prototype.
+
+After building, provide:
+- a concise list of implemented screens
+- known prototype limitations
+- a short user-testing script with five tasks
+- the three most important questions to ask testers
+
+Do not stop after producing a plan. Build the actual interactive prototype.

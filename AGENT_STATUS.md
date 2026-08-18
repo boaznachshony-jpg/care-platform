@@ -17,8 +17,12 @@ This dashboard is the shared coordination state for concurrent engineering agent
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Current delivery coordination | — | Orchestrator | `main` | — | ACTIVE | — | n/a | None recorded | Assign each new task through an Issue and update this row set before parallel implementation |
 | Wave 3 canonical Product Intelligence closure | — | Codex primary | `codex/finalize-wave-3-closure-for-product-intelligence` | #48 | DONE | — | no | None; merged main CI succeeded at `a97f61f` | Retain as completed dependency evidence |
-| Final capability and production-readiness assessment | — | Codex primary | `codex/final-product-gap-production-readiness` | — | ACTIVE | PR #48 | no | No implementation blocker; production/provider prerequisites documented separately | Validate governance-only diff, commit, and open the governance PR |
-| Pipedream CI monitoring | #51 | Codex Pipedream CI task | `agent/add-pipedream-ci-monitoring` | #53 | IN_REVIEW | — | yes | Pipedream returns HTTP 401 without affecting CI | Align the repository token with Pipedream authentication, rerun CI, and do not merge until explicitly approved |
+| Final capability and production-readiness assessment | — | Codex primary | `codex/final-product-gap-production-readiness` | #50 | DONE | PR #48 | no | None; merged at `dc98410` | Retain as production-readiness scope authority |
+| Emergency Binder, Event Wizard, and monthly-close cleanup | — | Codex primary | `codex/perform-final-product-gap-closure-review` | #52 | BLOCKED | PR #50 | no | Branch synchronized locally at `b90dc79`, but Playwright Chromium download is forbidden (HTTP 403) and GitHub credentials are unavailable for push/merge | Run hosted E2E and push the synchronized merge commit from an authenticated environment; payroll work may continue because the blocker does not overlap it |
+| Canonical payroll UI and Future Cost cutover | #54 | Codex primary | `codex/case-scoped-payroll-ui-cutover` | — | BLOCKED | PR #55 merged at `f5d7bc8` | no | `origin` remote, live PostgreSQL, and hosted browser/CI access are unavailable; local quality gates pass | Push the committed branch, open the prepared Issue #54 PR, and run PostgreSQL RLS plus hosted Playwright/CI from an authenticated environment |
+| Pipedream CI monitoring | #51 | Agent | `feat/pipedream-ci-monitoring` | #53 | DONE | — | yes | None | Merged at `a38cadd`; Pipedream webhook + GitHub Secrets configured; closes #51 |
+| Binder + Wizard canonical data sources | #63 | Agent (P1) | `fix/binder-wizard-canonical-closure` | #67 | DONE | — | yes | None | Merged |
+| CanonicalPayrollIntelligence reconciliation purge | #62 | Agent (P1) | `fix/legacy-payroll-reconciliation` | #68 | DONE | — | yes | None | Merged at `857ec88` |
 
 ## Required status values
 

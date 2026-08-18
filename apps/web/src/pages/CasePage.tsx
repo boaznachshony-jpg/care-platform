@@ -86,7 +86,7 @@ export function CasePage() {
         <dd dir="ltr">{data.startDate}</dd>
       </dl>
 
-      <AutomationPanel />
+      <AutomationPanel caseId={data.id} />
       <ProductCompletionPanel caseId={data.id} />
       <CanonicalPayrollIntelligence caseId={data.id} />
 

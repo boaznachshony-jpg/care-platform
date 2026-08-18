@@ -1,5 +1,9 @@
 # CareDesk build status
 
+## Canonical payroll cutover candidate (2026-08-17)
+
+The authenticated case page now contains the canonical payroll-entry editor with optimistic locking, explicit conflict recovery, and a user-confirmed legacy preparation path that does not delete or dual-write MVP data. Future Cost precedence is closed `payroll_month_close`, then open `payroll_entry`, then deterministic forecast/unknown. Local and hosted validation evidence is still required before this candidate is production-ready.
+
 Status date: **2026-08-16**
 
 ## Wave 3 canonical Product Intelligence closure (2026-08-16)

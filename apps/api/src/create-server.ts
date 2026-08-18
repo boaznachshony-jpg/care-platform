@@ -19,6 +19,7 @@ import { InMemoryRateLimiter } from './rate-limit.js';
 import { registerWave5Routes } from './routes/wave5.js';
 import { registerProductDifferentiationRoutes } from './routes/product-differentiation.js';
 import { registerCanonicalProductIntelligenceRoutes } from './routes/canonical-product-intelligence.js';
+import { registerPayrollEntryRoutes } from './routes/payroll-entries.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -164,6 +165,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerWave5Routes(app, container);
   registerProductDifferentiationRoutes(app, container, productRateLimiter);
   registerCanonicalProductIntelligenceRoutes(app, container);
+  registerPayrollEntryRoutes(app, container, productRateLimiter);
 
   return app;
 }
