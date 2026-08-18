@@ -13,7 +13,11 @@ export const createTaskRequestSchema = z.object({
    * string is normalised away first — otherwise leaving this optional field
    * blank fails the regex and blocks the whole form.
    */
-  dueDate: z.preprocess((value) => (value === '' ? undefined : value), isoDateSchema.optional()),
+  dueDate: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v))
+    .pipe(isoDateSchema.optional()),
 });
 
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;

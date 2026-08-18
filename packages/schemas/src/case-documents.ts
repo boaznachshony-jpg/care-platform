@@ -39,7 +39,11 @@ export const uploadDocumentRequestSchema = z.object({
    * string is normalised away first — otherwise leaving this optional field
    * blank fails the regex and silently blocks the whole form.
    */
-  expiresOn: z.preprocess((value) => (value === '' ? undefined : value), isoDateSchema.optional()),
+  expiresOn: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v))
+    .pipe(isoDateSchema.optional()),
 });
 
 export type UploadDocumentRequest = z.infer<typeof uploadDocumentRequestSchema>;

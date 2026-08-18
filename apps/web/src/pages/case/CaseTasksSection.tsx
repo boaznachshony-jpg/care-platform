@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { TASK_PRIORITIES } from '@caredesk/domain';
 import {
   createTaskRequestSchema,
+  type CreateTaskRequest,
   type TaskResponse,
 } from '@caredesk/schemas';
 import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
@@ -28,7 +29,7 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm({
+  } = useForm<CreateTaskRequest>({
     resolver: zodResolver(createTaskRequestSchema),
     // Without this the select shows its first option ("low") while the schema
     // default is "normal" — a user who never touches the field would silently
