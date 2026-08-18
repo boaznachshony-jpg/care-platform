@@ -237,3 +237,76 @@ jobs:
           test "$POSTGRES_RLS_RESULT" = success
           test "$E2E_RESULT" = success
           test "$SECRET_SCAN_RESULT" = success
+
+  notify-pipedream:
+    name: Report final CI result to Pipedream
+    if: ${{ always() }}
+    needs: required-quality-gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure-isolated CI notification
+        env:
+          PIPEDREAM_CI_WEBHOOK_URL: ${{ secrets.PIPEDREAM_CI_WEBHOOK_URL }}
+          PIPEDREAM_CI_TOKEN: ${{ secrets.PIPEDREAM_CI_TOKEN }}
+          CI_CONCLUSION: ${{ needs.required-quality-gates.result }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set +e
+
+          case "$PIPEDREAM_CI_WEBHOOK_URL" in
+            https://*) ;;
+            *)
+              echo "::warning::Pipedream CI notification skipped because its HTTPS configuration is unavailable."
+              exit 0
+              ;;
+          esac
+
+          if [ -z "$PIPEDREAM_CI_TOKEN" ]; then
+            echo "::warning::Pipedream CI notification skipped because its authentication configuration is unavailable."
+            exit 0
+          fi
+
+          payload="$(jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$RUN_ATTEMPT" \
+            --arg ref "$GITHUB_REF" \
+            --arg sha "$GITHUB_SHA" \
+            --arg event_name "$GITHUB_EVENT_NAME" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg conclusion "$CI_CONCLUSION" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg timestamp "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '{
+              repository: $repository,
+              workflow: $workflow,
+              run_id: $run_id,
+              run_attempt: $run_attempt,
+              ref: $ref,
+              sha: $sha,
+              event_name: $event_name,
+              actor: $actor,
+              conclusion: $conclusion,
+              run_url: $run_url,
+              timestamp: $timestamp
+            }')"
+
+          http_status="$(curl --silent \
+            --fail \
+            --output /dev/null \
+            --write-out "%{http_code}" \
+            --max-time 10 \
+            --request POST \
+            --header "Authorization: Bearer $PIPEDREAM_CI_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            "$PIPEDREAM_CI_WEBHOOK_URL" \
+            2>/dev/null)"
+          curl_exit="$?"
+
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::warning::Pipedream CI notification failed without affecting CI (curl exit $curl_exit, HTTP ${http_status:-000})."
+          fi
+
+          exit 0
