@@ -140,4 +140,70 @@ describe('/billing routes', () => {
       nextChargeOn: null,
     });
   });
+
+  // ── Auth and security edge cases ──────────────────────────────────────────
+
+  it('rejects GET /billing/subscription without a valid session token', async () => {
+    const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock' }));
+    const response = await app.inject({ method: 'GET', url: '/billing/subscription' });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('rejects DELETE /billing/subscription without a valid session token', async () => {
+    const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock' }));
+    const response = await app.inject({ method: 'DELETE', url: '/billing/subscription' });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('rejects the cron job when the secret is wrong', async () => {
+    const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock', CRON_SECRET }));
+    const response = await app.inject({
+      method: 'GET',
+      url: '/billing/jobs/collect',
+      headers: { authorization: 'Bearer wrong-secret' },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('rejects the cron job when the Authorization header is absent', async () => {
+    const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock', CRON_SECRET }));
+    const response = await app.inject({ method: 'GET', url: '/billing/jobs/collect' });
+    expect(response.statusCode).toBe(401);
+  });
+
+  // ── Webhook via query string ──────────────────────────────────────────────
+
+  it('accepts the Cardcom webhook when LowProfileId arrives as a query parameter', async () => {
+    const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock', CRON_SECRET }));
+    // First create a setup so there is something to verify
+    await app.inject({
+      method: 'POST',
+      url: '/billing/payment-method/setup',
+      headers: AUTH,
+      payload: {
+        billingName: 'Query Param Customer',
+        billingEmail: 'qp@example.test',
+        acceptsRecurringCharge: true,
+        termsVersion: BILLING_TERMS_VERSION,
+      },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/billing/webhooks/cardcom?LowProfileId=10000000-0000-4000-8000-000000000001',
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ received: true });
+  });
+
+  it('returns 400 when the Cardcom webhook contains no recognisable LowProfileId', async () => {
+    const app = buildServer(loadEnv({ BILLING_PROVIDER: 'mock' }));
+    const response = await app.inject({
+      method: 'POST',
+      url: '/billing/webhooks/cardcom',
+      payload: { unrelated: 'field' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'INVALID_BILLING_WEBHOOK' });
+  });
 });
