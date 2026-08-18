@@ -46,8 +46,8 @@ describe('Israeli ID validation', () => {
   });
 
   it('rejects inputs containing SQL-injection-style characters', () => {
-    expect(isValidIsraeliId("1; DROP TABLE--")).toBe(false);
-    expect(getIsraeliIdValidationError("1; DROP TABLE--")).toBe('characters');
+    expect(isValidIsraeliId('1; DROP TABLE--')).toBe(false);
+    expect(getIsraeliIdValidationError('1; DROP TABLE--')).toBe('characters');
   });
 
   it('rejects a 10-digit number even when leading digit is zero', () => {
