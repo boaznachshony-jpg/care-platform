@@ -55,7 +55,7 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<Pick<UploadDocumentRequest, 'documentType' | 'expiresOn'>>({
+  } = useForm({
     resolver: zodResolver(
       uploadDocumentRequestSchema.pick({ documentType: true, expiresOn: true }),
     ),
