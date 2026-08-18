@@ -42,7 +42,10 @@ vi.mock('../hooks/use-mvp-profile.js', () => ({
 }));
 
 vi.mock('../hooks/use-client-path.js', () => ({
-  useClientPath: () => (path: string = '/') => path,
+  useClientPath:
+    () =>
+    (path: string = '/') =>
+      path,
 }));
 
 function renderPage() {

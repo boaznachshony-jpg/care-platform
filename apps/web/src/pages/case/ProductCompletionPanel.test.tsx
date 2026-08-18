@@ -88,9 +88,7 @@ describe('ProductCompletionPanel', () => {
 
   it('shows no reviews message when reviews list is empty', async () => {
     renderPanel();
-    await waitFor(() =>
-      expect(screen.getByText('אין בקשות בדיקה פתוחות.')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('אין בקשות בדיקה פתוחות.')).toBeInTheDocument());
   });
 
   it('calls getCaseHealth and listProfessionalReviews on mount', async () => {

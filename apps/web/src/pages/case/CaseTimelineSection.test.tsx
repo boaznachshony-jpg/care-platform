@@ -37,9 +37,7 @@ describe('CaseTimelineSection', () => {
 
     it('shows empty state when no events', async () => {
       renderSection();
-      await waitFor(() =>
-        expect(screen.getByText('אין עדיין אירועים בתיק.')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('אין עדיין אירועים בתיק.')).toBeInTheDocument());
     });
   });
 
@@ -67,16 +65,12 @@ describe('CaseTimelineSection', () => {
 
     it('renders a list of timeline events', async () => {
       renderSection();
-      await waitFor(() =>
-        expect(screen.getByRole('list')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByRole('list')).toBeInTheDocument());
     });
 
     it('displays the translated event summary', async () => {
       renderSection();
-      await waitFor(() =>
-        expect(screen.getByText('תיק ההעסקה נפתח')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('תיק ההעסקה נפתח')).toBeInTheDocument());
     });
   });
 });

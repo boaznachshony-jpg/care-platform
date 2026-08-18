@@ -1,0 +1,174 @@
+import type {
+  CreateTaskRecord,
+  TaskRepository,
+  TimelineEventInput,
+  TimelineRepository,
+  TimelineService,
+} from '@caredesk/application';
+import { brandId, type Task, type TimelineEvent } from '@caredesk/domain';
+import type { Pool } from 'pg';
+import { withTenant } from './pool.js';
+
+interface TaskRow {
+  id: string;
+  tenant_id: string;
+  employment_case_id: string;
+  title: string | null;
+  title_key: string | null;
+  description: string | null;
+  status: string;
+  priority: string;
+  due_at: Date | null;
+  completed_at: Date | null;
+  source_type: string;
+}
+
+function toTask(row: TaskRow): Task {
+  return {
+    id: brandId(row.id),
+    tenantId: brandId(row.tenant_id),
+    employmentCaseId: brandId(row.employment_case_id),
+    title: row.title,
+    titleKey: row.title_key,
+    description: row.description,
+    status: row.status as Task['status'],
+    priority: row.priority as Task['priority'],
+    dueAt: row.due_at ? row.due_at.toISOString() : null,
+    completedAt: row.completed_at ? row.completed_at.toISOString() : null,
+    sourceType: row.source_type as Task['sourceType'],
+  };
+}
+
+const TASK_COLUMNS = `id, tenant_id, employment_case_id, title, title_key, description,
+  status, priority, due_at, completed_at, source_type`;
+
+export class PgTaskRepository implements TaskRepository {
+  constructor(private readonly pool: Pool) {}
+
+  async createTask(input: CreateTaskRecord): Promise<Task> {
+    return withTenant(this.pool, input.tenantId, async (client) => {
+      const result = await client.query<TaskRow>(
+        `insert into task
+           (id, tenant_id, employment_case_id, title, description, priority, due_at, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)
+         returning ${TASK_COLUMNS}`,
+        [
+          input.id,
+          input.tenantId,
+          input.employmentCaseId,
+          input.title,
+          input.description,
+          input.priority,
+          input.dueAt,
+          input.createdBy,
+        ],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        throw new Error('Task insert returned no row.');
+      }
+      return toTask(row);
+    });
+  }
+
+  async listTasks(tenantId: string, employmentCaseId: string): Promise<Task[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TaskRow>(
+        `select ${TASK_COLUMNS} from task
+         where employment_case_id = $1
+         order by (status = 'completed'), due_at nulls last, created_at asc`,
+        [employmentCaseId],
+      );
+      return result.rows.map(toTask);
+    });
+  }
+
+  async findTask(tenantId: string, taskId: string): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TaskRow>(`select ${TASK_COLUMNS} from task where id = $1`, [
+        taskId,
+      ]);
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+
+  async completeTask(
+    tenantId: string,
+    taskId: string,
+    completedAt: string,
+    completedBy: string,
+  ): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      // `status <> 'completed'` makes this idempotent: a repeated request
+      // matches no row rather than rewriting the original completion time.
+      const result = await client.query<TaskRow>(
+        `update task
+            set status = 'completed', completed_at = $2, completed_by = $3,
+                updated_at = now(), updated_by = $3, version = version + 1
+          where id = $1 and status <> 'completed'
+         returning ${TASK_COLUMNS}`,
+        [taskId, completedAt, completedBy],
+      );
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+}
+
+interface TimelineRow {
+  id: string;
+  tenant_id: string;
+  employment_case_id: string;
+  event_type_key: string;
+  summary_key: string;
+  occurred_at: Date;
+  actor_display: string | null;
+  sensitivity: string;
+}
+
+/** Writes timeline events (TimelineService) and reads them back (TimelineRepository). */
+export class PgTimelineService implements TimelineService, TimelineRepository {
+  constructor(private readonly pool: Pool) {}
+
+  async record(event: TimelineEventInput): Promise<void> {
+    await withTenant(this.pool, event.tenantId, async (client) => {
+      await client.query(
+        `insert into timeline_event
+           (tenant_id, employment_case_id, event_type_key, summary_key, occurred_at, sensitivity)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [
+          event.tenantId,
+          event.employmentCaseId,
+          event.eventTypeKey,
+          event.summaryKey,
+          event.occurredAt,
+          event.sensitivity,
+        ],
+      );
+    });
+  }
+
+  async listTimeline(tenantId: string, employmentCaseId: string): Promise<TimelineEvent[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TimelineRow>(
+        `select id, tenant_id, employment_case_id, event_type_key, summary_key,
+                occurred_at, actor_display, sensitivity
+           from timeline_event
+          where employment_case_id = $1
+          order by occurred_at desc`,
+        [employmentCaseId],
+      );
+      return result.rows.map((row): TimelineEvent => ({
+        id: brandId(row.id),
+        tenantId: brandId(row.tenant_id),
+        employmentCaseId: brandId(row.employment_case_id),
+        eventTypeKey: row.event_type_key,
+        summaryKey: row.summary_key,
+        occurredAt: row.occurred_at.toISOString(),
+        actorDisplay: row.actor_display,
+        sensitivity: row.sensitivity as TimelineEvent['sensitivity'],
+      }));
+    });
+  }
+}

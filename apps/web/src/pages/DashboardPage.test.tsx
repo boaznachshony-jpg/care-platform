@@ -44,7 +44,10 @@ vi.mock('../hooks/use-mvp-profile.js', () => ({
 }));
 
 vi.mock('../hooks/use-client-path.js', () => ({
-  useClientPath: () => (path: string = '/') => path,
+  useClientPath:
+    () =>
+    (path: string = '/') =>
+      path,
 }));
 
 vi.mock('../api/client.js', () => ({
@@ -99,8 +102,6 @@ describe('DashboardPage', () => {
 
   it('calls getCaseHealth with the clientId from params', async () => {
     renderPage('client-demo-001');
-    await waitFor(() =>
-      expect(mockGetCaseHealth).toHaveBeenCalledWith('client-demo-001'),
-    );
+    await waitFor(() => expect(mockGetCaseHealth).toHaveBeenCalledWith('client-demo-001'));
   });
 });

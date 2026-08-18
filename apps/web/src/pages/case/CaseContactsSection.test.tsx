@@ -71,16 +71,12 @@ describe('CaseContactsSection', () => {
     it('displays the contact organization name', async () => {
       renderSection();
       // organizationName is rendered as " · תאגיד בדיקה" inside the <li> — use regex
-      await waitFor(() =>
-        expect(screen.getByText(/תאגיד בדיקה/)).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText(/תאגיד בדיקה/)).toBeInTheDocument());
     });
 
     it('displays the primary contact badge', async () => {
       renderSection();
-      await waitFor(() =>
-        expect(screen.getByText('ראשי')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('ראשי')).toBeInTheDocument());
     });
   });
 });

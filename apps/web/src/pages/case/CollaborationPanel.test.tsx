@@ -13,15 +13,9 @@ const EMPTY_COLLABORATION = {
 };
 
 const LOADED_COLLABORATION = {
-  members: [
-    { id: 'mem-001', display_name: 'ישראל ישראלי', role: 'manager', status: 'active' },
-  ],
-  responsibilities: [
-    { responsibility: 'payroll', assignee_membership_id: 'mem-001' },
-  ],
-  tasks: [
-    { id: 'task-001', title: 'חידוש אשרה', assignee_membership_id: null },
-  ],
+  members: [{ id: 'mem-001', display_name: 'ישראל ישראלי', role: 'manager', status: 'active' }],
+  responsibilities: [{ responsibility: 'payroll', assignee_membership_id: 'mem-001' }],
+  tasks: [{ id: 'task-001', title: 'חידוש אשרה', assignee_membership_id: null }],
   requests: [],
 };
 
@@ -58,9 +52,7 @@ describe('CollaborationPanel', () => {
 
     it('shows error message on fetch failure', async () => {
       renderPanel();
-      await waitFor(() =>
-        expect(screen.getByRole('alert')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
       expect(screen.getByText(/could not be loaded/)).toBeInTheDocument();
     });
   });
@@ -99,9 +91,7 @@ describe('CollaborationPanel', () => {
 
     it('shows no open requests message when requests list is empty', async () => {
       renderPanel();
-      await waitFor(() =>
-        expect(screen.getByText('No open requests.')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText('No open requests.')).toBeInTheDocument());
     });
   });
 

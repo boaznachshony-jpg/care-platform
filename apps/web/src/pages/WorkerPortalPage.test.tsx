@@ -60,9 +60,7 @@ describe('WorkerPortalPage', () => {
 
     it('shows access error message on failure', async () => {
       renderPage();
-      await waitFor(() =>
-        expect(screen.getByRole('alert')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
       expect(
         screen.getByText('אין גישה פעילה לאזור המטפל. ייתכן שההזמנה פגה או שהגישה בוטלה.'),
       ).toBeInTheDocument();
