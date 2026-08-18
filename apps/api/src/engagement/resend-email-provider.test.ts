@@ -93,7 +93,7 @@ describe('ResendEmailProvider', () => {
       html: '<p>HTML body</p>',
       replyTo: 'noreply@example.test',
     });
-    const body = JSON.parse(request.mock.calls[0][1].body as string) as Record<string, unknown>;
+    const body = JSON.parse(request.mock.calls[0]![1]!.body as string) as Record<string, unknown>;
     expect(body.html).toBe('<p>HTML body</p>');
     expect(body.reply_to).toBe('noreply@example.test');
   });
@@ -106,7 +106,7 @@ describe('ResendEmailProvider', () => {
       { apiKey: 'server-only-key', fromEmail: 'support@example.test' },
       request,
     ).send(email);
-    const body = JSON.parse(request.mock.calls[0][1].body as string) as Record<string, unknown>;
+    const body = JSON.parse(request.mock.calls[0]![1]!.body as string) as Record<string, unknown>;
     expect(body).not.toHaveProperty('html');
     expect(body).not.toHaveProperty('reply_to');
   });
