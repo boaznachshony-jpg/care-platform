@@ -42,7 +42,7 @@ describe('Israeli ID validation', () => {
 
   it('rejects Unicode Arabic-Indic digit strings (not ASCII digits)', () => {
     // ١٢٣٤٥٦٧٨٩ are Eastern Arabic numerals — must not bypass the numeric-only rule
-    expect(getIsraeliIdValidationError('\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669')).toBe('characters');
+    expect(getIsraeliIdValidationError('١٢٣٤٥٦٧٨٩')).toBe('characters');
   });
 
   it('rejects inputs containing SQL-injection-style characters', () => {
