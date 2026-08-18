@@ -214,7 +214,10 @@ describe('CardcomProductBillingGateway', () => {
 
   it('throws a CardcomGatewayError when the HTTP request itself fails (non-2xx)', async () => {
     const fetcher = vi.fn(async () =>
-      new Response(JSON.stringify({}), { status: 503, headers: { 'content-type': 'application/json' } }),
+      new Response(JSON.stringify({}), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      }),
     );
     const gateway = new CardcomProductBillingGateway(
       {
