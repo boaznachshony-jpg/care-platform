@@ -1,0 +1,10 @@
+# Normalize all text files to LF in the repository, regardless of the
+# contributor's OS — prevents CRLF churn from showing hundreds of files as
+# modified on Windows.
+* text=auto eol=lf
+
+# Binary formats — never normalize.
+*.docx binary
+*.png binary
+*.jpg binary
+*.pdf binary

@@ -1,0 +1,2122 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
+  <title>CareDesk Israel — Prototype</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    :root { --fs-xs: 15px; --fs-sm: 18px; --fs-base: 21px; --fs-md: 24px; --fs-lg: 28px; --fs-xl: 34px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+    html, body { font-size: var(--fs-base); }
+    body { background: #f0f4f8; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+    .phone-shell {
+      width: 100%; max-width: 430px; min-height: 100vh; background: #fff;
+      overflow: hidden; position: relative; display: flex; flex-direction: column;
+    }
+    @media (min-width: 480px) {
+      body { align-items: center; }
+      .phone-shell {
+        width: 430px; min-height: 844px; border-radius: 40px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      }
+    }
+    .status-bar {
+      background: #1a56db; color: white; padding: 12px 20px 8px;
+      font-size: var(--fs-sm); display: flex; justify-content: space-between;
+    }
+    .screen { flex: 1; overflow-y: auto; padding-bottom: 80px; background: #f8fafc; }
+    .screen-header {
+      background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
+      color: white; padding: 20px; text-align: center;
+    }
+    .screen-header h2 { font-size: var(--fs-lg); font-weight: 700; }
+    .screen-header p { font-size: var(--fs-sm); opacity: 0.85; margin-top: 4px; }
+    .card {
+      background: white; border-radius: 16px; padding: 18px;
+      margin: 12px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .card-title { font-size: var(--fs-sm); color: #64748b; margin-bottom: 4px; }
+    .card-value { font-size: var(--fs-xl); font-weight: 700; color: #1e293b; }
+    .card-sub { font-size: var(--fs-xs); color: #94a3b8; margin-top: 2px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 15px 20px; border-radius: 12px; font-size: var(--fs-base); font-weight: 600;
+      border: none; cursor: pointer; transition: all 0.2s; gap: 6px; min-height: 52px;
+    }
+    .btn-primary { background: #1a56db; color: white; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: #fee2e2; color: #dc2626; }
+    .btn-full { width: 100%; margin: 6px 0; }
+    .bottom-nav {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: white; border-top: 1px solid #e2e8f0;
+      display: flex; padding: 8px 0 4px;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 3px; cursor: pointer; padding: 6px 4px;
+      color: #94a3b8; font-size: var(--fs-xs); font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-item.active { color: #1a56db; }
+    .nav-icon { font-size: 26px; }
+    .demo-banner {
+      background: #fef3c7; border-bottom: 1px solid #fcd34d;
+      padding: 8px 16px; text-align: center;
+      font-size: var(--fs-xs); color: #92400e; font-weight: 600;
+    }
+    .badge {
+      display: inline-flex; align-items: center; padding: 4px 12px;
+      border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
+    }
+    .badge-green { background: #dcfce7; color: #16a34a; }
+    .badge-yellow { background: #fef9c3; color: #ca8a04; }
+    .badge-red { background: #fee2e2; color: #dc2626; }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .input-group { margin-bottom: 14px; }
+    .input-label { font-size: var(--fs-sm); color: #374151; margin-bottom: 6px; font-weight: 600; display: block; }
+    .input-field {
+      width: 100%; padding: 14px 14px; border: 1.5px solid #e2e8f0;
+      border-radius: 10px; font-size: var(--fs-base); color: #1e293b;
+      outline: none; transition: border 0.2s;
+    }
+    .input-field:focus { border-color: #1a56db; }
+    .section-title {
+      font-size: var(--fs-md); font-weight: 700; color: #1e293b;
+      margin: 16px 16px 4px;
+    }
+    .list-item {
+      background: white; padding: 16px 16px;
+      border-bottom: 1px solid #f1f5f9; display: flex;
+      align-items: center; gap: 12px;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: flex-end; justify-content: center;
+      z-index: 100;
+    }
+    .modal-sheet {
+      background: white; border-radius: 24px 24px 0 0;
+      padding: 24px; width: 390px; max-height: 80vh; overflow-y: auto;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
+    .rule-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 0; border-bottom: 1px solid #f1f5f9;
+    }
+    .rule-row:last-child { border-bottom: none; }
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .audit-table th {
+      background: #f8fafc; color: #64748b; font-weight: 600;
+      padding: 8px 10px; text-align: right; border-bottom: 1px solid #e2e8f0;
+    }
+    .audit-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+    .audit-table tr:last-child td { border-bottom: none; }
+    .user-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px; border-bottom: 1px solid #f1f5f9;
+    }
+    .user-avatar {
+      width: 42px; height: 42px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; background: #dbeafe; font-weight: 700;
+    }
+    .step-dot {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect } = React;
+
+/* ─── localStorage helpers ─── */
+const STORAGE_VERSION = "cd_v2";
+const load = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(STORAGE_VERSION + "_" + key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+};
+const save = (key, val) => {
+  try { localStorage.setItem(STORAGE_VERSION + "_" + key, JSON.stringify(val)); } catch {}
+};
+
+/* ─── Default state values — module-level constants (stable across renders) ─── */
+const defaultWorker = {
+  firstName: "מריה", lastName: "סנטוס",
+  passportId: "P12345678", visaType: "B1 — עבודה",
+  visaExp: "15/03/25", nationality: "פיליפינים 🇵🇭",
+  startDate: "01/02/2024", role: "מטפלת סיעוד",
+};
+const defaultDocs = [
+  { name: "דרכון",                 status: "תקף",              badge: "badge-green",  action: null },
+  { name: "ויזה B1",               status: "פגה בקרוב ⚠️",    badge: "badge-yellow", action: "חדש ויזה" },
+  { name: "חוזה עבודה",            status: "חתום",             badge: "badge-green",  action: "עדכן חוזה" },
+  { name: "ביטוח בריאות",          status: "חסר ❌",           badge: "badge-red",    action: "הוסף מסמך" },
+  { name: "אישור העסקה שנתי",      status: "תקף עד 31/12/2025", badge: "badge-green", action: "חדש אישור" },
+];
+const defaultTasks = [
+  { id: 1, text: "חדש ויזה — מריה סנטוס", done: false, urgent: true, due: "15/03/2025",
+    detail: "ויזה B1 של מריה פגה ב-15/03/2025. יש לפנות לרשות האוכלוסין לחידוש לפחות 30 יום לפני הפקיעה.", nav: "worker", navLabel: "עדכן ויזה" },
+  { id: 2, text: "הגש ד׳׳וח לרשות האוכלוסין", done: false, urgent: true, due: "28/02/2025",
+    detail: "דוח חודשי פברואר נדרש עד 28/02. עיכוב בהגשה עלול לגרור קנס מהרשות.", nav: null, navLabel: null },
+  { id: 3, text: "חשב שכר מרץ", done: false, urgent: false, due: "01/03/2025",
+    detail: "חישוב שכר מרץ כולל שעות נוספות, שבתות ודמי הבראה.", nav: "payroll", navLabel: "חשב שכר" },
+  { id: 4, text: "שלח אישור מס לרו׳׳ח", done: true, urgent: false, due: "10/02/2025",
+    detail: "אישור ניכוי מס במקור לשנת 2024 — הושלם ונשלח לרואה החשבון.", nav: null, navLabel: null },
+  { id: 5, text: "תשלום ביטוח לאומי רבעוני — Q1 2025", done: false, urgent: true, due: "30/04/2025",
+    detail: "תשלום דמי ביטוח לאומי רבעוני (ינואר–מרץ 2025). יש לשלם דרך אתר ביטוח לאומי לפני 30/04. אי תשלום בזמן כרוך בקנס פיגורים.", nav: null, navLabel: null },
+  { id: 6, text: "חידוש אישור העסקה שנתי", done: false, urgent: false, due: "01/12/2025",
+    detail: "אישור ההעסקה השנתי פוקע ב-31/12/2025. יש לחדשו מול רשות האוכלוסין לפחות 30 יום לפני הפקיעה.", nav: "worker", navLabel: "עדכן מסמך" },
+];
+const defaultObligations = [
+  /* ── הקמה ראשונית ── */
+  { id:"o1",  cat:"הקמה ראשונית",  icon:"🏛️", text:"היתר עבודה / אישור העסקה",    detail:"קבלת היתר עבודה מרשות האוכלוסין לפני תחילת העסקת העובד הזר.",              date:"", done:false },
+  { id:"o2",  cat:"הקמה ראשונית",  icon:"📝", text:"חוזה עבודה",                    detail:"חתימה על חוזה עבודה בעברית ובשפת העובד, תוך 30 יום מתחילת העסקה.",        date:"", done:false },
+  { id:"o3",  cat:"הקמה ראשונית",  icon:"📋", text:"טופס 101 (הצהרת עובד)",         detail:"מילוי טופס 101 על-ידי העובד בתחילת ההעסקה ובכל שינוי אישי (חתונה, ילד).", date:"", done:false },
+  { id:"o4",  cat:"הקמה ראשונית",  icon:"🏢", text:"פתיחת תיק ביטוח לאומי",         detail:"פתיחת תיק מעסיק בביטוח הלאומי תוך 7 ימים מתחילת ההעסקה.",                date:"", done:false },
+  { id:"o5",  cat:"הקמה ראשונית",  icon:"🦺", text:"ביטוח תאונות עבודה",            detail:"רכישת ביטוח תאונות עבודה לעובד לפני תחילת העבודה — חובה חוקית.",           date:"", done:false },
+  { id:"o6",  cat:"הקמה ראשונית",  icon:"🏥", text:"ביטוח בריאות",                  detail:"הסדרת ביטוח בריאות עם קופת חולים — הבריאות של העובד באחריות המעסיק.",      date:"", done:false },
+  /* ── חודשי ── */
+  { id:"o7",  cat:"חודשי",          icon:"💰", text:"תשלום שכר",                     detail:"תשלום שכר עד ה-9 לחודש הבא. עיכוב מהווה הפרת חוק שכר מינימום.",           date:"", done:false },
+  { id:"o8",  cat:"חודשי",          icon:"🧾", text:"תלוש שכר",                      detail:"הנפקת תלוש שכר מפורט מדי חודש — חובה לפי חוק הגנת השכר.",                  date:"", done:false },
+  /* ── רבעוני ── */
+  { id:"o9",  cat:"רבעוני",         icon:"📊", text:"תשלום מקדמות ביטוח לאומי",      detail:"תשלום מקדמות דמי ביטוח לאומי בכל רבעון: ינואר, אפריל, יולי, אוקטובר.",    date:"", done:false },
+  /* ── שנתי ── */
+  { id:"o10", cat:"שנתי",           icon:"🔄", text:"חידוש אישור העסקה שנתי",        detail:"חידוש היתר העסקה מול רשות האוכלוסין 30 יום לפני תפוגה.",                   date:"", done:false },
+  { id:"o11", cat:"שנתי",           icon:"📄", text:"טופס 106 (אישור שנתי למס)",     detail:"הנפקת טופס 106 לעובד עד 31 במרץ, לצרכי הגשת דוח שנתי למס הכנסה.",        date:"", done:false },
+  { id:"o12", cat:"שנתי",           icon:"🌴", text:"דמי הבראה",                      detail:"תשלום דמי הבראה: ₪440 ליום × מספר ימים לפי ותק (2 ימים בשנה הראשונה).",   date:"", done:false },
+  { id:"o13", cat:"שנתי",           icon:"✈️", text:"חופשה שנתית",                   detail:"12 ימי חופשה לפחות בשנה הראשונה — בתיאום מראש. לא ניתן לבטל.",             date:"", done:false },
+  /* ── לאחר 6 חודשים ── */
+  { id:"o14", cat:"לאחר 6 חודשים", icon:"🛡️", text:"הפרשות פנסיה",                 detail:"חובת הפרשה לפנסיה לאחר 6 חודשי עבודה: 6.5% פנסיה + 6% פיצויים + 2.5% השתלמות.", date:"", done:false },
+  { id:"o15", cat:"לאחר 6 חודשים", icon:"📅", text:"מעקב ימי מחלה וחופשה",          detail:"ניהול יומן שעות, ימי מחלה (1.5 ימים לחודש) וחופשה (12+ ימים) — חובה לפי חוק.", date:"", done:false },
+];
+
+/* ─── DemoBanner ─── */
+const DemoBanner = () => (
+  <div className="demo-banner">⚡ DEMO — נתונים לדוגמה בלבד</div>
+);
+
+/* ─── BottomNav ─── */
+const BottomNav = ({ active, onNavigate }) => (
+  <nav className="bottom-nav">
+    {[
+      { id: "dashboard", icon: "🏠", label: "ראשי" },
+      { id: "worker",    icon: "👤", label: "עובד" },
+      { id: "payroll",   icon: "💰", label: "שכר" },
+      { id: "tasks",     icon: "✅", label: "משימות" },
+      { id: "settings",  icon: "⚙️", label: "הגדרות" },
+    ].map(n => (
+      <div key={n.id}
+        className={`nav-item ${active === n.id ? "active" : ""}`}
+        onClick={() => onNavigate(n.id)}>
+        <span className="nav-icon">{n.icon}</span>
+        {n.label}
+      </div>
+    ))}
+  </nav>
+);
+
+/* ════════════════════════════════════════════
+   LOGIN SCREEN
+════════════════════════════════════════════ */
+const LoginScreen = ({ onNavigate }) => {
+  const [email, setEmail] = useState("rachel@example.com");
+  const [pass, setPass] = useState("••••••••");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 24px 24px" }}>
+      <div style={{ fontSize: 56, marginBottom: 12 }}>🏥</div>
+      <h1 style={{ fontSize: 26, fontWeight: 800, color: "#1e293b", marginBottom: 4 }}>CareDesk</h1>
+      <p style={{ color: "#64748b", fontSize: 14, marginBottom: 32, textAlign: "center" }}>
+        פלטפורמה לניהול העסקת עובד סיעוד
+      </p>
+
+      <div style={{ width: "100%" }}>
+        <div className="input-group">
+          <label className="input-label">אימייל</label>
+          <input className="input-field" value={email} onChange={e => setEmail(e.target.value)} />
+        </div>
+        <div className="input-group">
+          <label className="input-label">סיסמה</label>
+          <input className="input-field" type="password" value={pass} onChange={e => setPass(e.target.value)} />
+        </div>
+        <button className="btn btn-primary btn-full" onClick={() => onNavigate("dashboard")}>
+          כניסה למערכת
+        </button>
+        <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => onNavigate("empty")}>
+          משתמש חדש — ראה מסך ריק
+        </button>
+      </div>
+
+      <p style={{ marginTop: 24, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+        v0.4 DEMO · נתונים לדוגמה בלבד
+      </p>
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   OBLIGATIONS CARD — employer legal checklist
+════════════════════════════════════════════ */
+const ObligationsCard = ({ obligations, setObligations }) => {
+  const [open,     setOpen]     = useState(false);
+  const [editing,  setEditing]  = useState(null); // id of item being date-edited
+  const [dateVal,  setDateVal]  = useState("");
+
+  const cats = [...new Set(obligations.map(o => o.cat))];
+  const done  = obligations.filter(o => o.done).length;
+  const total = obligations.length;
+  const pct   = Math.round((done / total) * 100);
+
+  const toggle = id => setObligations(prev => prev.map(o => o.id === id ? { ...o, done: !o.done } : o));
+  const setDate = (id, val) => {
+    setObligations(prev => prev.map(o => o.id === id ? { ...o, date: val } : o));
+    setEditing(null);
+  };
+
+  const statusColor = pct === 100 ? "#16a34a" : pct >= 60 ? "#ca8a04" : "#dc2626";
+  const statusBg    = pct === 100 ? "#dcfce7"  : pct >= 60 ? "#fef9c3"  : "#fee2e2";
+
+  return (
+  <div className="card" style={{ marginTop: 12 }}>
+    {/* Header — always visible */}
+    <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+      onClick={() => setOpen(o => !o)}>
+      <span style={{ fontSize: 26 }}>📋</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#1e293b" }}>חובות מעסיק</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>רשימת חובות חוקיות — לחץ להגדרת מועדים</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+        <span style={{ background: statusBg, color: statusColor, borderRadius: 999, padding: "3px 10px", fontSize: 13, fontWeight: 700 }}>
+          {done}/{total} ✓
+        </span>
+        <span style={{ fontSize: 18, color: "#94a3b8" }}>{open ? "▲" : "▼"}</span>
+      </div>
+    </div>
+
+    {/* Progress bar */}
+    <div style={{ height: 6, background: "#f1f5f9", borderRadius: 3, marginTop: 10, overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: statusColor, borderRadius: 3, transition: "width 0.4s" }} />
+    </div>
+
+    {/* Expandable list */}
+    {open && (
+      <div style={{ marginTop: 14 }}>
+        {cats.map(cat => (
+          <div key={cat} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, borderBottom: "1px solid #f1f5f9", paddingBottom: 4 }}>
+              {cat}
+            </div>
+            {obligations.filter(o => o.cat === cat).map(o => (
+              <div key={o.id} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <input type="checkbox" checked={o.done}
+                    onChange={() => toggle(o.id)}
+                    style={{ width: 22, height: 22, marginTop: 2, cursor: "pointer", flexShrink: 0, accentColor: "#1a56db" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: o.done ? "#94a3b8" : "#1e293b",
+                      textDecoration: o.done ? "line-through" : "none" }}>
+                      {o.icon} {o.text}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 2, lineHeight: 1.4 }}>{o.detail}</div>
+                    {/* Date area */}
+                    {editing === o.id ? (
+                      <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                        <input type="date" className="input-field" style={{ flex: 1, padding: "8px 10px", fontSize: 14 }}
+                          value={dateVal} onChange={e => setDateVal(e.target.value)} />
+                        <button className="btn btn-primary" style={{ padding: "8px 14px", fontSize: 13, minHeight: "unset" }}
+                          onClick={() => setDate(o.id, dateVal)}>שמור</button>
+                        <button className="btn btn-secondary" style={{ padding: "8px 10px", fontSize: 13, minHeight: "unset" }}
+                          onClick={() => setEditing(null)}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 5, display: "flex", gap: 8, alignItems: "center" }}>
+                        {o.date ? (
+                          <span style={{ fontSize: 13, color: "#1a56db", fontWeight: 600 }}>
+                            📅 {new Date(o.date).toLocaleDateString("he-IL")}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 13, color: "#94a3b8" }}>תאריך לא הוגדר</span>
+                        )}
+                        <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: 12, minHeight: "unset" }}
+                          onClick={() => { setEditing(o.id); setDateVal(o.date || ""); }}>
+                          {o.date ? "✏️ ערוך" : "➕ הגדר תאריך"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+        <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", marginTop: 4 }}>
+          {pct === 100 ? "✅ כל חובות המעסיק הוגדרו!" : `נותרו ${total - done} פריטים להשלמה`}
+        </div>
+      </div>
+    )}
+  </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   DASHBOARD SCREEN — interactive alerts + tasks
+════════════════════════════════════════════ */
+const DashboardScreen = ({ onNavigate, worker, docs, tasks, setTasks, obligations, setObligations }) => {
+  const [alertModal, setAlertModal] = useState(null);
+  const [taskModal, setTaskModal] = useState(null);
+
+  /* Alerts = doc problems only */
+  const alerts = (docs || []).filter(d => d.badge !== "badge-green").map(d => ({
+    icon: d.badge === "badge-red" ? "🔴" : "🟡",
+    label: d.name,
+    status: d.status,
+    detail: d.badge === "badge-red"
+      ? `${d.name} לא קיים או לא תקף. יש לטפל בהקדם — מצב זה עלול לפגוע בחוקיות ההעסקה.`
+      : `${d.name}: ${d.status}. מומלץ לחדש לפני תום התוקף כדי להימנע מהפתעות.`,
+    nav: "worker",
+    navLabel: d.action || "עדכן מסמך",
+    type: d.badge === "badge-red" ? "red" : "yellow",
+  }));
+
+  /* Tasks = action items (live from state) */
+  const openTasks = (tasks || []).filter(t => !t.done);
+  const urgentTasks = openTasks.filter(t => t.urgent);
+
+  const toggleDone = id => setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+
+  return (
+  <div className="screen">
+    <DemoBanner />
+    <div className="screen-header">
+      <h2>שלום, רחל 👋</h2>
+      <p>{worker ? `${worker.firstName} ${worker.lastName}` : "מריה סנטוס"} — תיק #001</p>
+    </div>
+
+    {/* Summary cards */}
+    <div style={{ display: "flex", gap: 8, padding: "12px 16px" }}>
+      <div className="card" style={{ flex: 1, margin: 0 }}>
+        <div className="card-title">שכר הבא</div>
+        <div className="card-value" style={{ fontSize: 20 }}>₪7,070</div>
+        <div className="card-sub">01/03/2025</div>
+      </div>
+      <div className="card" style={{ flex: 1, margin: 0, cursor: "pointer" }} onClick={() => onNavigate("tasks")}>
+        <div className="card-title">משימות פתוחות</div>
+        <div className="card-value" style={{ fontSize: 20 }}>{openTasks.length}</div>
+        <div className="card-sub">{urgentTasks.length} דחופות</div>
+      </div>
+    </div>
+
+    {/* ── ALERTS section (docs only) ── */}
+    <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <strong style={{ fontSize: 17 }}>🔔 התראות מסמכים</strong>
+        {alerts.filter(a => a.type === "red").length > 0
+          ? <span className="badge badge-red">{alerts.filter(a => a.type === "red").length} דחופות</span>
+          : alerts.length > 0
+            ? <span className="badge badge-yellow">{alerts.length} לטיפול</span>
+            : <span className="badge badge-green">הכל תקין ✅</span>}
+      </div>
+      {alerts.length === 0 && (
+        <div style={{ fontSize: 15, color: "#64748b", textAlign: "center", padding: "8px 0" }}>כל המסמכים תקינים ✅</div>
+      )}
+      {alerts.map((a, i) => (
+        <div key={i} onClick={() => setAlertModal(a)}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0",
+            borderBottom: i < alerts.length - 1 ? "1px solid #f1f5f9" : "none", cursor: "pointer" }}>
+          <span style={{ fontSize: 20 }}>{a.icon}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#1e293b" }}>{a.label}</div>
+            <div style={{ fontSize: 14, color: "#64748b" }}>{a.status}</div>
+          </div>
+          <span style={{ color: "#94a3b8", fontSize: 20 }}>›</span>
+        </div>
+      ))}
+    </div>
+
+    {/* ── TASKS section ── */}
+    <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <strong style={{ fontSize: 17 }}>✅ משימות</strong>
+        <span style={{ fontSize: 14, color: "#1a56db", cursor: "pointer", fontWeight: 600 }}
+          onClick={() => onNavigate("tasks")}>כל המשימות ›</span>
+      </div>
+      {openTasks.length === 0 && (
+        <div style={{ fontSize: 15, color: "#64748b", textAlign: "center", padding: "8px 0" }}>אין משימות פתוחות 🎉</div>
+      )}
+      {openTasks.map((t, i) => (
+        <div key={t.id} onClick={() => setTaskModal(t)}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0",
+            borderBottom: i < openTasks.length - 1 ? "1px solid #f1f5f9" : "none", cursor: "pointer" }}>
+          <span style={{ fontSize: 20 }}>{t.urgent ? "🔴" : "🟡"}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#1e293b" }}>{t.text}</div>
+            <div style={{ fontSize: 14, color: "#64748b" }}>עד {t.due}</div>
+          </div>
+          {t.urgent && <span className="badge badge-red" style={{ fontSize: 13 }}>דחוף</span>}
+          <span style={{ color: "#94a3b8", fontSize: 20 }}>›</span>
+        </div>
+      ))}
+    </div>
+
+    {/* Alert detail modal */}
+    {alertModal && (
+      <div className="modal-overlay" onClick={() => setAlertModal(null)}>
+        <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>{alertModal.icon}</div>
+          <div className="modal-title">{alertModal.label}</div>
+          <div style={{ background: alertModal.type === "red" ? "#fee2e2" : "#fef9c3",
+            borderRadius: 10, padding: "12px 14px", marginBottom: 16, fontSize: 15,
+            color: alertModal.type === "red" ? "#991b1b" : "#92400e", lineHeight: 1.5 }}>
+            {alertModal.detail}
+          </div>
+          <button className="btn btn-primary btn-full" onClick={() => { setAlertModal(null); onNavigate(alertModal.nav); }}>
+            ✏️ {alertModal.navLabel}
+          </button>
+          <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => setAlertModal(null)}>סגור</button>
+        </div>
+      </div>
+    )}
+
+    {/* Task detail modal */}
+    {taskModal && (
+      <div className="modal-overlay" onClick={() => setTaskModal(null)}>
+        <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>{taskModal.urgent ? "🔴" : "🟡"}</div>
+          <div className="modal-title">{taskModal.text}</div>
+          <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+            <div style={{ fontSize: 15, color: "#374151", marginBottom: 6 }}>📅 תאריך יעד: <strong>{taskModal.due}</strong></div>
+            <div style={{ fontSize: 15, color: "#374151" }}>{taskModal.detail}</div>
+          </div>
+          {taskModal.done ? (
+            <button className="btn btn-secondary btn-full" onClick={() => { toggleDone(taskModal.id); setTaskModal(null); }}>↩️ סמן כפתוח</button>
+          ) : (
+            <button className="btn btn-primary btn-full" onClick={() => { toggleDone(taskModal.id); setTaskModal(null); }}>✅ סמן כהושלם</button>
+          )}
+          {taskModal.nav && (
+            <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }}
+              onClick={() => { setTaskModal(null); onNavigate(taskModal.nav); }}>
+              {taskModal.navLabel} ›
+            </button>
+          )}
+          <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => setTaskModal(null)}>סגור</button>
+        </div>
+      </div>
+    )}
+
+    <p className="section-title">פעולות מהירות</p>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "0 16px" }}>
+      {[
+        { label: "חשב שכר", icon: "💰", nav: "payroll" },
+        { label: "הוסף משימה", icon: "✅", nav: "tasks" },
+        { label: "דוח שנתי", icon: "📊", nav: "annual" },
+        { label: "הרשאות", icon: "🔐", nav: "permissions" },
+      ].map(a => (
+        <button key={a.nav} className="btn btn-secondary" style={{ padding: "14px", flexDirection: "column", gap: 4 }} onClick={() => onNavigate(a.nav)}>
+          <span style={{ fontSize: 22 }}>{a.icon}</span>
+          <span style={{ fontSize: 16 }}>{a.label}</span>
+        </button>
+      ))}
+    </div>
+
+    {/* ── Trust tip banner ── */}
+    <div style={{ margin: "12px 16px 0", cursor: "pointer" }} onClick={() => onNavigate("trust")}>
+      <div style={{ background: "linear-gradient(135deg,#7c3aed,#1a56db)", borderRadius: 16, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+        <span style={{ fontSize: 34, flexShrink: 0 }}>💡</span>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "white" }}>איך לבנות אמון עם המטפל?</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>טיפים מעשיים + רגישות תרבותית לפי ארץ מוצא</div>
+        </div>
+        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 22, marginRight: "auto" }}>›</span>
+      </div>
+    </div>
+
+    {/* ── Employer Obligations Card ── */}
+    {obligations && setObligations && (
+      <ObligationsCard obligations={obligations} setObligations={setObligations} />
+    )}
+
+    <BottomNav active="dashboard" onNavigate={onNavigate} />
+  </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   WORKER SCREEN — editable profile + live doc state + date validation
+════════════════════════════════════════════ */
+const WorkerScreen = ({ onNavigate, worker, setWorker, docs, setDocs, setTasks }) => {
+  const [editMode, setEditMode] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [docModal, setDocModal] = useState(null);
+  const [modalForm, setModalForm] = useState({});
+  const [dateError, setDateError] = useState("");
+  const [saveMsg, setSaveMsg] = useState("");
+
+  const [form, setForm] = useState({ ...worker });
+  const setF = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  /* ── Date validation ── */
+  const validateDate = (val, label) => {
+    if (!val) return `יש להזין ${label}`;
+    const d = new Date(val);
+    // isNaN catches impossible dates (e.g. Feb 29 on non-leap)
+    if (isNaN(d.getTime())) return `תאריך לא תקין (${label})`;
+    return null;
+  };
+
+  const fmtDate = iso => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  };
+
+  /* ── Profile save ── */
+  const saveProfile = () => {
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setProfileError("שם פרטי ושם משפחה הם שדות חובה");
+      return;
+    }
+    setProfileError("");
+    setWorker({ ...form });
+    setEditMode(false);
+    setSaveMsg("✅ הפרופיל עודכן");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
+  /* ── Doc modal save ── */
+  const openDocModal = d => { setDocModal(d); setModalForm({}); setDateError(""); };
+
+  const saveDocModal = () => {
+    const dateVal = modalForm.visaExp || modalForm.contractDate || modalForm.insuranceStart || modalForm.permitExp;
+    const dateLabel = docModal.name === "ויזה B1" ? "תוקף ויזה"
+      : docModal.name === "חוזה עבודה" ? "תאריך חתימה"
+      : docModal.name === "אישור העסקה שנתי" ? "תוקף אישור"
+      : "תאריך תחילת ביטוח";
+    const err = validateDate(dateVal, dateLabel);
+    if (err) { setDateError(err); return; }
+
+    setDocs(prev => prev.map(d => {
+      if (d.name !== docModal.name) return d;
+      if (d.name === "ויזה B1")
+        return { ...d, status: `תקף עד ${fmtDate(modalForm.visaExp)}`, badge: "badge-green", action: "עדכן ויזה" };
+      if (d.name === "חוזה עבודה")
+        return { ...d, status: `עודכן ${fmtDate(modalForm.contractDate)} ✅`, badge: "badge-green" };
+      if (d.name === "ביטוח בריאות")
+        return { ...d, status: `תקף — ${modalForm.insurer || "כללית"} ✅`, badge: "badge-green", action: null };
+      if (d.name === "אישור העסקה שנתי")
+        return { ...d, status: `תקף עד ${fmtDate(modalForm.permitExp)}`, badge: "badge-green", action: "חדש אישור" };
+      return d;
+    }));
+
+    /* ── Auto-close related tasks when doc renewed ── */
+    if (docModal.name === "ויזה B1")
+      setTasks(prev => prev.map(t => (t.id === 1 && !t.done) ? { ...t, done: true } : t));
+    if (docModal.name === "אישור העסקה שנתי")
+      setTasks(prev => prev.map(t => (t.id === 6 && !t.done) ? { ...t, done: true } : t));
+
+    setDocModal(null);
+    setSaveMsg("✅ המסמך עודכן");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
+  const mSet = k => e => { setModalForm(f => ({ ...f, [k]: e.target.value })); setDateError(""); };
+
+  return (
+    <div className="screen">
+      <DemoBanner />
+      <div className="screen-header">
+        <h2>👤 פרופיל עובד</h2>
+        <p>{worker.firstName} {worker.lastName} · {worker.nationality}</p>
+      </div>
+
+      {saveMsg && (
+        <div style={{ background: "#dcfce7", color: "#166534", padding: "10px 16px", textAlign: "center", fontWeight: 600, fontSize: 16 }}>
+          {saveMsg}
+        </div>
+      )}
+
+      {/* ── Profile card ── */}
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+          <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg,#1a56db,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "white", flexShrink: 0 }}>מ</div>
+          <div style={{ flex: 1 }}>
+            {editMode ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <input className="input-field" style={{ flex: 1 }} value={form.firstName} onChange={setF("firstName")} placeholder="שם פרטי" />
+                <input className="input-field" style={{ flex: 1 }} value={form.lastName} onChange={setF("lastName")} placeholder="שם משפחה" />
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#1e293b" }}>{worker.firstName} {worker.lastName}</div>
+                <div style={{ fontSize: 15, color: "#64748b" }}>{worker.role}</div>
+                <span className="badge badge-green" style={{ marginTop: 4 }}>פעיל</span>
+              </>
+            )}
+          </div>
+          <button className="btn btn-secondary" style={{ padding: "10px 16px", fontSize: 16 }}
+            onClick={() => { if (editMode) { saveProfile(); } else { setForm({ ...worker }); setProfileError(""); setEditMode(true); } }}>
+            {editMode ? "💾 שמור" : "✏️ ערוך"}
+          </button>
+        </div>
+
+        {profileError && <div style={{ color: "#dc2626", fontSize: 14, marginBottom: 10 }}>⚠️ {profileError}</div>}
+
+        {editMode && (
+          <div style={{ marginBottom: 12 }}>
+            <div className="input-group">
+              <label className="input-label">תפקיד</label>
+              <input className="input-field" value={form.role} onChange={setF("role")} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">ת.ז / דרכון</label>
+              <input className="input-field" value={form.passportId} onChange={setF("passportId")} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">לאום</label>
+              <select className="input-field" value={form.nationality} onChange={setF("nationality")}>
+                <option>פיליפינים 🇵🇭</option><option>אינדונזיה 🇮🇩</option><option>הודו 🇮🇳</option>
+                <option>סרי לנקה 🇱🇰</option><option>נפאל 🇳🇵</option>
+              </select>
+            </div>
+            <button className="btn btn-secondary btn-full" onClick={() => { setForm({ ...worker }); setEditMode(false); setProfileError(""); }}>ביטול</button>
+          </div>
+        )}
+
+        {!editMode && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[
+              ["ת.ז / דרכון", worker.passportId],
+              ["ויזה", `${worker.visaType.split("—")[0]}— פגה ${worker.visaExp}`],
+              ["לאום", worker.nationality],
+              ["תחילת עבודה", worker.startDate],
+            ].map(([k, v]) => (
+              <div key={k} style={{ background: "#f8fafc", borderRadius: 10, padding: "12px" }}>
+                <div style={{ fontSize: 13, color: "#64748b" }}>{k}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1e293b" }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Documents ── */}
+      <div className="card">
+        <strong style={{ fontSize: 17, display: "block", marginBottom: 8 }}>מסמכים</strong>
+        {docs.map((d, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: i < docs.length - 1 ? "1px solid #f1f5f9" : "none", gap: 10 }}>
+            <span style={{ fontSize: 16, color: "#334155", flex: 1 }}>{d.name}</span>
+            <span className={`badge ${d.badge}`} style={{ fontSize: 13 }}>{d.status}</span>
+            {d.action && (
+              <button className="btn btn-primary" style={{ padding: "8px 14px", fontSize: 14, minHeight: 38 }}
+                onClick={() => openDocModal(d)}>
+                {d.action}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Document action modal ── */}
+      {docModal && (
+        <div className="modal-overlay" onClick={() => setDocModal(null)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">
+              {docModal.name === "ויזה B1" ? "🔄 חידוש ויזה" :
+               docModal.name === "חוזה עבודה" ? "📝 עדכון חוזה" :
+               docModal.name === "אישור העסקה שנתי" ? "🏛️ חידוש אישור העסקה" : "📎 הוספת מסמך"}
+            </div>
+
+            {docModal.name === "ויזה B1" && <>
+              <div className="input-group">
+                <label className="input-label">סוג ויזה חדשה</label>
+                <select className="input-field" onChange={mSet("visaType")}>
+                  <option>B1 — עבודה</option><option>B2 — תייר</option><option>A5 — תושב</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label className="input-label">מספר ויזה חדשה</label>
+                <input className="input-field" placeholder="V12345678" onChange={mSet("visaNum")} />
+              </div>
+              <div className="input-group">
+                <label className="input-label">תוקף חדש *</label>
+                <input className="input-field" type="date" min={new Date().toISOString().split("T")[0]} onChange={mSet("visaExp")} />
+              </div>
+            </>}
+
+            {docModal.name === "חוזה עבודה" && <>
+              <div className="input-group">
+                <label className="input-label">תאריך חתימה *</label>
+                <input className="input-field" type="date" max={new Date().toISOString().split("T")[0]} onChange={mSet("contractDate")} />
+              </div>
+              <div className="input-group">
+                <label className="input-label">שכר בסיס מעודכן (₪)</label>
+                <input className="input-field" type="number" placeholder="7200" min="0" onChange={mSet("salary")} />
+              </div>
+            </>}
+
+            {docModal.name === "ביטוח בריאות" && <>
+              <div className="input-group">
+                <label className="input-label">קופת חולים</label>
+                <select className="input-field" onChange={mSet("insurer")}>
+                  <option>כללית</option><option>מכבי</option><option>מאוחדת</option><option>לאומית</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label className="input-label">מספר פוליסה</label>
+                <input className="input-field" placeholder="מספר הפוליסה..." onChange={mSet("policyNum")} />
+              </div>
+              <div className="input-group">
+                <label className="input-label">תאריך תחילת ביטוח *</label>
+                <input className="input-field" type="date" onChange={mSet("insuranceStart")} />
+              </div>
+            </>}
+
+            {docModal.name === "אישור העסקה שנתי" && <>
+              <div className="input-group">
+                <label className="input-label">מספר אישור</label>
+                <input className="input-field" placeholder="מספר אישור ההעסקה..." onChange={mSet("permitNum")} />
+              </div>
+              <div className="input-group">
+                <label className="input-label">תוקף אישור עד *</label>
+                <input className="input-field" type="date" min={new Date().toISOString().split("T")[0]} onChange={mSet("permitExp")} />
+              </div>
+              <div style={{ background: "#eff6ff", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "#1d4ed8", marginBottom: 12 }}>
+                💡 אישור העסקה מתחדש אחת לשנה מול רשות האוכלוסין וההגירה
+              </div>
+            </>}
+
+            {dateError && (
+              <div style={{ background: "#fee2e2", color: "#dc2626", padding: "10px 14px", borderRadius: 8, fontSize: 15, marginBottom: 12 }}>
+                ⚠️ {dateError}
+              </div>
+            )}
+
+            <button className="btn btn-primary btn-full" onClick={saveDocModal}>💾 שמור</button>
+            <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => setDocModal(null)}>ביטול</button>
+          </div>
+        </div>
+      )}
+
+      <BottomNav active="worker" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   PAYROLL SCREEN — interactive monthly calculator
+════════════════════════════════════════════ */
+const MONTHS_HE = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+
+/* count working days (Sun–Fri) in a given month/year */
+const workingDaysInMonth = (m, y) => {
+  const days = new Date(y, m + 1, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= days; d++) {
+    const dow = new Date(y, m, d).getDay();
+    if (dow !== 6) count++; // exclude Saturday
+  }
+  return count;
+};
+
+const PayrollScreen = ({ onNavigate, setTasks }) => {
+  const now = new Date();
+  const [month,      setMonth]      = useState(now.getMonth());
+  const [year,       setYear]       = useState(now.getFullYear());
+  const [baseSalary, setBaseSalary] = useState(6000);
+  const [saturdays,  setSaturdays]  = useState(4);
+  const [satPrice,   setSatPrice]   = useState(240);
+  const [overtimeH,  setOvertimeH]  = useState(0);
+  const [travel,     setTravel]     = useState(200);
+  const [taxDed,     setTaxDed]     = useState(null);
+  const [biturDed,   setBiturDed]   = useState(null);
+  const [approved,   setApproved]   = useState(false);
+  const [partial,    setPartial]    = useState(false);  // partial month toggle
+  const [startDay,   setStartDay]   = useState(15);     // day of month work started
+
+  const fmt = n => "₪" + Math.round(n).toLocaleString("he-IL");
+  const reset = () => setApproved(false);
+
+  /* ── Partial month calculation ── */
+  const totalWorkDays = workingDaysInMonth(month, year);
+  // count working days from startDay to end of month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const workedDays = (() => {
+    let count = 0;
+    for (let d = startDay; d <= daysInMonth; d++) {
+      if (new Date(year, month, d).getDay() !== 6) count++;
+    }
+    return count;
+  })();
+  const partialRatio  = partial ? workedDays / totalWorkDays : 1;
+  const effectiveBase = Math.round(baseSalary * partialRatio);
+
+  const hourlyRate  = Math.round(baseSalary / 182);
+  const satTotal    = satPrice * saturdays;
+  const overtimePay = Math.round(hourlyRate * 1.25 * overtimeH);
+  const gross       = effectiveBase + satTotal + overtimePay + (partial ? Math.round(travel * partialRatio) : travel);
+
+  // deductions: use manual value if set, otherwise auto-calc
+  const taxCalc   = Math.max(0, Math.round(gross * 0.024));
+  const biturCalc = Math.round(gross * 0.035);
+  const taxFinal   = taxDed   !== null ? taxDed   : taxCalc;
+  const biturFinal = biturDed !== null ? biturDed : biturCalc;
+  const net = gross - taxFinal - biturFinal;
+
+  const handleApprove = () => {
+    setApproved(true);
+    if (setTasks) setTasks(prev => prev.map(t => t.id === 3 ? { ...t, done: true } : t));
+  };
+
+  /* ── reusable deduction row ── */
+  const DedRow = ({ label, value, autoVal, onChange, onReset }) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <label className="input-label" style={{ margin: 0 }}>{label}</label>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {value !== null && (
+            <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: 13, minHeight: "unset" }}
+              onClick={() => { onReset(); reset(); }}>
+              חישוב אוטומטי
+            </button>
+          )}
+          <button className="btn btn-danger" style={{ padding: "4px 10px", fontSize: 13, minHeight: "unset" }}
+            onClick={() => { onChange(0); reset(); }}>
+            אפס
+          </button>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input className="input-field" type="number" min="0" step="10"
+          value={value !== null ? value : autoVal}
+          onChange={e => { onChange(+e.target.value || 0); reset(); }}
+          style={{ flex: 1 }} />
+        {value === null && (
+          <span style={{ fontSize: 13, color: "#94a3b8", whiteSpace: "nowrap" }}>אוטומטי</span>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+  <div className="screen">
+    <DemoBanner />
+    <div className="screen-header">
+      <h2>💰 חישוב שכר</h2>
+      <p>{MONTHS_HE[month]} {year}</p>
+    </div>
+
+    {/* Month selector */}
+    <div className="card">
+      <strong style={{ fontSize: 16, display: "block", marginBottom: 12 }}>📅 חודש לחישוב</strong>
+      <div style={{ display: "flex", gap: 8 }}>
+        <select className="input-field" style={{ flex: 2 }} value={month}
+          onChange={e => { setMonth(+e.target.value); reset(); }}>
+          {MONTHS_HE.map((m, i) => <option key={i} value={i}>{m}</option>)}
+        </select>
+        <select className="input-field" style={{ flex: 1 }} value={year}
+          onChange={e => { setYear(+e.target.value); reset(); }}>
+          {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+    </div>
+
+    {/* Partial month toggle */}
+    <div className="card" style={{ padding: "14px 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>📆 חודש חלקי</div>
+          <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>עובד שהחל/סיים באמצע החודש</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 14, color: "#64748b" }}>{partial ? "פעיל" : "כבוי"}</span>
+          <div onClick={() => { setPartial(p => !p); reset(); }}
+            style={{ width: 48, height: 26, borderRadius: 13, background: partial ? "#1a56db" : "#cbd5e1",
+              cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
+            <div style={{ width: 20, height: 20, borderRadius: "50%", background: "white",
+              position: "absolute", top: 3, left: partial ? 25 : 3, transition: "left 0.2s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+          </div>
+        </div>
+      </div>
+
+      {partial && (
+        <div style={{ marginTop: 14, borderTop: "1px solid #f1f5f9", paddingTop: 14 }}>
+          <label className="input-label">תחילת עבודה — יום {startDay} ב{MONTHS_HE[month]}</label>
+          <input type="range" min="1" max={daysInMonth} value={startDay}
+            onChange={e => { setStartDay(+e.target.value); reset(); }}
+            style={{ width: "100%", marginBottom: 8, accentColor: "#1a56db" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#64748b" }}>
+            <span>יום 1</span>
+            <span style={{ fontWeight: 700, color: "#1a56db", fontSize: 15 }}>
+              יום {startDay} — {workedDays} מתוך {totalWorkDays} ימי עבודה ({Math.round(partialRatio * 100)}%)
+            </span>
+            <span>יום {daysInMonth}</span>
+          </div>
+          <div style={{ marginTop: 10, background: "#eff6ff", borderRadius: 10, padding: "10px 14px", fontSize: 14 }}>
+            שכר בסיס מחושב: <strong style={{ color: "#1a56db" }}>{fmt(effectiveBase)}</strong>
+            <span style={{ color: "#94a3b8" }}> (במקום {fmt(baseSalary)})</span>
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* Income inputs */}
+    <div className="card">
+      <strong style={{ fontSize: 16, display: "block", marginBottom: 14 }}>➕ תוספות שכר</strong>
+
+      <div className="input-group">
+        <label className="input-label">שכר בסיס (₪)</label>
+        <input className="input-field" type="number" min="0" step="100"
+          value={baseSalary} onChange={e => { setBaseSalary(+e.target.value || 0); reset(); }} />
+        <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>מינימום 2025: ₪6,000 · שעתי: {fmt(hourlyRate)}</div>
+      </div>
+
+      {/* Saturdays — count + fixed price */}
+      <div className="input-group">
+        <label className="input-label">שבתות</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <button className="btn btn-secondary" style={{ padding: "10px 18px", fontSize: 20 }}
+            onClick={() => { setSaturdays(s => Math.max(0, s-1)); reset(); }}>−</button>
+          <span style={{ fontSize: 28, fontWeight: 700, color: "#1e293b", minWidth: 36, textAlign: "center" }}>{saturdays}</span>
+          <button className="btn btn-secondary" style={{ padding: "10px 18px", fontSize: 20 }}
+            onClick={() => { setSaturdays(s => Math.min(6, s+1)); reset(); }}>+</button>
+          <span style={{ fontSize: 15, color: "#64748b" }}>× {fmt(satPrice)} = <strong style={{ color: "#1e293b" }}>{fmt(satTotal)}</strong></span>
+        </div>
+        <label className="input-label" style={{ fontSize: 13 }}>תשלום קבוע לשבת (₪)</label>
+        <input className="input-field" type="number" min="0" step="10"
+          value={satPrice} onChange={e => { setSatPrice(+e.target.value || 0); reset(); }} />
+      </div>
+
+      <div className="input-group">
+        <label className="input-label">שעות נוספות</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn btn-secondary" style={{ padding: "10px 18px", fontSize: 20 }}
+            onClick={() => { setOvertimeH(h => Math.max(0, h-1)); reset(); }}>−</button>
+          <span style={{ fontSize: 28, fontWeight: 700, color: "#1e293b", minWidth: 36, textAlign: "center" }}>{overtimeH}</span>
+          <button className="btn btn-secondary" style={{ padding: "10px 18px", fontSize: 20 }}
+            onClick={() => { setOvertimeH(h => h+1); reset(); }}>+</button>
+          <span style={{ fontSize: 15, color: "#64748b" }}>= <strong style={{ color: "#1e293b" }}>{fmt(overtimePay)}</strong> (125%)</span>
+        </div>
+      </div>
+
+      <div className="input-group" style={{ marginBottom: 0 }}>
+        <label className="input-label">דמי הסעה (₪)</label>
+        <input className="input-field" type="number" min="0" step="50"
+          value={travel} onChange={e => { setTravel(+e.target.value || 0); reset(); }} />
+      </div>
+    </div>
+
+    {/* Deductions — dynamic, resettable */}
+    <div className="card">
+      <strong style={{ fontSize: 16, display: "block", marginBottom: 14 }}>➖ קיזוזים</strong>
+      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>ברוטו: {fmt(gross)} · לחץ "אפס" לביטול קיזוז</div>
+
+      <DedRow
+        label="ניכוי מס הכנסה (₪)"
+        value={taxDed}
+        autoVal={taxCalc}
+        onChange={setTaxDed}
+        onReset={() => setTaxDed(null)}
+      />
+      <DedRow
+        label="ניכוי ביטוח לאומי (₪)"
+        value={biturDed}
+        autoVal={biturCalc}
+        onChange={setBiturDed}
+        onReset={() => setBiturDed(null)}
+      />
+    </div>
+
+    {/* Summary */}
+    <div className="card">
+      {[
+        { label: partial ? `שכר בסיס (${workedDays}/${totalWorkDays} ימים)` : `שכר בסיס`, val: fmt(effectiveBase), neg: false },
+        { label: `שבתות (${saturdays}×${fmt(satPrice)})`, val: fmt(satTotal), neg: false },
+        { label: `שעות נוספות (${overtimeH}ש׳)`, val: fmt(overtimePay), neg: false },
+        { label: "דמי הסעה",                  val: fmt(travel),      neg: false },
+        { label: "ניכוי מס הכנסה",            val: taxFinal === 0 ? "₪0 (מאופס)" : "-" + fmt(taxFinal),   neg: taxFinal > 0 },
+        { label: "ניכוי ביטוח לאומי",         val: biturFinal === 0 ? "₪0 (מאופס)" : "-" + fmt(biturFinal), neg: biturFinal > 0 },
+      ].map(({ label, val, neg }) => (
+        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #f1f5f9", fontSize: 16 }}>
+          <span style={{ color: "#374151" }}>{label}</span>
+          <span style={{ fontWeight: 600, color: neg ? "#dc2626" : "#1e293b" }}>{val}</span>
+        </div>
+      ))}
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 0 4px", fontSize: 22, fontWeight: 700, borderTop: "2px solid #e2e8f0", marginTop: 4 }}>
+        <span>נטו לתשלום</span>
+        <span style={{ color: "#1a56db" }}>{fmt(net)}</span>
+      </div>
+    </div>
+
+    {/* Actions */}
+    <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {approved ? (
+        <div style={{ background: "#dcfce7", color: "#166534", padding: "14px 16px", borderRadius: 12, textAlign: "center", fontWeight: 700, fontSize: 17 }}>
+          ✅ שכר {MONTHS_HE[month]} אושר — {fmt(net)}
+        </div>
+      ) : (
+        <button className="btn btn-primary btn-full" onClick={handleApprove}>
+          ✅ אשר תשלום — {fmt(net)}
+        </button>
+      )}
+      <button className="btn btn-secondary btn-full" onClick={() => onNavigate("annual")}>צפה בדוח שנתי</button>
+    </div>
+
+    <BottomNav active="payroll" onNavigate={onNavigate} />
+  </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   TASKS SCREEN — receives tasks from App state
+════════════════════════════════════════════ */
+const TasksScreen = ({ onNavigate, tasks, setTasks }) => {
+  const [detail, setDetail] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newTask, setNewTask] = useState({ text: "", due: "", urgent: false });
+  const [addErr, setAddErr] = useState("");
+
+  const toggle = id => setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+
+  const submitAdd = () => {
+    if (!newTask.text.trim()) { setAddErr("יש להזין תיאור משימה"); return; }
+    if (!newTask.due)         { setAddErr("יש לבחור תאריך יעד"); return; }
+    const d = new Date(newTask.due);
+    const fmt = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    setTasks(prev => [...prev, {
+      id: Date.now(), text: newTask.text.trim(), done: false,
+      urgent: newTask.urgent, due: fmt,
+      detail: newTask.text.trim(), nav: null, navLabel: null,
+    }]);
+    setShowAdd(false);
+    setNewTask({ text: "", due: "", urgent: false });
+    setAddErr("");
+  };
+
+  return (
+    <div className="screen">
+      <DemoBanner />
+      <div className="screen-header">
+        <h2>✅ משימות</h2>
+        <p>{tasks.filter(t => !t.done).length} פתוחות · {tasks.filter(t => t.done).length} הושלמו</p>
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {tasks.map((t, i) => (
+          <div key={t.id} className="list-item" style={{ cursor: "pointer" }} onClick={() => setDetail(t)}>
+            <input type="checkbox" checked={t.done}
+              onClick={e => e.stopPropagation()}
+              onChange={() => toggle(t.id)}
+              style={{ width: 22, height: 22, cursor: "pointer", flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, color: t.done ? "#94a3b8" : "#1e293b", textDecoration: t.done ? "line-through" : "none", fontWeight: 500 }}>{t.text}</div>
+              <div style={{ fontSize: 14, color: "#94a3b8" }}>עד {t.due}</div>
+            </div>
+            {t.urgent && !t.done && <span className="badge badge-red">דחוף</span>}
+            <span style={{ color: "#94a3b8", fontSize: 20 }}>›</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: "0 16px" }}>
+        <button className="btn btn-primary btn-full" onClick={() => { setShowAdd(true); setAddErr(""); }}>+ הוסף משימה</button>
+      </div>
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={() => setShowAdd(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">+ משימה חדשה</div>
+            <div className="input-group">
+              <label className="input-label">תיאור המשימה *</label>
+              <input className="input-field" value={newTask.text}
+                onChange={e => { setNewTask(t => ({ ...t, text: e.target.value })); setAddErr(""); }}
+                placeholder='למשל: חדש ביטוח עבודה' />
+            </div>
+            <div className="input-group">
+              <label className="input-label">תאריך יעד *</label>
+              <input className="input-field" type="date"
+                min={new Date().toISOString().split("T")[0]}
+                value={newTask.due}
+                onChange={e => { setNewTask(t => ({ ...t, due: e.target.value })); setAddErr(""); }} />
+            </div>
+            <div className="input-group" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+              <input type="checkbox" checked={newTask.urgent}
+                onChange={e => setNewTask(t => ({ ...t, urgent: e.target.checked }))}
+                style={{ width: 22, height: 22, cursor: "pointer" }} />
+              <label className="input-label" style={{ margin: 0 }}>סמן כדחוף 🔴</label>
+            </div>
+            {addErr && <div style={{ color: "#dc2626", fontSize: 14, marginBottom: 8 }}>⚠️ {addErr}</div>}
+            <button className="btn btn-primary btn-full" onClick={submitAdd}>💾 הוסף משימה</button>
+            <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => setShowAdd(false)}>ביטול</button>
+          </div>
+        </div>
+      )}
+
+      {detail && (
+        <div className="modal-overlay" onClick={() => setDetail(null)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 30, marginBottom: 6 }}>{detail.urgent ? "🔴" : "🟡"}</div>
+            <div className="modal-title">{detail.text}</div>
+            <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, color: "#374151", marginBottom: 6 }}>📅 תאריך יעד: <strong>{detail.due}</strong></div>
+              <div style={{ fontSize: 15, color: "#374151", lineHeight: 1.5 }}>{detail.detail}</div>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={() => { toggle(detail.id); setDetail(null); }}>
+              {detail.done ? "↩️ סמן כפתוח" : "✅ סמן כהושלם"}
+            </button>
+            {detail.nav && (
+              <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => { setDetail(null); onNavigate(detail.nav); }}>
+                {detail.navLabel} ›
+              </button>
+            )}
+            <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => setDetail(null)}>סגור</button>
+          </div>
+        </div>
+      )}
+
+      <BottomNav active="tasks" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   SETTINGS SCREEN — with notification config
+════════════════════════════════════════════ */
+const SettingsScreen = ({ onNavigate, notifSettings, setNotifSettings, tasks }) => {
+  const [permStatus, setPermStatus] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+  );
+  const [testMsg, setTestMsg] = useState("");
+
+  const requestPermission = async () => {
+    if (typeof Notification === "undefined") { setTestMsg("הדפדפן לא תומך בהתראות"); return; }
+    const result = await Notification.requestPermission();
+    setPermStatus(result);
+    if (result === "granted") setTestMsg("✅ הרשאה ניתנה — ההתראות פעילות");
+    else setTestMsg("❌ ההרשאה נדחתה — אפשר ידנית בהגדרות הדפדפן");
+  };
+
+  const sendTest = () => {
+    if (Notification.permission !== "granted") { setTestMsg("יש להפעיל הרשאה קודם"); return; }
+    new Notification("CareDesk — בדיקת התראה", {
+      body: `התראה תישלח ${notifSettings.leadDays} ימים לפני תאריך יעד של משימות דחופות`,
+    });
+    setTestMsg("📲 התראת בדיקה נשלחה");
+  };
+
+  const permLabel = permStatus === "granted" ? "✅ פעיל" : permStatus === "denied" ? "❌ חסום" : "⚪ לא הופעל";
+  const permBadge = permStatus === "granted" ? "badge-green" : permStatus === "denied" ? "badge-red" : "badge-yellow";
+
+  return (
+  <div className="screen">
+    <DemoBanner />
+    <div className="screen-header">
+      <h2>⚙️ הגדרות</h2>
+    </div>
+
+    {/* ── Notification settings ── */}
+    <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <strong style={{ fontSize: 17 }}>🔔 התראות Push</strong>
+        <span className={`badge ${permBadge}`}>{permLabel}</span>
+      </div>
+
+      <div className="input-group">
+        <label className="input-label">שלח התראה כמה ימים לפני?</label>
+        <select className="input-field" value={notifSettings.leadDays}
+          onChange={e => setNotifSettings(s => ({ ...s, leadDays: +e.target.value }))}>
+          <option value={3}>3 ימים לפני</option>
+          <option value={7}>7 ימים לפני</option>
+          <option value={14}>14 ימים לפני</option>
+          <option value={30}>30 ימים לפני</option>
+        </select>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {permStatus !== "granted" && (
+          <button className="btn btn-primary btn-full" onClick={requestPermission}>
+            🔔 הפעל התראות
+          </button>
+        )}
+        <button className="btn btn-secondary btn-full" onClick={sendTest}>
+          📲 שלח התראת בדיקה
+        </button>
+      </div>
+
+      {testMsg && (
+        <div style={{ marginTop: 10, fontSize: 15, color: "#374151", background: "#f8fafc", borderRadius: 8, padding: "10px 12px" }}>
+          {testMsg}
+        </div>
+      )}
+
+      <div style={{ marginTop: 14, fontSize: 14, color: "#64748b", lineHeight: 1.6 }}>
+        המערכת תשלח התראה עבור כל משימה פתוחה ודחופה {notifSettings.leadDays} ימים לפני תאריך היעד.
+      </div>
+    </div>
+
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      {[
+        { icon: "📊", label: "דוח שנתי 2024", nav: "annual" },
+        { icon: "🔐", label: "משתמשים והרשאות", nav: "permissions" },
+        { icon: "⚖️", label: "אימות משפטי", nav: "legal" },
+        { icon: "🔍", label: "סשן פעיל / Audit Log", nav: "session" },
+        { icon: "📋", label: "תהליך קליטה", nav: "onboarding" },
+      ].map(item => (
+        <div key={item.nav} className="list-item" style={{ cursor: "pointer", justifyContent: "space-between" }} onClick={() => onNavigate(item.nav)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 20 }}>{item.icon}</span>
+            <span style={{ fontSize: 16, color: "#1e293b", fontWeight: 500 }}>{item.label}</span>
+          </div>
+          <span style={{ color: "#94a3b8" }}>›</span>
+        </div>
+      ))}
+    </div>
+
+    <div style={{ padding: "0 16px" }}>
+      <button className="btn btn-danger btn-full" onClick={() => onNavigate("login")}>התנתק</button>
+    </div>
+
+    <BottomNav active="settings" onNavigate={onNavigate} />
+  </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   ONBOARDING SCREEN
+════════════════════════════════════════════ */
+const OnboardingScreen = ({ onNavigate, setWorker, setDocs, setTasks }) => {
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", idNum: "", nationality: "",
+    passportNum: "", passportExp: "", visaType: "", visaExp: "",
+    bankName: "", bankAccount: "", baseSalary: "",
+    healthInsurer: "", pensionFund: "",
+  });
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const finish = () => {
+    const today = new Date();
+    const fmtD = d => d ? `${String(new Date(d).getDate()).padStart(2,"0")}/${String(new Date(d).getMonth()+1).padStart(2,"0")}/${String(new Date(d).getFullYear()).slice(2)}` : "";
+    const startStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
+
+    const flagMap = { "פיליפינים":"🇵🇭","אינדונזיה":"🇮🇩","הודו":"🇮🇳","סרי לנקה":"🇱🇰","נפאל":"🇳🇵","אוזבקיסטן":"🇺🇿","אחר":"🌍" };
+    const flag = flagMap[form.nationality] || "";
+
+    setWorker({
+      firstName:  form.firstName  || "עובד",
+      lastName:   form.lastName   || "חדש",
+      passportId: form.passportNum || form.idNum || "—",
+      visaType:   form.visaType   || "—",
+      visaExp:    fmtD(form.visaExp),
+      nationality: `${form.nationality} ${flag}`.trim(),
+      startDate:  startStr,
+      role:       "מטפל/ת סיעוד",
+    });
+
+    const visaStatus = form.visaExp ? `תקף עד ${fmtD(form.visaExp)}` : "לא הוזן";
+    const visaBadge  = form.visaExp && new Date(form.visaExp) > new Date() ? "badge-green" : "badge-yellow";
+    setDocs([
+      { name: "דרכון",       status: form.passportExp ? `תקף עד ${fmtD(form.passportExp)}` : "נרשם", badge: "badge-green", action: null },
+      { name: "ויזה B1",     status: visaStatus, badge: visaBadge, action: "עדכן ויזה" },
+      { name: "חוזה עבודה",  status: "טרם נחתם ⚠️", badge: "badge-yellow", action: "הוסף חוזה" },
+      { name: "ביטוח בריאות", status: form.healthInsurer ? `${form.healthInsurer} ✅` : "חסר ❌", badge: form.healthInsurer ? "badge-green" : "badge-red", action: form.healthInsurer ? null : "הוסף מסמך" },
+    ]);
+
+    setTasks(prev => [
+      ...prev.filter(t => t.done), // keep completed tasks, add fresh ones for new worker
+      { id: Date.now()+1, text: `חתום חוזה עבודה — ${form.firstName} ${form.lastName}`, done: false, urgent: true,
+        due: startStr, detail: "יש לחתום על חוזה עבודה בתוך 30 יום מתחילת העבודה.", nav: "worker", navLabel: "עדכן מסמך" },
+      { id: Date.now()+2, text: `פתח תיק ביטוח לאומי — ${form.firstName} ${form.lastName}`, done: false, urgent: false,
+        due: startStr, detail: "יש לפתוח תיק ביטוח לאומי למעסיק ולעובד.", nav: null, navLabel: null },
+    ]);
+
+    onNavigate("worker");
+  };
+
+  const steps = [
+    { title: "פרטי עובד", icon: "👤" },
+    { title: "מסמכים", icon: "📄" },
+    { title: "פרטי תשלום", icon: "💳" },
+    { title: "ביטוחים", icon: "🛡️" },
+    { title: "סיום", icon: "✅" },
+  ];
+
+  const stepContent = [
+    /* 0 — employee details */
+    <div>
+      <div className="input-group">
+        <label className="input-label">שם פרטי</label>
+        <input className="input-field" placeholder="מריה" value={form.firstName} onChange={set("firstName")} />
+      </div>
+      <div className="input-group">
+        <label className="input-label">שם משפחה</label>
+        <input className="input-field" placeholder="סנטוס" value={form.lastName} onChange={set("lastName")} />
+      </div>
+      <div className="input-group">
+        <label className="input-label">מספר ת.ז / דרכון</label>
+        <input className="input-field" placeholder="123456789" value={form.idNum} onChange={set("idNum")} />
+      </div>
+      <div className="input-group">
+        <label className="input-label">לאום</label>
+        <select className="input-field" value={form.nationality} onChange={set("nationality")}>
+          <option value="">בחר לאום</option>
+          <option>פיליפינים</option><option>אינדונזיה</option><option>הודו</option>
+          <option>סרי לנקה</option><option>נפאל</option><option>אוזבקיסטן</option><option>אחר</option>
+        </select>
+      </div>
+    </div>,
+
+    /* 1 — documents */
+    <div>
+      <div className="input-group">
+        <label className="input-label">מספר דרכון</label>
+        <input className="input-field" placeholder="P12345678" value={form.passportNum} onChange={set("passportNum")} />
+      </div>
+      <div className="input-group">
+        <label className="input-label">תוקף דרכון</label>
+        <input className="input-field" type="date" value={form.passportExp} onChange={set("passportExp")} />
+      </div>
+      <div className="input-group">
+        <label className="input-label">סוג ויזה</label>
+        <select className="input-field" value={form.visaType} onChange={set("visaType")}>
+          <option value="">בחר סוג ויזה</option>
+          <option>B1 — עבודה</option><option>B2 — תייר</option><option>A5 — תושב</option>
+        </select>
+      </div>
+      <div className="input-group">
+        <label className="input-label">תוקף ויזה</label>
+        <input className="input-field" type="date" value={form.visaExp} onChange={set("visaExp")} />
+      </div>
+    </div>,
+
+    /* 2 — payment */
+    <div>
+      <div className="input-group">
+        <label className="input-label">בנק</label>
+        <select className="input-field" value={form.bankName} onChange={set("bankName")}>
+          <option value="">בחר בנק</option>
+          <option>בנק הפועלים</option><option>בנק לאומי</option><option>מזרחי טפחות</option>
+          <option>דיסקונט</option><option>הבינלאומי</option>
+        </select>
+      </div>
+      <div className="input-group">
+        <label className="input-label">מספר חשבון בנק</label>
+        <input className="input-field" placeholder="12-345-678901" value={form.bankAccount} onChange={set("bankAccount")} />
+      </div>
+      <div className="input-group">
+        <label className="input-label">שכר בסיס חודשי (₪)</label>
+        <input className="input-field" type="number" placeholder="6500" value={form.baseSalary} onChange={set("baseSalary")} />
+      </div>
+    </div>,
+
+    /* 3 — insurance */
+    <div>
+      <div className="input-group">
+        <label className="input-label">קופת חולים</label>
+        <select className="input-field" value={form.healthInsurer} onChange={set("healthInsurer")}>
+          <option value="">בחר קופת חולים</option>
+          <option>כללית</option><option>מכבי</option><option>מאוחדת</option><option>לאומית</option>
+        </select>
+      </div>
+      <div className="input-group">
+        <label className="input-label">קרן פנסיה</label>
+        <select className="input-field" value={form.pensionFund} onChange={set("pensionFund")}>
+          <option value="">בחר קרן פנסיה</option>
+          <option>מגדל מקפת</option><option>הראל</option><option>כלל</option><option>מנורה מבטחים</option>
+        </select>
+      </div>
+      <div className="card" style={{ background: "#f0fdf4", margin: 0, marginTop: 12 }}>
+        <p style={{ fontSize: 14, color: "#166534" }}>✅ הפרשות מחושבות אוטומטית לפי חוק: 6.5% פנסיה + 6% פיצויים + 2.5% השתלמות</p>
+      </div>
+    </div>,
+
+    /* 4 — summary */
+    <div>
+      <div className="card" style={{ background: "#f0fdf4", margin: 0 }}>
+        <p style={{ fontSize: 17, fontWeight: 700, color: "#166534", marginBottom: 12 }}>✅ סיכום קליטה</p>
+        {[
+          ["שם", `${form.firstName} ${form.lastName}`.trim() || "—"],
+          ["ת.ז", form.idNum || "—"],
+          ["ויזה", form.visaType || "—"],
+          ["שכר בסיס", form.baseSalary ? `₪${form.baseSalary}` : "—"],
+          ["קופת חולים", form.healthInsurer || "—"],
+          ["פנסיה", form.pensionFund || "—"],
+        ].map(([k, v]) => (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #dcfce7", fontSize: 15 }}>
+            <span style={{ color: "#64748b" }}>{k}</span>
+            <span style={{ fontWeight: 600, color: "#1e293b" }}>{v}</span>
+          </div>
+        ))}
+      </div>
+    </div>,
+  ];
+
+  return (
+    <div className="screen">
+      <DemoBanner />
+      <div className="screen-header">
+        <h2>📋 קליטת עובד חדש</h2>
+        <p>{steps[step].icon} {steps[step].title} — שלב {step + 1} מתוך {steps.length}</p>
+      </div>
+
+      <div style={{ padding: "16px" }}>
+        <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+          {steps.map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: i <= step ? "#1a56db" : "#e2e8f0", transition: "background 0.3s" }} />
+          ))}
+        </div>
+
+        <div className="card" style={{ margin: 0 }}>
+          {stepContent[step]}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          {step > 0 && <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setStep(s => s - 1)}>← אחורה</button>}
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => {
+            if (step < steps.length - 1) setStep(s => s + 1);
+            else finish();
+          }}>
+            {step === steps.length - 1 ? "✅ סיים ופתח תיק" : "המשך →"}
+          </button>
+        </div>
+
+        <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => onNavigate("dashboard")}>ביטול</button>
+      </div>
+
+      <BottomNav active="dashboard" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   NEW: ANNUAL REPORT SCREEN
+════════════════════════════════════════════ */
+const AnnualReportScreen = ({ onNavigate }) => (
+  <div className="screen">
+    <DemoBanner />
+    <div className="screen-header">
+      <h2>📊 דוח שנתי 2024</h2>
+      <p>מריה סנטוס · ינואר–דצמבר 2024</p>
+    </div>
+
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      <div className="card">
+        <div className="card-title">💰 שכר שנתי ברוטו</div>
+        <div className="card-value">₪84,840</div>
+        <div className="card-sub">ממוצע חודשי: ₪7,070 · 12 חודשים</div>
+      </div>
+      <div style={{ display: "flex", gap: 8, padding: "0 16px" }}>
+        <div className="card" style={{ flex: 1, margin: 0 }}>
+          <div className="card-title">🏖️ ימי חופשה</div>
+          <div className="card-value" style={{ fontSize: 20 }}>8</div>
+          <div className="card-sub">מתוך 12 זכאות</div>
+        </div>
+        <div className="card" style={{ flex: 1, margin: 0 }}>
+          <div className="card-title">🤒 ימי מחלה</div>
+          <div className="card-value" style={{ fontSize: 20 }}>3</div>
+          <div className="card-sub">מתוך 18 זכאות</div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-title">🛡️ הפרשות סוציאליות</div>
+        <div className="card-value">₪5,090</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 10 }}>
+          {[["פנסיה", "₪2,545"], ["פיצויים", "₪1,697"], ["השתלמות", "₪848"]].map(([k, v]) => (
+            <div key={k} style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#64748b" }}>{k}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div style={{ padding: "4px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+      <button className="btn btn-primary btn-full" onClick={() => alert("📄 מוריד PDF... (סימולציה)")}>
+        📥 הורד PDF
+      </button>
+      <button className="btn btn-secondary btn-full" onClick={() => alert("📧 נשלח לרו״ח בהצלחה (סימולציה)")}>
+        📨 שלח לרו״ח
+      </button>
+      <button className="btn btn-secondary btn-full" onClick={() => onNavigate("settings")}>← חזרה</button>
+    </div>
+
+    <BottomNav active="payroll" onNavigate={onNavigate} />
+  </div>
+);
+
+/* ════════════════════════════════════════════
+   NEW: EMPTY STATE / FIRST-TIME USER SCREEN
+════════════════════════════════════════════ */
+const EmptyStateScreen = ({ onNavigate }) => (
+  <div className="screen" style={{ background: "#fff" }}>
+    <div style={{ padding: "48px 24px 24px", textAlign: "center" }}>
+      <div style={{ fontSize: 72, marginBottom: 16 }}>🏥</div>
+      <h2 style={{ fontSize: 24, fontWeight: 800, color: "#1e293b", marginBottom: 10 }}>ברוכים הבאים ל-CareDesk</h2>
+      <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6, marginBottom: 32 }}>
+        פתח תיק העסקה ראשון — לוקח כ-20 דקות
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+        {[
+          { icon: "⚡", title: "מנוע חוקים אוטומטי", desc: "חישוב שכר לפי חוק עובדים זרים בזמן אמת" },
+          { icon: "🔍", title: "שקיפות בחישובי שכר", desc: "כל פרט מוסבר — בלי הפתעות" },
+          { icon: "🔔", title: "תזכורות ומסמכים", desc: "ויזות, דוחות, תשלומים — הכל מנוהל עבורך" },
+        ].map(c => (
+          <div key={c.title} className="card" style={{ textAlign: "right", display: "flex", gap: 14, alignItems: "flex-start", margin: 0 }}>
+            <div style={{ fontSize: 28, flex: "0 0 36px" }}>{c.icon}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{c.title}</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{c.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button className="btn btn-primary btn-full" onClick={() => onNavigate("onboarding")}>
+        🚀 פתח תיק ראשון
+      </button>
+      <button className="btn btn-secondary btn-full" style={{ marginTop: 8 }} onClick={() => alert("📖 קרא עוד על CareDesk (סימולציה)")}>
+        קרא עוד
+      </button>
+    </div>
+  </div>
+);
+
+/* ════════════════════════════════════════════
+   NEW: LEGAL VERIFICATION SCREEN
+════════════════════════════════════════════ */
+const LegalScreen = ({ onNavigate }) => {
+  const [showModal, setShowModal] = useState(false);
+  const [newRule, setNewRule] = useState({ rule: "", validator: "", date: "" });
+
+  const rules = [
+    { text: "כלל חישוב שכר בסיס", status: "מאומת ✅", badge: "badge-green", date: "01/01/2024", source: "יועץ שכר" },
+    { text: "כלל חישוב שבתות", status: "ממתין לאימות ⚠️", badge: "badge-yellow", date: "—", source: "—" },
+    { text: "כלל חישוב ניכויים", status: "ממתין לאימות ⚠️", badge: "badge-yellow", date: "—", source: "—" },
+    { text: "Privacy Notice (תיקון 13)", status: "טיוטה בלבד ⚠️", badge: "badge-yellow", date: "—", source: "—" },
+    { text: "Flow תרחישי קצה", status: "לא הוגדר ❌", badge: "badge-red", date: "—", source: "—" },
+  ];
+
+  return (
+    <div className="screen">
+      <DemoBanner />
+      <div className="screen-header">
+        <h2>⚖️ אימות משפטי</h2>
+        <p>ורגולטורי</p>
+      </div>
+
+      <div style={{ margin: "12px 16px", background: "#fef3c7", borderRadius: 12, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start", border: "1px solid #fcd34d" }}>
+        <span style={{ fontSize: 20 }}>⚠️</span>
+        <span style={{ fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
+          יש לאמת עם יועץ מקצועי לפני שימוש מסחרי. מסמך זה הוא לצורכי מעקב פנימי בלבד.
+        </span>
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid #f1f5f9" }}>
+          <strong style={{ fontSize: 14 }}>כללים לאימות</strong>
+        </div>
+        {rules.map((r, i) => (
+          <div key={i} className="rule-row" style={{ padding: "12px 16px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{r.text}</div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                {r.date !== "—" ? `${r.date} · ${r.source}` : "טרם אומת"}
+              </div>
+            </div>
+            <span className={`badge ${r.badge}`} style={{ fontSize: 10, whiteSpace: "nowrap" }}>{r.status}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: "4px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+        <button className="btn btn-primary btn-full" onClick={() => setShowModal(true)}>+ הוסף אימות</button>
+        <button className="btn btn-secondary btn-full" onClick={() => alert("📤 ייוצא לרו׳׳ח (סימולציה)")}>ייצא לרו״ח</button>
+        <button className="btn btn-secondary btn-full" onClick={() => onNavigate("settings")}>← חזרה</button>
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">➕ הוסף אימות חדש</div>
+            <div className="input-group">
+              <label className="input-label">כלל</label>
+              <input className="input-field" placeholder="שם הכלל המשפטי..." value={newRule.rule} onChange={e => setNewRule(p => ({ ...p, rule: e.target.value }))} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">מאמת</label>
+              <input className="input-field" placeholder="שם היועץ / הגורם המאמת..." value={newRule.validator} onChange={e => setNewRule(p => ({ ...p, validator: e.target.value }))} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">תאריך אימות</label>
+              <input className="input-field" type="date" value={newRule.date} onChange={e => setNewRule(p => ({ ...p, date: e.target.value }))} />
+            </div>
+            <button className="btn btn-primary btn-full" onClick={() => { alert("✅ אימות נוסף (סימולציה)"); setShowModal(false); }}>שמור</button>
+            <button className="btn btn-secondary btn-full" style={{ marginTop: 6 }} onClick={() => setShowModal(false)}>ביטול</button>
+          </div>
+        </div>
+      )}
+
+      <BottomNav active="settings" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   NEW: SESSION / AUDIT LOG SCREEN
+════════════════════════════════════════════ */
+const SessionScreen = ({ onNavigate }) => {
+  const auditLog = [
+    { action: "הועלה מסמך: אשרה", time: "14:32", entity: "מריה סנטוס" },
+    { action: "נפתח תיק העסקה", time: "14:31", entity: "תיק #001" },
+    { action: "חושב שכר פברואר", time: "14:35", entity: "PayrollPeriod" },
+    { action: "נצפה דרכון", time: "14:38", entity: "מריה סנטוס" },
+    { action: "שונה סטטוס משימה", time: "14:40", entity: "Task #1" },
+  ];
+
+  return (
+    <div className="screen">
+      <DemoBanner />
+      <div className="screen-header">
+        <h2>🔍 סשן פעיל</h2>
+        <p>Audit Log — 15/02/2025</p>
+      </div>
+
+      <div className="card">
+        <strong style={{ fontSize: 14, display: "block", marginBottom: 12 }}>פרטי הסשן</strong>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {[
+            ["👤 משתמש", "רחל כהן"],
+            ["🕐 כניסה", "15/02/2025 14:30"],
+            ["🌐 IP", "XXX.XXX.X.XX"],
+            ["🔢 פעולות", "7 בסשן"],
+          ].map(([k, v]) => (
+            <div key={k} style={{ background: "#f8fafc", borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ fontSize: 11, color: "#64748b" }}>{k}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="section-title">Audit Log</p>
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <table className="audit-table">
+          <thead>
+            <tr>
+              <th>פעולה</th>
+              <th>שעה</th>
+              <th>ישות</th>
+            </tr>
+          </thead>
+          <tbody>
+            {auditLog.map((row, i) => (
+              <tr key={i}>
+                <td style={{ fontSize: 11 }}>{row.action}</td>
+                <td style={{ whiteSpace: "nowrap", color: "#64748b" }}>{row.time}</td>
+                <td style={{ fontSize: 11, color: "#1a56db" }}>{row.entity}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ padding: "4px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+        <button className="btn btn-danger btn-full" onClick={() => { if (window.confirm("לסיים את הסשן?")) onNavigate("login"); }}>
+          🚪 סיום סשן
+        </button>
+        <button className="btn btn-secondary btn-full" onClick={() => onNavigate("settings")}>← חזרה</button>
+      </div>
+
+      <BottomNav active="settings" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   NEW: PERMISSIONS SCREEN
+════════════════════════════════════════════ */
+const PermissionsScreen = ({ onNavigate }) => {
+  const [showModal, setShowModal] = useState(false);
+  const [newUser, setNewUser] = useState({ name: "", role: "", email: "" });
+
+  const users = [
+    {
+      name: "רחל כהן",
+      role: "מנהל משפחה",
+      perms: "כל ההרשאות",
+      badge: "badge-blue",
+      icon: "👑",
+      avatar: "ר",
+    },
+    {
+      name: "דוד כהן (בן)",
+      role: "בן משפחה",
+      perms: "צפייה + משימות",
+      badge: "badge-green",
+      icon: "👤",
+      avatar: "ד",
+    },
+    {
+      name: "רו״ח ישראל לוי",
+      role: "חשב שכר",
+      perms: "שכר + תשלומים + דוחות",
+      badge: "badge-yellow",
+      icon: "📊",
+      avatar: "י",
+    },
+  ];
+
+  return (
+    <div className="screen">
+      <DemoBanner />
+      <div className="screen-header">
+        <h2>🔐 משתמשים והרשאות</h2>
+        <p>{users.length} משתמשים פעילים</p>
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {users.map((u, i) => (
+          <div key={i} className="user-row" style={{ borderBottom: i < users.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+            <div className="user-avatar">
+              {u.avatar}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{u.name}</span>
+                <span style={{ fontSize: 16 }}>{u.icon}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b" }}>{u.role}</div>
+              <div style={{ fontSize: 11, marginTop: 3 }}>
+                <span className={`badge ${u.badge}`} style={{ fontSize: 10 }}>{u.perms}</span>
+              </div>
+            </div>
+            <button className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: 12 }}
+              onClick={() => alert(`עריכת הרשאות: ${u.name} (סימולציה)`)}>
+              ערוך
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: "4px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+        <button className="btn btn-primary btn-full" onClick={() => setShowModal(true)}>+ הוסף משתמש</button>
+        <button className="btn btn-secondary btn-full" onClick={() => onNavigate("settings")}>← חזרה</button>
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">➕ הוסף משתמש חדש</div>
+            <div className="input-group">
+              <label className="input-label">שם מלא</label>
+              <input className="input-field" placeholder="שם המשתמש..." value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">תפקיד / הרשאה</label>
+              <input className="input-field" placeholder="למשל: בן משפחה, רו׳׳ח..." value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">אימייל</label>
+              <input className="input-field" type="email" placeholder="user@example.com" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
+            </div>
+            <button className="btn btn-primary btn-full" onClick={() => { alert("✅ משתמש נוסף (סימולציה)"); setShowModal(false); }}>שמור</button>
+            <button className="btn btn-secondary btn-full" style={{ marginTop: 6 }} onClick={() => setShowModal(false)}>ביטול</button>
+          </div>
+        </div>
+      )}
+
+      <BottomNav active="settings" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   TRUST SCREEN — בניית אמון עם המטפל
+════════════════════════════════════════════ */
+const trustData = {
+  principles: [
+    { icon: "🤝", title: "התחלה נכונה", body: "הקדישו את הימים הראשונים להיכרות: הציגו את הבית, השגרה, ההעדפות של המטופל ואנשי הקשר במשפחה." },
+    { icon: "💬", title: "תקשורת קבועה", body: "קבעו שיחת עדכון שבועית קצרה (גם בווטסאפ). אל תחכו שבעיה תצטבר." },
+    { icon: "🙏", title: "כבוד הדדי", body: "המטפל הוא איש מקצוע. פנייה בשמו, הכרת תודה ויחס מכבד — הבסיס לכל השאר." },
+    { icon: "⏳", title: "סבלנות בהסתגלות", body: "לוקח 4–8 שבועות עד ששני הצדדים מתרגלים. טעויות בהתחלה הן טבעיות." },
+    { icon: "🛡️", title: "גיבוי מול המטופל", body: "אם המטופל מתנגד, המשפחה צריכה לתווך ולגבות את המטפל — לא להשאיר אותו לבד מול הקושי." },
+    { icon: "🔐", title: "פרטיות ומרחב אישי", body: "למטפל מגיע חדר משלו, זמן מנוחה ופרטיות בשיחות עם משפחתו בחו\"ל." },
+    { icon: "💰", title: "שקיפות כספית", body: "שכר, החזרים, דמי כיס ותנאים — הכל בכתב ובזמן. עיכובים בתשלום הם הגורם מספר אחד לשחיקת אמון." },
+    { icon: "🗣️", title: "ללמוד כמה מילים בשפתו", body: "\"תודה\" ו\"בוקר טוב\" בשפת המטפל עושות פלאים. גם עידוד ללמידת עברית בסיסית עוזר לכולם." },
+  ],
+  expectations: [
+    { title: "שעות עבודה ומנוחה", body: "מתי מתחיל ונגמר יום העבודה, מהו זמן המנוחה היומי, ומה קורה בלילה." },
+    { title: "יום חופשי שבועי", body: "יום קבוע, שעת יציאה ושעת חזרה. שינויים רק בתיאום מראש." },
+    { title: "הגדרת המטלות", body: "מה כלול (טיפול אישי, בישול, ניקיון סביבת המטופל) ומה לא כלול." },
+    { title: "אוכל", body: "האם המטפל אוכל מאוכל הבית או מבשל לעצמו? תקציב קניות? מוצרים חשובים?" },
+    { title: "שימוש בטלפון", body: "מתי מותר ומתי מצופה זמינות מלאה למטופל." },
+    { title: "נהלי חירום", body: "את מי מתקשרים, היכן התרופות, מסמכים רפואיים ומספרי חירום." },
+    { title: "חופשות וחגים", body: "חופשה שנתית, חגי המטפל, נסיעות הביתה — לתאם חודשים מראש." },
+  ],
+  cultures: [
+    {
+      id: "muslim", label: "מוסלמי", flag: "🕌",
+      know: ["חמש תפילות ביום — אפשרו דקות ומקום שקט.", "רמדאן: צום מזריחה עד שקיעה — תאמו בעומס העבודה.", "חגים: עיד אל-פיטר ועיד אל-אדחא — חשוב לאפשר חופש ולברך."],
+      avoid: ["אל תגישו בשר חזיר ואל תצפו לרכישת אלכוהול.", "הימנעו מלחיצת יד עם בן/בת המין השני לפני בדיקה.", "אל תקבעו מטלות מאומצות בשעות הצום ברמדאן ללא תיאום."],
+    },
+    {
+      id: "indian", label: "הודי", flag: "🇮🇳",
+      know: ["רבים הינדים — חלקם צמחונים ונמנעים מבשר בקר. יש גם נוצרים ומוסלמים מהודו.", "דיוואלי הוא החג המרכזי — כמו ראש השנה אצלנו.", "תרבות כבוד והיררכיה — לרוב לא יסרבו ישירות. שאלו: \"האם משהו לא נוח?\""],
+      avoid: ["אל תצפו שיבשל בשר בקר אם זה נוגד לאמונתו.", "אל תפרשו שתיקה כהסכמה — ודאו בשאלות פתוחות."],
+    },
+    {
+      id: "filipino", label: "פיליפיני", flag: "🇵🇭",
+      know: ["רובם נוצרים קתולים — חג המולד חשוב מאוד, רבים ירצו לכנסייה ביום ראשון.", "המשפחה במרכז: גלו התעניינות בה — זה בונה קשר אמיתי.", "חיוך לא תמיד אומר שהכל בסדר — מטפל פיליפיני לרוב לא יתלונן ישירות."],
+      avoid: ["הימנעו מביקורת מול אחרים — זה נחווה כהשפלה קשה. משוב בפרטיות ובעדינות.", "אל תמנעו קשר עם המשפחה בפיליפינים או חופש ביום ראשון ללא סיבה."],
+    },
+    {
+      id: "srilankan", label: "סרי לנקי", flag: "🇱🇰",
+      know: ["רובם בודהיסטים, חלקם הינדים, נוצרים או מוסלמים — בררו.", "חג הווסאק (Vesak) חשוב לבודהיסטים.", "תרבות מנומסת — נדרשת שאלה יזומה לשמוע על קשיים."],
+      avoid: ["אל תניחו שדתו זהה לזו של מטפלים אחרים מהאזור.", "הימנעו מהרמת קול — היא נחווית כפגיעה קשה."],
+    },
+    {
+      id: "nepali", label: "נפאלי", flag: "🇳🇵",
+      know: ["רובם הינדים, חלקם בודהיסטים. רבים נמנעים מבשר בקר.", "חגים: דסאיין וטיהאר בסתיו — המקבילה לחגי תשרי.", "\"נמסטה\" (הצמדת ידיים) היא ברכה מקובלת ומכבדת."],
+      avoid: ["אל תצפו לאכילת בשר בקר.", "הימנעו מנגיעה בראשו — בתרבות ההינדית הראש נחשב קדוש."],
+    },
+    {
+      id: "eastern-eu", label: "מזרח אירופה", flag: "🇺🇦",
+      know: ["רובם נוצרים אורתודוקסים — חג המולד ופסחא לפי הלוח היוליאני (ינואר/אביב).", "תרבות תקשורת ישירה — מה שנשמע \"בוטה\" הוא לרוב פשוט ישירות.", "רבים משאירים מאחור ילדים — רגישות לנושא חשובה."],
+      avoid: ["אל תפרשו ישירות כהתרסה.", "אל תניחו ידיעת עברית — אפליקציות תרגום עוזרות מאוד."],
+    },
+  ],
+};
+
+const TrustScreen = ({ onNavigate }) => {
+  const [open, setOpen] = useState({ principles: true, expectations: false, culture: false });
+  const [activeCulture, setActiveCulture] = useState("filipino");
+  const toggle = k => setOpen(o => ({ ...o, [k]: !o[k] }));
+  const cult = trustData.cultures.find(c => c.id === activeCulture);
+
+  const Section = ({ id, title, icon, children }) => (
+    <div style={{ background: "white", borderRadius: 16, margin: "0 16px 12px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <button onClick={() => toggle(id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "18px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "right" }}>
+        <span style={{ fontSize: 24 }}>{icon}</span>
+        <span style={{ flex: 1, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>{title}</span>
+        <span style={{ fontSize: 22, color: "#94a3b8", transform: open[id] ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
+      </button>
+      {open[id] && <div style={{ padding: "0 18px 18px" }}>{children}</div>}
+    </div>
+  );
+
+  return (
+    <div className="screen">
+      <div className="screen-header" style={{ background: "linear-gradient(135deg,#7c3aed,#1a56db)" }}>
+        <h2>💡 בניית אמון עם המטפל</h2>
+        <p>מדריך מעשי לשותפות מוצלחת לאורך זמן</p>
+      </div>
+
+      {/* Hero insight */}
+      <div style={{ margin: "16px 16px 4px", background: "#f0fdf4", borderRadius: 16, padding: "16px 18px", border: "1px solid #bbf7d0" }}>
+        <p style={{ fontSize: 16, color: "#166534", lineHeight: 1.6 }}>
+          <strong>מחקרים מראים:</strong> מטפל שמרגיש מכובד ובטוח נשאר לאורך זמן. יציבות היא הדבר הטוב ביותר עבור המטופל — ועבורכם.
+        </p>
+      </div>
+
+      <div style={{ height: 12 }} />
+
+      {/* Section 1 — Principles */}
+      <Section id="principles" title="8 עקרונות יסוד" icon="🌟">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {trustData.principles.map((p, i) => (
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 24, flexShrink: 0 }}>{p.icon}</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{p.title}</div>
+                <div style={{ fontSize: 15, color: "#475569", marginTop: 3, lineHeight: 1.5 }}>{p.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* Section 2 — Expectations */}
+      <Section id="expectations" title="תיאום ציפיות מראש" icon="📋">
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {trustData.expectations.map((e, i) => (
+            <div key={i} style={{ padding: "12px 0", borderBottom: i < trustData.expectations.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{e.title}</div>
+              <div style={{ fontSize: 15, color: "#475569", marginTop: 3, lineHeight: 1.5 }}>{e.body}</div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* Section 3 — Cultural sensitivity */}
+      <Section id="culture" title="רגישות תרבותית" icon="🌍">
+        <div style={{ background: "#fef9c3", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 14, color: "#92400e", lineHeight: 1.5 }}>
+          💡 <strong>העיקרון החשוב מכולם:</strong> לשאול ולא להניח. כל אדם שונה — שאלו את המטפל שלכם מה חשוב לו.
+        </div>
+        {/* Culture tabs */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+          {trustData.cultures.map(c => (
+            <button key={c.id} onClick={() => setActiveCulture(c.id)}
+              style={{ padding: "8px 12px", borderRadius: 20, fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", background: activeCulture === c.id ? "#1a56db" : "#f1f5f9", color: activeCulture === c.id ? "white" : "#374151" }}>
+              {c.flag} {c.label}
+            </button>
+          ))}
+        </div>
+        {cult && (
+          <div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#166534", marginBottom: 8 }}>✅ כדאי לדעת</div>
+              {cult.know.map((k, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                  <span style={{ color: "#16a34a", flexShrink: 0, marginTop: 2 }}>•</span>
+                  <span style={{ fontSize: 15, color: "#1e293b", lineHeight: 1.5 }}>{k}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: "#fff7ed", borderRadius: 10, padding: "12px 14px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#c2410c", marginBottom: 8 }}>⚠️ ממה להימנע</div>
+              {cult.avoid.map((a, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                  <span style={{ color: "#ea580c", flexShrink: 0, marginTop: 2 }}>•</span>
+                  <span style={{ fontSize: 15, color: "#1e293b", lineHeight: 1.5 }}>{a}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
+
+      {/* Final tips */}
+      <div style={{ margin: "0 16px 16px", background: "linear-gradient(135deg,#7c3aed,#1a56db)", borderRadius: 16, padding: "18px" }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "white", marginBottom: 10 }}>3 מחוות קטנות, אפקט גדול</div>
+        {["ציינו את חגי המטפל ביומן המשפחתי ואחלו לו חג שמח.", "אפשרו לו לבשל מדי פעם אוכל מהבית שלו — גם למטופל זו חוויה נחמדה.", "זכרו: מטפל שמרגיש שייך מגיע לעבודה עם לב פתוח."].map((t, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "flex-start" }}>
+            <span style={{ color: "#fbbf24", fontSize: 18, flexShrink: 0 }}>★</span>
+            <span style={{ fontSize: 15, color: "rgba(255,255,255,0.9)", lineHeight: 1.5 }}>{t}</span>
+          </div>
+        ))}
+      </div>
+
+      <BottomNav active="dashboard" onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════
+   APP ROUTER — global state persists across nav
+════════════════════════════════════════════ */
+const App = () => {
+  const [screen, setScreen] = useState("login");
+
+  /* ── Global state — defaults defined at module level, loaded from localStorage ── */
+  const [worker, _setWorker] = useState(() => load("worker", defaultWorker));
+  const [docs,   _setDocs]   = useState(() => load("docs",   defaultDocs));
+  const [tasks,  _setTasks]  = useState(() => load("tasks",  defaultTasks));
+  const [obligations, _setObligations] = useState(() => load("obligations", defaultObligations));
+  const [notifSettings, _setNotifSettings] = useState(() => load("notif", { leadDays: 7 }));
+
+  /* ── Dual-save wrappers: save synchronously inside updater + useEffect backup ── */
+  /* This guarantees persistence even if the component unmounts before effects run  */
+  const setWorker = v => _setWorker(prev => {
+    const next = typeof v === "function" ? v(prev) : v;
+    save("worker", next); return next;
+  });
+  const setDocs = v => _setDocs(prev => {
+    const next = typeof v === "function" ? v(prev) : v;
+    save("docs", next); return next;
+  });
+  const setTasks = v => _setTasks(prev => {
+    const next = typeof v === "function" ? v(prev) : v;
+    save("tasks", next); return next;
+  });
+  const setObligations = v => _setObligations(prev => {
+    const next = typeof v === "function" ? v(prev) : v;
+    save("obligations", next); return next;
+  });
+  const setNotifSettings = v => _setNotifSettings(prev => {
+    const next = typeof v === "function" ? v(prev) : v;
+    save("notif", next); return next;
+  });
+
+  /* ── Belt-and-suspenders: also persist via useEffect after every render ── */
+  useEffect(() => { save("worker", worker); }, [worker]);
+  useEffect(() => { save("docs",   docs);   }, [docs]);
+  useEffect(() => { save("tasks",  tasks);  }, [tasks]);
+  useEffect(() => { save("obligations", obligations); }, [obligations]);
+  useEffect(() => { save("notif",  notifSettings); }, [notifSettings]);
+
+  /* ── Check and fire push notifications on load ── */
+  useEffect(() => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const now = new Date();
+    tasks.forEach(task => {
+      if (task.done) return;
+      const parts = task.due.split("/");
+      if (parts.length !== 3) return;
+      const due = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      const daysUntil = (due - now) / (1000 * 60 * 60 * 24);
+      if (daysUntil >= 0 && daysUntil <= notifSettings.leadDays) {
+        setTimeout(() => {
+          new Notification(`CareDesk${task.urgent ? " 🔴 דחוף" : ""}: ${task.text}`, {
+            body: `תאריך יעד: ${task.due} — עוד ${Math.ceil(daysUntil)} ימים`,
+            tag: `task_${task.id}`,
+          });
+        }, 1500);
+      }
+    });
+  }, []);
+
+  const navigate = (s) => setScreen(s);
+
+  if (screen === "login")       return <LoginScreen onNavigate={navigate} />;
+  if (screen === "dashboard")   return <DashboardScreen onNavigate={navigate} worker={worker} docs={docs} tasks={tasks} setTasks={setTasks} obligations={obligations} setObligations={setObligations} />;
+  if (screen === "worker")      return <WorkerScreen onNavigate={navigate} worker={worker} setWorker={setWorker} docs={docs} setDocs={setDocs} setTasks={setTasks} />;
+  if (screen === "payroll")     return <PayrollScreen onNavigate={navigate} setTasks={setTasks} />;
+  if (screen === "tasks")       return <TasksScreen onNavigate={navigate} tasks={tasks} setTasks={setTasks} />;
+  if (screen === "settings")    return <SettingsScreen onNavigate={navigate} notifSettings={notifSettings} setNotifSettings={setNotifSettings} tasks={tasks} />;
+  if (screen === "onboarding")  return <OnboardingScreen onNavigate={navigate} setWorker={setWorker} setDocs={setDocs} setTasks={setTasks} />;
+
+  /* ── New screens ── */
+  if (screen === "annual")      return <AnnualReportScreen onNavigate={navigate} />;
+  if (screen === "empty")       return <EmptyStateScreen onNavigate={navigate} />;
+  if (screen === "legal")       return <LegalScreen onNavigate={navigate} />;
+  if (screen === "session")     return <SessionScreen onNavigate={navigate} />;
+  if (screen === "permissions") return <PermissionsScreen onNavigate={navigate} />;
+  if (screen === "trust")       return <TrustScreen onNavigate={navigate} />;
+
+  return <LoginScreen onNavigate={navigate} />;
+};
+
+/* ════════════════════════════════════════════
+   SHELL
+════════════════════════════════════════════ */
+const Shell = () => (
+  <div className="phone-shell">
+    <div className="status-bar">
+      <span>9:41</span>
+      <span>CareDesk Israel v0.4</span>
+      <span>🔋 100%</span>
+    </div>
+    <App />
+  </div>
+);
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Shell />);
+</script>
+</body>
+</html>

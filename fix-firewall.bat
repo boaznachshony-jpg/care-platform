@@ -1,0 +1,3 @@
+@echo off
+echo Requesting admin rights to open firewall for CareDesk...
+powershell -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall add rule name=""CareDesk Vite Dev"" dir=in action=allow protocol=TCP localport=5173-5176 && echo OK && pause' -Verb RunAs"

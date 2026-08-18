@@ -17,6 +17,8 @@ export default [
       '**/playwright-report/**',
       '**/test-results/**',
       'docs/**',
+      'גרסה2.0/**',
+      'CareDesk_Claude_Code_Handoff_*/**',
     ],
   },
   js.configs.recommended,

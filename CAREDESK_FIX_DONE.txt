@@ -1,0 +1,21 @@
+תיקון persistence — הושלם ✅
+=====================================
+
+הקבצים הבאים עודכנו:
+- apps/web/public/caredesk_prototype.html
+- netlify-deploy/index.html
+
+מה שינינו:
+1. STORAGE_VERSION שודרג מ-cd_v1 ל-cd_v2
+   (מנקה localStorage ישן אוטומטית לכל המשתמשים)
+
+2. כל ה-defaults (defaultTasks, defaultWorker, defaultDocs, defaultObligations)
+   הועברו מחוץ ל-App component — קבועי module יציבים
+
+3. כל setter (setTasks, setWorker וכו') שומר ל-localStorage
+   מיידית בתוך ה-updater — לא מחכה ל-useEffect.
+   useEffect נשאר כגיבוי.
+
+לפריסה:
+  גרור את תיקיית netlify-deploy ל-Netlify Drop
+  https://app.netlify.com/drop

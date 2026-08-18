@@ -1,0 +1,42 @@
+{
+  "generated_at_local": "2026-08-17T13:47:00+03:00",
+  "repository": "boaznachshony-jpg/care-platform",
+  "main_sha": "ead8482628921af035855a8ab15e25a255043fe2",
+  "candidate_branch": {
+    "name": "codex/perform-final-product-gap-closure-review",
+    "head_sha": "2179da8cd745d0d3999e6e323a7d16ab8b8e034c",
+    "ahead_by": 2,
+    "behind_by": 0,
+    "files": [
+      "apps/web/src/pages/EmergencyBinderPage.tsx",
+      "apps/web/src/pages/case/AutomationPanel.tsx"
+    ],
+    "validated": false
+  },
+  "legacy_payroll_branch": {
+    "name": "codex/legacy-payroll-reconciliation",
+    "head_sha": "ead8482628921af035855a8ab15e25a255043fe2",
+    "published_changes": false
+  },
+  "issues": {
+    "54": "open_stale_after_pr65",
+    "60": "closed",
+    "61": "closed",
+    "62": "open",
+    "63": "open_pr52_closed",
+    "64": "open_p2"
+  },
+  "prs": {
+    "52": "closed_not_merged",
+    "53": "open_draft_nonblocking",
+    "55": "merged",
+    "65": "merged",
+    "66": "closed_duplicate"
+  },
+  "capability_totals": {
+    "complete": 5,
+    "partial": 9,
+    "foundation_only": 1,
+    "not_implemented": 0
+  }
+}

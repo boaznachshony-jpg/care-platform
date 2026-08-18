@@ -9,3 +9,9 @@ README.md
 CareDesk_*.md
 *.docx
 *.html
+# Backup / archive directories and Windows "Copy" files
+גרסה2.0/
+*- Copy.*
+* - Copy.*
+# Claude Code handoff snapshot directories
+CareDesk_Claude_Code_Handoff_*/
