@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+—import { fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
