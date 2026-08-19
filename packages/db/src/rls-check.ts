@@ -75,6 +75,8 @@ const ALL_TENANT_TABLES = [
   'payroll_entry',
   'professional_review_transition',
   'binder_export_receipt',
+  'regulation_rule',
+  'regulation_rule_transition',
 ] as const;
 
 interface Fixture {

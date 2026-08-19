@@ -780,6 +780,9 @@
     "document": {
       "uploaded": {
         "summary": "A document was uploaded to the case"
+      },
+      "intake_reviewed": {
+        "summary": "A document AI review was recorded"
       }
     },
     "automation": {
@@ -982,5 +985,39 @@
     "download": "Download securely",
     "language": "Language",
     "savePreferences": "Save preferences"
+  },
+  "regulation": {
+    "title": "Regulation rules — reviewed content",
+    "intro": "Reviewed factual content with cited sources and a full approval lifecycle. Only active, in-effect rules feed the assistant and event wizards.",
+    "disclaimer": "Reference content only — not legal advice; requires professional validation.",
+    "loadError": "Loading the rules failed.",
+    "transitionFailed": "The status change was rejected by the server.",
+    "empty": "No rules to show.",
+    "status": {
+      "draft": "Draft",
+      "in_review": "In review",
+      "approved": "Approved",
+      "active": "Active",
+      "retired": "Retired"
+    },
+    "source": "Source",
+    "authority": "Authority",
+    "version": "Version",
+    "effectiveFrom": "Effective from",
+    "reviewedBy": "Reviewed by",
+    "requiresValidation": "Requires professional validation before reliance.",
+    "reviewerName": "Professional reviewer name",
+    "reviewerNameHelp": "Free-text professional name — manual review record only; no provider is contacted.",
+    "submitForReview": "Submit for review",
+    "approve": "Approve",
+    "activate": "Activate",
+    "retire": "Retire",
+    "createTitle": "Draft a new rule",
+    "ruleKey": "Rule key",
+    "ruleKeyHelp": "Lowercase letters, digits and underscores only (3–80 chars).",
+    "ruleTitle": "Title",
+    "statement": "Factual statement",
+    "createFailed": "Creating the draft failed.",
+    "createDraft": "Save draft"
   }
 }

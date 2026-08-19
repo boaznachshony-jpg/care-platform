@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
+import { RegulationRulesAdmin } from '../components/RegulationRulesAdmin.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import type { ReminderLeadDays } from '../storage/mvp-storage.js';
@@ -541,6 +542,9 @@ export function SettingsPage() {
           </button>
         </div>
       </form>
+      {/* Reviewed regulation content lifecycle (capability #11) — server-backed,
+          manager-only mutations; deliberately outside the local profile form. */}
+      <RegulationRulesAdmin />
     </div>
   );
 }

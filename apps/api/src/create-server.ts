@@ -22,6 +22,10 @@ import { registerCanonicalProductIntelligenceRoutes } from './routes/canonical-p
 import { registerPayrollEntryRoutes } from './routes/payroll-entries.js';
 import { registerBinderExportRoutes } from './routes/binder-exports.js';
 import { registerEventActionPlanRoutes } from './routes/event-action-plans.js';
+import { registerRegulationRuleRoutes } from './routes/regulation-rules.js';
+import { registerLeaveEntryRoutes } from './routes/leave-entries.js';
+import { registerEvidenceExportRoutes } from './routes/evidence-exports.js';
+import { registerScenarioExpenseRoutes } from './routes/scenario-expenses.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -170,6 +174,10 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerPayrollEntryRoutes(app, container, productRateLimiter);
   registerBinderExportRoutes(app, container, productRateLimiter);
   registerEventActionPlanRoutes(app, container, productRateLimiter);
+  registerRegulationRuleRoutes(app, container, productRateLimiter);
+  registerLeaveEntryRoutes(app, container, productRateLimiter);
+  registerEvidenceExportRoutes(app, container, productRateLimiter);
+  registerScenarioExpenseRoutes(app, container, productRateLimiter);
 
   return app;
 }

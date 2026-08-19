@@ -108,6 +108,11 @@ import {
   PgAutomationReceiptStore,
   type AutomationReceiptStore,
 } from './automation/automation-receipt-store.js';
+import {
+  InMemoryRegulationRuleService,
+  PgRegulationRuleService,
+  type RegulationRuleService,
+} from './regulation-rule-service.js';
 
 /**
  * Closed-pilot family role-to-permission map (ADR-004). `family_member` is a
@@ -204,6 +209,12 @@ export interface Container {
   timeline: TimelineService;
   /** Durable replay receipts for automation execution (migration 0029). */
   automationReceipts: AutomationReceiptStore;
+  /**
+   * Reviewed regulation content lifecycle (migration 0032). Its
+   * `listActiveForContext` is the only query allowed to feed assistant/wizard
+   * rule context — active + effective-dated content only.
+   */
+  regulationRules: RegulationRuleService;
   openCase: OpenEmploymentCase;
   getCase: GetEmploymentCase;
   listCases: ListEmploymentCases;
@@ -491,6 +502,21 @@ export function buildContainer(env: Env): Container {
       chargingStartsAt: null,
     },
   };
+  // Instantiated once so the regulation service's in-memory role resolution
+  // goes through the very same authenticated read the Family Access page (and
+  // its tests) use — a test that makes this instance answer "viewer" makes
+  // every regulation mutation fail closed with 403.
+  const listFamilyMembersUseCase = new ListFamilyMembers(familyAccessDeps);
+  const regulationRules: RegulationRuleService = pool
+    ? new PgRegulationRuleService(pool)
+    : new InMemoryRegulationRuleService({
+        audit,
+        resolveRole: async (actor) => {
+          const access = await listFamilyMembersUseCase.execute(actor).catch(() => null);
+          return access?.members.find((member) => member.isCurrentUser)?.role ?? null;
+        },
+      });
+
   const visaDeps = {
     authorization,
     audit,
@@ -513,6 +539,7 @@ export function buildContainer(env: Env): Container {
     automationReceipts: pool
       ? new PgAutomationReceiptStore(pool)
       : new InMemoryAutomationReceiptStore(),
+    regulationRules,
     pool,
     openCase: new OpenEmploymentCase(caseDeps),
     // Read use cases take audit + clock too: a refused read is an audited
@@ -550,7 +577,7 @@ export function buildContainer(env: Env): Container {
     putWorkspaceFile: new PutWorkspaceFile(workspaceFileDeps),
     getWorkspaceFileUrl: new GetWorkspaceFileUrl(workspaceFileDeps),
     deleteWorkspaceFile: new DeleteWorkspaceFile(workspaceFileDeps),
-    listFamilyMembers: new ListFamilyMembers(familyAccessDeps),
+    listFamilyMembers: listFamilyMembersUseCase,
     inviteFamilyMember: new InviteFamilyMember(familyAccessDeps),
     updateFamilyMemberRole: new UpdateFamilyMemberRole(familyAccessDeps),
     revokeFamilyMember: new RevokeFamilyMember(familyAccessDeps),

@@ -108,7 +108,14 @@ export function registerEventActionPlanRoutes(
         return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
 
       // Deterministic server-side rebuild of the plan from canonical facts.
-      const documents = await container.listDocuments.execute(actor, params.data.caseId);
+      // Rule context comes exclusively from the regulation lifecycle's
+      // active-only query (migration 0032): status='active' rules inside their
+      // effective window — draft/in-review/approved/retired never leak here.
+      const rulesAsOf = new Date().toISOString().slice(0, 10);
+      const [documents, activeRules] = await Promise.all([
+        container.listDocuments.execute(actor, params.data.caseId),
+        container.regulationRules.listActiveForContext(actor, rulesAsOf),
+      ]);
       let plan: EventActionPlan;
       try {
         plan = createEventPlan(body.data.eventType, body.data.answers, {
@@ -117,9 +124,10 @@ export function registerEventActionPlanRoutes(
             type: item.document.documentType,
             expiresAt: item.document.expiresAt,
           })),
-          // Approved rule context is deliberately empty until the reviewed
-          // regulation lifecycle ships; the plan then requires review items.
-          approvedRules: [],
+          approvedRules: activeRules.map((rule) => ({
+            id: rule.id,
+            version: String(rule.version),
+          })),
         });
       } catch {
         return sendError(request, reply, 422, 'PLAN_INVALID');

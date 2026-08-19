@@ -254,9 +254,14 @@ export function registerProductDifferentiationRoutes(
       if (!body.success) return sendValidationError(request, reply, body.error);
       const authorized = await authorizeCase(request, reply, params.data.caseId);
       if (!authorized) return;
-      const [tasks, documents] = await Promise.all([
+      // Reviewed regulation context (migration 0032): the service query only
+      // ever returns status='active' rules whose effective window covers
+      // today — draft/in-review/approved/retired content can never leak here.
+      const rulesAsOf = new Date().toISOString().slice(0, 10);
+      const [tasks, documents, activeRules] = await Promise.all([
         container.listTasks.execute(authorized.actor, params.data.caseId),
         container.listDocuments.execute(authorized.actor, params.data.caseId),
+        container.regulationRules.listActiveForContext(authorized.actor, rulesAsOf),
       ]);
       const context = {
         caseSummary: { caseId: params.data.caseId, status: authorized.graph.employmentCase.status },
@@ -278,7 +283,11 @@ export function registerProductDifferentiationRoutes(
             dueAt: task.dueAt,
           })),
         relevantTimelineEvents: [],
-        relevantApprovedRules: [],
+        relevantApprovedRules: activeRules.map((rule) => ({
+          id: rule.id,
+          version: String(rule.version),
+          title: rule.title,
+        })),
       };
       const missing = ['passport', 'visa', 'medical_insurance'].filter(
         (type) =>
@@ -304,6 +313,10 @@ export function registerProductDifferentiationRoutes(
             ...context.documentStatusSummary.map((_item, index) => ({
               factPath: `documentStatusSummary.${index}.status`,
               label: `Stored document ${index + 1} status`,
+            })),
+            ...context.relevantApprovedRules.map((rule, index) => ({
+              factPath: `relevantApprovedRules.${index}.title`,
+              label: `Approved rule: ${rule.title}`,
             })),
           ],
           uncertainties: context.relevantApprovedRules.length
@@ -340,9 +353,14 @@ export function registerProductDifferentiationRoutes(
             },
           ],
           proposedChecklist: checklist,
+          // Escalation stays required either way: reviewed content is marked
+          // requires_professional_validation, so it informs but never replaces
+          // the professional review boundary.
           escalation: {
             required: true,
-            reason: 'No approved rule covers professional interpretation',
+            reason: context.relevantApprovedRules.length
+              ? 'Approved rules were applied; professional validation is still required before reliance'
+              : 'No approved rule covers professional interpretation',
           },
         },
         context,

@@ -128,6 +128,12 @@ export interface ForecastExpense {
   amount: number;
   frequency: 'monthly' | 'quarterly' | 'annual' | 'one_time';
   dueDate?: string;
+  /** Optional YYYY-MM window: a monthly expense applies only from this month on. */
+  startMonth?: string;
+  /** Optional YYYY-MM window end (inclusive) for monthly expenses. */
+  endMonth?: string;
+  /** Provenance of the stored expense; canonical scenario rows are planning-only. */
+  source?: 'employment_expense' | 'planning_scenario';
 }
 export interface FutureCostScenario {
   salaryChange?: { effectiveMonth: string; amount: number };
@@ -170,11 +176,14 @@ export function projectFutureCost(input: {
     const month = date.toISOString().slice(0, 7);
     const actual = input.actuals?.find((item) => item.month === month);
     const entered = input.enteredPayroll?.find((item) => item.month === month);
+    const inWindow = (e: ForecastExpense) =>
+      (e.startMonth === undefined || month >= e.startMonth) &&
+      (e.endMonth === undefined || month <= e.endMonth);
     const knownExpenses = input.expenses
       .filter((e) => e.dueDate?.startsWith(month))
       .reduce((sum, e) => sum + e.amount, 0);
     const recurring = input.expenses
-      .filter((e) => e.frequency === 'monthly')
+      .filter((e) => e.frequency === 'monthly' && inWindow(e))
       .reduce((sum, e) => sum + e.amount, 0);
     const scenarioSalary =
       input.scenario?.salaryChange && month >= input.scenario.salaryChange.effectiveMonth
@@ -251,16 +260,20 @@ export function projectFutureCost(input: {
                   },
                 ]),
             ...input.expenses
-              .filter((e) => e.frequency === 'monthly' || e.dueDate?.startsWith(month))
+              .filter(
+                (e) => (e.frequency === 'monthly' && inWindow(e)) || e.dueDate?.startsWith(month),
+              )
               .map((e) => ({
                 id: e.id,
                 label: e.label,
                 amount: e.amount,
-                source: 'employment_expense',
+                source: e.source ?? 'employment_expense',
                 explanation:
-                  e.frequency === 'monthly'
-                    ? 'Stored recurring employment cost'
-                    : 'Stored dated employment cost',
+                  e.source === 'planning_scenario'
+                    ? 'Planning-only value; canonical records are unchanged'
+                    : e.frequency === 'monthly'
+                      ? 'Stored recurring employment cost'
+                      : 'Stored dated employment cost',
                 status: 'FORECAST' as const,
               })),
             ...scenarioItems.map((item) => ({

@@ -507,6 +507,64 @@ export function savePayrollEntry(
   );
 }
 
+/** Planning-only Future Cost scenario expense (canonical scenario_expense row). */
+export interface ScenarioExpenseResponse {
+  id: string;
+  label: string;
+  amount: number;
+  kind: 'recurring' | 'one_time';
+  startMonth: string;
+  endMonth: string | null;
+  status: 'active' | 'deleted';
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export type SaveScenarioExpenseRequest = Omit<
+  ScenarioExpenseResponse,
+  'id' | 'status' | 'version' | 'createdAt' | 'updatedAt'
+> & { version?: number };
+export function listScenarioExpenses(caseId: string): Promise<ScenarioExpenseResponse[]> {
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}/scenario-expenses`);
+}
+export function createScenarioExpense(
+  caseId: string,
+  input: SaveScenarioExpenseRequest,
+  idempotencyKey: string,
+): Promise<{ expense: ScenarioExpenseResponse; replayed: boolean }> {
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}/scenario-expenses`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+export function updateScenarioExpense(
+  caseId: string,
+  expenseId: string,
+  input: SaveScenarioExpenseRequest,
+  idempotencyKey: string,
+): Promise<{ expense: ScenarioExpenseResponse; replayed: boolean }> {
+  return apiRequest(
+    `/cases/${encodeURIComponent(caseId)}/scenario-expenses/${encodeURIComponent(expenseId)}`,
+    { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
+  );
+}
+export function deleteScenarioExpense(
+  caseId: string,
+  expenseId: string,
+  version: number,
+  idempotencyKey: string,
+): Promise<{ expense: ScenarioExpenseResponse; replayed: boolean }> {
+  return apiRequest(
+    `/cases/${encodeURIComponent(caseId)}/scenario-expenses/${encodeURIComponent(expenseId)}`,
+    {
+      method: 'DELETE',
+      headers: { 'idempotency-key': idempotencyKey },
+      body: JSON.stringify({ version }),
+    },
+  );
+}
+
 /** Explicit Emergency Binder selection — nothing is exported by implication. */
 export interface BinderExportManifest {
   sections: string[];
@@ -542,4 +600,65 @@ export function createBinderExport(
 
 export function listBinderExports(caseId: string): Promise<BinderExportReceiptResponse[]> {
   return apiRequest(`/cases/${encodeURIComponent(caseId)}/binder-exports`);
+}
+
+/**
+ * Regulation Engine review lifecycle (capability #11). A rule is reviewed
+ * factual content with an explicit source citation — never legal advice. Only
+ * status='active' rules inside their effective window ever feed the
+ * assistant/wizard context; this admin surface manages the manual lifecycle
+ * draft → in_review → approved → active → retired.
+ */
+export type RegulationRuleStatus = 'draft' | 'in_review' | 'approved' | 'active' | 'retired';
+export interface RegulationRuleResponse {
+  id: string;
+  ruleKey: string;
+  version: number;
+  title: string;
+  statement: string;
+  sourceCitation: string;
+  sourceAuthority: string | null;
+  requiresProfessionalValidation: boolean;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  status: RegulationRuleStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  activatedAt: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function listRegulationRules(): Promise<RegulationRuleResponse[]> {
+  return apiRequest('/regulation-rules');
+}
+
+export function createRegulationRule(input: {
+  ruleKey: string;
+  title: string;
+  statement: string;
+  sourceCitation: string;
+  sourceAuthority?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+}): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
+  return apiRequest('/regulation-rules', {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
+}
+
+// Manual review lifecycle only: reviewedBy is a free-text professional name
+// recorded on approval. No provider is contacted and no validation is claimed.
+export function transitionRegulationRule(
+  ruleId: string,
+  input: { status: Exclude<RegulationRuleStatus, 'draft'>; reviewedBy?: string },
+): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
+  return apiRequest(`/regulation-rules/${encodeURIComponent(ruleId)}`, {
+    method: 'PATCH',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
 }
