@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "fastify",
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm --filter @caredesk/api... build",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "crons": [{ "path": "/billing/jobs/collect", "schedule": "17 4 * * *" }]
 }
