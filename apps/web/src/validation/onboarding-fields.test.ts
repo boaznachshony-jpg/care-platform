@@ -52,10 +52,10 @@ describe('onboarding field validation', () => {
     expect(isValidPassportNumber('אב12345')).toBe(false);
   });
 
-  // ── Visa / passport boundary lengths ─────────────────────────────────────
+  // ── Visa / passport boundary lengths ─────────────────────
   it.each([
     ['5 chars (minimum)', 'A1234'],
-    ['20 chars (maximum)', 'ABCDEFGH123456789012'.slice(0, 20)],
+    ['20 chars (maximum)', 'ABCDEFGH12345678WX12'],
     ['all-numeric 9 chars', '123456789'],
     ['all-alpha uppercase', 'ABCDEFGHIJ'],
   ])('accepts valid foreign-worker visa/passport value: %s', (_label, value) => {
@@ -72,7 +72,7 @@ describe('onboarding field validation', () => {
     expect(isValidPassportNumber(value)).toBe(false);
   });
 
-  // ── Calendar edge cases for isValidIsoDate ────────────────────────────────
+  // ── Calendar edge cases for isValidIsoDate ──────────────────
   it.each([
     ['Feb 29 in non-leap year', '2025-02-29'],
     ['Feb 29 in century non-leap year', '1900-02-29'],
