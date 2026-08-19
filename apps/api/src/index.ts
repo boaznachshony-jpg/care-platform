@@ -1,30 +1,40 @@
 import { pathToFileURL } from 'node:url';
-import Fastify from 'fastify';
-import { buildContainer } from './container.js';
-import { loadEnv } from './env.js';
-import { buildServer } from './create-server.js';
-import { safeErrorDetails } from './plugins/safe-error.js';
+import type { FastifyInstance } from 'fastify';
+import type { Env } from './env.js';
+import type { Container } from './container.js';
 
-// Return 503 with real error instead of crashing Lambda — exposes env/startup failures.
-function buildApp() {
+// Dynamic imports catch module-load failures that static `import` declarations miss.
+// If any workspace package is missing or has a top-level error, the try block catches
+// it and returns a 503 app with the real error message — instead of Vercel's silent
+// FUNCTION_INVOCATION_FAILED with zero logs.
+type StartupResult =
+  | { ok: true; env: Env; container: Container; app: FastifyInstance }
+  | { ok: false; app: FastifyInstance };
+
+const result: StartupResult = await (async (): Promise<StartupResult> => {
   try {
+    const [{ buildContainer }, { loadEnv }, { buildServer }] = await Promise.all([
+      import('./container.js'),
+      import('./env.js'),
+      import('./create-server.js'),
+    ]);
     const env = loadEnv();
     const container = buildContainer(env);
     const app = buildServer(env, container);
-    return { ok: true as const, env, container, app };
+    return { ok: true, env, container, app };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[CAREDESK_STARTUP_FAILED] ${message}`);
+    const { default: Fastify } = await import('fastify');
     const errApp = Fastify({ logger: false });
-    void errApp.ready();
     errApp.all('*', async (_req, reply) => {
       return reply.status(503).send({ error: 'startup_failed', message });
     });
-    return { ok: false as const, env: null, container: null, app: errApp };
+    await errApp.ready();
+    return { ok: false, app: errApp };
   }
-}
+})();
 
-const result = buildApp();
 export default result.app;
 
 async function startLocalServer(): Promise<void> {
@@ -33,6 +43,7 @@ async function startLocalServer(): Promise<void> {
     return;
   }
   const { env, container, app } = result;
+  const { safeErrorDetails } = await import('./plugins/safe-error.js');
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
     app.log.info(
