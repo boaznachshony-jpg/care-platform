@@ -28,7 +28,10 @@ const result = buildApp();
 export default result.app;
 
 async function startLocalServer(): Promise<void> {
-  if (!result.ok) { process.exitCode = 1; return; }
+  if (!result.ok) {
+    process.exitCode = 1;
+    return;
+  }
   const { env, container, app } = result;
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
