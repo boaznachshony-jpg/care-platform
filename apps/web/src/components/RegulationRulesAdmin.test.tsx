@@ -73,7 +73,8 @@ describe('RegulationRulesAdmin', () => {
     renderAdmin();
     expect(await screen.findByText('מנוחה שבועית לעובד')).toBeInTheDocument();
     expect(screen.getByText(tt('regulation.status.approved'))).toBeInTheDocument();
-    expect(screen.getByText(/חוק שעות עבודה ומנוחה/)).toBeInTheDocument();
+    // Both synthetic rules share the same source citation, so match all.
+    expect(screen.getAllByText(/חוק שעות עבודה ומנוחה/)).toHaveLength(2);
     expect(screen.getAllByText(/v1/)[0]).toBeInTheDocument();
     expect(screen.getByText('Adv. Synthetic Reviewer')).toBeInTheDocument();
     // The fail-closed provenance flag is always visible.

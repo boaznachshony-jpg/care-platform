@@ -89,9 +89,7 @@ describe('SettingsPage complete client profile', () => {
 
   it('shows the data security notice', async () => {
     await renderPage();
-    expect(
-      screen.getByRole('heading', { name: 'Data security' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Data security' })).toBeVisible();
     expect(screen.getByText(/stored encrypted on your device/)).toBeVisible();
     expect(readMvpProfile().recipientName).toBe('Sample Recipient');
   });

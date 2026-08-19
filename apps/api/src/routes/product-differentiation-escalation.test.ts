@@ -120,7 +120,10 @@ describe('human escalation lifecycle routes', () => {
       method: 'PATCH',
       url,
       headers: { ...AUTH, 'idempotency-key': 'res-0000001' },
-      payload: { status: 'resolved', resolutionNote: 'Reviewed manually by the named professional.' },
+      payload: {
+        status: 'resolved',
+        resolutionNote: 'Reviewed manually by the named professional.',
+      },
     });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json()).toMatchObject({

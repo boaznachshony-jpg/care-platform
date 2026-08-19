@@ -2540,6 +2540,10 @@ body {
   background: #e6efff;
   color: #2859a7;
 }
+.status-card.ok .status-icon {
+  background: #e2f5ec;
+  color: #0f6e56;
+}
 .onboarding-page {
   max-width: 820px;
   margin: 0 auto;

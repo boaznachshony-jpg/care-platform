@@ -31,7 +31,17 @@ export function DashboardPage() {
     !profile.licenseRenewalDate,
     !profile.visaRenewalDate,
   ].filter(Boolean).length;
-  const status = missingCount > 0 ? 'missing' : 'attention';
+  const hasAttention = health?.factors.some((factor) => factor.status === 'attention') ?? false;
+  const status: 'missing' | 'attention' | 'ok' | 'loading' =
+    missingCount > 0 ? 'missing' : !health ? 'loading' : hasAttention ? 'attention' : 'ok';
+  const statusChipKey =
+    status === 'missing'
+      ? 'dashboard.statusMissing'
+      : status === 'loading'
+        ? 'dashboard.statusLoading'
+        : status === 'attention'
+          ? 'dashboard.statusAttention'
+          : 'dashboard.statusOk';
 
   return (
     <div className="page-stack">
@@ -41,8 +51,10 @@ export function DashboardPage() {
           <h1>{t('dashboard.greeting', { name: profile.employerName })}</h1>
           <p>{t('dashboard.summary')}</p>
         </div>
-        <span className={`status-chip ${status}`}>
-          {t(status === 'missing' ? 'dashboard.statusMissing' : 'dashboard.statusAttention')}
+        <span
+          className={`status-chip ${status === 'ok' ? 'ok' : status === 'missing' ? 'missing' : 'attention'}`}
+        >
+          {t(statusChipKey)}
         </span>
       </section>
       <section className="card intelligence-attention" aria-labelledby="attention-title">
@@ -79,13 +91,15 @@ export function DashboardPage() {
         )}
       </section>
       <section className="card health-card" aria-labelledby="health-title">
-        <div className="score-ring" aria-label={`${health?.score ?? 0} מתוך 100`}>
-          <strong>{health?.score ?? '…'}</strong>
-          <span>/100</span>
-        </div>
+        {health ? (
+          <div className="score-ring" aria-label={`${health.score} מתוך 100`}>
+            <strong>{health.score}</strong>
+            <span>/100</span>
+          </div>
+        ) : null}
         <div>
           <h2 id="health-title">{t('intelligence.health')}</h2>
-          <p>{t('intelligence.healthDisclaimer')}</p>
+          <p>{health ? t('intelligence.healthDisclaimer') : t('dashboard.scoreUnavailable')}</p>
           <ul>
             {(health?.factors ?? []).map((factor) => (
               <li key={factor.id}>
@@ -101,18 +115,28 @@ export function DashboardPage() {
           ) : null}
         </div>
       </section>
-      <section className={`status-card ${status === 'missing' ? 'warning' : 'attention'}`}>
+      <section
+        className={`status-card ${status === 'missing' ? 'warning' : status === 'ok' ? 'ok' : 'attention'}`}
+      >
         <div className="status-icon" aria-hidden="true">
-          {status === 'missing' ? '!' : 'i'}
+          {status === 'missing' ? '!' : status === 'ok' ? '✓' : 'i'}
         </div>
         <div>
           <span>{t('dashboard.overallStatus')}</span>
           <h2>
             {status === 'missing'
               ? t('dashboard.missingTitle', { count: missingCount })
-              : t('dashboard.attentionTitle')}
+              : status === 'ok'
+                ? t('dashboard.okTitle')
+                : t('dashboard.attentionTitle')}
           </h2>
-          <p>{status === 'missing' ? t('dashboard.missingBody') : t('dashboard.attentionBody')}</p>
+          <p>
+            {status === 'missing'
+              ? t('dashboard.missingBody')
+              : status === 'ok'
+                ? t('dashboard.okBody')
+                : t('dashboard.attentionBody')}
+          </p>
         </div>
         <Link className="text-link" to={path('/settings')}>
           {t('dashboard.reviewDetails')}

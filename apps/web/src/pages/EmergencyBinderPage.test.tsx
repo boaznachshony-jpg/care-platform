@@ -149,7 +149,7 @@ describe('EmergencyBinderPage', () => {
     );
     // The receipt ("אסמכתת ייצוא") is visible on screen and inside the
     // printable document before window.print ran.
-    expect(screen.getAllByText(/binder\.receiptLabel/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/אסמכתת ייצוא/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(new RegExp(DEMO_RECEIPT.id)).length).toBeGreaterThan(0);
     expect(screen.getAllByText(new RegExp(DEMO_RECEIPT.contentHash)).length).toBeGreaterThan(0);
   });
@@ -176,7 +176,7 @@ describe('EmergencyBinderPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /יצירת PDF/ }));
 
     await waitFor(() => expect(printMock).toHaveBeenCalledOnce());
-    expect(screen.getByRole('alert')).toHaveTextContent(/binder\.unrecordedLocalPrint/);
-    expect(screen.queryByText(/binder\.receiptLabel/)).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/הדפסה מקומית ללא רישום/);
+    expect(screen.queryByText(/אסמכתת ייצוא/)).not.toBeInTheDocument();
   });
 });

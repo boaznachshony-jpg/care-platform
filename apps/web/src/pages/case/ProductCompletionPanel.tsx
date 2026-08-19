@@ -217,8 +217,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                       key={next}
                       variant="secondary"
                       disabled={
-                        busy ||
-                        (next === 'resolved' && (notes[review.id]?.trim().length ?? 0) < 3)
+                        busy || (next === 'resolved' && (notes[review.id]?.trim().length ?? 0) < 3)
                       }
                       onClick={() => void transition(review, next)}
                     >

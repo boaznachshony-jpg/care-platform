@@ -82,6 +82,14 @@ export async function installCanonicalProductIntelligence(page: Page) {
     }),
   );
 
+  // The settings page renders RegulationRulesAdmin, which loads the reviewed
+  // regulation rules on mount. An empty list keeps the page free of load-error
+  // alerts so assertions on role="alert" stay unambiguous.
+  await page.route(/\/regulation-rules(?:\?.*)?$/, (route) => {
+    if (route.request().method() === 'GET') return json(route, []);
+    return json(route, { code: 'METHOD_NOT_ALLOWED' }, 405);
+  });
+
   await page.route(/\/cases\/[^/]+\/payroll-month-closes(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') return json(route, [...closes.values()]);
     if (route.request().method() !== 'POST')

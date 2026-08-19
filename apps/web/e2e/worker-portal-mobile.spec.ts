@@ -17,7 +17,8 @@ test('worker sees only the worker-safe projection of the employment file', async
   await page.goto('/worker');
 
   await expect(page.getByRole('heading', { name: 'האזור שלי' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'שלום' })).toBeVisible();
+  // exact: true — 'שלום' is a substring of the 'התשלום האחרון' heading below.
+  await expect(page.getByRole('heading', { name: 'שלום', exact: true })).toBeVisible();
 
   // Latest payment: month is visible, but no amount is invented while the
   // canonical payroll aggregate withholds it.
