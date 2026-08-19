@@ -103,6 +103,11 @@ import { SupabaseDocumentStorage } from './storage/supabase-document-storage.js'
 import { MirroredDocumentStorage } from './storage/mirrored-document-storage.js';
 import { CardcomProductBillingGateway } from './billing/cardcom-gateway.js';
 import { Wave5Service } from './collaboration/wave5-service.js';
+import {
+  InMemoryAutomationReceiptStore,
+  PgAutomationReceiptStore,
+  type AutomationReceiptStore,
+} from './automation/automation-receipt-store.js';
 
 /**
  * Closed-pilot family role-to-permission map (ADR-004). `family_member` is a
@@ -195,6 +200,10 @@ export interface Container {
   auth: AuthService;
   actorResolver: ActorResolver;
   audit: AuditService;
+  /** Canonical user-facing case history writer (Timeline evidence). */
+  timeline: TimelineService;
+  /** Durable replay receipts for automation execution (migration 0029). */
+  automationReceipts: AutomationReceiptStore;
   openCase: OpenEmploymentCase;
   getCase: GetEmploymentCase;
   listCases: ListEmploymentCases;
@@ -498,6 +507,12 @@ export function buildContainer(env: Env): Container {
     auth,
     actorResolver,
     audit,
+    timeline,
+    // Durable in Postgres; the in-memory fallback exists only so a bare
+    // `pnpm dev:api`/tests keep the identical claim/replay contract.
+    automationReceipts: pool
+      ? new PgAutomationReceiptStore(pool)
+      : new InMemoryAutomationReceiptStore(),
     pool,
     openCase: new OpenEmploymentCase(caseDeps),
     // Read use cases take audit + clock too: a refused read is an audited

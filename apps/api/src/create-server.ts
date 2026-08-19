@@ -20,6 +20,8 @@ import { registerWave5Routes } from './routes/wave5.js';
 import { registerProductDifferentiationRoutes } from './routes/product-differentiation.js';
 import { registerCanonicalProductIntelligenceRoutes } from './routes/canonical-product-intelligence.js';
 import { registerPayrollEntryRoutes } from './routes/payroll-entries.js';
+import { registerBinderExportRoutes } from './routes/binder-exports.js';
+import { registerEventActionPlanRoutes } from './routes/event-action-plans.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -166,6 +168,8 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerProductDifferentiationRoutes(app, container, productRateLimiter);
   registerCanonicalProductIntelligenceRoutes(app, container);
   registerPayrollEntryRoutes(app, container, productRateLimiter);
+  registerBinderExportRoutes(app, container, productRateLimiter);
+  registerEventActionPlanRoutes(app, container, productRateLimiter);
 
   return app;
 }

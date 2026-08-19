@@ -37,6 +37,8 @@ import { ContactPage } from './pages/ContactPage.js';
 import { CasePage } from './pages/CasePage.js';
 import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
 import { EmergencyBinderPage } from './pages/EmergencyBinderPage.js';
+import { OpenIssuesPage } from './pages/OpenIssuesPage.js';
+import { DemoOverviewPage } from './pages/DemoOverviewPage.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -119,6 +121,14 @@ function AuthenticatedApp() {
           element={
             <ClientApp>
               <ClientHome />
+            </ClientApp>
+          }
+        />
+        <Route
+          path="/clients/:clientId/overview"
+          element={
+            <ClientApp>
+              <OpenIssuesPage />
             </ClientApp>
           }
         />
@@ -321,6 +331,7 @@ export function App() {
         <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
         <Route path="/cases/new" element={<Navigate to="/" replace />} />
         <Route path="/cases/not-a-public-route" element={<Navigate to="/" replace />} />
+        <Route path="/demo/overview" element={<DemoOverviewPage />} />
         <Route path="*" element={<ApplicationEntry />} />
       </Routes>
     </>

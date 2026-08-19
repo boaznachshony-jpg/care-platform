@@ -6,11 +6,28 @@ import {
   confirmAssistantChecklist,
   createProfessionalReview,
   getCaseHealth,
+  getProfessionalReview,
   listProfessionalReviews,
+  transitionProfessionalReview,
   type AssistantResponse,
   type CaseHealthResponse,
   type ProfessionalReviewResponse,
+  type ProfessionalReviewStatus,
+  type ProfessionalReviewTransitionResponse,
 } from '../../api/client.js';
+
+/**
+ * Mirror of the server-side lifecycle. The server is authoritative — this map
+ * only decides which buttons to render. Assignment is a manual handoff to a
+ * professional named by the manager; CareDesk never contacts a provider.
+ */
+const ESCALATION_TRANSITIONS: Record<ProfessionalReviewStatus, ProfessionalReviewStatus[]> = {
+  requested: ['acknowledged', 'cancelled'],
+  acknowledged: ['in_review', 'cancelled'],
+  in_review: ['resolved', 'cancelled'],
+  resolved: [],
+  cancelled: [],
+};
 
 export function ProductCompletionPanel({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
@@ -47,6 +64,35 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       source: answer ? 'case_ai' : 'manual',
     });
     setReviews((current) => [row, ...current]);
+  }
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [histories, setHistories] = useState<
+    Record<string, ProfessionalReviewTransitionResponse[]>
+  >({});
+  const [transitionError, setTransitionError] = useState(false);
+  async function transition(review: ProfessionalReviewResponse, status: ProfessionalReviewStatus) {
+    setTransitionError(false);
+    setBusy(true);
+    try {
+      const assignedTo = assignments[review.id]?.trim();
+      const resolutionNote = notes[review.id]?.trim();
+      const updated = await transitionProfessionalReview(caseId, review.id, {
+        status,
+        ...(assignedTo ? { assignedTo } : {}),
+        ...(status === 'resolved' && resolutionNote ? { resolutionNote } : {}),
+      });
+      setReviews((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      setHistories((current) => ({ ...current, [review.id]: [] }));
+    } catch {
+      setTransitionError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function loadHistory(reviewId: string) {
+    const detail = await getProfessionalReview(caseId, reviewId);
+    setHistories((current) => ({ ...current, [reviewId]: detail.history }));
   }
   return (
     <section className="card completion-panel" aria-labelledby="case-health-title">
@@ -118,11 +164,85 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       ) : null}
       <hr />
       <h2>{t('completion.reviews')}</h2>
+      <p>
+        <small>{t('escalation.manualHandoffDisclaimer')}</small>
+      </p>
+      {transitionError ? <p role="alert">{t('escalation.transitionFailed')}</p> : null}
       {reviews.length ? (
         <ul>
           {reviews.map((review) => (
             <li key={review.id}>
-              <strong>{review.status}</strong> — {review.reason}
+              <strong className="escalation-status" data-status={review.status}>
+                {t(`escalation.status.${review.status}`)}
+              </strong>{' '}
+              — {review.reason}
+              {review.assignedTo ? (
+                <p>
+                  {t('escalation.assignedToDisplay')}: {review.assignedTo}{' '}
+                  <small>({t('escalation.manualHandoff')})</small>
+                </p>
+              ) : null}
+              {review.resolutionNote ? (
+                <p>
+                  {t('escalation.resolutionNoteDisplay')}: {review.resolutionNote}
+                </p>
+              ) : null}
+              {ESCALATION_TRANSITIONS[review.status].length ? (
+                <div className="escalation-actions">
+                  <label>
+                    {t('escalation.assignedToLabel')}
+                    <input
+                      value={assignments[review.id] ?? ''}
+                      onChange={(event) =>
+                        setAssignments((current) => ({
+                          ...current,
+                          [review.id]: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  {ESCALATION_TRANSITIONS[review.status].includes('resolved') ? (
+                    <label>
+                      {t('escalation.resolutionNoteLabel')}
+                      <textarea
+                        value={notes[review.id] ?? ''}
+                        onChange={(event) =>
+                          setNotes((current) => ({ ...current, [review.id]: event.target.value }))
+                        }
+                      />
+                    </label>
+                  ) : null}
+                  {ESCALATION_TRANSITIONS[review.status].map((next) => (
+                    <Button
+                      key={next}
+                      variant="secondary"
+                      disabled={
+                        busy ||
+                        (next === 'resolved' && (notes[review.id]?.trim().length ?? 0) < 3)
+                      }
+                      onClick={() => void transition(review, next)}
+                    >
+                      {t(`escalation.transition.${next}`)}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+              <details
+                onToggle={(event) => {
+                  if ((event.target as HTMLDetailsElement).open) void loadHistory(review.id);
+                }}
+              >
+                <summary>{t('escalation.history')}</summary>
+                <ul>
+                  {(histories[review.id] ?? []).map((item) => (
+                    <li key={item.id}>
+                      {t(`escalation.status.${item.fromStatus}`)} →{' '}
+                      {t(`escalation.status.${item.toStatus}`)}
+                      {item.assignedTo ? ` · ${item.assignedTo}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </li>
           ))}
         </ul>

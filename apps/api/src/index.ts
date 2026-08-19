@@ -4,15 +4,30 @@ import { loadEnv } from './env.js';
 import { buildServer } from './create-server.js';
 import { safeErrorDetails } from './plugins/safe-error.js';
 
-const env = loadEnv();
-const container = buildContainer(env);
+// Wrap startup so Vercel's runtime logs show the real error message before
+// FUNCTION_INVOCATION_FAILED obscures it. Without this, a bad env var produces
+// a silent 500 with no log entry anywhere.
+function buildApp() {
+  try {
+    const env = loadEnv();
+    const container = buildContainer(env);
+    /**
+     * Vercel's Fastify runtime imports this module and requires the default export
+     * to be a Fastify server instance. Keeping construction at module scope also
+     * lets the runtime reuse a warm instance between invocations.
+     */
+    const app = buildServer(env, container);
+    return { env, container, app };
+  } catch (error) {
+    // console.error is captured by Vercel before FUNCTION_INVOCATION_FAILED —
+    // this surfaces the exact invalid/missing env var so it can be fixed.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[CAREDESK_STARTUP_FAILED] ${message}`);
+    throw error;
+  }
+}
 
-/**
- * Vercel's Fastify runtime imports this module and requires the default export
- * to be a Fastify server instance. Keeping construction at module scope also
- * lets the runtime reuse a warm instance between invocations.
- */
-const app = buildServer(env, container);
+const { env, container, app } = buildApp();
 export default app;
 
 async function startLocalServer(): Promise<void> {

@@ -9,6 +9,8 @@ describe('product differentiation route rate limits', () => {
       checklistConfirmation: { max: 20, timeWindow: 60_000, bucket: 'checklist' },
       reviewList: { max: 60, timeWindow: 60_000, bucket: 'review-list' },
       reviewCreate: { max: 10, timeWindow: 60_000, bucket: 'review-create' },
+      reviewGet: { max: 60, timeWindow: 60_000, bucket: 'review-get' },
+      reviewTransition: { max: 20, timeWindow: 60_000, bucket: 'review-transition' },
     });
   });
 });

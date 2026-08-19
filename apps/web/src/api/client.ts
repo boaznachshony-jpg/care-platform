@@ -360,14 +360,32 @@ export interface AssistantResponse {
   proposedChecklist?: string[];
   escalation?: { required: boolean; reason: string };
 }
+export type ProfessionalReviewStatus =
+  'requested' | 'acknowledged' | 'in_review' | 'resolved' | 'cancelled';
 export interface ProfessionalReviewResponse {
   id: string;
   category: string;
   reason: string;
   summary: string;
   source: string;
-  status: string;
+  status: ProfessionalReviewStatus;
+  assignedTo?: string | null;
+  resolutionNote?: string | null;
+  resolvedAt?: string | null;
   createdAt: string;
+}
+export interface ProfessionalReviewTransitionResponse {
+  id: string;
+  fromStatus: ProfessionalReviewStatus;
+  toStatus: ProfessionalReviewStatus;
+  changedBy: string;
+  assignedTo?: string | null;
+  resolutionNote?: string | null;
+  createdAt: string;
+}
+export interface ProfessionalReviewDetailResponse {
+  review: ProfessionalReviewResponse;
+  history: ProfessionalReviewTransitionResponse[];
 }
 export const getCaseHealth = (caseId: string) =>
   apiRequest<CaseHealthResponse>(`${casePath(caseId)}/health`);
@@ -427,6 +445,22 @@ export const createProfessionalReview = (
     headers: { 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify(input),
   });
+export const getProfessionalReview = (caseId: string, reviewId: string) =>
+  apiRequest<ProfessionalReviewDetailResponse>(
+    `${casePath(caseId)}/professional-reviews/${reviewId}`,
+  );
+// Manual handoff only: assignedTo is a free-text professional name/contact.
+// No provider is contacted and no fulfilment is claimed.
+export const transitionProfessionalReview = (
+  caseId: string,
+  reviewId: string,
+  input: { status: ProfessionalReviewStatus; assignedTo?: string; resolutionNote?: string },
+) =>
+  apiRequest<ProfessionalReviewResponse>(`${casePath(caseId)}/professional-reviews/${reviewId}`, {
+    method: 'PATCH',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
 
 export interface PayrollEntryResponse {
   id: string;
@@ -471,4 +505,41 @@ export function savePayrollEntry(
     `/cases/${encodeURIComponent(caseId)}/payroll-entries/${encodeURIComponent(month)}`,
     { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
   );
+}
+
+/** Explicit Emergency Binder selection — nothing is exported by implication. */
+export interface BinderExportManifest {
+  sections: string[];
+  documentIds: string[];
+}
+
+/**
+ * Durable server-side evidence of a Binder export ("אסמכתת ייצוא"): the
+ * validated manifest plus a deterministic sha256 fingerprint. Never a sharing
+ * link — public Binder sharing stays disabled.
+ */
+export interface BinderExportReceiptResponse {
+  id: string;
+  caseId: string;
+  manifest: BinderExportManifest;
+  contentHash: string;
+  hashAlgorithm: 'sha256';
+  createdBy: string;
+  createdAt: string;
+}
+
+export function createBinderExport(
+  caseId: string,
+  manifest: BinderExportManifest,
+  idempotencyKey: string,
+): Promise<{ receipt: BinderExportReceiptResponse; replayed: boolean }> {
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}/binder-exports`, {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify(manifest),
+  });
+}
+
+export function listBinderExports(caseId: string): Promise<BinderExportReceiptResponse[]> {
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}/binder-exports`);
 }

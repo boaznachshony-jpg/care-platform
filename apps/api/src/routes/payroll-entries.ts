@@ -1,5 +1,6 @@
-import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
+import { withTenant } from '@caredesk/db';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { PayrollEntryService } from '../payroll-entry-service.js';
@@ -71,10 +72,30 @@ export function registerPayrollEntryRoutes(
   rateLimiter: RateLimiter,
 ) {
   if (!container.pool) return;
+  const pool = container.pool;
   const auth = makeAuthenticate(container.auth, container.actorResolver);
-  const service = new PayrollEntryService(container.pool);
+  const service = new PayrollEntryService(pool);
   const authorize = async (a: NonNullable<FastifyRequest['actor']>, id: string) =>
     container.getCase.execute(a, id).catch(() => null);
+
+  /**
+   * Payroll mutations are manager-only: reading a case never confers authority
+   * to record salary facts. The active tenant membership role is checked under
+   * forced RLS (the product-differentiation/wave5 pattern).
+   */
+  const requireManager = async (req: FastifyRequest, reply: FastifyReply): Promise<boolean> => {
+    const actor = req.actor;
+    if (!actor) return false;
+    const allowed = await withTenant(pool, actor.tenantId, (client) =>
+      client.query(
+        `select 1 from tenant_membership where tenant_id=$1 and user_id=$2 and status='active' and role in ('owner','manager')`,
+        [actor.tenantId, actor.userId],
+      ),
+    );
+    if (allowed.rowCount) return true;
+    sendError(req, reply, 403, 'MANAGER_REQUIRED');
+    return false;
+  };
 
   app.get<{ Params: { caseId: string } }>(
     '/cases/:caseId/payroll-entries',
@@ -127,6 +148,7 @@ export function registerPayrollEntryRoutes(
       if (!req.actor) return;
       if (!(await authorize(req.actor, p.data.caseId)))
         return sendError(req, reply, 404, 'NOT_FOUND');
+      if (!(await requireManager(req, reply))) return;
       try {
         const result = await service.save(req.actor, p.data.caseId, p.data.month!, key, b.data);
         return reply.status(result.replayed ? 200 : 201).send(result);
