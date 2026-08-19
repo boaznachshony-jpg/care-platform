@@ -82,7 +82,6 @@ export class CardcomProductBillingGateway implements ProductBillingGateway {
         CardOwnerEmailValue: input.billingEmail,
         IsCardOwnerEmailRequired: true,
       },
-      AdvancedDefinition: { JValidateType: 2 },
     });
     this.assertSuccess(response);
     const providerSetupId = getString(response.LowProfileId);
