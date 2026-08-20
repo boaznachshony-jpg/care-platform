@@ -47,6 +47,9 @@ const envSchema = z
     BILLING_PRICE_AGOROT: z.coerce.number().int().positive().default(3900),
     BILLING_VAT_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(1800),
     BILLING_LAUNCH_DISCOUNT_PERCENT: z.coerce.number().int().min(0).max(100).default(100),
+    // Calendar days after chargingStartsAt during which a tenant without a
+    // payment method sees a warning instead of a frozen account.
+    BILLING_GRACE_DAYS: z.coerce.number().int().min(0).max(365).default(7),
     BILLING_SUCCESS_URL: z.string().url().optional(),
     BILLING_FAILURE_URL: z.string().url().optional(),
     BILLING_WEBHOOK_URL: z.string().url().optional(),

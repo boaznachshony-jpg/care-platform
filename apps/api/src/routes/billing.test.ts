@@ -41,6 +41,28 @@ describe('/billing routes', () => {
       chargingStartsAt: null,
       providerConfigured: true,
       canManage: true,
+      accessState: 'active',
+      graceDaysRemaining: null,
+    });
+  });
+
+  it('derives an active access state while the tenant is fully sponsored', async () => {
+    const app = buildServer(
+      loadEnv({ BILLING_PROVIDER: 'mock', BILLING_LAUNCH_DISCOUNT_PERCENT: '0' }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: '/billing/subscription',
+      headers: AUTH,
+    });
+    expect(response.statusCode).toBe(200);
+    // Discount removed but no per-tenant charging start date: no charge-date
+    // policy applies, so the account must stay usable.
+    expect(response.json<BillingPlanResponse>()).toMatchObject({
+      launchDiscountPercent: 0,
+      chargingStartsAt: null,
+      accessState: 'active',
+      graceDaysRemaining: null,
     });
   });
 

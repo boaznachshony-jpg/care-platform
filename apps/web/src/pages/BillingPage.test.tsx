@@ -42,6 +42,8 @@ const sponsoredPlan: BillingPlanResponse = {
   canManage: true,
   providerConfigured: false,
   termsVersion: '2026-08-04',
+  accessState: 'active',
+  graceDaysRemaining: null,
 };
 
 async function renderPage(initialPath = '/billing') {
@@ -75,6 +77,8 @@ const savedCardPlan: BillingPlanResponse = {
   canManage: true,
   providerConfigured: true,
   termsVersion: '2026-08-04',
+  accessState: 'active',
+  graceDaysRemaining: null,
 };
 
 describe('BillingPage', () => {

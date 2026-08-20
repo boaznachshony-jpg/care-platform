@@ -21,7 +21,6 @@ export const createTaskRequestSchema = z.object({
 });
 
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
-export type CreateTaskInput = z.input<typeof createTaskRequestSchema>;
 
 export const taskResponseSchema = z.object({
   id: z.string(),
