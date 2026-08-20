@@ -737,7 +737,7 @@
       "section5Body": "Cancellation can be requested before the next billing date. It stops future charges and does not erase account data without a separate, verified deletion request.",
       "section6Title": "6. Failed payment",
       "section6Body": "If a charge fails, the owner is notified. The same period is protected against duplicate charges and a replacement payment method may be required.",
-      "legalNotice": "This pilot text does not replace terms of use and a privacy policy approved by legal counsel before a full commercial launch."
+      "legalNotice": "CareDesk is a management tool only. Responsibility for the accuracy of the information, its use, and compliance with the law rests solely with the user; the service does not constitute legal or accounting advice."
     }
   },
   "settings": {
