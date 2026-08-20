@@ -7,9 +7,16 @@ import { OpenIssuesGlance, type OpenIssue } from '../components/OpenIssuesGlance
  * no API calls. All action links stay inside the demo route.
  */
 const DEMO_ROUTE = '/demo/overview';
+const DEMO_SCORE = 72;
+
+/* eslint-disable no-restricted-syntax -- Synthetic demo fixture data (fictional names and sample issue text) for the public demo route; this is data fed into the glance layout, not user-facing UI copy — all UI copy below comes from the i18n resources. */
 const DEMO_RECIPIENT_NAME = 'רות כהן';
 const DEMO_CAREGIVER_NAME = 'מריה סנטוס';
-const DEMO_SCORE = 72;
+const DEMO_AGREEMENT_TITLE = `הסכם העסקה חתום עם ${DEMO_CAREGIVER_NAME}`;
+const DEMO_AGREEMENT_EXPLANATION = 'טרם הועלה לתיק עותק חתום של הסכם ההעסקה.';
+const DEMO_PAYROLL_TITLE = 'תשלומי שכר מתועדים';
+const DEMO_PAYROLL_EXPLANATION = 'תלושי השכר של שלושת החודשים האחרונים שמורים בתיק.';
+/* eslint-enable no-restricted-syntax */
 
 export function DemoOverviewPage() {
   const { t } = useTranslation();
@@ -26,8 +33,8 @@ export function DemoOverviewPage() {
     {
       id: 'demo-agreement',
       severity: 'urgent',
-      title: `הסכם העסקה חתום עם ${DEMO_CAREGIVER_NAME}`,
-      explanation: 'טרם הועלה לתיק עותק חתום של הסכם ההעסקה.',
+      title: DEMO_AGREEMENT_TITLE,
+      explanation: DEMO_AGREEMENT_EXPLANATION,
       actionLabel: t('openIssues.completeInSettings'),
       actionTo: DEMO_ROUTE,
     },
@@ -58,8 +65,8 @@ export function DemoOverviewPage() {
     {
       id: 'demo-payroll',
       severity: 'ok',
-      title: 'תשלומי שכר מתועדים',
-      explanation: 'תלושי השכר של שלושת החודשים האחרונים שמורים בתיק.',
+      title: DEMO_PAYROLL_TITLE,
+      explanation: DEMO_PAYROLL_EXPLANATION,
     },
   ];
 
