@@ -58,12 +58,19 @@ export function RegulationRulesAdmin() {
   const [createError, setCreateError] = useState(false);
 
   useEffect(() => {
+    let active = true;
     listRegulationRules()
       .then((rows) => {
+        if (!active) return;
         setRules(rows);
         setLoadFailed(false);
       })
-      .catch(() => setLoadFailed(true));
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function transition(rule: RegulationRuleResponse, status: RegulationRuleStatus) {
