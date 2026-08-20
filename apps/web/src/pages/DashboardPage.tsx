@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
+import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 
 export function DashboardPage() {
   const path = useClientPath();
@@ -142,6 +143,7 @@ export function DashboardPage() {
           {t('dashboard.reviewDetails')}
         </Link>
       </section>
+      <UpcomingPaymentsCard />
       <div className="dashboard-grid">
         <section className="card">
           <div className="section-heading">

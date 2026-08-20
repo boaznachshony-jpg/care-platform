@@ -66,6 +66,7 @@
     "paymentMethodBody": "Card details are entered on Cardcom's secure page. CareDesk does not receive or store the card number or CVV.",
     "billingName": "Invoice name",
     "billingEmail": "Invoice email",
+    "sameAsRecipient": "Same as care recipient details",
     "consentPrefix": "I have read and agree to",
     "consentLink": "the subscription and recurring billing terms",
     "connectCard": "Securely connect a card",
@@ -292,6 +293,7 @@
     "back": "Back",
     "continue": "Continue",
     "select": "Select",
+    "suggestions": "Suggestions",
     "notProvided": "Not provided"
   },
   "profile": {
@@ -511,6 +513,20 @@
     "demoDetailsTitle": "Sample file details",
     "demoRecipient": "Care recipient",
     "demoCaregiver": "Caregiver"
+  },
+  "payments": {
+    "upcomingTitle": "Upcoming payments",
+    "upcomingSummary": "The recurring obligations of a household employer, computed automatically from today's date.",
+    "salaryTitle": "Next salary payment",
+    "salaryNote": "By law, the salary must be paid by the 9th of the following month.",
+    "nationalInsuranceTitle": "National Insurance payment (quarterly)",
+    "nationalInsuranceNote": "Due by the 15th of {{month}}",
+    "payOnline": "Pay on the National Insurance website",
+    "dueDate": "Due date: {{date}}",
+    "dueToday": "Due today",
+    "daysRemaining": "In {{count}} days",
+    "openPayroll": "Open the payroll screen",
+    "openTasks": "Open tasks"
   },
   "glossary": {
     "eyebrow": "Simple, clear information",

@@ -6,6 +6,7 @@ import type {
   ReminderLeadDays,
 } from './storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from './quarterly-national-insurance.js';
+import { nextSalaryPaymentDate } from './upcoming-payments.js';
 
 export interface CareNotification {
   id: string;
@@ -111,6 +112,18 @@ export function createCareNotifications({
       to: '/payroll',
       dueDate: expense.dueDate,
       ...timing(days),
+    });
+  }
+
+  const salaryDueDate = nextSalaryPaymentDate(today);
+  const salaryDays = daysFrom(today, salaryDueDate);
+  if (salaryDays !== null && salaryDays <= reminderLeadDays) {
+    items.push({
+      id: `salary-payment-${salaryDueDate}`,
+      title: 'תשלום שכר חודשי — עד ה-9 לחודש',
+      to: '/payroll',
+      dueDate: salaryDueDate,
+      ...timing(salaryDays),
     });
   }
 

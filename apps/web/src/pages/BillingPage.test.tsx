@@ -20,6 +20,7 @@ vi.mock('../auth/auth-context.js', () => ({
   useAuth: () => ({ user: { email: 'owner@example.test' } }),
 }));
 
+import { emptyMvpProfile, saveMvpProfile } from '../storage/mvp-storage.js';
 import { BillingPage } from './BillingPage.js';
 
 const sponsoredPlan: BillingPlanResponse = {
@@ -223,5 +224,55 @@ describe('BillingPage', () => {
     await renderPage();
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  // ── Payer details copied from the care recipient ─────────────────────────
+
+  describe('same-as-recipient payer default', () => {
+    beforeEach(() => {
+      localStorage.clear();
+      saveMvpProfile({
+        ...emptyMvpProfile,
+        recipientName: 'Ilana Cohen',
+        recipientEmail: 'ilana@example.test',
+      });
+    });
+
+    it('copies the recipient details once and keeps the payer fields editable', async () => {
+      await renderPage();
+
+      const checkbox = await screen.findByLabelText(/same as care recipient details/i);
+      fireEvent.click(checkbox);
+
+      const nameInput = screen.getByLabelText(/invoice name/i);
+      const emailInput = screen.getByLabelText(/invoice email/i);
+      expect(nameInput).toHaveValue('Ilana Cohen');
+      expect(emailInput).toHaveValue('ilana@example.test');
+
+      // One-time copy — the payer fields stay editable, no live binding.
+      fireEvent.change(nameInput, { target: { value: 'Different Payer' } });
+      expect(nameInput).toHaveValue('Different Payer');
+      expect(emailInput).toHaveValue('ilana@example.test');
+      expect(checkbox).toBeChecked();
+    });
+
+    it('keeps the auth email when the recipient has no email to copy', async () => {
+      localStorage.clear();
+      saveMvpProfile({ ...emptyMvpProfile, recipientName: 'Ilana Cohen' });
+      await renderPage();
+
+      fireEvent.click(await screen.findByLabelText(/same as care recipient details/i));
+
+      expect(screen.getByLabelText(/invoice name/i)).toHaveValue('Ilana Cohen');
+      expect(screen.getByLabelText(/invoice email/i)).toHaveValue('owner@example.test');
+    });
+
+    it('hides the copy option when no recipient details exist', async () => {
+      localStorage.clear();
+      await renderPage();
+
+      expect(await screen.findByLabelText(/invoice name/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/same as care recipient details/i)).not.toBeInTheDocument();
+    });
   });
 });

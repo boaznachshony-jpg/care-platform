@@ -66,6 +66,7 @@
     "paymentMethodBody": "הכרטיס מוזן בדף המאובטח של Cardcom. CareDesk אינה מקבלת או שומרת מספר כרטיס או CVV.",
     "billingName": "שם לחשבונית",
     "billingEmail": "דוא״ל לקבלת חשבונית",
+    "sameAsRecipient": "זהה לפרטי המטופל",
     "consentPrefix": "קראתי ואני מסכים/ה",
     "consentLink": "לתנאי המנוי והחיוב החודשי",
     "connectCard": "חיבור כרטיס מאובטח",
@@ -292,6 +293,7 @@
     "back": "חזרה",
     "continue": "המשך",
     "select": "בחירה",
+    "suggestions": "הצעות השלמה",
     "notProvided": "טרם הוזן"
   },
   "profile": {
@@ -511,6 +513,20 @@
     "demoDetailsTitle": "פרטי התיק לדוגמה",
     "demoRecipient": "מקבלת הטיפול",
     "demoCaregiver": "המטפלת"
+  },
+  "payments": {
+    "upcomingTitle": "תשלומים קרובים",
+    "upcomingSummary": "מועדי החובה הקבועים של מעסיק במשק בית, מחושבים אוטומטית לפי התאריך של היום.",
+    "salaryTitle": "תשלום השכר הקרוב",
+    "salaryNote": "לפי החוק יש לשלם את השכר עד ה-9 לחודש העוקב.",
+    "nationalInsuranceTitle": "תשלום דמי ביטוח לאומי (רבעוני)",
+    "nationalInsuranceNote": "עד ה-15 בחודש {{month}}",
+    "payOnline": "לתשלום באתר הביטוח הלאומי",
+    "dueDate": "תאריך יעד: {{date}}",
+    "dueToday": "המועד הוא היום",
+    "daysRemaining": "בעוד {{count}} ימים",
+    "openPayroll": "מעבר למסך השכר",
+    "openTasks": "מעבר למשימות"
   },
   "glossary": {
     "eyebrow": "מידע פשוט וברור",

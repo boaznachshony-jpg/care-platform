@@ -1,9 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
-import { emptyMvpProfile, readMvpProfile, saveMvpProfile } from '../storage/mvp-storage.js';
+import {
+  emptyMvpProfile,
+  readMvpOnboardingDraft,
+  readMvpProfile,
+  saveMvpProfile,
+} from '../storage/mvp-storage.js';
 import { employmentSetupCompletedCount, OnboardingPage } from './OnboardingPage.js';
 
 function renderPage() {
@@ -80,6 +85,61 @@ describe('ATM onboarding validation and persistence', () => {
 
     expect(screen.getByText(/מי רשום כמעסיק/)).toBeInTheDocument();
     expect(readMvpProfile().recipientName).toBe('שרה לוי');
+  });
+
+  it('auto-saves in-progress input as a draft and restores it after leaving mid-step', () => {
+    vi.useFakeTimers();
+    try {
+      const firstRender = renderPage();
+      fireEvent.change(screen.getByLabelText(/שם המטופל/), {
+        target: { value: '123' },
+      });
+      act(() => vi.advanceTimersByTime(600));
+      firstRender.unmount();
+
+      renderPage();
+
+      // The invalid in-progress value is restored as a draft...
+      expect(screen.getByLabelText(/שם המטופל/)).toHaveValue('123');
+      // ...but it never reaches the committed profile and still blocks המשך.
+      expect(readMvpProfile().recipientName).toBe('');
+      expect(screen.getByRole('button', { name: /המשך/ })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('debounces draft persistence while typing', () => {
+    vi.useFakeTimers();
+    try {
+      renderPage();
+      const name = screen.getByLabelText(/שם המטופל/);
+      fireEvent.change(name, { target: { value: 'שר' } });
+      act(() => vi.advanceTimersByTime(300));
+      expect(readMvpOnboardingDraft()).toBeNull();
+
+      fireEvent.change(name, { target: { value: 'שרה' } });
+      act(() => vi.advanceTimersByTime(300));
+      expect(readMvpOnboardingDraft()).toBeNull();
+
+      act(() => vi.advanceTimersByTime(300));
+      expect(readMvpOnboardingDraft()?.profile.recipientName).toBe('שרה');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers locality suggestions for the recipient city while allowing free text', () => {
+    renderPage();
+    const city = screen.getByLabelText(/עיר או יישוב/);
+
+    fireEvent.change(city, { target: { value: 'חיפ' } });
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'חיפה' }));
+    expect(city).toHaveValue('חיפה');
+
+    fireEvent.change(city, { target: { value: 'יישוב שאינו ברשימה' } });
+    expect(city).toHaveValue('יישוב שאינו ברשימה');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
   it('rejects numeric-only names with an accessible field error', () => {

@@ -10,6 +10,7 @@ import {
   type OpenIssueSeverity,
 } from '../components/OpenIssuesGlance.js';
 import type { MvpProfile } from '../storage/mvp-storage.js';
+import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const URGENT_WINDOW_DAYS = 14;
@@ -110,6 +111,22 @@ export function OpenIssuesPage() {
       ...(severity === 'ok'
         ? {}
         : { actionLabel: t('openIssues.reviewDates'), actionTo: path('/settings') }),
+    });
+  }
+
+  for (const payment of createUpcomingPayments()) {
+    if (payment.daysRemaining > SOON_WINDOW_DAYS) continue;
+    issues.push({
+      id: `payment-${payment.id}`,
+      severity: 'soon',
+      title: t(`payments.${payment.id}Title`),
+      explanation: `${t('payments.dueDate', { date: formatDisplayDate(payment.dueDate) })} · ${
+        payment.daysRemaining === 0
+          ? t('payments.dueToday')
+          : t('payments.daysRemaining', { count: payment.daysRemaining })
+      }`,
+      actionLabel: payment.id === 'salary' ? t('payments.openPayroll') : t('payments.openTasks'),
+      actionTo: path(payment.id === 'salary' ? '/payroll' : '/tasks'),
     });
   }
 

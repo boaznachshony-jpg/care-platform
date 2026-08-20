@@ -58,6 +58,24 @@ vi.mock('../api/client.js', () => ({
   getCaseHealth: (...args: unknown[]) => mockGetCaseHealth(...args),
 }));
 
+// Deterministic upcoming payments: salary inside the 30-day window, the
+// quarterly National Insurance payment outside it.
+vi.mock('../upcoming-payments.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../upcoming-payments.js')>();
+  return {
+    ...actual,
+    createUpcomingPayments: () => [
+      { id: 'salary' as const, dueDate: '2026-09-09', daysRemaining: 8 },
+      {
+        id: 'nationalInsurance' as const,
+        dueDate: '2026-10-15',
+        daysRemaining: 44,
+        externalUrl: actual.NATIONAL_INSURANCE_PAYMENT_URL,
+      },
+    ],
+  };
+});
+
 /**
  * Tests inject their own openIssues bundle so they stay deterministic while
  * the shared he.json/en.json files are updated in a separate change.
@@ -109,9 +127,25 @@ const openIssuesHe = {
   demoCaregiver: 'המטפלת',
 };
 
+const paymentsHe = {
+  salaryTitle: 'תשלום השכר הקרוב',
+  nationalInsuranceTitle: 'תשלום דמי ביטוח לאומי (רבעוני)',
+  dueDate: 'תאריך יעד: {{date}}',
+  dueToday: 'המועד הוא היום',
+  daysRemaining: 'בעוד {{count}} ימים',
+  openPayroll: 'מעבר למסך השכר',
+  openTasks: 'מעבר למשימות',
+};
+
 function renderPage(clientId = 'client-001') {
   const i18n = initI18n();
-  i18n.addResourceBundle('he', 'translation', { openIssues: openIssuesHe }, true, true);
+  i18n.addResourceBundle(
+    'he',
+    'translation',
+    { openIssues: openIssuesHe, payments: paymentsHe },
+    true,
+    true,
+  );
   return render(
     <I18nextProvider i18n={i18n}>
       <MemoryRouter initialEntries={[`/clients/${clientId}/overview`]}>
@@ -187,12 +221,24 @@ describe('OpenIssuesPage', () => {
   it('counts issues per severity bucket', async () => {
     const { container } = renderPage();
     // Urgent: attention factor + visa (5 days). Soon: missing field + insurance
-    // (20 days). Ok: good factor + license (200 days).
+    // (20 days) + salary payment (8 days). Ok: good factor + license (200 days).
     await waitFor(() =>
       expect(container.querySelector('.issues-count-urgent strong')?.textContent).toBe('2'),
     );
-    expect(container.querySelector('.issues-count-soon strong')?.textContent).toBe('2');
+    expect(container.querySelector('.issues-count-soon strong')?.textContent).toBe('3');
     expect(container.querySelector('.issues-count-ok strong')?.textContent).toBe('2');
+  });
+
+  it('surfaces a payment obligation in the soon bucket only when due within 30 days', () => {
+    renderPage();
+    expect(screen.getByText('תשלום השכר הקרוב')).toBeInTheDocument();
+    expect(screen.getByText('תאריך יעד: 09.09.2026 · בעוד 8 ימים')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'מעבר למסך השכר' })).toHaveAttribute(
+      'href',
+      '/payroll',
+    );
+    // 44 days away — stays off the open-issues list until it enters the window.
+    expect(screen.queryByText('תשלום דמי ביטוח לאומי (רבעוני)')).not.toBeInTheDocument();
   });
 
   it('shows the health score in the ring', async () => {

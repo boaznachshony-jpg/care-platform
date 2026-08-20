@@ -104,4 +104,18 @@ describe('DashboardPage', () => {
     renderPage('client-demo-001');
     await waitFor(() => expect(mockGetCaseHealth).toHaveBeenCalledWith('client-demo-001'));
   });
+
+  it('always shows the two upcoming payment obligations with the official payment link', () => {
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'תשלומים קרובים' })).toBeInTheDocument();
+    expect(screen.getByText('תשלום השכר הקרוב')).toBeInTheDocument();
+    expect(screen.getByText('תשלום דמי ביטוח לאומי (רבעוני)')).toBeInTheDocument();
+    const paymentLink = screen.getByRole('link', { name: 'לתשלום באתר הביטוח הלאומי' });
+    expect(paymentLink).toHaveAttribute(
+      'href',
+      'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx',
+    );
+    expect(paymentLink).toHaveAttribute('target', '_blank');
+    expect(paymentLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
 });

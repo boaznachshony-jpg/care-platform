@@ -5405,3 +5405,38 @@ input[type='number'] {
   margin: 0 auto;
   padding: 24px 16px;
 }
+
+/* Autocomplete (city/locality) — WAI-ARIA combobox with a suggestions list. */
+.autocomplete-anchor {
+  position: relative;
+  display: block;
+}
+
+.autocomplete-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 2px solid #cbd4df;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgb(16 42 67 / 16%);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.autocomplete-suggestions li {
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.autocomplete-suggestions li.active,
+.autocomplete-suggestions li:hover {
+  background: var(--cd-primary-soft);
+  color: #244d83;
+}

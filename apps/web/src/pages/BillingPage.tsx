@@ -8,6 +8,7 @@ import {
   startBillingPaymentMethodSetup,
 } from '../api/client.js';
 import { useAuth } from '../auth/auth-context.js';
+import { readMvpRecipientContact } from '../storage/mvp-storage.js';
 
 const money = (agorot: number, language: string) =>
   new Intl.NumberFormat(language, { style: 'currency', currency: 'ILS' }).format(agorot / 100);
@@ -28,6 +29,8 @@ export function BillingPage() {
   const [plan, setPlan] = useState<BillingPlanResponse | null>(null);
   const [billingName, setBillingName] = useState('');
   const [billingEmail, setBillingEmail] = useState(authEmail);
+  const [recipientContact] = useState(readMvpRecipientContact);
+  const [sameAsRecipient, setSameAsRecipient] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -79,6 +82,17 @@ export function BillingPage() {
       setBusy(false);
       setError(true);
     }
+  }
+
+  /**
+   * One-time copy of the care recipient's details into the payer fields —
+   * the fields stay fully editable afterwards (no live binding).
+   */
+  function toggleSameAsRecipient(checked: boolean) {
+    setSameAsRecipient(checked);
+    if (!checked) return;
+    if (recipientContact.name) setBillingName(recipientContact.name);
+    if (recipientContact.email) setBillingEmail(recipientContact.email);
   }
 
   async function cancelSubscription() {
@@ -220,6 +234,16 @@ export function BillingPage() {
             ) : plan.canManage ? (
               <form className="billing-setup-form" onSubmit={(event) => void submit(event)}>
                 <p>{t('billing.paymentMethodBody')}</p>
+                {recipientContact.name || recipientContact.email ? (
+                  <label className="billing-consent billing-same-as-recipient">
+                    <input
+                      type="checkbox"
+                      checked={sameAsRecipient}
+                      onChange={(event) => toggleSameAsRecipient(event.target.checked)}
+                    />
+                    <span>{t('billing.sameAsRecipient')}</span>
+                  </label>
+                ) : null}
                 <label>
                   {t('billing.billingName')}
                   <input
