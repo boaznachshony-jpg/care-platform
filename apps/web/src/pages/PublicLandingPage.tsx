@@ -171,8 +171,11 @@ export function PublicLandingPage() {
             <h1 id="public-title">{t('public.hero.title')}</h1>
             <p>{t('public.hero.body')}</p>
             <div className="public-hero-actions">
+              <Link className="public-primary-action" to="/app?mode=register">
+                {t('public.hero.openAccount')}
+              </Link>
               {signupUrl ? (
-                <a className="public-primary-action" href={signupUrl}>
+                <a className="public-secondary-action" href={signupUrl}>
                   {t('public.hero.signup')}
                 </a>
               ) : null}
@@ -304,8 +307,8 @@ export function PublicLandingPage() {
               {t('public.pilot.signup')}
             </a>
           ) : (
-            <Link className="public-primary-action" to="/app">
-              {t('public.pilot.existing')}
+            <Link className="public-primary-action" to="/app?mode=register">
+              {t('public.hero.openAccount')}
             </Link>
           )}
         </section>

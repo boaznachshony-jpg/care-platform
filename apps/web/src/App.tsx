@@ -39,6 +39,7 @@ import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
 import { EmergencyBinderPage } from './pages/EmergencyBinderPage.js';
 import { OpenIssuesPage } from './pages/OpenIssuesPage.js';
 import { DemoOverviewPage } from './pages/DemoOverviewPage.js';
+import { AccountFrozenGate } from './components/AccountFrozenGate.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -102,206 +103,208 @@ function AuthenticatedApp() {
       passwordRecovery={<PasswordRecoveryPage />}
       loading={<AuthLoadingPage />}
     >
-      <Routes>
-        <Route path="/worker" element={<WorkerPortalPage />} />
-        <Route
-          path="/binder"
-          element={
-            <ClientApp>
-              <EmergencyBinderPage />
-            </ClientApp>
-          }
-        />
-        <Route path="/app" element={<ClientsPage />} />
-        <Route path="/family" element={<FamilyAccessPage />} />
-        <Route path="/billing" element={<BillingPage />} />
-        <Route path="/cases/:caseId" element={<CasePage />} />
-        <Route
-          path="/clients/:clientId"
-          element={
-            <ClientApp>
-              <ClientHome />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/overview"
-          element={
-            <ClientApp>
-              <OpenIssuesPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/onboarding"
-          element={
-            <ClientApp>
-              <OnboardingPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/tasks"
-          element={
-            <ClientApp>
-              <TasksPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/employee"
-          element={
-            <ClientApp>
-              <EmployeePage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/trust"
-          element={
-            <ClientApp>
-              <TrustMessagesPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/glossary"
-          element={
-            <ClientApp>
-              <GlossaryPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/documents"
-          element={
-            <ClientApp>
-              <DocumentsPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/timeline"
-          element={
-            <ClientApp>
-              <TimelinePage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/payroll"
-          element={
-            <ClientApp>
-              <PayrollPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/settings"
-          element={
-            <ClientApp>
-              <SettingsPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/binder"
-          element={
-            <ClientApp>
-              <EmergencyBinderPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/clients/:clientId/contact"
-          element={
-            <ClientApp>
-              <ContactPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/onboarding"
-          element={
-            <ClientApp>
-              <OnboardingPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/tasks"
-          element={
-            <ClientApp>
-              <TasksPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/employee"
-          element={
-            <ClientApp>
-              <EmployeePage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/trust"
-          element={
-            <ClientApp>
-              <TrustMessagesPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/glossary"
-          element={
-            <ClientApp>
-              <GlossaryPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/documents"
-          element={
-            <ClientApp>
-              <DocumentsPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/timeline"
-          element={
-            <ClientApp>
-              <TimelinePage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/payroll"
-          element={
-            <ClientApp>
-              <PayrollPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ClientApp>
-              <SettingsPage />
-            </ClientApp>
-          }
-        />
-        <Route
-          path="/contact"
-          element={
-            <ClientApp>
-              <ContactPage />
-            </ClientApp>
-          }
-        />
-        <Route path="*" element={<Navigate to="/app" replace />} />
-      </Routes>
+      <AccountFrozenGate>
+        <Routes>
+          <Route path="/worker" element={<WorkerPortalPage />} />
+          <Route
+            path="/binder"
+            element={
+              <ClientApp>
+                <EmergencyBinderPage />
+              </ClientApp>
+            }
+          />
+          <Route path="/app" element={<ClientsPage />} />
+          <Route path="/family" element={<FamilyAccessPage />} />
+          <Route path="/billing" element={<BillingPage />} />
+          <Route path="/cases/:caseId" element={<CasePage />} />
+          <Route
+            path="/clients/:clientId"
+            element={
+              <ClientApp>
+                <ClientHome />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/overview"
+            element={
+              <ClientApp>
+                <OpenIssuesPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/onboarding"
+            element={
+              <ClientApp>
+                <OnboardingPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/tasks"
+            element={
+              <ClientApp>
+                <TasksPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/employee"
+            element={
+              <ClientApp>
+                <EmployeePage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/trust"
+            element={
+              <ClientApp>
+                <TrustMessagesPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/glossary"
+            element={
+              <ClientApp>
+                <GlossaryPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/documents"
+            element={
+              <ClientApp>
+                <DocumentsPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/timeline"
+            element={
+              <ClientApp>
+                <TimelinePage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/payroll"
+            element={
+              <ClientApp>
+                <PayrollPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/settings"
+            element={
+              <ClientApp>
+                <SettingsPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/binder"
+            element={
+              <ClientApp>
+                <EmergencyBinderPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/clients/:clientId/contact"
+            element={
+              <ClientApp>
+                <ContactPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/onboarding"
+            element={
+              <ClientApp>
+                <OnboardingPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/tasks"
+            element={
+              <ClientApp>
+                <TasksPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/employee"
+            element={
+              <ClientApp>
+                <EmployeePage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/trust"
+            element={
+              <ClientApp>
+                <TrustMessagesPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/glossary"
+            element={
+              <ClientApp>
+                <GlossaryPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <ClientApp>
+                <DocumentsPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/timeline"
+            element={
+              <ClientApp>
+                <TimelinePage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/payroll"
+            element={
+              <ClientApp>
+                <PayrollPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ClientApp>
+                <SettingsPage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/contact"
+            element={
+              <ClientApp>
+                <ContactPage />
+              </ClientApp>
+            }
+          />
+          <Route path="*" element={<Navigate to="/app" replace />} />
+        </Routes>
+      </AccountFrozenGate>
     </AuthProvider>
   );
 }
