@@ -43,12 +43,14 @@ const intakeReviewBodySchema = z
     reviewState: z.enum(['user_confirmed', 'cancelled']),
     fields: z
       .array(
-        z.object({
-          key: z.enum(['holder_name', 'issue_date', 'expiry_date']),
-          validationStatus: z.enum(['valid', 'invalid', 'ambiguous', 'unverified']),
-          provenance: z.enum(['ocr', 'ai', 'user']),
-          userConfirmed: z.boolean(),
-        }),
+        z
+          .object({
+            key: z.enum(['holder_name', 'issue_date', 'expiry_date']),
+            validationStatus: z.enum(['valid', 'invalid', 'ambiguous', 'unverified']),
+            provenance: z.enum(['ocr', 'ai', 'user']),
+            userConfirmed: z.boolean(),
+          })
+          .strict(),
       )
       .max(10)
       .default([]),

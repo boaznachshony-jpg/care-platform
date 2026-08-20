@@ -23,7 +23,9 @@ const CONFIRMED_PLAN = {
 function makeApp(): { app: FastifyInstance; container: Container } {
   const container = buildContainer(loadEnv({}));
   const app = buildServer(loadEnv({}), container);
-  registerEventActionPlanRoutes(app, container, new InMemoryRateLimiter());
+  if (!app.hasRoute({ method: 'POST', url: '/cases/:caseId/event-plans' })) {
+    registerEventActionPlanRoutes(app, container, new InMemoryRateLimiter());
+  }
   return { app, container };
 }
 
