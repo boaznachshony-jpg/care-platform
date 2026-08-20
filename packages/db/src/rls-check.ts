@@ -71,6 +71,12 @@ const ALL_TENANT_TABLES = [
   'communication_preference',
   'notification_intent',
   'notification_delivery_attempt',
+  'automation_execution_receipt',
+  'payroll_entry',
+  'professional_review_transition',
+  'binder_export_receipt',
+  'regulation_rule',
+  'regulation_rule_transition',
 ] as const;
 
 interface Fixture {

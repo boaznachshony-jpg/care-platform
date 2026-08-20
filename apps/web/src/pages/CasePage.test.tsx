@@ -36,6 +36,7 @@ vi.mock('../api/client.js', () => {
       Promise.resolve({ members: [], responsibilities: [], tasks: [], requests: [] }),
     listPayrollEntries: () => Promise.resolve([]),
     listCanonicalPayrollCloses: () => Promise.resolve([]),
+    listScenarioExpenses: () => Promise.resolve([]),
     confirmAssistantChecklist: () => Promise.resolve(undefined),
   };
 });
@@ -43,6 +44,8 @@ vi.mock('../api/client.js', () => {
 vi.mock('../storage/mvp-storage.js', () => ({
   readMvpPayroll: () => [],
   saveMvpPayroll: () => undefined,
+  readMvpEmploymentExpenses: () => [],
+  saveMvpEmploymentExpenses: () => undefined,
 }));
 
 vi.mock('@caredesk/application', () => ({

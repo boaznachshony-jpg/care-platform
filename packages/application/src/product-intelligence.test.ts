@@ -161,4 +161,77 @@ describe('product intelligence projections', () => {
       projectFutureCost({ startMonth: '2028-01', baseSalary: amount, expenses: [] }),
     ).toThrow('finite and non-negative');
   });
+
+  it('applies a canonical recurring scenario expense only inside its month window', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [
+        {
+          id: 'scenario-1',
+          label: 'Insurance scenario',
+          amount: 50,
+          frequency: 'monthly',
+          startMonth: '2028-03',
+          endMonth: '2028-04',
+          source: 'planning_scenario',
+        },
+      ],
+    });
+    expect(result.months.map((m) => m.total)).toEqual([
+      100, 100, 150, 150, 100, 100, 100, 100, 100, 100, 100, 100,
+    ]);
+    const inWindow = result.months[2]!.components.find((c) => c.id === 'scenario-1');
+    expect(inWindow).toMatchObject({
+      source: 'planning_scenario',
+      status: 'FORECAST',
+      explanation: 'Planning-only value; canonical records are unchanged',
+    });
+    expect(result.months[0]!.components.some((c) => c.id === 'scenario-1')).toBe(false);
+  });
+
+  it('applies a canonical one-time scenario expense on its dated month only', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [
+        {
+          id: 'scenario-2',
+          label: 'Planned equipment',
+          amount: 30,
+          frequency: 'one_time',
+          dueDate: '2028-05-01',
+          source: 'planning_scenario',
+        },
+      ],
+    });
+    expect(result.months[4]).toMatchObject({ month: '2028-05', known: 30, total: 130 });
+    expect(result.months.filter((m) => m.known > 0)).toHaveLength(1);
+  });
+
+  it('lets canonical actuals replace forecast plus scenario layers for their month', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [
+        {
+          id: 'scenario-3',
+          label: 'Recurring scenario',
+          amount: 40,
+          frequency: 'monthly',
+          source: 'planning_scenario',
+        },
+      ],
+      actuals: [{ month: '2028-01', amount: 95, sourceId: 'closed-1' }],
+      enteredPayroll: [{ month: '2028-02', amount: 105, sourceId: 'entry-1' }],
+    });
+    // Closed month: only the canonical closed record counts.
+    expect(result.months[0]).toMatchObject({ total: 95, status: 'ACTUAL' });
+    expect(result.months[0]!.components).toHaveLength(1);
+    // Open entered month: only the canonical payroll entry counts.
+    expect(result.months[1]).toMatchObject({ total: 105, status: 'ACTUAL' });
+    expect(result.months[1]!.components[0]?.source).toBe('payroll_entry');
+    // Pure forecast month: salary forecast base plus the scenario layer.
+    expect(result.months[2]).toMatchObject({ total: 140, status: 'FORECAST' });
+  });
 });

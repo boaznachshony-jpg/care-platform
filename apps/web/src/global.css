@@ -2540,6 +2540,10 @@ body {
   background: #e6efff;
   color: #2859a7;
 }
+.status-card.ok .status-icon {
+  background: #e2f5ec;
+  color: #0f6e56;
+}
 .onboarding-page {
   max-width: 820px;
   margin: 0 auto;
@@ -5355,4 +5359,84 @@ input[type='number'] {
   .event-grid {
     display: grid;
   }
+}
+
+/* Open issues at a glance: severity buckets + public demo banner. */
+.status-chip.urgent {
+  background: #fdebe9;
+  color: #9c2f22;
+}
+.status-chip.soon {
+  background: var(--cd-warning-soft);
+  color: #865000;
+}
+.status-chip.ok {
+  background: var(--cd-success-soft);
+  color: #116c41;
+}
+.attention-item.soon {
+  border-inline-start-color: var(--cd-warning);
+  background: var(--cd-warning-soft);
+}
+.attention-item.ok {
+  border-inline-start-color: var(--cd-success);
+  background: var(--cd-success-soft);
+}
+.issues-count-urgent strong {
+  color: #9c2f22;
+}
+.issues-count-soon strong {
+  color: #865000;
+}
+.issues-count-ok strong {
+  color: #116c41;
+}
+.demo-banner {
+  padding: 12px 16px;
+  border: 1px solid var(--cd-warning);
+  border-radius: 12px;
+  background: var(--cd-warning-soft);
+  color: #865000;
+  font-weight: 800;
+  text-align: center;
+}
+.demo-overview {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* Autocomplete (city/locality) — WAI-ARIA combobox with a suggestions list. */
+.autocomplete-anchor {
+  position: relative;
+  display: block;
+}
+
+.autocomplete-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 2px solid #cbd4df;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgb(16 42 67 / 16%);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.autocomplete-suggestions li {
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.autocomplete-suggestions li.active,
+.autocomplete-suggestions li:hover {
+  background: var(--cd-primary-soft);
+  color: #244d83;
 }

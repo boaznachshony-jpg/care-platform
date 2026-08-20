@@ -120,6 +120,38 @@ describe('care notifications', () => {
     ]);
   });
 
+  it('reminds about the monthly salary payment within the reminder lead time', () => {
+    const notifications = createCareNotifications({
+      today: new Date('2026-09-05T12:00:00'),
+      reminderLeadDays: 7,
+      documents: [],
+      tasks: [],
+      expenses: [],
+    });
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        title: 'תשלום שכר חודשי — עד ה-9 לחודש',
+        detail: 'נותרו 4 ימים',
+        severity: 'upcoming',
+        dueDate: '2026-09-09',
+        to: '/payroll',
+      }),
+    ]);
+  });
+
+  it('keeps the salary reminder silent outside the reminder lead time', () => {
+    const notifications = createCareNotifications({
+      today: new Date('2026-08-10T12:00:00'),
+      reminderLeadDays: 7,
+      documents: [],
+      tasks: [],
+      expenses: [],
+    });
+
+    expect(notifications).toEqual([]);
+  });
+
   it('uses the quarterly preparation task on the final day instead of a payment deadline', () => {
     const notifications = createCareNotifications({
       today: new Date('2026-09-30T12:00:00'),

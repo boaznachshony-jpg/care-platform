@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import {
@@ -35,6 +35,38 @@ const assistantBody = z.object({
 const checklistBody = z.object({
   items: z.array(z.string().trim().min(1).max(160)).min(1).max(25),
 });
+const reviewParams = z.object({ caseId: z.string().uuid(), reviewId: z.string().uuid() });
+const transitionBody = z
+  .object({
+    status: z.enum(['acknowledged', 'in_review', 'resolved', 'cancelled']),
+    // Free-text professional name/contact for a MANUAL handoff. CareDesk never
+    // contacts a provider and never claims fulfilment (fail closed by design).
+    assignedTo: z.string().trim().min(2).max(200).optional(),
+    resolutionNote: z.string().trim().min(3).max(2000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.status === 'resolved' && !value.resolutionNote) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['resolutionNote'],
+        message: 'A resolution note is required to resolve an escalation',
+      });
+    }
+  });
+
+type ReviewStatus = 'requested' | 'acknowledged' | 'in_review' | 'resolved' | 'cancelled';
+
+/**
+ * The only legal escalation lifecycle. Everything else is rejected: the
+ * lifecycle is manual/fail-closed evidence, never a provider fulfilment claim.
+ */
+export const ESCALATION_TRANSITIONS: Record<ReviewStatus, readonly ReviewStatus[]> = {
+  requested: ['acknowledged', 'cancelled'],
+  acknowledged: ['in_review', 'cancelled'],
+  in_review: ['resolved', 'cancelled'],
+  resolved: [],
+  cancelled: [],
+};
 
 interface ReviewRow {
   id: string;
@@ -43,9 +75,22 @@ interface ReviewRow {
   reason: string;
   summary: string;
   source: z.infer<typeof reviewBody>['source'];
-  status: 'draft' | 'open' | 'in_review' | 'resolved' | 'cancelled';
+  status: ReviewStatus;
+  assignedTo: string | null;
+  resolutionNote: string | null;
+  resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TransitionRow {
+  id: string;
+  fromStatus: ReviewStatus;
+  toStatus: ReviewStatus;
+  changedBy: string;
+  assignedTo: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
 }
 
 const MINUTE_MS = 60_000;
@@ -55,6 +100,8 @@ export const PRODUCT_DIFFERENTIATION_RATE_LIMITS = {
   checklistConfirmation: { max: 20, timeWindow: MINUTE_MS, bucket: 'checklist' },
   reviewList: { max: 60, timeWindow: MINUTE_MS, bucket: 'review-list' },
   reviewCreate: { max: 10, timeWindow: MINUTE_MS, bucket: 'review-create' },
+  reviewGet: { max: 60, timeWindow: MINUTE_MS, bucket: 'review-get' },
+  reviewTransition: { max: 20, timeWindow: MINUTE_MS, bucket: 'review-transition' },
 } as const satisfies Record<string, RouteRateLimit>;
 
 /**
@@ -86,7 +133,33 @@ export function registerProductDifferentiationRoutes(
 ): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const memoryReviews = new Map<string, ReviewRow>();
+  const memoryTransitions = new Map<string, TransitionRow[]>();
   const idempotency = new Map<string, unknown>();
+
+  const REVIEW_COLUMNS = `id, employment_case_id as "employmentCaseId", category, reason, summary,
+       source, status, assigned_to_name as "assignedTo", resolution_note as "resolutionNote",
+       resolved_at as "resolvedAt", created_at as "createdAt", updated_at as "updatedAt"`;
+
+  /**
+   * Escalation lifecycle mutations are manager-only. With PostgreSQL the
+   * active tenant membership role is checked under forced RLS (wave5 pattern).
+   * The in-memory fallback exists for development/tests only, where the sole
+   * seeded synthetic identity is the tenant owner.
+   */
+  async function requireManager(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+    const actor = request.actor;
+    if (!actor) return false;
+    if (!container.pool) return true;
+    const allowed = await withTenant(container.pool, actor.tenantId, (client) =>
+      client.query(
+        `select 1 from tenant_membership where tenant_id=$1 and user_id=$2 and status='active' and role in ('owner','manager')`,
+        [actor.tenantId, actor.userId],
+      ),
+    );
+    if (allowed.rowCount) return true;
+    sendError(request, reply, 403, 'MANAGER_REQUIRED');
+    return false;
+  }
 
   async function authorizeCase(request: FastifyRequest, reply: FastifyReply, caseId: string) {
     const actor = request.actor;
@@ -181,9 +254,14 @@ export function registerProductDifferentiationRoutes(
       if (!body.success) return sendValidationError(request, reply, body.error);
       const authorized = await authorizeCase(request, reply, params.data.caseId);
       if (!authorized) return;
-      const [tasks, documents] = await Promise.all([
+      // Reviewed regulation context (migration 0032): the service query only
+      // ever returns status='active' rules whose effective window covers
+      // today — draft/in-review/approved/retired content can never leak here.
+      const rulesAsOf = new Date().toISOString().slice(0, 10);
+      const [tasks, documents, activeRules] = await Promise.all([
         container.listTasks.execute(authorized.actor, params.data.caseId),
         container.listDocuments.execute(authorized.actor, params.data.caseId),
+        container.regulationRules.listActiveForContext(authorized.actor, rulesAsOf),
       ]);
       const context = {
         caseSummary: { caseId: params.data.caseId, status: authorized.graph.employmentCase.status },
@@ -205,7 +283,11 @@ export function registerProductDifferentiationRoutes(
             dueAt: task.dueAt,
           })),
         relevantTimelineEvents: [],
-        relevantApprovedRules: [],
+        relevantApprovedRules: activeRules.map((rule) => ({
+          id: rule.id,
+          version: String(rule.version),
+          title: rule.title,
+        })),
       };
       const missing = ['passport', 'visa', 'medical_insurance'].filter(
         (type) =>
@@ -231,6 +313,10 @@ export function registerProductDifferentiationRoutes(
             ...context.documentStatusSummary.map((_item, index) => ({
               factPath: `documentStatusSummary.${index}.status`,
               label: `Stored document ${index + 1} status`,
+            })),
+            ...context.relevantApprovedRules.map((rule, index) => ({
+              factPath: `relevantApprovedRules.${index}.title`,
+              label: `Approved rule: ${rule.title}`,
             })),
           ],
           uncertainties: context.relevantApprovedRules.length
@@ -267,9 +353,14 @@ export function registerProductDifferentiationRoutes(
             },
           ],
           proposedChecklist: checklist,
+          // Escalation stays required either way: reviewed content is marked
+          // requires_professional_validation, so it informs but never replaces
+          // the professional review boundary.
           escalation: {
             required: true,
-            reason: 'No approved rule covers professional interpretation',
+            reason: context.relevantApprovedRules.length
+              ? 'Approved rules were applied; professional validation is still required before reliance'
+              : 'No approved rule covers professional interpretation',
           },
         },
         context,
@@ -302,18 +393,72 @@ export function registerProductDifferentiationRoutes(
       const authorized = await authorizeCase(request, reply, params.data.caseId);
       if (!authorized) return;
       const key = request.headers['idempotency-key'];
-      if (typeof key !== 'string' || key.length < 8)
+      if (typeof key !== 'string' || key.length < 8 || key.length > 200)
         return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
-      const cacheKey = `${authorized.actor.tenantId}:${key}`;
-      if (idempotency.has(cacheKey)) return reply.send(idempotency.get(cacheKey));
-      const created = [];
-      for (const title of body.data.items)
-        created.push(
-          await container.createTask.execute(authorized.actor, params.data.caseId, { title }),
-        );
-      const result = { created, confirmationId: randomUUID() };
-      idempotency.set(cacheKey, result);
-      reply.status(201).send(result);
+      // Durable tenant-scoped receipt (migration 0029): the claim replaces the
+      // old process-memory map, so a replayed request returns the stored
+      // receipt and a concurrent duplicate resolves on the unique constraint
+      // instead of creating the tasks twice.
+      const requestHash = createHash('sha256')
+        .update(JSON.stringify({ caseId: params.data.caseId, items: body.data.items }))
+        .digest('hex');
+      const claim = await container.automationReceipts.claim<Record<string, unknown>>(
+        authorized.actor.tenantId,
+        {
+          operation: 'checklist_confirmation',
+          idempotencyKey: key,
+          requestHash,
+          employmentCaseId: params.data.caseId,
+          createdBy: authorized.actor.userId,
+        },
+      );
+      if (claim.outcome === 'replay')
+        return reply.status(200).send({ ...(claim.receipt.response ?? {}), replayed: true });
+      if (claim.outcome === 'in_progress')
+        return sendError(request, reply, 409, 'CONFIRMATION_IN_PROGRESS');
+      if (claim.outcome === 'hash_mismatch')
+        return sendError(request, reply, 409, 'IDEMPOTENCY_KEY_REUSED');
+      try {
+        const created = [];
+        for (const title of body.data.items)
+          created.push(
+            await container.createTask.execute(authorized.actor, params.data.caseId, { title }),
+          );
+        const now = new Date().toISOString();
+        await container.timeline.record({
+          tenantId: authorized.actor.tenantId,
+          employmentCaseId: params.data.caseId,
+          eventTypeKey: 'timeline.automation.checklist_confirmed',
+          occurredAt: now,
+          summaryKey: 'timeline.automation.checklist_confirmed.summary',
+          sensitivity: 'general',
+        });
+        await container.audit.record({
+          tenantId: authorized.actor.tenantId,
+          actorId: authorized.actor.userId,
+          action: 'assistant_checklist.confirmed',
+          resourceType: 'automation_execution_receipt',
+          resourceId: claim.receiptId,
+          correlationId: authorized.actor.correlationId,
+          occurredAt: now,
+          changeSummary: `Checklist confirmation created ${created.length} task(s).`,
+          sensitivity: 'employment_sensitive',
+        });
+        const result = {
+          created,
+          confirmationId: claim.receiptId,
+          receiptId: claim.receiptId,
+          replayed: false,
+        };
+        await container.automationReceipts.complete(authorized.actor.tenantId, claim.receiptId, {
+          ...result,
+        });
+        reply.status(201).send(result);
+      } catch (error) {
+        // Release the claim so a retry with the same key can execute.
+        await container.automationReceipts.fail(authorized.actor.tenantId, claim.receiptId);
+        throw error;
+      }
     },
   );
 
@@ -341,7 +486,7 @@ export function registerProductDifferentiationRoutes(
         async (client) =>
           (
             await client.query(
-              `select id, employment_case_id as "employmentCaseId", category, reason, summary, source, status, created_at as "createdAt", updated_at as "updatedAt" from professional_review_request where employment_case_id=$1 order by created_at desc`,
+              `select ${REVIEW_COLUMNS} from professional_review_request where employment_case_id=$1 order by created_at desc`,
               [params.data.caseId],
             )
           ).rows,
@@ -374,7 +519,10 @@ export function registerProductDifferentiationRoutes(
         id: randomUUID(),
         employmentCaseId: params.data.caseId,
         ...body.data,
-        status: 'open',
+        status: 'requested',
+        assignedTo: null,
+        resolutionNote: null,
+        resolvedAt: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -385,7 +533,7 @@ export function registerProductDifferentiationRoutes(
           async (client) =>
             (
               await client.query(
-                `insert into professional_review_request (tenant_id,id,employment_case_id,created_by,category,reason,summary,source,related_entity_type,related_entity_id,idempotency_key) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) on conflict (tenant_id,idempotency_key) do update set idempotency_key=excluded.idempotency_key returning id, employment_case_id as "employmentCaseId", category, reason, summary, source, status, created_at as "createdAt", updated_at as "updatedAt"`,
+                `insert into professional_review_request (tenant_id,id,employment_case_id,created_by,category,reason,summary,source,related_entity_type,related_entity_id,idempotency_key) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) on conflict (tenant_id,idempotency_key) do update set idempotency_key=excluded.idempotency_key returning ${REVIEW_COLUMNS}`,
                 [
                   authorized.actor.tenantId,
                   row.id,
@@ -421,6 +569,191 @@ export function registerProductDifferentiationRoutes(
       memoryReviews.set(row.id, row);
       idempotency.set(cacheKey, row);
       reply.status(201).send(row);
+    },
+  );
+
+  app.get<{ Params: { caseId: string; reviewId: string } }>(
+    '/cases/:caseId/professional-reviews/:reviewId',
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewGet },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(rateLimiter, PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewGet),
+      ],
+    },
+    async (request, reply) => {
+      const params = reviewParams.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
+      const authorized = await authorizeCase(request, reply, params.data.caseId);
+      if (!authorized) return;
+      if (!container.pool) {
+        const review = memoryReviews.get(params.data.reviewId);
+        if (!review || review.employmentCaseId !== params.data.caseId)
+          return sendError(request, reply, 404, 'NOT_FOUND');
+        return reply.send({ review, history: memoryTransitions.get(review.id) ?? [] });
+      }
+      const result = await withTenant(container.pool, authorized.actor.tenantId, async (client) => {
+        const review = (
+          await client.query<ReviewRow>(
+            `select ${REVIEW_COLUMNS} from professional_review_request where id=$1 and employment_case_id=$2`,
+            [params.data.reviewId, params.data.caseId],
+          )
+        ).rows[0];
+        if (!review) return null;
+        const history = (
+          await client.query<TransitionRow>(
+            `select id, from_status as "fromStatus", to_status as "toStatus", changed_by as "changedBy",
+               assigned_to_name as "assignedTo", resolution_note as "resolutionNote", created_at as "createdAt"
+             from professional_review_transition where review_id=$1 order by created_at asc`,
+            [params.data.reviewId],
+          )
+        ).rows;
+        return { review, history };
+      });
+      if (!result) return sendError(request, reply, 404, 'NOT_FOUND');
+      reply.send(result);
+    },
+  );
+
+  app.patch<{ Params: { caseId: string; reviewId: string } }>(
+    '/cases/:caseId/professional-reviews/:reviewId',
+    {
+      config: { rateLimit: PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewTransition },
+      preHandler: [
+        authenticate,
+        makeProductRateLimit(rateLimiter, PRODUCT_DIFFERENTIATION_RATE_LIMITS.reviewTransition),
+      ],
+    },
+    async (request, reply) => {
+      const params = reviewParams.safeParse(request.params);
+      const body = transitionBody.safeParse(request.body);
+      if (!params.success) return sendValidationError(request, reply, params.error);
+      if (!body.success) return sendValidationError(request, reply, body.error);
+      const authorized = await authorizeCase(request, reply, params.data.caseId);
+      if (!authorized) return;
+      if (!(await requireManager(request, reply))) return;
+      const key = request.headers['idempotency-key'];
+      if (typeof key !== 'string' || key.length < 8)
+        return sendError(request, reply, 400, 'IDEMPOTENCY_KEY_REQUIRED');
+      const now = new Date().toISOString();
+
+      if (!container.pool) {
+        // Development/test fallback only (no durable persistence claim).
+        const cacheKey = `transition:${authorized.actor.tenantId}:${key}`;
+        const replayed = idempotency.get(cacheKey);
+        if (replayed) return reply.send(replayed);
+        const review = memoryReviews.get(params.data.reviewId);
+        if (!review || review.employmentCaseId !== params.data.caseId)
+          return sendError(request, reply, 404, 'NOT_FOUND');
+        if (!ESCALATION_TRANSITIONS[review.status].includes(body.data.status))
+          return sendError(request, reply, 409, 'INVALID_TRANSITION');
+        const transition: TransitionRow = {
+          id: randomUUID(),
+          fromStatus: review.status,
+          toStatus: body.data.status,
+          changedBy: authorized.actor.userId,
+          assignedTo: body.data.assignedTo ?? null,
+          resolutionNote: body.data.resolutionNote ?? null,
+          createdAt: now,
+        };
+        review.status = body.data.status;
+        review.assignedTo = body.data.assignedTo ?? review.assignedTo;
+        review.resolutionNote = body.data.resolutionNote ?? review.resolutionNote;
+        review.resolvedAt = body.data.status === 'resolved' ? now : review.resolvedAt;
+        review.updatedAt = now;
+        memoryTransitions.set(review.id, [...(memoryTransitions.get(review.id) ?? []), transition]);
+        idempotency.set(cacheKey, review);
+        return reply.send(review);
+      }
+
+      const outcome = await withTenant(
+        container.pool,
+        authorized.actor.tenantId,
+        async (client) => {
+          const replay = (
+            await client.query<{ review_id: string }>(
+              `select review_id from professional_review_transition where idempotency_key=$1`,
+              [key],
+            )
+          ).rows[0];
+          if (replay) {
+            if (replay.review_id !== params.data.reviewId)
+              return { kind: 'idempotency_conflict' as const };
+            const review = (
+              await client.query<ReviewRow>(
+                `select ${REVIEW_COLUMNS} from professional_review_request where id=$1 and employment_case_id=$2`,
+                [params.data.reviewId, params.data.caseId],
+              )
+            ).rows[0];
+            return review ? { kind: 'replayed' as const, review } : { kind: 'not_found' as const };
+          }
+          const current = (
+            await client.query<{ status: ReviewStatus }>(
+              `select status from professional_review_request where id=$1 and employment_case_id=$2 for update`,
+              [params.data.reviewId, params.data.caseId],
+            )
+          ).rows[0];
+          if (!current) return { kind: 'not_found' as const };
+          if (!ESCALATION_TRANSITIONS[current.status].includes(body.data.status))
+            return { kind: 'invalid_transition' as const };
+          const review = (
+            await client.query<ReviewRow>(
+              `update professional_review_request set status=$2,
+                 assigned_to_name=coalesce($3, assigned_to_name),
+                 resolution_note=coalesce($4, resolution_note),
+                 resolved_at=case when $2='resolved' then now() else resolved_at end,
+                 updated_at=now()
+               where id=$1 returning ${REVIEW_COLUMNS}`,
+              [
+                params.data.reviewId,
+                body.data.status,
+                body.data.assignedTo ?? null,
+                body.data.resolutionNote ?? null,
+              ],
+            )
+          ).rows[0]!;
+          await client.query(
+            `insert into professional_review_transition
+               (tenant_id, review_id, from_status, to_status, changed_by, assigned_to_name, resolution_note, idempotency_key)
+             values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [
+              authorized.actor.tenantId,
+              params.data.reviewId,
+              current.status,
+              body.data.status,
+              authorized.actor.userId,
+              body.data.assignedTo ?? null,
+              body.data.resolutionNote ?? null,
+              key,
+            ],
+          );
+          await client.query(
+            `insert into timeline_event (tenant_id, employment_case_id, event_type_key, summary_key, source_type, source_id, sensitivity)
+             values ($1,$2,'escalation.status_changed','Professional review status changed.','professional_review_request',$3,'general')`,
+            [authorized.actor.tenantId, params.data.caseId, params.data.reviewId],
+          );
+          return { kind: 'ok' as const, review, fromStatus: current.status };
+        },
+      );
+      if (outcome.kind === 'not_found') return sendError(request, reply, 404, 'NOT_FOUND');
+      if (outcome.kind === 'invalid_transition')
+        return sendError(request, reply, 409, 'INVALID_TRANSITION');
+      if (outcome.kind === 'idempotency_conflict')
+        return sendError(request, reply, 409, 'IDEMPOTENCY_CONFLICT');
+      if (outcome.kind === 'ok') {
+        await container.audit.record({
+          tenantId: authorized.actor.tenantId,
+          actorId: authorized.actor.userId,
+          action: 'professional_review.status_changed',
+          resourceType: 'professional_review_request',
+          resourceId: outcome.review.id,
+          correlationId: authorized.actor.correlationId,
+          occurredAt: now,
+          changeSummary: `Review status changed from ${outcome.fromStatus} to ${outcome.review.status} (manual handoff).`,
+          sensitivity: 'employment_sensitive',
+        });
+      }
+      reply.send(outcome.review);
     },
   );
 }

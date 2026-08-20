@@ -87,12 +87,10 @@ describe('SettingsPage complete client profile', () => {
     expect(screen.getByLabelText(/^Caregiver passport number/)).toHaveValue('AB123456');
   });
 
-  it('shows the synthetic-data safety notice', async () => {
+  it('shows the data security notice', async () => {
     await renderPage();
-    expect(
-      screen.getByRole('heading', { name: 'Sensitive information — test environment' }),
-    ).toBeVisible();
-    expect(screen.getByText(/Use synthetic data only/)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Data security' })).toBeVisible();
+    expect(screen.getByText(/stored encrypted on your device/)).toBeVisible();
     expect(readMvpProfile().recipientName).toBe('Sample Recipient');
   });
 });

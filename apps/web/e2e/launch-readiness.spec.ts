@@ -233,7 +233,7 @@ test.describe('launch readiness interactions', () => {
 
     await page.getByLabel('שם המעסיק').fill('מעסיק מעודכן להשקה');
     await page.locator('#settings-employer-id').fill('123');
-    await expect(page.getByRole('alert')).toContainText('אינו תקין');
+    await expect(page.locator('#settings-employer-id-error')).toContainText('אינו תקין');
     await expect(page.getByRole('button', { name: 'שמירת השינויים' })).toBeDisabled();
     await page.locator('#settings-employer-id').fill('123456782');
     await page.locator('#settings-employer-phone').fill('0507654321');

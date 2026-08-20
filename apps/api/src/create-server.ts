@@ -20,6 +20,12 @@ import { registerWave5Routes } from './routes/wave5.js';
 import { registerProductDifferentiationRoutes } from './routes/product-differentiation.js';
 import { registerCanonicalProductIntelligenceRoutes } from './routes/canonical-product-intelligence.js';
 import { registerPayrollEntryRoutes } from './routes/payroll-entries.js';
+import { registerBinderExportRoutes } from './routes/binder-exports.js';
+import { registerEventActionPlanRoutes } from './routes/event-action-plans.js';
+import { registerRegulationRuleRoutes } from './routes/regulation-rules.js';
+import { registerLeaveEntryRoutes } from './routes/leave-entries.js';
+import { registerEvidenceExportRoutes } from './routes/evidence-exports.js';
+import { registerScenarioExpenseRoutes } from './routes/scenario-expenses.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -166,6 +172,12 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerProductDifferentiationRoutes(app, container, productRateLimiter);
   registerCanonicalProductIntelligenceRoutes(app, container);
   registerPayrollEntryRoutes(app, container, productRateLimiter);
+  registerBinderExportRoutes(app, container, productRateLimiter, container.binderExportService);
+  registerEventActionPlanRoutes(app, container, productRateLimiter);
+  registerRegulationRuleRoutes(app, container, productRateLimiter);
+  registerLeaveEntryRoutes(app, container, productRateLimiter);
+  registerEvidenceExportRoutes(app, container, productRateLimiter, container.evidenceExportService);
+  registerScenarioExpenseRoutes(app, container, productRateLimiter);
 
   return app;
 }

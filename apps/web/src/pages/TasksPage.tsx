@@ -8,11 +8,9 @@ import {
   type MvpTaskSource,
 } from '../storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
+import { NATIONAL_INSURANCE_PAYMENT_URL } from '../upcoming-payments.js';
 
 type TaskFilter = 'open' | 'week' | 'completed';
-
-const NATIONAL_INSURANCE_PAYMENT_URL =
-  'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx';
 
 const emptyDraft = {
   title: '',

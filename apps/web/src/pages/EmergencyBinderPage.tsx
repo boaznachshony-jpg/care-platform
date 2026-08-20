@@ -1,5 +1,7 @@
 /* eslint-disable no-restricted-syntax -- Hebrew-first reviewed export surface */
 import { useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import type {
   CaseContactResponse,
   DocumentResponse,
@@ -7,11 +9,13 @@ import type {
   TaskResponse,
 } from '@caredesk/schemas';
 import {
+  createBinderExport,
   listCanonicalPayrollCloses,
   listCaseContacts,
   listCaseDocuments,
   listCaseTasks,
   listEmploymentCases,
+  type BinderExportReceiptResponse,
   type CanonicalPayrollClose,
 } from '../api/client.js';
 
@@ -39,7 +43,21 @@ interface BinderData {
   contacts: CaseContactResponse[];
 }
 
+/**
+ * crypto.randomUUID only exists in secure contexts, and this app is
+ * deliberately reachable over plain http on a phone at 192.168.x.x — so a
+ * non-cryptographic fallback keeps the export recordable there too. The key
+ * only de-duplicates retries; uniqueness, not secrecy, is what it needs.
+ */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `binder-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+}
+
 export function EmergencyBinderPage() {
+  const { t } = useTranslation();
   const [cases, setCases] = useState<EmploymentCaseResponse[]>([]);
   const [caseId, setCaseId] = useState('');
   const [data, setData] = useState<BinderData>();
@@ -48,6 +66,14 @@ export function EmergencyBinderPage() {
   );
   const [selected, setSelected] = useState<Section[]>([...presets.full]);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  // Server-side export receipt ("אסמכתת ייצוא"): 'recorded' means the export
+  // was persisted with an immutable receipt before printing; 'unrecorded'
+  // means the server could not be reached and the print stays a local,
+  // explicitly labelled, unrecorded copy.
+  const [exportState, setExportState] = useState<'idle' | 'recording' | 'recorded' | 'unrecorded'>(
+    'idle',
+  );
+  const [receipt, setReceipt] = useState<BinderExportReceiptResponse>();
   const generatedAt = useMemo(
     () =>
       new Intl.DateTimeFormat('he-IL', { dateStyle: 'long', timeStyle: 'short' }).format(
@@ -71,6 +97,8 @@ export function EmergencyBinderPage() {
   }, []);
 
   useEffect(() => {
+    setReceipt(undefined);
+    setExportState('idle');
     if (!caseId) {
       setData(undefined);
       setDocumentIds([]);
@@ -105,6 +133,36 @@ export function EmergencyBinderPage() {
         : [...current, section],
     );
   const openTasks = data?.tasks.filter((task) => task.status !== 'completed') ?? [];
+
+  /**
+   * Records the export server-side (immutable receipt + hash) before opening
+   * the print dialog. If the server cannot be reached the print still works,
+   * but is explicitly labelled — on screen and on paper — as an unrecorded
+   * local print. flushSync makes the receipt/label reach the DOM before the
+   * synchronous, render-blocking window.print().
+   */
+  const exportBinder = async () => {
+    if (!data || !selected.length || exportState === 'recording') return;
+    setExportState('recording');
+    const manifest = {
+      // Canonical order so the same explicit selection always hashes the same.
+      sections: presets.full.filter((section) => selected.includes(section)),
+      documentIds: selected.includes('documents') ? [...documentIds].sort() : [],
+    };
+    try {
+      const result = await createBinderExport(caseId, manifest, newIdempotencyKey());
+      flushSync(() => {
+        setReceipt(result.receipt);
+        setExportState('recorded');
+      });
+    } catch {
+      flushSync(() => {
+        setReceipt(undefined);
+        setExportState('unrecorded');
+      });
+    }
+    window.print();
+  };
 
   return (
     <div className="binder-page">
@@ -190,11 +248,21 @@ export function EmergencyBinderPage() {
         <button
           className="primary-button"
           type="button"
-          disabled={!data || !selected.length}
-          onClick={() => window.print()}
+          disabled={!data || !selected.length || exportState === 'recording'}
+          onClick={() => void exportBinder()}
         >
           יצירת PDF / הדפסה
         </button>
+        {exportState === 'recording' ? <p role="status">{t('binder.recordingExport')}</p> : null}
+        {exportState === 'recorded' && receipt ? (
+          <p role="status">
+            {t('binder.receiptLabel')}: <code>{receipt.id}</code> · {t('binder.receiptHash')}:{' '}
+            <code>{receipt.contentHash}</code>
+          </p>
+        ) : null}
+        {exportState === 'unrecorded' ? (
+          <p role="alert">{t('binder.unrecordedLocalPrint')}</p>
+        ) : null}
         <p>
           <small>קובץ ההדפסה נוצר במכשיר ואינו קישור ציבורי. בדקו הרשאות שיתוף לפני העברה.</small>
         </p>
@@ -205,6 +273,15 @@ export function EmergencyBinderPage() {
             <strong>CareDesk — תיק העסקה</strong>
             <h2>{data.employmentCase.careRecipient.fullName}</h2>
             <p>נוצר: {generatedAt}</p>
+            {exportState === 'recorded' && receipt ? (
+              <p className="binder-receipt">
+                {t('binder.receiptLabel')}: {receipt.id} · {t('binder.receiptHash')}:{' '}
+                {receipt.contentHash}
+              </p>
+            ) : null}
+            {exportState === 'unrecorded' ? (
+              <p className="binder-receipt">{t('binder.unrecordedLocalPrint')}</p>
+            ) : null}
           </header>
           <nav aria-label="תוכן עניינים">
             <h3>תוכן עניינים</h3>

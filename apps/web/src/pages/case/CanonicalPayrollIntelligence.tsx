@@ -3,14 +3,25 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { projectFutureCost } from '@caredesk/application';
 import {
   ApiRequestError,
+  createScenarioExpense,
+  deleteScenarioExpense,
   listCanonicalPayrollCloses,
   listPayrollEntries,
+  listScenarioExpenses,
   savePayrollEntry,
   type CanonicalPayrollClose,
   type PayrollEntryResponse,
   type SavePayrollEntryRequest,
+  type SaveScenarioExpenseRequest,
+  type ScenarioExpenseResponse,
 } from '../../api/client.js';
-import { readMvpPayroll, saveMvpPayroll } from '../../storage/mvp-storage.js';
+import {
+  readMvpEmploymentExpenses,
+  readMvpPayroll,
+  saveMvpEmploymentExpenses,
+  saveMvpPayroll,
+  type MvpEmploymentExpense,
+} from '../../storage/mvp-storage.js';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -54,22 +65,61 @@ const numericFields = [
   ['agreedDeductions', 'ניכויים מוסכמים'],
 ] as const;
 
+const blankExpense = (): SaveScenarioExpenseRequest => ({
+  label: '',
+  amount: 0,
+  kind: 'recurring',
+  startMonth: currentMonth,
+  endMonth: null,
+});
+/** One-time migration read: map a legacy MVP expense onto a canonical scenario expense. */
+function legacyExpenseToScenario(expense: MvpEmploymentExpense): SaveScenarioExpenseRequest {
+  const dueMonth = /^\d{4}-(0[1-9]|1[0-2])/.test(expense.dueDate)
+    ? expense.dueDate.slice(0, 7)
+    : currentMonth;
+  return expense.frequency === 'monthly'
+    ? {
+        label: expense.category,
+        amount: expense.amount,
+        kind: 'recurring',
+        startMonth: currentMonth,
+        endMonth: null,
+      }
+    : {
+        label: expense.category,
+        amount: expense.amount,
+        kind: 'one_time',
+        startMonth: dueMonth,
+        endMonth: null,
+      };
+}
+
 /** The authenticated EmploymentCase is the sole authority for this canonical payroll surface. */
 export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   const [entries, setEntries] = useState<PayrollEntryResponse[]>();
   const [closes, setCloses] = useState<CanonicalPayrollClose[]>([]);
+  const [scenarioExpenses, setScenarioExpenses] = useState<ScenarioExpenseResponse[]>([]);
   const [month, setMonth] = useState(currentMonth);
   const [draft, setDraft] = useState<SavePayrollEntryRequest>(blank);
+  const [expenseDraft, setExpenseDraft] = useState<SaveScenarioExpenseRequest>(blankExpense);
   const [state, setState] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'conflict'>(
     'loading',
   );
   const [error, setError] = useState('');
+  const [expenseError, setExpenseError] = useState('');
   const [migrationConfirmed, setMigrationConfirmed] = useState(false);
   /** True once a legacy→canonical migration save has been confirmed by the server. */
   const [migrationSaved, setMigrationSaved] = useState(false);
   /** True once the legacy localStorage record has been explicitly purged after canonical save. */
   const [legacyPurged, setLegacyPurged] = useState(false);
+  const [expenseMigrationConfirmed, setExpenseMigrationConfirmed] = useState(false);
+  /** Ids of legacy expenses whose canonical persistence has been confirmed by the server. */
+  const [migratedExpenseIds, setMigratedExpenseIds] = useState<string[]>([]);
+  const [expensesPurged, setExpensesPurged] = useState(false);
   const legacy = readMvpPayroll().find((record) => record.month === month);
+  const legacyExpenses = readMvpEmploymentExpenses().filter(
+    (expense) => expense.amountEntered !== false,
+  );
   const calculatedTotal = useMemo(
     () =>
       draft.baseSalary +
@@ -89,12 +139,14 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setState('loading');
     setError('');
     try {
-      const [payroll, closed] = await Promise.all([
+      const [payroll, closed, expenses] = await Promise.all([
         listPayrollEntries(caseId),
         listCanonicalPayrollCloses(caseId),
+        listScenarioExpenses(caseId),
       ]);
       setEntries(payroll);
       setCloses(closed);
+      setScenarioExpenses(expenses);
       setState('idle');
     } catch {
       setError('טעינת נתוני השכר הקנוניים נכשלה.');
@@ -112,9 +164,25 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setMigrationSaved(false);
     setLegacyPurged(false);
   }, [entries, month]);
+  /**
+   * All projection inputs are canonical: closed months (actuals), the payroll
+   * worksheet (forecast base + entered months) and scenario_expense rows (the
+   * planning-only FORECAST layer). No compatibility-blob value is read here.
+   */
   const forecast = projectFutureCost({
     startMonth: month,
-    expenses: [],
+    // The latest canonical worksheet salary repeats as the forecast base.
+    baseSalary: entries?.[0]?.baseSalary,
+    expenses: scenarioExpenses.map((expense) => ({
+      id: expense.id,
+      label: expense.label,
+      amount: expense.amount,
+      frequency: expense.kind === 'recurring' ? ('monthly' as const) : ('one_time' as const),
+      ...(expense.kind === 'one_time' ? { dueDate: `${expense.startMonth}-01` } : {}),
+      startMonth: expense.startMonth,
+      ...(expense.endMonth ? { endMonth: expense.endMonth } : {}),
+      source: 'planning_scenario' as const,
+    })),
     actuals: closes
       .filter((c) => c.total !== null)
       .map((c) => ({ month: c.month, amount: c.total!, sourceId: c.id })),
@@ -191,6 +259,67 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       agreedDeductions: legacy.agreedDeduction,
     });
   }
+  async function addExpense() {
+    setExpenseError('');
+    if (!expenseDraft.label.trim() || expenseDraft.amount < 0) {
+      setExpenseError('נדרשים תיאור וסכום תקין להוצאת תרחיש.');
+      return;
+    }
+    try {
+      await createScenarioExpense(
+        caseId,
+        {
+          ...expenseDraft,
+          label: expenseDraft.label.trim(),
+          endMonth: expenseDraft.kind === 'recurring' ? expenseDraft.endMonth : null,
+        },
+        crypto.randomUUID(),
+      );
+      setExpenseDraft(blankExpense());
+      await refresh();
+    } catch {
+      setExpenseError('שמירת הוצאת התרחיש נכשלה.');
+    }
+  }
+
+  async function removeExpense(expense: ScenarioExpenseResponse) {
+    setExpenseError('');
+    try {
+      await deleteScenarioExpense(caseId, expense.id, expense.version, crypto.randomUUID());
+      await refresh();
+    } catch {
+      setExpenseError('הסרת הוצאת התרחיש נכשלה.');
+    }
+  }
+
+  /**
+   * One-time legacy→canonical expense migration (the PR #55 payroll pattern):
+   * server persistence must be proven before the purge step unlocks, and the
+   * legacy blob is only removed by an explicit user action (Constitution §16).
+   */
+  async function migrateLegacyExpenses() {
+    if (!expenseMigrationConfirmed || legacyExpenses.length === 0) return;
+    setExpenseError('');
+    try {
+      const migrated: string[] = [];
+      for (const expense of legacyExpenses) {
+        await createScenarioExpense(caseId, legacyExpenseToScenario(expense), crypto.randomUUID());
+        migrated.push(expense.id);
+      }
+      setMigratedExpenseIds(migrated);
+      await refresh();
+    } catch {
+      setExpenseError('העברת ההוצאות לשרת נכשלה. הרישום המקומי לא נמחק.');
+    }
+  }
+
+  function purgeLegacyExpenses() {
+    saveMvpEmploymentExpenses(
+      readMvpEmploymentExpenses().filter((expense) => !migratedExpenseIds.includes(expense.id)),
+    );
+    setExpensesPurged(true);
+  }
+
   const setNumber = (key: (typeof numericFields)[number][0], value: string) =>
     setDraft((old) => ({ ...old, [key]: Number(value) }));
   return (
@@ -342,6 +471,128 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           הרישום הישן הוסר — הנתון הקנוני בשרת הוא מקור הסמכות היחיד.
         </p>
       ) : null}
+      <h3 id="scenario-expenses-title">הוצאות תרחיש — שכבת תכנון קנונית</h3>
+      <p>
+        הוצאות התרחיש נשמרות בשרת תחת התיק ומוצגות בתחזית כשכבת תכנון בלבד. הן אינן משנות רשומות שכר
+        קנוניות.
+      </p>
+      {expenseError ? <p role="alert">{expenseError}</p> : null}
+      {scenarioExpenses.length ? (
+        <ul aria-labelledby="scenario-expenses-title">
+          {scenarioExpenses.map((expense) => (
+            <li key={expense.id}>
+              <strong>{expense.label}</strong> · {money.format(expense.amount)} ·{' '}
+              {expense.kind === 'recurring'
+                ? `חודשי מ-${expense.startMonth}${expense.endMonth ? ` עד ${expense.endMonth}` : ''}`
+                : `חד-פעמי ב-${expense.startMonth}`}{' '}
+              <button type="button" onClick={() => void removeExpense(expense)}>
+                הסרת הוצאת תרחיש
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>לא נשמרו הוצאות תרחיש קנוניות.</p>
+      )}
+      <div className="form-grid scenario-expense-form">
+        <label>
+          תיאור ההוצאה
+          <input
+            value={expenseDraft.label}
+            onChange={(e) => setExpenseDraft({ ...expenseDraft, label: e.target.value })}
+          />
+        </label>
+        <label>
+          סכום חודשי
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={expenseDraft.amount}
+            onChange={(e) => setExpenseDraft({ ...expenseDraft, amount: Number(e.target.value) })}
+          />
+        </label>
+        <label>
+          סוג הוצאה
+          <select
+            value={expenseDraft.kind}
+            onChange={(e) =>
+              setExpenseDraft({
+                ...expenseDraft,
+                kind: e.target.value as 'recurring' | 'one_time',
+                endMonth: null,
+              })
+            }
+          >
+            <option value="recurring">חוזרת (חודשית)</option>
+            <option value="one_time">חד-פעמית</option>
+          </select>
+        </label>
+        <label>
+          מחודש
+          <input
+            type="month"
+            value={expenseDraft.startMonth}
+            onChange={(e) => setExpenseDraft({ ...expenseDraft, startMonth: e.target.value })}
+          />
+        </label>
+        {expenseDraft.kind === 'recurring' ? (
+          <label>
+            עד חודש (רשות)
+            <input
+              type="month"
+              value={expenseDraft.endMonth ?? ''}
+              onChange={(e) =>
+                setExpenseDraft({ ...expenseDraft, endMonth: e.target.value || null })
+              }
+            />
+          </label>
+        ) : null}
+      </div>
+      <button type="button" onClick={() => void addExpense()}>
+        הוספת הוצאת תרחיש
+      </button>
+      {legacyExpenses.length > 0 && migratedExpenseIds.length === 0 ? (
+        <aside className="migration-notice" aria-labelledby="legacy-expenses-title">
+          <h3 id="legacy-expenses-title">התאמת הוצאות MVP קיימות</h3>
+          <p>
+            נמצאו {legacyExpenses.length} הוצאות שמורות באחסון המקומי. הן לא משויכות אוטומטית. אשרו
+            במפורש שהן שייכות לתיק הנוכחי; המקור הישן יישאר ללא שינוי עד ששמירת השרת תוכח.
+          </p>
+          <label>
+            <input
+              type="checkbox"
+              checked={expenseMigrationConfirmed}
+              onChange={(event) => setExpenseMigrationConfirmed(event.target.checked)}
+            />{' '}
+            בדקתי שההוצאות שייכות לתיק זה
+          </label>{' '}
+          <button
+            type="button"
+            disabled={!expenseMigrationConfirmed}
+            onClick={() => void migrateLegacyExpenses()}
+          >
+            העברת ההוצאות לשרת
+          </button>
+        </aside>
+      ) : null}
+      {migratedExpenseIds.length > 0 && !expensesPurged ? (
+        <aside className="reconciliation-cleanup" aria-labelledby="expense-cleanup-title">
+          <h3 id="expense-cleanup-title">שלב ב׳ — הסרת הוצאות מקומיות</h3>
+          <p>
+            ההוצאות נשמרו בשרת בהצלחה. הרישום הישן עדיין קיים באחסון המקומי של הדפדפן. הסירו אותו
+            כדי למנוע כפיל-כתיבה קבוע.
+          </p>
+          <button type="button" onClick={purgeLegacyExpenses}>
+            הסרת ההוצאות הישנות מהדפדפן
+          </button>
+        </aside>
+      ) : null}
+      {expensesPurged ? (
+        <p role="status" className="reconciliation-done">
+          ההוצאות הישנות הוסרו — הוצאות התרחיש בשרת הן מקור הסמכות היחיד.
+        </p>
+      ) : null}
       <h3>עלות עתידית — קדימות מקור סמכות</h3>
       <ul aria-label="תחזית קנונית">
         {forecast.months.slice(0, 3).map((item) => (
@@ -351,7 +602,9 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
               ? 'בפועל סגור'
               : entries?.some((e) => e.month === item.month)
                 ? 'שכר פתוח שהוזן'
-                : 'תחזית / לא ידוע'}
+                : scenarioExpenses.length
+                  ? 'תחזית כולל שכבת תרחיש'
+                  : 'תחזית / לא ידוע'}
           </li>
         ))}
       </ul>

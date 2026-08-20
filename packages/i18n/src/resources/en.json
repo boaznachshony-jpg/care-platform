@@ -66,6 +66,7 @@
     "paymentMethodBody": "Card details are entered on Cardcom's secure page. CareDesk does not receive or store the card number or CVV.",
     "billingName": "Invoice name",
     "billingEmail": "Invoice email",
+    "sameAsRecipient": "Same as care recipient details",
     "consentPrefix": "I have read and agree to",
     "consentLink": "the subscription and recurring billing terms",
     "connectCard": "Securely connect a card",
@@ -292,6 +293,7 @@
     "back": "Back",
     "continue": "Continue",
     "select": "Select",
+    "suggestions": "Suggestions",
     "notProvided": "Not provided"
   },
   "profile": {
@@ -440,6 +442,11 @@
     "summary": "Only saved data and actions needing attention are shown here.",
     "statusMissing": "Missing data",
     "statusAttention": "Needs attention",
+    "statusOk": "All in order",
+    "statusLoading": "Loading data…",
+    "scoreUnavailable": "The file health score is unavailable right now — we'll retry shortly.",
+    "okTitle": "No open actions",
+    "okBody": "Everything saved has been checked and is in order. We'll flag anything that needs attention here.",
     "overallStatus": "Overall status",
     "missingTitle": "{{count}} required details are missing",
     "missingBody": "Complete the details in Settings so we can calculate a reliable status.",
@@ -452,6 +459,74 @@
     "openDocuments": "Open documents",
     "savedContact": "Saved contact",
     "contactDisclaimer": "The representative is a saved contact only. They do not have an account or user permissions in this version."
+  },
+  "openIssues": {
+    "eyebrow": "Status snapshot",
+    "title": "Open issues at a glance",
+    "summary": "Everything in the employment file that needs handling, grouped by urgency.",
+    "status": {
+      "urgent": "Needs immediate attention",
+      "soon": "Handle soon",
+      "ok": "All in order"
+    },
+    "countsTitle": "Summary by urgency",
+    "buckets": {
+      "urgent": "Urgent",
+      "soon": "Soon",
+      "ok": "In order"
+    },
+    "scoreLabel": "Score {{score}} out of 100",
+    "healthTitle": "File completeness score",
+    "healthDisclaimer": "A completeness indicator based on file data; not legal compliance certification.",
+    "empty": {
+      "urgent": "No urgent issues to handle",
+      "soon": "No issues waiting for handling soon",
+      "ok": "No in-order items to show yet"
+    },
+    "missingTitle": "{{count}} required details are missing",
+    "completeInSettings": "Complete in Settings",
+    "reviewDates": "Review the dates",
+    "expiresInDays": "Expires in {{count}} days",
+    "expiredDaysAgo": "Expired {{count}} days ago",
+    "dates": {
+      "visa": "Work visa validity",
+      "license": "Employment license validity",
+      "insurance": "Medical insurance validity"
+    },
+    "fields": {
+      "employerName": "Employer name",
+      "recipientName": "Care recipient name",
+      "caregiverName": "Caregiver name",
+      "employmentStartDate": "Employment start date",
+      "representativeName": "Representative name",
+      "licensedBureauName": "Licensed bureau name",
+      "licensedBureauContactName": "Bureau contact person",
+      "licensedBureauContactPhone": "Bureau contact phone",
+      "employmentAgreementConfirmed": "Employment agreement confirmation",
+      "medicalInsurance": "Valid medical insurance",
+      "baseSalary": "Base salary",
+      "saturdayRate": "Saturday rate",
+      "licenseRenewalDate": "License renewal date",
+      "visaRenewalDate": "Visa renewal date"
+    },
+    "demoBanner": "Demo view — sample data only",
+    "demoDetailsTitle": "Sample file details",
+    "demoRecipient": "Care recipient",
+    "demoCaregiver": "Caregiver"
+  },
+  "payments": {
+    "upcomingTitle": "Upcoming payments",
+    "upcomingSummary": "The recurring obligations of a household employer, computed automatically from today's date.",
+    "salaryTitle": "Next salary payment",
+    "salaryNote": "By law, the salary must be paid by the 9th of the following month.",
+    "nationalInsuranceTitle": "National Insurance payment (quarterly)",
+    "nationalInsuranceNote": "Due by the 15th of {{month}}",
+    "payOnline": "Pay on the National Insurance website",
+    "dueDate": "Due date: {{date}}",
+    "dueToday": "Due today",
+    "daysRemaining": "In {{count}} days",
+    "openPayroll": "Open the payroll screen",
+    "openTasks": "Open tasks"
   },
   "glossary": {
     "eyebrow": "Simple, clear information",
@@ -662,15 +737,15 @@
       "section5Body": "Cancellation can be requested before the next billing date. It stops future charges and does not erase account data without a separate, verified deletion request.",
       "section6Title": "6. Failed payment",
       "section6Body": "If a charge fails, the owner is notified. The same period is protected against duplicate charges and a replacement payment method may be required.",
-      "legalNotice": "This pilot text does not replace terms of use and a privacy policy approved by legal counsel before a full commercial launch."
+      "legalNotice": "CareDesk is a management tool only. Responsibility for the accuracy of the information, its use, and compliance with the law rests solely with the user; the service does not constitute legal or accounting advice."
     }
   },
   "settings": {
     "eyebrow": "Settings",
     "title": "Details and preferences",
     "intro": "Update your information here. Changes appear immediately on the dashboard.",
-    "dataSafetyTitle": "Sensitive information — test environment",
-    "dataSafetyBody": "Use synthetic data only at this stage. Do not enter real ID numbers, medical information, addresses, or personal details until protected-field encryption and privacy approval are complete.",
+    "dataSafetyTitle": "Data security",
+    "dataSafetyBody": "The information you enter here is stored encrypted on your device only and is not sent to any external server.",
     "recipient": "Care recipient details",
     "caregiver": "Caregiver details",
     "reopenOnboarding": "Reopen setup",
@@ -726,6 +801,17 @@
     "document": {
       "uploaded": {
         "summary": "A document was uploaded to the case"
+      },
+      "intake_reviewed": {
+        "summary": "A document AI review was recorded"
+      }
+    },
+    "automation": {
+      "checklist_confirmed": {
+        "summary": "Action checklist confirmed"
+      },
+      "event_plan_committed": {
+        "summary": "Event action plan committed"
       }
     }
   },
@@ -837,6 +923,12 @@
       "replace": "Family wants to replace caregiver"
     }
   },
+  "binder": {
+    "recordingExport": "Recording the export on the server…",
+    "receiptLabel": "Export receipt",
+    "receiptHash": "SHA-256 fingerprint",
+    "unrecordedLocalPrint": "Unrecorded local print — the server could not be reached, so this export was not recorded. This copy is undocumented."
+  },
   "completion": {
     "health": "Employment file health",
     "disclaimer": "This score describes the completeness of stored case facts. It is not legal certification or professional advice.",
@@ -854,6 +946,29 @@
     "manualReview": "Request a review",
     "reviewReason": "The case needs professional review",
     "reviewSummary": "Please review the relevant case evidence. No professional has been assigned yet."
+  },
+  "escalation": {
+    "manualHandoffDisclaimer": "Review requests are handed off manually to a professional you record. CareDesk does not contact any provider and makes no fulfilment claim.",
+    "transitionFailed": "Updating the request status failed. Please try again.",
+    "manualHandoff": "manual handoff",
+    "assignedToDisplay": "Assigned to",
+    "resolutionNoteDisplay": "Resolution summary",
+    "assignedToLabel": "Professional name and contact (manual handoff)",
+    "resolutionNoteLabel": "Resolution note (required to resolve)",
+    "history": "Status history",
+    "status": {
+      "requested": "Requested",
+      "acknowledged": "Acknowledged",
+      "in_review": "In review",
+      "resolved": "Resolved",
+      "cancelled": "Cancelled"
+    },
+    "transition": {
+      "acknowledged": "Acknowledge",
+      "in_review": "Start review",
+      "resolved": "Resolve and close",
+      "cancelled": "Cancel request"
+    }
   },
   "worker": {
     "title": "My CareDesk",
@@ -891,5 +1006,39 @@
     "download": "Download securely",
     "language": "Language",
     "savePreferences": "Save preferences"
+  },
+  "regulation": {
+    "title": "Regulation rules — reviewed content",
+    "intro": "Reviewed factual content with cited sources and a full approval lifecycle. Only active, in-effect rules feed the assistant and event wizards.",
+    "disclaimer": "Reference content only — not legal advice; requires professional validation.",
+    "loadError": "Loading the rules failed.",
+    "transitionFailed": "The status change was rejected by the server.",
+    "empty": "No rules to show.",
+    "status": {
+      "draft": "Draft",
+      "in_review": "In review",
+      "approved": "Approved",
+      "active": "Active",
+      "retired": "Retired"
+    },
+    "source": "Source",
+    "authority": "Authority",
+    "version": "Version",
+    "effectiveFrom": "Effective from",
+    "reviewedBy": "Reviewed by",
+    "requiresValidation": "Requires professional validation before reliance.",
+    "reviewerName": "Professional reviewer name",
+    "reviewerNameHelp": "Free-text professional name — manual review record only; no provider is contacted.",
+    "submitForReview": "Submit for review",
+    "approve": "Approve",
+    "activate": "Activate",
+    "retire": "Retire",
+    "createTitle": "Draft a new rule",
+    "ruleKey": "Rule key",
+    "ruleKeyHelp": "Lowercase letters, digits and underscores only (3–80 chars).",
+    "ruleTitle": "Title",
+    "statement": "Factual statement",
+    "createFailed": "Creating the draft failed.",
+    "createDraft": "Save draft"
   }
 }

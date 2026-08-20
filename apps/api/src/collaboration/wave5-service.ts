@@ -323,6 +323,17 @@ export class Wave5Service {
           actor.userId,
         ],
       );
+      // Evidence (capability #10): granting portal access is a security-
+      // relevant mutation. Only the invitation id is recorded — never the
+      // token or the destination address.
+      await client.query(
+        `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'worker.invited','Worker portal invitation issued.','worker_portal_invitation',$3,'general')`,
+        [actor.tenantId, input.caseId, id],
+      );
+      await client.query(
+        `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'worker_invitation.created','worker_portal_invitation',$3,now(),$4,'worker_portal','Worker portal invitation issued.','general')`,
+        [actor.tenantId, actor.userId, id, `wave5:invitation:${id}`],
+      );
     });
     return { invitationId: id, token, expiresInHours: input.expiresInHours ?? 72 };
   }
@@ -350,6 +361,23 @@ export class Wave5Service {
         `update worker_portal_access set user_id=$1,status='active',activated_at=now()
         where id=$2 and status='invited'`,
         [userId, row.worker_portal_access_id],
+      );
+      // Evidence (capability #10): activation changes who can reach case data,
+      // so it is recorded like every other access-shaping mutation. The token
+      // itself never appears — only the access row it activated.
+      const access = await client.query<{ employment_case_id: string }>(
+        `select employment_case_id from worker_portal_access where id=$1`,
+        [row.worker_portal_access_id],
+      );
+      if (access.rows[0]) {
+        await client.query(
+          `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'worker.portal_activated','Worker portal access activated.','worker_portal_access',$3,'general')`,
+          [tenantId, access.rows[0].employment_case_id, row.worker_portal_access_id],
+        );
+      }
+      await client.query(
+        `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'worker_invitation.consumed','worker_portal_access',$3,now(),$4,'worker_portal','Worker portal invitation consumed; access activated.','general')`,
+        [tenantId, userId, row.worker_portal_access_id, `wave5:activation:${row.id}`],
       );
       return { activated: true };
     });
@@ -413,14 +441,29 @@ export class Wave5Service {
         [closeId, context.caseId],
       );
       if (!close.rowCount) throw new Error('payment_not_found');
-      const result = await client.query(
+      const result = await client.query<{ acknowledged_at: Date }>(
         `insert into worker_payment_acknowledgement
         (tenant_id,payroll_month_close_id,worker_portal_access_id) values ($1,$2,$3)
         on conflict (tenant_id,payroll_month_close_id,worker_portal_access_id,acknowledgement_version)
-        do update set payroll_month_close_id=excluded.payroll_month_close_id returning acknowledged_at`,
+        do update set payroll_month_close_id=excluded.payroll_month_close_id returning acknowledged_at, (xmax = 0) as inserted`,
         [context.tenantId, closeId, context.accessId],
       );
-      return result.rows[0];
+      // Evidence (capability #10): the worker's acknowledgement of a payroll
+      // close is itself compliance evidence. Recorded only on first insert so
+      // an idempotent replay does not duplicate the trail. No amounts appear —
+      // only the close being acknowledged.
+      const row = result.rows[0] as { acknowledged_at: Date; inserted?: boolean };
+      if (row.inserted) {
+        await client.query(
+          `insert into timeline_event (tenant_id,employment_case_id,event_type_key,summary_key,source_type,source_id,sensitivity) values ($1,$2,'payment.acknowledged','Worker acknowledged a payment.','payroll_month_close',$3,'financial_sensitive')`,
+          [context.tenantId, context.caseId, closeId],
+        );
+        await client.query(
+          `insert into audit_event (tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,'payment.acknowledged','payroll_month_close',$3,now(),$4,'worker_portal','Worker acknowledged a payroll month close.','financial_sensitive')`,
+          [context.tenantId, context.userId, closeId, `wave5:acknowledgement:${closeId}`],
+        );
+      }
+      return { acknowledged_at: row.acknowledged_at };
     });
   }
 

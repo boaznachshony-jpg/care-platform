@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { listCaseTimeline, type CanonicalTimelineEvent } from '../api/client.js';
+import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 
 export function TimelinePage() {
   const path = useClientPath();
@@ -28,6 +29,7 @@ export function TimelinePage() {
           <p>אירועים אנושיים מהתיק הקנוני; פרטי אבטחה וספקים נשמרים בנפרד ביומן הביקורת.</p>
         </div>
       </header>
+      <UpcomingPaymentsCard />
       {failed ? (
         <p role="alert">לא ניתן לטעון את ציר הזמן הקנוני.</p>
       ) : events === undefined ? (

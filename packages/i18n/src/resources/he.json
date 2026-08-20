@@ -66,6 +66,7 @@
     "paymentMethodBody": "הכרטיס מוזן בדף המאובטח של Cardcom. CareDesk אינה מקבלת או שומרת מספר כרטיס או CVV.",
     "billingName": "שם לחשבונית",
     "billingEmail": "דוא״ל לקבלת חשבונית",
+    "sameAsRecipient": "זהה לפרטי המטופל",
     "consentPrefix": "קראתי ואני מסכים/ה",
     "consentLink": "לתנאי המנוי והחיוב החודשי",
     "connectCard": "חיבור כרטיס מאובטח",
@@ -292,6 +293,7 @@
     "back": "חזרה",
     "continue": "המשך",
     "select": "בחירה",
+    "suggestions": "הצעות השלמה",
     "notProvided": "טרם הוזן"
   },
   "profile": {
@@ -440,6 +442,11 @@
     "summary": "כאן מוצגים רק נתונים שנשמרו במערכת ופעולות שדורשות תשומת לב.",
     "statusMissing": "חסרים נתונים",
     "statusAttention": "דורש טיפול",
+    "statusOk": "הכול תקין",
+    "statusLoading": "טוען נתונים…",
+    "scoreUnavailable": "מדד התקינות אינו זמין כרגע — ננסה לטעון שוב בקרוב.",
+    "okTitle": "אין פעולות פתוחות",
+    "okBody": "כל הנתונים שנשמרו נבדקו ותקינים. נעדכן כאן ברגע שמשהו ידרוש טיפול.",
     "overallStatus": "סטטוס כללי",
     "missingTitle": "חסרים {{count}} פרטים חיוניים",
     "missingBody": "השלימו את הפרטים בהגדרות כדי שנוכל לחשב תמונת מצב אמינה.",
@@ -452,6 +459,74 @@
     "openDocuments": "פתיחת המסמכים",
     "savedContact": "איש קשר שמור",
     "contactDisclaimer": "הנציג נשמר כאיש קשר בלבד. בשלב זה אין לו חשבון או הרשאות משתמש."
+  },
+  "openIssues": {
+    "eyebrow": "תמונת מצב",
+    "title": "נושאים פתוחים במבט אחד",
+    "summary": "ריכוז של כל מה שדורש טיפול בתיק ההעסקה, לפי דחיפות.",
+    "status": {
+      "urgent": "דורש טיפול מיידי",
+      "soon": "כדאי לטפל בקרוב",
+      "ok": "הכול תקין"
+    },
+    "countsTitle": "סיכום לפי דחיפות",
+    "buckets": {
+      "urgent": "דחוף",
+      "soon": "בקרוב",
+      "ok": "תקין"
+    },
+    "scoreLabel": "ציון {{score}} מתוך 100",
+    "healthTitle": "מדד שלמות התיק",
+    "healthDisclaimer": "מדד שלמות המבוסס על המידע בתיק; אינו אישור לעמידה בדין.",
+    "empty": {
+      "urgent": "אין נושאים דחופים לטיפול",
+      "soon": "אין נושאים שממתינים לטיפול קרוב",
+      "ok": "עדיין אין נושאים תקינים להצגה"
+    },
+    "missingTitle": "חסרים {{count}} פרטים חיוניים",
+    "completeInSettings": "השלמה בהגדרות",
+    "reviewDates": "בדיקת התאריכים",
+    "expiresInDays": "פג תוקף בעוד {{count}} ימים",
+    "expiredDaysAgo": "פג תוקף לפני {{count}} ימים",
+    "dates": {
+      "visa": "תוקף אשרת העבודה",
+      "license": "תוקף רישיון ההעסקה",
+      "insurance": "תוקף הביטוח הרפואי"
+    },
+    "fields": {
+      "employerName": "שם המעסיק",
+      "recipientName": "שם המטופל",
+      "caregiverName": "שם המטפל או המטפלת",
+      "employmentStartDate": "תאריך תחילת ההעסקה",
+      "representativeName": "שם המורשה",
+      "licensedBureauName": "שם הלשכה הפרטית",
+      "licensedBureauContactName": "איש הקשר בלשכה",
+      "licensedBureauContactPhone": "טלפון איש הקשר בלשכה",
+      "employmentAgreementConfirmed": "אישור הסכם ההעסקה",
+      "medicalInsurance": "ביטוח רפואי בתוקף",
+      "baseSalary": "שכר בסיס",
+      "saturdayRate": "תעריף שבת",
+      "licenseRenewalDate": "תאריך חידוש הרישיון",
+      "visaRenewalDate": "תאריך חידוש האשרה"
+    },
+    "demoBanner": "תצוגת הדגמה — נתונים לדוגמה בלבד",
+    "demoDetailsTitle": "פרטי התיק לדוגמה",
+    "demoRecipient": "מקבלת הטיפול",
+    "demoCaregiver": "המטפלת"
+  },
+  "payments": {
+    "upcomingTitle": "תשלומים קרובים",
+    "upcomingSummary": "מועדי החובה הקבועים של מעסיק במשק בית, מחושבים אוטומטית לפי התאריך של היום.",
+    "salaryTitle": "תשלום השכר הקרוב",
+    "salaryNote": "לפי החוק יש לשלם את השכר עד ה-9 לחודש העוקב.",
+    "nationalInsuranceTitle": "תשלום דמי ביטוח לאומי (רבעוני)",
+    "nationalInsuranceNote": "עד ה-15 בחודש {{month}}",
+    "payOnline": "לתשלום באתר הביטוח הלאומי",
+    "dueDate": "תאריך יעד: {{date}}",
+    "dueToday": "המועד הוא היום",
+    "daysRemaining": "בעוד {{count}} ימים",
+    "openPayroll": "מעבר למסך השכר",
+    "openTasks": "מעבר למשימות"
   },
   "glossary": {
     "eyebrow": "מידע פשוט וברור",
@@ -662,15 +737,15 @@
       "section5Body": "ניתן לבקש ביטול מנוי לפני מועד החיוב הבא. הביטול מפסיק חיובים עתידיים ואינו מוחק את נתוני החשבון ללא בקשת מחיקה נפרדת ותהליך אימות.",
       "section6Title": "6. כשל בחיוב",
       "section6Body": "במקרה של כשל תוצג הודעה לבעל החשבון. לא יתבצע חיוב כפול עבור אותה תקופה, וייתכן שתידרש החלפת אמצעי תשלום.",
-      "legalNotice": "הנוסח מיועד לגרסת ההרצה ואינו מחליף תנאי שימוש ומדיניות פרטיות שאושרו בידי ייעוץ משפטי לפני השקה מסחרית מלאה."
+      "legalNotice": "CareDesk הוא כלי ניהול בלבד. האחריות על נכונות המידע, על השימוש בו ועל העמידה בהוראות הדין היא של המשתמש בלבד, והשירות אינו מהווה ייעוץ משפטי או חשבונאי."
     }
   },
   "settings": {
     "eyebrow": "הגדרות",
     "title": "פרטים והעדפות",
     "intro": "אפשר לעדכן כאן את המידע. השינויים יופיעו מיד בדשבורד.",
-    "dataSafetyTitle": "מידע רגיש — סביבת בדיקות",
-    "dataSafetyBody": "בשלב זה יש להשתמש בנתוני דמה בלבד. אין להזין תעודות זהות, מידע רפואי, כתובות או פרטים אישיים אמיתיים עד להשלמת הצפנת השדות ואישור הפרטיות.",
+    "dataSafetyTitle": "אבטחת מידע",
+    "dataSafetyBody": "המידע שתזינו כאן מאוחסן בצורה מוצפנת במכשיר שלכם בלבד ואינו נשלח לשרת חיצוני.",
     "recipient": "פרטי מקבל הטיפול",
     "caregiver": "פרטי המטפל או המטפלת",
     "reopenOnboarding": "פתיחת ההדרכה מחדש",
@@ -726,6 +801,17 @@
     "document": {
       "uploaded": {
         "summary": "הועלה מסמך חדש לתיק"
+      },
+      "intake_reviewed": {
+        "summary": "נרשמה סקירת מסמך של ה-AI"
+      }
+    },
+    "automation": {
+      "checklist_confirmed": {
+        "summary": "אושרה רשימת פעולות"
+      },
+      "event_plan_committed": {
+        "summary": "בוצעה תוכנית אירוע"
       }
     }
   },
@@ -837,6 +923,12 @@
       "replace": "המשפחה רוצה להחליף מטפל/ת"
     }
   },
+  "binder": {
+    "recordingExport": "רושם את הייצוא בשרת…",
+    "receiptLabel": "אסמכתת ייצוא",
+    "receiptHash": "טביעת אצבע SHA-256",
+    "unrecordedLocalPrint": "הדפסה מקומית ללא רישום — לא היה חיבור לשרת והייצוא לא נרשם. העותק הזה אינו מתועד."
+  },
   "completion": {
     "health": "מצב תיק ההעסקה",
     "disclaimer": "הציון מתאר את שלמות העובדות השמורות בתיק. הוא אינו אישור משפטי או תחליף לייעוץ מקצועי.",
@@ -854,6 +946,29 @@
     "manualReview": "בקשת בדיקה",
     "reviewReason": "המקרה דורש בדיקה מקצועית",
     "reviewSummary": "נא לבדוק את הראיות הרלוונטיות בתיק. טרם הוקצה גורם מקצועי."
+  },
+  "escalation": {
+    "manualHandoffDisclaimer": "בקשות בדיקה נמסרות ידנית לגורם מקצועי שנרשם על ידכם. CareDesk אינה פונה לספק חיצוני ואינה מתחייבת לביצוע הבדיקה.",
+    "transitionFailed": "עדכון סטטוס הבקשה נכשל. נסו שוב.",
+    "manualHandoff": "מסירה ידנית",
+    "assignedToDisplay": "הוקצה לטיפול",
+    "resolutionNoteDisplay": "סיכום הטיפול",
+    "assignedToLabel": "שם ופרטי קשר של הגורם המקצועי (מסירה ידנית)",
+    "resolutionNoteLabel": "הערת סיום (נדרשת לסגירת הבקשה)",
+    "history": "היסטוריית סטטוסים",
+    "status": {
+      "requested": "התבקשה",
+      "acknowledged": "התקבלה",
+      "in_review": "בבדיקה",
+      "resolved": "טופלה",
+      "cancelled": "בוטלה"
+    },
+    "transition": {
+      "acknowledged": "אישור קבלה",
+      "in_review": "התחלת בדיקה",
+      "resolved": "סיום וסגירה",
+      "cancelled": "ביטול הבקשה"
+    }
   },
   "worker": {
     "title": "האזור שלי",
@@ -891,5 +1006,39 @@
     "download": "הורדה מאובטחת",
     "language": "שפה",
     "savePreferences": "שמירת העדפות"
+  },
+  "regulation": {
+    "title": "כללי רגולציה — תוכן מאושר",
+    "intro": "תוכן עובדתי שעבר סקירה, עם מקור מצוטט ומחזור אישור מלא. רק כלל פעיל ובתוקף מוזן לעוזר ולאשפי האירועים.",
+    "disclaimer": "תוכן ייחוס בלבד — אינו ייעוץ משפטי וטעון אימות על ידי גורם מקצועי.",
+    "loadError": "טעינת הכללים נכשלה.",
+    "transitionFailed": "עדכון הסטטוס נדחה על ידי השרת.",
+    "empty": "אין כללים להצגה.",
+    "status": {
+      "draft": "טיוטה",
+      "in_review": "בבדיקה",
+      "approved": "מאושר",
+      "active": "פעיל",
+      "retired": "הוצא משימוש"
+    },
+    "source": "מקור",
+    "authority": "רשות מוסמכת",
+    "version": "גרסה",
+    "effectiveFrom": "בתוקף מ־",
+    "reviewedBy": "נסקר על ידי",
+    "requiresValidation": "טעון אימות מקצועי לפני הסתמכות.",
+    "reviewerName": "שם הגורם המקצועי הסוקר",
+    "reviewerNameHelp": "שם חופשי של איש מקצוע — תיעוד סקירה ידנית בלבד, ללא פנייה לספק.",
+    "submitForReview": "שליחה לבדיקה",
+    "approve": "אישור",
+    "activate": "הפעלה",
+    "retire": "הוצאה משימוש",
+    "createTitle": "ניסוח כלל חדש (טיוטה)",
+    "ruleKey": "מזהה כלל",
+    "ruleKeyHelp": "אותיות לטיניות קטנות, ספרות וקו תחתון בלבד (3–80 תווים).",
+    "ruleTitle": "כותרת",
+    "statement": "ניסוח עובדתי",
+    "createFailed": "יצירת הטיוטה נכשלה.",
+    "createDraft": "שמירת טיוטה"
   }
 }

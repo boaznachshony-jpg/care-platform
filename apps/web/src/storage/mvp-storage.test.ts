@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  clearMvpOnboardingDraft,
   createMvpClient,
   emptyMvpProfile,
   isNewEmployerLabel,
   readMvpDocuments,
   readMvpClients,
   readMvpEmploymentExpenses,
+  readMvpOnboardingDraft,
   readMvpPayroll,
   readMvpProfile,
+  readMvpRecipientContact,
   readMvpTasks,
   saveMvpDocuments,
   saveMvpEmploymentExpenses,
+  saveMvpOnboardingDraft,
   saveMvpPayroll,
   saveMvpProfile,
 } from './mvp-storage.js';
@@ -268,5 +272,59 @@ describe('MVP local storage', () => {
     expect(localStorage.getItem('caredesk.mvp.profile.v1')).not.toBeNull();
     history.replaceState({}, '', `/clients/${migrated?.id}`);
     expect(readMvpProfile().employerName).toBe('מעסיק ותיק');
+  });
+
+  it('saves, restores and clears an onboarding draft without touching the profile', () => {
+    saveMvpOnboardingDraft({ ...emptyMvpProfile, recipientName: '123' });
+
+    const draft = readMvpOnboardingDraft();
+    expect(draft?.profile.recipientName).toBe('123');
+    expect(draft?.savedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // Invalid in-progress values stay out of the committed profile.
+    expect(readMvpProfile().recipientName).toBe('');
+    // The device cache never stores the draft in plaintext.
+    expect(localStorage.getItem('caredesk.mvp.onboarding-draft.v1')).toMatch(
+      /^caredesk-encrypted-v1:/,
+    );
+
+    clearMvpOnboardingDraft();
+    expect(readMvpOnboardingDraft()).toBeNull();
+  });
+
+  it('keeps onboarding drafts isolated between clients', () => {
+    const first = createMvpClient();
+    const second = createMvpClient();
+
+    history.replaceState({}, '', `/clients/${first.id}/onboarding`);
+    saveMvpOnboardingDraft({ ...emptyMvpProfile, recipientName: 'טיוטה ראשונה' });
+
+    history.replaceState({}, '', `/clients/${second.id}/onboarding`);
+    expect(readMvpOnboardingDraft()).toBeNull();
+    history.replaceState({}, '', `/clients/${first.id}/onboarding`);
+    expect(readMvpOnboardingDraft()?.profile.recipientName).toBe('טיוטה ראשונה');
+  });
+
+  it('returns null for a corrupted onboarding draft instead of throwing', () => {
+    localStorage.setItem('caredesk.mvp.onboarding-draft.v1', '{not json');
+    expect(readMvpOnboardingDraft()).toBeNull();
+  });
+
+  it('reads recipient contact details from the most recent client when unscoped', () => {
+    expect(readMvpRecipientContact()).toEqual({ name: '', email: '' });
+
+    const client = createMvpClient();
+    history.replaceState({}, '', `/clients/${client.id}`);
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      recipientName: 'אילנה כהן',
+      recipientEmail: 'ilana@example.test',
+    });
+
+    // Billing lives outside the client-scoped routes.
+    history.replaceState({}, '', '/billing');
+    expect(readMvpRecipientContact()).toEqual({
+      name: 'אילנה כהן',
+      email: 'ilana@example.test',
+    });
   });
 });

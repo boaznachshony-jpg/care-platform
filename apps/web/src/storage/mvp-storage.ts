@@ -373,6 +373,85 @@ export function updateMvpProfile(changes: Partial<MvpProfile>): MvpProfile {
   return updated;
 }
 
+const ONBOARDING_DRAFT_KEY = 'caredesk.mvp.onboarding-draft.v1';
+
+/** A yes/no wizard answer; '' means the question was never answered. */
+export type MvpOnboardingChoice = '' | 'yes' | 'no';
+
+export interface MvpOnboardingDraft {
+  savedAt: string;
+  profile: MvpProfile;
+  /**
+   * Wizard-only answers that have no committed-profile field of their own.
+   * Without them a reload could not restore the same-person / helper radios
+   * exactly as the user left them.
+   */
+  samePersonChoice: MvpOnboardingChoice;
+  helperChoice: MvpOnboardingChoice;
+}
+
+function parseOnboardingChoice(value: unknown): MvpOnboardingChoice {
+  return value === 'yes' || value === 'no' ? value : '';
+}
+
+/**
+ * In-progress onboarding answers, saved while the user types so leaving a
+ * step never loses input. Kept separate from the committed profile: a draft
+ * may hold invalid values, so it must never feed reminders or reports.
+ */
+export function readMvpOnboardingDraft(): MvpOnboardingDraft | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = readBusinessItem(scopedKey(ONBOARDING_DRAFT_KEY));
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as Partial<MvpOnboardingDraft>;
+    if (typeof parsed?.profile !== 'object' || parsed.profile === null) return null;
+    return {
+      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+      profile: { ...emptyMvpProfile, ...parsed.profile },
+      samePersonChoice: parseOnboardingChoice(parsed.samePersonChoice),
+      helperChoice: parseOnboardingChoice(parsed.helperChoice),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveMvpOnboardingDraft(
+  profile: MvpProfile,
+  choices?: { samePersonChoice?: MvpOnboardingChoice; helperChoice?: MvpOnboardingChoice },
+): void {
+  if (!isBrowser()) return;
+  const draft: MvpOnboardingDraft = {
+    savedAt: new Date().toISOString(),
+    profile,
+    samePersonChoice: choices?.samePersonChoice ?? '',
+    helperChoice: choices?.helperChoice ?? '',
+  };
+  writeBusinessItem(scopedKey(ONBOARDING_DRAFT_KEY), JSON.stringify(draft));
+}
+
+export function clearMvpOnboardingDraft(): void {
+  if (!isBrowser()) return;
+  window.localStorage.removeItem(scopedKey(ONBOARDING_DRAFT_KEY));
+}
+
+/**
+ * Recipient contact details for prefilling payer/billing forms. Billing lives
+ * outside the client-scoped routes, so when the current path carries no
+ * client the most recently updated client profile is used as a fallback.
+ */
+export function readMvpRecipientContact(): { name: string; email: string } {
+  const direct = readMvpProfile();
+  if (direct.recipientName || direct.recipientEmail) {
+    return { name: direct.recipientName, email: direct.recipientEmail };
+  }
+  const [latest] = readMvpClients();
+  if (!latest) return { name: '', email: '' };
+  const profile = readMvpProfileForClient(latest.id);
+  return { name: profile.recipientName, email: profile.recipientEmail };
+}
+
 export type MvpDocumentStatus = 'valid' | 'attention';
 
 export interface MvpDocument {

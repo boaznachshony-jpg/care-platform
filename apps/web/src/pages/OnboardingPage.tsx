@@ -6,10 +6,17 @@ import {
   caregiverLanguages,
   languageAfterCountryChange,
 } from '../caregiver-options.js';
+import { AutocompleteField } from '../components/AutocompleteField.js';
 import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
+import { israeliLocalities } from '../data/israeli-localities.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
-import type { MvpProfile } from '../storage/mvp-storage.js';
+import {
+  clearMvpOnboardingDraft,
+  readMvpOnboardingDraft,
+  saveMvpOnboardingDraft,
+  type MvpProfile,
+} from '../storage/mvp-storage.js';
 import {
   getIsraeliIdValidationError,
   isValidIsraeliId,
@@ -32,6 +39,7 @@ type ProfileStringKey = {
 type Choice = '' | 'yes' | 'no';
 
 const LAST_STEP = 5;
+const DRAFT_SAVE_DELAY_MS = 500;
 
 function stepStorageKey(clientId: string): string {
   return `caredesk.onboarding.step.${clientId || 'default'}`;
@@ -70,18 +78,26 @@ export function OnboardingPage() {
   const { clientId = '' } = useParams<{ clientId: string }>();
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
-  const [draft, setDraft] = useState(profile);
+  // In-progress answers are restored from the auto-saved draft so leaving a
+  // step mid-typing never loses input (the committed profile is the fallback).
+  // Everything is restored inside useState initializers — synchronously,
+  // before the first paint — so a reload never flashes an unanswered step.
+  const [restoredDraft] = useState(() => readMvpOnboardingDraft());
+  const [draft, setDraft] = useState(() => restoredDraft?.profile ?? profile);
   const [step, setStep] = useState(() => readSavedStep(clientId));
-  const [samePerson, setSamePerson] = useState<Choice>(() =>
-    profile.recipientName && profile.recipientName === profile.employerName
+  const [samePerson, setSamePerson] = useState<Choice>(() => {
+    if (restoredDraft?.samePersonChoice) return restoredDraft.samePersonChoice;
+    // Legacy drafts predate the stored choice; infer it from the names.
+    return draft.recipientName && draft.recipientName === draft.employerName
       ? 'yes'
-      : profile.employerName
+      : draft.employerName
         ? 'no'
-        : '',
-  );
-  const [helperChoice, setHelperChoice] = useState<Choice>(() =>
-    profile.representativeName || profile.representativePhone ? 'yes' : '',
-  );
+        : '';
+  });
+  const [helperChoice, setHelperChoice] = useState<Choice>(() => {
+    if (restoredDraft?.helperChoice) return restoredDraft.helperChoice;
+    return draft.representativeName || draft.representativePhone ? 'yes' : '';
+  });
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
   const isFirstRun = !profile.onboardingCompleted;
   const checklistComplete = employmentSetupCompletedCount(draft);
@@ -90,9 +106,18 @@ export function OnboardingPage() {
     window.localStorage.setItem(stepStorageKey(clientId), String(step));
   }, [clientId, step]);
 
-  function persist(next: MvpProfile) {
+  // Debounced draft auto-save: in-progress (possibly invalid) values are kept
+  // out of the committed profile but survive leaving the page mid-step.
+  useEffect(() => {
+    const handle = window.setTimeout(
+      () => saveMvpOnboardingDraft(draft, { samePersonChoice: samePerson, helperChoice }),
+      DRAFT_SAVE_DELAY_MS,
+    );
+    return () => window.clearTimeout(handle);
+  }, [draft, samePerson, helperChoice]);
+
+  function updateDraft(next: MvpProfile) {
     setDraft(next);
-    setProfile(next);
   }
 
   function updateField<Key extends ProfileStringKey>(key: Key, value: MvpProfile[Key]) {
@@ -101,7 +126,7 @@ export function OnboardingPage() {
       [key]: value,
       ...(key === 'recipientName' && samePerson === 'yes' ? { employerName: value } : {}),
     } as MvpProfile;
-    persist(next);
+    updateDraft(next);
   }
 
   function touch(key: string) {
@@ -224,17 +249,28 @@ export function OnboardingPage() {
 
   function chooseSamePerson(choice: Exclude<Choice, ''>) {
     setSamePerson(choice);
-    persist({
+    const next = {
       ...draft,
       employerName: choice === 'yes' ? draft.recipientName : '',
-    });
+    };
+    updateDraft(next);
+    // A radio tap is a discrete answer, not mid-typing: persist it immediately
+    // so a reload inside the debounce window still restores the exact choice.
+    saveMvpOnboardingDraft(next, { samePersonChoice: choice, helperChoice });
   }
 
   function chooseHelper(choice: Exclude<Choice, ''>) {
     setHelperChoice(choice);
-    if (choice === 'no') {
-      persist({ ...draft, representativeName: '', representativePhone: '' });
-    }
+    const next =
+      choice === 'no' ? { ...draft, representativeName: '', representativePhone: '' } : draft;
+    if (next !== draft) updateDraft(next);
+    saveMvpOnboardingDraft(next, { samePersonChoice: samePerson, helperChoice: choice });
+  }
+
+  function commitStep(next: MvpProfile) {
+    setDraft(next);
+    setProfile(next);
+    saveMvpOnboardingDraft(next, { samePersonChoice: samePerson, helperChoice });
   }
 
   function complete() {
@@ -243,7 +279,9 @@ export function OnboardingPage() {
       salaryEffectiveDate: draft.salaryEffectiveDate || draft.employmentStartDate,
       onboardingCompleted: true,
     };
-    persist(completed);
+    setDraft(completed);
+    setProfile(completed);
+    clearMvpOnboardingDraft();
     window.localStorage.removeItem(stepStorageKey(clientId));
     navigate(isFirstRun ? '/billing?from=onboarding' : path('/'));
   }
@@ -277,8 +315,12 @@ export function OnboardingPage() {
           onSubmit={(event) => {
             event.preventDefault();
             if (!currentValid) return;
-            if (step === LAST_STEP) complete();
-            else setStep((value) => value + 1);
+            if (step === LAST_STEP) {
+              complete();
+            } else {
+              commitStep(draft);
+              setStep((value) => value + 1);
+            }
           }}
         >
           <h2 id="onboarding-step">{stepTitle}</h2>
@@ -288,7 +330,18 @@ export function OnboardingPage() {
             )}
           </p>
 
-          {step === 0 ? personNameField('recipientName', t('profile.recipientName')) : null}
+          {step === 0 ? (
+            <>
+              {personNameField('recipientName', t('profile.recipientName'))}
+              <AutocompleteField
+                label={t('profile.city')}
+                value={draft.recipientCity}
+                options={israeliLocalities}
+                autoComplete="address-level2"
+                onChange={(value) => updateField('recipientCity', value)}
+              />
+            </>
+          ) : null}
 
           {step === 1 ? (
             <>
@@ -380,7 +433,7 @@ export function OnboardingPage() {
                   onBlur={() => touch('caregiverCountry')}
                   onChange={(event) => {
                     const country = event.target.value;
-                    persist({
+                    updateDraft({
                       ...draft,
                       caregiverCountry: country,
                       caregiverLanguage: languageAfterCountryChange(
@@ -511,7 +564,7 @@ export function OnboardingPage() {
           ) : null}
 
           {step === 4 ? (
-            <LicensedBureauSelector profile={draft} onChange={persist} required />
+            <LicensedBureauSelector profile={draft} onChange={updateDraft} required />
           ) : null}
 
           {step === 5 ? (
@@ -521,7 +574,7 @@ export function OnboardingPage() {
                   type="checkbox"
                   checked={draft.employmentAgreementConfirmed}
                   onChange={(event) =>
-                    persist({ ...draft, employmentAgreementConfirmed: event.target.checked })
+                    updateDraft({ ...draft, employmentAgreementConfirmed: event.target.checked })
                   }
                 />
                 <span>{t('onboarding.agreementConfirmed')}</span>
@@ -538,7 +591,7 @@ export function OnboardingPage() {
                   type="checkbox"
                   checked={draft.medicalInsuranceConfirmed}
                   onChange={(event) =>
-                    persist({
+                    updateDraft({
                       ...draft,
                       medicalInsuranceConfirmed: event.target.checked,
                       medicalInsuranceExpiryDate: event.target.checked
@@ -617,7 +670,7 @@ export function OnboardingPage() {
                   }
                   onBlur={() => touch('baseSalary')}
                   onChange={(event) =>
-                    persist({
+                    updateDraft({
                       ...draft,
                       baseSalary: event.target.value ? Number(event.target.value) : null,
                     })
@@ -655,7 +708,7 @@ export function OnboardingPage() {
                   }
                   onBlur={() => touch('saturdayRate')}
                   onChange={(event) =>
-                    persist({
+                    updateDraft({
                       ...draft,
                       saturdayRate: event.target.value ? Number(event.target.value) : null,
                     })
