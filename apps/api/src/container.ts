@@ -113,6 +113,8 @@ import {
   PgRegulationRuleService,
   type RegulationRuleService,
 } from './regulation-rule-service.js';
+import type { BinderExportService } from './binder-export-service.js';
+import type { EvidenceExportService } from './evidence-export-service.js';
 
 /**
  * Closed-pilot family role-to-permission map (ADR-004). `family_member` is a
@@ -256,6 +258,13 @@ export interface Container {
   }>;
   /** Present only when backed by Postgres; close it on shutdown. */
   pool?: Pool;
+  /**
+   * Optional service overrides consumed by create-server.ts route
+   * registration — tests inject deterministic in-memory implementations
+   * (e.g. a fixed role resolver) before calling buildServer.
+   */
+  binderExportService?: BinderExportService;
+  evidenceExportService?: EvidenceExportService;
 }
 
 export function buildContainer(env: Env): Container {

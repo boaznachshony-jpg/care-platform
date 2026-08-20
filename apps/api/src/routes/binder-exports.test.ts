@@ -18,9 +18,11 @@ const UNKNOWN_CASE_ID = '00000000-0000-4000-8000-00000000dead';
 const FOREIGN_DOCUMENT_ID = '00000000-0000-4000-8000-00000000beef';
 
 /**
- * Route registration is pending in create-server.ts (merged centrally), so
- * each test wires the module onto a full buildServer app the same way the
- * central registration will.
+ * Central registration in create-server.ts consumes
+ * `container.binderExportService`, so the role-override tests inject their
+ * deterministic service through the container before buildServer runs. The
+ * hasRoute guard keeps this suite valid both before and after the central
+ * registration line lands (same pattern as leave-entries.test.ts).
  */
 function makeApp(options?: { role?: 'viewer' | 'manager' }): {
   app: FastifyInstance;
@@ -28,7 +30,6 @@ function makeApp(options?: { role?: 'viewer' | 'manager' }): {
 } {
   const env = loadEnv({});
   const container = buildContainer(env);
-  const app = buildServer(env, container);
   const service = options?.role
     ? new InMemoryBinderExportService({
         getCase: container.getCase,
@@ -37,7 +38,11 @@ function makeApp(options?: { role?: 'viewer' | 'manager' }): {
         resolveRole: async () => options.role ?? null,
       })
     : undefined;
-  registerBinderExportRoutes(app, container, new InMemoryRateLimiter(), service);
+  container.binderExportService = service;
+  const app = buildServer(env, container);
+  if (!app.hasRoute({ method: 'POST', url: '/cases/:caseId/binder-exports' })) {
+    registerBinderExportRoutes(app, container, new InMemoryRateLimiter(), service);
+  }
   return { app, container };
 }
 

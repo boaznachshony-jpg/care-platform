@@ -172,11 +172,11 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerProductDifferentiationRoutes(app, container, productRateLimiter);
   registerCanonicalProductIntelligenceRoutes(app, container);
   registerPayrollEntryRoutes(app, container, productRateLimiter);
-  registerBinderExportRoutes(app, container, productRateLimiter);
+  registerBinderExportRoutes(app, container, productRateLimiter, container.binderExportService);
   registerEventActionPlanRoutes(app, container, productRateLimiter);
   registerRegulationRuleRoutes(app, container, productRateLimiter);
   registerLeaveEntryRoutes(app, container, productRateLimiter);
-  registerEvidenceExportRoutes(app, container, productRateLimiter);
+  registerEvidenceExportRoutes(app, container, productRateLimiter, container.evidenceExportService);
   registerScenarioExpenseRoutes(app, container, productRateLimiter);
 
   return app;

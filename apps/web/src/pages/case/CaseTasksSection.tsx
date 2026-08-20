@@ -2,14 +2,24 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 import { TASK_PRIORITIES } from '@caredesk/domain';
-import {
-  createTaskRequestSchema,
-  type CreateTaskRequest,
-  type TaskResponse,
-} from '@caredesk/schemas';
+import { createTaskRequestSchema, type TaskResponse } from '@caredesk/schemas';
 import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
 import { completeCaseTask, createCaseTask, listCaseTasks } from '../../api/client.js';
+
+/**
+ * The API schema defaults an omitted priority to 'normal', but a zod
+ * `.default()` makes the resolver's input type diverge from its output type
+ * (optional in, required out), which @hookform/resolvers v5 rejects. The form
+ * always renders the priority select, so it validates against a required
+ * priority and supplies the default through useForm's defaultValues instead.
+ */
+const taskFormSchema = createTaskRequestSchema.extend({
+  priority: z.enum(TASK_PRIORITIES),
+});
+
+type TaskFormValues = z.infer<typeof taskFormSchema>;
 
 function statusTone(status: string): 'success' | 'warning' | 'neutral' {
   if (status === 'completed') return 'success';
@@ -29,9 +39,9 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<CreateTaskRequest>({
-    resolver: zodResolver(createTaskRequestSchema),
-    // Without this the select shows its first option ("low") while the schema
+  } = useForm<TaskFormValues>({
+    resolver: zodResolver(taskFormSchema),
+    // Without this the select shows its first option ("low") while the API
     // default is "normal" — a user who never touches the field would silently
     // file every task at the wrong priority.
     defaultValues: { priority: 'normal' },

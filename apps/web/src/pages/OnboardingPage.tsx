@@ -80,18 +80,24 @@ export function OnboardingPage() {
   const [profile, setProfile] = useMvpProfile();
   // In-progress answers are restored from the auto-saved draft so leaving a
   // step mid-typing never loses input (the committed profile is the fallback).
-  const [draft, setDraft] = useState(() => readMvpOnboardingDraft()?.profile ?? profile);
+  // Everything is restored inside useState initializers — synchronously,
+  // before the first paint — so a reload never flashes an unanswered step.
+  const [restoredDraft] = useState(() => readMvpOnboardingDraft());
+  const [draft, setDraft] = useState(() => restoredDraft?.profile ?? profile);
   const [step, setStep] = useState(() => readSavedStep(clientId));
-  const [samePerson, setSamePerson] = useState<Choice>(() =>
-    draft.recipientName && draft.recipientName === draft.employerName
+  const [samePerson, setSamePerson] = useState<Choice>(() => {
+    if (restoredDraft?.samePersonChoice) return restoredDraft.samePersonChoice;
+    // Legacy drafts predate the stored choice; infer it from the names.
+    return draft.recipientName && draft.recipientName === draft.employerName
       ? 'yes'
       : draft.employerName
         ? 'no'
-        : '',
-  );
-  const [helperChoice, setHelperChoice] = useState<Choice>(() =>
-    draft.representativeName || draft.representativePhone ? 'yes' : '',
-  );
+        : '';
+  });
+  const [helperChoice, setHelperChoice] = useState<Choice>(() => {
+    if (restoredDraft?.helperChoice) return restoredDraft.helperChoice;
+    return draft.representativeName || draft.representativePhone ? 'yes' : '';
+  });
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
   const isFirstRun = !profile.onboardingCompleted;
   const checklistComplete = employmentSetupCompletedCount(draft);
@@ -103,9 +109,12 @@ export function OnboardingPage() {
   // Debounced draft auto-save: in-progress (possibly invalid) values are kept
   // out of the committed profile but survive leaving the page mid-step.
   useEffect(() => {
-    const handle = window.setTimeout(() => saveMvpOnboardingDraft(draft), DRAFT_SAVE_DELAY_MS);
+    const handle = window.setTimeout(
+      () => saveMvpOnboardingDraft(draft, { samePersonChoice: samePerson, helperChoice }),
+      DRAFT_SAVE_DELAY_MS,
+    );
     return () => window.clearTimeout(handle);
-  }, [draft]);
+  }, [draft, samePerson, helperChoice]);
 
   function updateDraft(next: MvpProfile) {
     setDraft(next);
@@ -240,23 +249,28 @@ export function OnboardingPage() {
 
   function chooseSamePerson(choice: Exclude<Choice, ''>) {
     setSamePerson(choice);
-    updateDraft({
+    const next = {
       ...draft,
       employerName: choice === 'yes' ? draft.recipientName : '',
-    });
+    };
+    updateDraft(next);
+    // A radio tap is a discrete answer, not mid-typing: persist it immediately
+    // so a reload inside the debounce window still restores the exact choice.
+    saveMvpOnboardingDraft(next, { samePersonChoice: choice, helperChoice });
   }
 
   function chooseHelper(choice: Exclude<Choice, ''>) {
     setHelperChoice(choice);
-    if (choice === 'no') {
-      updateDraft({ ...draft, representativeName: '', representativePhone: '' });
-    }
+    const next =
+      choice === 'no' ? { ...draft, representativeName: '', representativePhone: '' } : draft;
+    if (next !== draft) updateDraft(next);
+    saveMvpOnboardingDraft(next, { samePersonChoice: samePerson, helperChoice: choice });
   }
 
   function commitStep(next: MvpProfile) {
     setDraft(next);
     setProfile(next);
-    saveMvpOnboardingDraft(next);
+    saveMvpOnboardingDraft(next, { samePersonChoice: samePerson, helperChoice });
   }
 
   function complete() {

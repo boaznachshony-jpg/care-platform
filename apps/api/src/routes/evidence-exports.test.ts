@@ -25,9 +25,11 @@ const SYNTHETIC_BYTES = 'synthetic evidence export test bytes';
 const CONTENT_BASE64 = Buffer.from(SYNTHETIC_BYTES).toString('base64');
 
 /**
- * Route registration is pending in create-server.ts (merged centrally), so
- * each test wires the module onto a full buildServer app the same way the
- * central registration will.
+ * Central registration in create-server.ts consumes
+ * `container.evidenceExportService`, so the role-override tests inject their
+ * deterministic service through the container before buildServer runs. The
+ * hasRoute guard keeps this suite valid both before and after the central
+ * registration line lands (same pattern as leave-entries.test.ts).
  */
 function makeApp(options?: { role?: 'viewer' | 'manager' }): {
   app: FastifyInstance;
@@ -35,7 +37,6 @@ function makeApp(options?: { role?: 'viewer' | 'manager' }): {
 } {
   const env = loadEnv({});
   const container = buildContainer(env);
-  const app = buildServer(env, container);
   const audit = container.audit as InMemoryAuditService;
   const timeline = container.timeline as InMemoryTimelineService;
   const service = options?.role
@@ -49,7 +50,11 @@ function makeApp(options?: { role?: 'viewer' | 'manager' }): {
         resolveRole: async () => options.role ?? null,
       })
     : undefined;
-  registerEvidenceExportRoutes(app, container, new InMemoryRateLimiter(), service);
+  container.evidenceExportService = service;
+  const app = buildServer(env, container);
+  if (!app.hasRoute({ method: 'GET', url: '/cases/:caseId/evidence-export' })) {
+    registerEvidenceExportRoutes(app, container, new InMemoryRateLimiter(), service);
+  }
   return { app, container };
 }
 

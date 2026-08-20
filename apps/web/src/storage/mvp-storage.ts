@@ -375,9 +375,23 @@ export function updateMvpProfile(changes: Partial<MvpProfile>): MvpProfile {
 
 const ONBOARDING_DRAFT_KEY = 'caredesk.mvp.onboarding-draft.v1';
 
+/** A yes/no wizard answer; '' means the question was never answered. */
+export type MvpOnboardingChoice = '' | 'yes' | 'no';
+
 export interface MvpOnboardingDraft {
   savedAt: string;
   profile: MvpProfile;
+  /**
+   * Wizard-only answers that have no committed-profile field of their own.
+   * Without them a reload could not restore the same-person / helper radios
+   * exactly as the user left them.
+   */
+  samePersonChoice: MvpOnboardingChoice;
+  helperChoice: MvpOnboardingChoice;
+}
+
+function parseOnboardingChoice(value: unknown): MvpOnboardingChoice {
+  return value === 'yes' || value === 'no' ? value : '';
 }
 
 /**
@@ -395,15 +409,25 @@ export function readMvpOnboardingDraft(): MvpOnboardingDraft | null {
     return {
       savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
       profile: { ...emptyMvpProfile, ...parsed.profile },
+      samePersonChoice: parseOnboardingChoice(parsed.samePersonChoice),
+      helperChoice: parseOnboardingChoice(parsed.helperChoice),
     };
   } catch {
     return null;
   }
 }
 
-export function saveMvpOnboardingDraft(profile: MvpProfile): void {
+export function saveMvpOnboardingDraft(
+  profile: MvpProfile,
+  choices?: { samePersonChoice?: MvpOnboardingChoice; helperChoice?: MvpOnboardingChoice },
+): void {
   if (!isBrowser()) return;
-  const draft: MvpOnboardingDraft = { savedAt: new Date().toISOString(), profile };
+  const draft: MvpOnboardingDraft = {
+    savedAt: new Date().toISOString(),
+    profile,
+    samePersonChoice: choices?.samePersonChoice ?? '',
+    helperChoice: choices?.helperChoice ?? '',
+  };
   writeBusinessItem(scopedKey(ONBOARDING_DRAFT_KEY), JSON.stringify(draft));
 }
 
