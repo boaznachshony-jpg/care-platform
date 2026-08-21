@@ -109,6 +109,41 @@ describe('AccountFrozenGate', () => {
     expect(screen.getByText('protected content')).toBeTruthy();
   });
 
+  it('warns without freezing when the last charge failed (past_due)', async () => {
+    // A declined charge keeps the payment method on file, so accessState stays
+    // 'active' — the past_due warning is driven by the subscription status.
+    mocks.getBillingSubscription.mockResolvedValue(
+      plan({
+        status: 'past_due',
+        paymentMethod: { last4: '4242', expiryMonth: 12, expiryYear: 2030 },
+        nextChargeOn: '2026-08-01',
+      }),
+    );
+    await renderGate();
+
+    const banner = await screen.findByRole('status');
+    expect(banner.textContent).toContain('The last subscription charge failed');
+    expect(screen.getByRole('link', { name: 'Update payment method' }).getAttribute('href')).toBe(
+      '/billing',
+    );
+    // Never an immediate hard freeze on a first failed charge.
+    expect(screen.getByText('protected content')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Account frozen' })).toBeNull();
+  });
+
+  it('does not show the past_due banner on the billing page itself', async () => {
+    mocks.getBillingSubscription.mockResolvedValue(
+      plan({
+        status: 'past_due',
+        paymentMethod: { last4: '4242', expiryMonth: 12, expiryYear: 2030 },
+      }),
+    );
+    await renderGate('/billing');
+
+    expect(await screen.findByText('protected content')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('renders children without a banner when the account is active', async () => {
     mocks.getBillingSubscription.mockResolvedValue(plan());
     await renderGate();

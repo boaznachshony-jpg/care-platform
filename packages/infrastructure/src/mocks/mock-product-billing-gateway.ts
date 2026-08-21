@@ -37,6 +37,14 @@ export class MockProductBillingGateway implements ProductBillingGateway {
 
   async chargeMonthly(input: MonthlyChargeInput): Promise<MonthlyChargeResult> {
     this.charges.push(input);
+    // Deterministic decline hook for tests: a billing email whose local part
+    // starts with "decline" simulates a synchronous provider refusal, the way
+    // Cardcom rejects a real charge (CardcomGatewayError with a providerCode).
+    if (input.billingEmail.toLowerCase().startsWith('decline')) {
+      const error = new Error('Synthetic card decline.');
+      error.name = 'MockCardDeclined';
+      throw Object.assign(error, { providerCode: 'MOCK_DECLINED' });
+    }
     return { providerTransactionId: `synthetic-${input.externalUniqId}` };
   }
 }

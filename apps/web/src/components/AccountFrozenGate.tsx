@@ -77,9 +77,23 @@ export function AccountFrozenGate({ children }: { children: ReactNode }) {
     );
   }
 
+  // Escalation policy (deliberate): a first failed recurring charge marks the
+  // subscription 'past_due' but is treated like 'grace' — a prominent warning
+  // banner, never an immediate hard freeze. Hard freezing stays anchored to
+  // the existing accessState='frozen' derivation (missing payment method past
+  // the grace window); a tenant whose card merely declined keeps a payment
+  // method on file, so they see the warning and can fix the card while the
+  // collection job retries the same period (up to 3 attempts).
+  const pastDue = plan?.status === 'past_due';
+
   return (
     <>
-      {plan?.accessState === 'grace' && !onBillingPage ? (
+      {pastDue && !onBillingPage ? (
+        <div className="action-notice error account-grace-banner" role="status">
+          <span>{t('billing.pastDueBanner')}</span>{' '}
+          <Link to="/billing">{t('billing.pastDueCta')}</Link>
+        </div>
+      ) : plan?.accessState === 'grace' && !onBillingPage ? (
         <div className="action-notice error account-grace-banner" role="status">
           <span>{t('billing.graceBanner', { days: plan.graceDaysRemaining ?? 0 })}</span>{' '}
           <Link to="/billing">{t('billing.graceCta')}</Link>

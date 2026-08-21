@@ -6,6 +6,44 @@ import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
+import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
+
+type DashboardTabId = 'overview' | 'payments' | 'case';
+
+const dashboardTabs = [
+  ['overview', 'dashboard.tabOverview'],
+  ['payments', 'dashboard.tabPayments'],
+  ['case', 'dashboard.tabCase'],
+] as const;
+
+/* Simple inline glyphs (stroke only) for the gradient stat chips — no icon library. */
+const chipIcons = {
+  score: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3z" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  attention: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5" strokeLinecap="round" />
+      <path d="M12 16.2v.1" strokeLinecap="round" />
+    </svg>
+  ),
+  salary: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="7" width="18" height="10" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  ),
+  insurance: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4M16 3v4M4 10h16" strokeLinecap="round" />
+    </svg>
+  ),
+} as const;
 
 export function DashboardPage() {
   const path = useClientPath();
@@ -13,9 +51,22 @@ export function DashboardPage() {
   const [profile] = useMvpProfile();
   const { clientId } = useParams<{ clientId: string }>();
   const [health, setHealth] = useState<CaseHealthResponse>();
+  const [activeTab, setActiveTab] = useState<DashboardTabId>('overview');
   useEffect(() => {
     if (clientId) void getCaseHealth(clientId).then(setHealth);
   }, [clientId]);
+  const selectTab = (tab: DashboardTabId) => {
+    setActiveTab(tab);
+    document.getElementById(`dashboard-${tab}`)?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+  const upcomingPayments = createUpcomingPayments();
+  const nextSalary = upcomingPayments.find((payment) => payment.id === 'salary');
+  const nextInsurance = upcomingPayments.find((payment) => payment.id === 'nationalInsurance');
+  const attentionCount =
+    health?.factors.filter((factor) => factor.status === 'attention').length ?? 0;
   const missingCount = [
     !profile.employerName.trim(),
     !profile.recipientName.trim(),
@@ -46,7 +97,20 @@ export function DashboardPage() {
 
   return (
     <div className="page-stack">
-      <section className="hero-row">
+      <nav className="dash-tabs" aria-label={t('dashboard.tabsLabel')}>
+        {dashboardTabs.map(([id, labelKey]) => (
+          <button
+            key={id}
+            type="button"
+            className={activeTab === id ? 'dash-tab active' : 'dash-tab'}
+            aria-pressed={activeTab === id}
+            onClick={() => selectTab(id)}
+          >
+            {t(labelKey)}
+          </button>
+        ))}
+      </nav>
+      <section className="hero-row" id="dashboard-overview">
         <div>
           <p className="eyebrow">{t('dashboard.eyebrow')}</p>
           <h1>{t('dashboard.greeting', { name: profile.employerName })}</h1>
@@ -58,6 +122,40 @@ export function DashboardPage() {
           {t(statusChipKey)}
         </span>
       </section>
+      <div className="stat-grid">
+        <article className="stat-tile">
+          <span className="stat-chip teal-blue" aria-hidden="true">
+            {chipIcons.score}
+          </span>
+          <span className="stat-tile-label">{t('dashboard.scoreTileLabel')}</span>
+          <strong className="stat-tile-value">{health ? health.score : '—'}</strong>
+        </article>
+        <article className="stat-tile">
+          <span className="stat-chip violet-pink" aria-hidden="true">
+            {chipIcons.attention}
+          </span>
+          <span className="stat-tile-label">{t('dashboard.attentionTileLabel')}</span>
+          <strong className="stat-tile-value">{health ? attentionCount : '—'}</strong>
+        </article>
+        <article className="stat-tile">
+          <span className="stat-chip blue-violet" aria-hidden="true">
+            {chipIcons.salary}
+          </span>
+          <span className="stat-tile-label">{t('dashboard.salaryTileLabel')}</span>
+          <strong className="stat-tile-value">
+            {nextSalary ? formatDisplayDate(nextSalary.dueDate) : '—'}
+          </strong>
+        </article>
+        <article className="stat-tile">
+          <span className="stat-chip pink-amber" aria-hidden="true">
+            {chipIcons.insurance}
+          </span>
+          <span className="stat-tile-label">{t('dashboard.insuranceTileLabel')}</span>
+          <strong className="stat-tile-value">
+            {nextInsurance ? formatDisplayDate(nextInsurance.dueDate) : '—'}
+          </strong>
+        </article>
+      </div>
       <section className="card intelligence-attention" aria-labelledby="attention-title">
         <div className="section-heading">
           <div>
@@ -143,8 +241,10 @@ export function DashboardPage() {
           {t('dashboard.reviewDetails')}
         </Link>
       </section>
-      <UpcomingPaymentsCard />
-      <div className="dashboard-grid">
+      <div id="dashboard-payments">
+        <UpcomingPaymentsCard />
+      </div>
+      <div className="dashboard-grid" id="dashboard-case">
         <section className="card">
           <div className="section-heading">
             <h2>{t('dashboard.employment')}</h2>

@@ -1,13 +1,28 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { initI18n } from '@caredesk/i18n';
 import { saveMvpTasks } from './storage/mvp-storage.js';
 import { AppShell } from './AppShell.js';
+
+function renderShell() {
+  return render(
+    <I18nextProvider i18n={initI18n()}>
+      <MemoryRouter>
+        <AppShell>
+          <p>תוכן בדיקה</p>
+        </AppShell>
+      </MemoryRouter>
+    </I18nextProvider>,
+  );
+}
 
 describe('AppShell text size controls', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.style.removeProperty('--ui-scale');
+    document.documentElement.removeAttribute('data-theme');
   });
 
   it('enlarges the entire interface and persists the selected size', () => {
@@ -90,5 +105,37 @@ describe('AppShell text size controls', () => {
 
     expect(screen.getByText('שלום מעסיק אמיתי')).toBeVisible();
     expect(screen.queryByText('יום שלישי, 28 ביולי')).not.toBeInTheDocument();
+  });
+});
+
+describe('AppShell theme toggle', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('applies the dark theme on the document root and persists the choice', () => {
+    renderShell();
+
+    const toggle = screen.getByRole('button', { name: 'מעבר בין תצוגה בהירה לכהה' });
+    fireEvent.click(toggle);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(localStorage.getItem('caredesk.ui.theme')).toBe('dark');
+
+    fireEvent.click(toggle);
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(localStorage.getItem('caredesk.ui.theme')).toBe('light');
+  });
+
+  it('restores a previously saved dark theme on load and defaults to light otherwise', () => {
+    localStorage.setItem('caredesk.ui.theme', 'dark');
+    const { unmount } = renderShell();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    unmount();
+
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
+    renderShell();
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });
 });

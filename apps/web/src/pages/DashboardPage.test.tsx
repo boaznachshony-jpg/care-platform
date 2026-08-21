@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
+import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
 import { DashboardPage } from './DashboardPage.js';
 
 // Constitution §16: synthetic data only.
@@ -117,5 +118,67 @@ describe('DashboardPage', () => {
     );
     expect(paymentLink).toHaveAttribute('target', '_blank');
     expect(paymentLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders the section pill tabs with the overview tab active by default', () => {
+    renderPage();
+    const overviewTab = screen.getByRole('button', { name: 'סקירה' });
+    expect(overviewTab).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'תשלומים' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'פרטי תיק' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('activates a tab when it is clicked', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'תשלומים' }));
+    expect(screen.getByRole('button', { name: 'תשלומים' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'סקירה' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('renders the stat tiles with score, attention count and payment due dates', async () => {
+    renderPage();
+    expect(screen.getByText('ציון תקינות')).toBeInTheDocument();
+    expect(screen.getByText('נושאים לטיפול')).toBeInTheDocument();
+    expect(screen.getByText('תשלום השכר הבא')).toBeInTheDocument();
+    expect(screen.getByText('ביטוח לאומי הקרוב')).toBeInTheDocument();
+
+    // Score appears both in the tile and in the score ring once health loads.
+    await waitFor(() => expect(screen.getAllByText('90').length).toBeGreaterThanOrEqual(1));
+    expect(screen.getByText('0')).toBeInTheDocument();
+
+    for (const payment of createUpcomingPayments()) {
+      expect(screen.getByText(formatDisplayDate(payment.dueDate))).toBeInTheDocument();
+    }
+  });
+
+  it('counts attention factors in the attention stat tile', async () => {
+    mockGetCaseHealth.mockResolvedValue({
+      score: 70,
+      actionsRemaining: 2,
+      factors: [
+        {
+          id: 'factor-1',
+          title: 'ביטוח רפואי',
+          explanation: 'יש לחדש את הביטוח',
+          status: 'attention',
+          provenance: { sourceType: 'documents', sourceIds: ['doc-1'] },
+        },
+        {
+          id: 'factor-2',
+          title: 'שכר',
+          explanation: 'תקין',
+          status: 'good',
+          provenance: { sourceType: 'payroll', sourceIds: ['pay-1'] },
+        },
+      ],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument());
   });
 });
