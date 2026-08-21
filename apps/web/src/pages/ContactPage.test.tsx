@@ -69,6 +69,21 @@ describe('ContactPage', () => {
     expect(document.querySelector('.contact-character-count')).toHaveTextContent('0');
   });
 
+  it('explains the minimum message length while the message is too short', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'שליחת בקשת עזרה' }));
+
+    const messageInput = screen.getByLabelText('תוכן הפנייה');
+    expect(screen.queryByText('יש לכתוב לפחות 10 תווים כדי לשלוח.')).not.toBeInTheDocument();
+
+    fireEvent.change(messageInput, { target: { value: 'קצר' } });
+    expect(screen.getByText('יש לכתוב לפחות 10 תווים כדי לשלוח.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'שליחת הפנייה' })).toBeDisabled();
+
+    fireEvent.change(messageInput, { target: { value: 'הודעה ארוכה מספיק כדי להישלח.' } });
+    expect(screen.queryByText('יש לכתוב לפחות 10 תווים כדי לשלוח.')).not.toBeInTheDocument();
+  });
+
   it('submits the request to the API and shows a clear confirmation', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'שליחת הצעה לשיפור' }));

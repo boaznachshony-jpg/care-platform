@@ -44,6 +44,12 @@
     "ownershipNotice": "During the closed pilot, ownership transfer uses a verified support process to prevent accidental lockout or account takeover."
   },
   "billing": {
+    "frozenTitle": "Account frozen",
+    "frozenBody": "No active payment method was found for this account, so access is temporarily paused. To keep using CareDesk, please arrange payment — all of your data is safe and waiting.",
+    "frozenCta": "Arrange payment",
+    "frozenSignOut": "Sign out",
+    "graceBanner": "No payment method is connected to this account yet. {{days}} days remain to arrange payment before the account is frozen.",
+    "graceCta": "Connect a payment method",
     "onboardingStep": "Final setup step: securely connect a payment method",
     "completeSetup": "Finish and enter CareDesk",
     "eyebrow": "Subscription and billing",
@@ -584,6 +590,7 @@
     "helpPlaceholder": "For example: I could not mark a task as complete on the Tasks screen.",
     "feedbackPlaceholder": "For example: Please add a short explanation beside the Print button.",
     "charactersRemaining": "{{count}} characters remaining",
+    "minLength": "Write at least 10 characters to send.",
     "send": "Send request",
     "sending": "Sending…",
     "cancel": "Cancel",
@@ -627,6 +634,7 @@
       "title": "Direct caregiver employment, with greater peace of mind",
       "body": "CareDesk brings details, documents, tasks, expiry reminders, payroll records and payment tracking into one clear process, with an accessible interface that also works on mobile.",
       "signup": "Request an account",
+      "openAccount": "Open a new account",
       "pilot": "Join the pilot",
       "guide": "Read the direct employment guide",
       "trustLabel": "Main benefits",
@@ -695,7 +703,7 @@
     "pilot": {
       "eyebrow": "Limited commercial launch",
       "title": "Want to join the first employer group?",
-      "body": "Accounts are currently opened by invitation and personal coordination so each account can be configured and checked properly.",
+      "body": "Opening an account is self-serve and takes just a few minutes: register with your email address, verify it, and continue to a clear setup checklist.",
       "signup": "Send a request to join",
       "existing": "Sign in to an existing account"
     },

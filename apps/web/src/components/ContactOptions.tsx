@@ -200,6 +200,9 @@ export function ContactOptions() {
                   placeholder={t(`contact.${kind}Placeholder`)}
                   disabled={submission === 'submitting'}
                 />
+                {message.trim().length > 0 && message.trim().length < SUPPORT_MESSAGE_MIN_LENGTH ? (
+                  <small className="contact-min-length-hint">{t('contact.minLength')}</small>
+                ) : null}
                 <div className="contact-character-count" aria-live="polite">
                   {t('contact.charactersRemaining', { count: Math.max(0, remainingCharacters) })}
                 </div>

@@ -74,6 +74,7 @@ describe('loadEnv', () => {
     expect(env.BILLING_PRICE_AGOROT).toBe(3900);
     expect(env.BILLING_VAT_RATE_BPS).toBe(1800);
     expect(env.BILLING_LAUNCH_DISCOUNT_PERCENT).toBe(100);
+    expect(env.BILLING_GRACE_DAYS).toBe(7);
   });
 
   it('requires all server-only support delivery settings together', () => {

@@ -17,6 +17,18 @@ export const startBillingSetupRequestSchema = z.object({
 
 export type StartBillingSetupRequest = z.infer<typeof startBillingSetupRequestSchema>;
 
+/**
+ * Derived (never stored) app-access state for the tenant:
+ * - 'active'  — a payment method exists, the plan is fully sponsored, or no
+ *               charge-date policy applies yet, so the app is fully usable.
+ * - 'grace'   — payment is required but missing; the tenant is inside the
+ *               grace window and only sees a warning.
+ * - 'frozen'  — payment is required, missing, and the grace window has
+ *               elapsed; the app is locked until payment is arranged.
+ */
+export const BILLING_ACCESS_STATES = ['active', 'grace', 'frozen'] as const;
+export type BillingAccessState = (typeof BILLING_ACCESS_STATES)[number];
+
 export interface BillingPlanResponse {
   status: ProductSubscriptionStatus;
   currency: 'ILS';
@@ -40,6 +52,9 @@ export interface BillingPlanResponse {
   canManage: boolean;
   providerConfigured: boolean;
   termsVersion: string;
+  accessState: BillingAccessState;
+  /** Whole days left in the grace window; null unless accessState is 'grace'. */
+  graceDaysRemaining: number | null;
 }
 
 export interface BillingCheckoutResponse {

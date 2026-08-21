@@ -4,8 +4,10 @@ import {
   cardcomWebhookSchema,
   startBillingSetupRequestSchema,
   type BillingCheckoutResponse,
+  type BillingPlanResponse,
 } from '@caredesk/schemas';
 import type { FastifyInstance } from 'fastify';
+import { deriveBillingAccessState } from '../billing/access-state.js';
 import type { Container } from '../container.js';
 import type { Env } from '../env.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
@@ -34,7 +36,14 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
     const actor = request.actor;
     if (!actor) return;
     try {
-      reply.send(await container.getProductSubscription.execute(actor));
+      const plan = await container.getProductSubscription.execute(actor);
+      // accessState is derived on every read (never stored): the same plan
+      // data plus the clock fully determine whether the account is frozen.
+      const response: BillingPlanResponse = {
+        ...plan,
+        ...deriveBillingAccessState(plan, env.BILLING_GRACE_DAYS, new Date()),
+      };
+      reply.send(response);
     } catch (error) {
       if (error instanceof AuthorizationError) {
         return sendError(request, reply, 403, 'FORBIDDEN');

@@ -90,6 +90,33 @@ describe('login progress', () => {
   });
 });
 
+describe('registration deep link', () => {
+  it('opens in sign-in mode by default', () => {
+    renderWithProviders(<LoginPage />);
+    expect(screen.getByRole('tab', { name: 'כבר יש לי חשבון' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('opens directly in registration mode when reached via ?mode=register', () => {
+    render(
+      <I18nextProvider i18n={initI18n()}>
+        <MemoryRouter initialEntries={['/app?mode=register']}>
+          <LoginPage />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'פתיחת חשבון CareDesk' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'פתיחת חשבון' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByLabelText('אימות הסיסמה החדשה')).toBeInTheDocument();
+  });
+});
+
 describe('registration validation', () => {
   it('lets an unconfirmed user request a fresh verification email', async () => {
     authMocks.signUp.mockResolvedValue('confirmation-required');

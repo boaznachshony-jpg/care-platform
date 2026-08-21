@@ -33,6 +33,11 @@ describe('App', () => {
     expect(screen.getByText('רישום נתוני שכר, מעקב תשלומים ותזכורות')).toBeInTheDocument();
     expect(screen.queryByText('חישובי שכר, סיכומים ותזכורות')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
+    const registrationLinks = screen.getAllByRole('link', { name: 'פתיחת חשבון חדש' });
+    expect(registrationLinks.length).toBeGreaterThan(0);
+    for (const link of registrationLinks) {
+      expect(link).toHaveAttribute('href', '/app?mode=register');
+    }
     expect(screen.queryByRole('link', { name: 'הצטרפות לפיילוט' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'למדריך ההעסקה הישירה' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'יצירת קשר ועזרה' })).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
 
 export type RegistrationValidationError = 'email' | 'password' | 'confirmation' | null;
@@ -42,7 +42,10 @@ export function LoginPage() {
   const { t } = useTranslation();
   const { signIn, signUp, resendSignUpConfirmation, requestMagicLink, requestPasswordReset } =
     useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<'login' | 'register'>(() =>
+    searchParams.get('mode') === 'register' ? 'register' : 'login',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
