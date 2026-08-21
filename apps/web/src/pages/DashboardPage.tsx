@@ -297,7 +297,15 @@ export function DashboardPage() {
       <TileGradientDefs />
       <nav className="tile-grid" aria-label={t('dashboard.tiles.gridLabel')}>
         {navTiles.map((tile) => (
-          <Link key={tile.id} className="nav-tile" to={tile.to}>
+          /* Explicit accessible name: the label and the value are separate inline elements, so the
+             name computed from content would run them together ("מסמכים0"). Composed from the same
+             translated strings, so it keeps matching the visible text (WCAG 2.5.3 Label in Name). */
+          <Link
+            key={tile.id}
+            className="nav-tile"
+            to={tile.to}
+            aria-label={`${tile.label} ${tile.value}`}
+          >
             <span className="nav-tile-icon" aria-hidden="true">
               {tile.icon}
             </span>
