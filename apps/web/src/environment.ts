@@ -4,6 +4,7 @@ export function getDeploymentEnvironment(
   hostname = window.location.hostname,
 ): DeploymentEnvironment {
   if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return 'local';
+  if (hostname === 'caredesk-isr.com' || hostname === 'www.caredesk-isr.com') return 'production';
   if (hostname === 'care-platform-web.vercel.app') return 'production';
   if (hostname.endsWith('.vercel.app')) return 'staging';
   return 'production';
