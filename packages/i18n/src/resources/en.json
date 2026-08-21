@@ -474,10 +474,25 @@
     "tabOverview": "Overview",
     "tabPayments": "Payments",
     "tabCase": "Case details",
-    "scoreTileLabel": "Compliance score",
-    "attentionTileLabel": "Items needing attention",
-    "salaryTileLabel": "Next salary payment",
-    "insuranceTileLabel": "Next National Insurance"
+    "tiles": {
+      "gridLabel": "Quick navigation to all topics",
+      "score": "Compliance score",
+      "attention": "Items needing attention",
+      "visa": "Visa",
+      "medicalInsurance": "Medical insurance",
+      "salary": "Salary",
+      "nationalInsurance": "National Insurance",
+      "documents": "Documents",
+      "tasks": "Tasks",
+      "timeline": "Timeline",
+      "binder": "Emergency binder",
+      "untilDate": "By {{date}}",
+      "missingDate": "Date missing",
+      "notConfirmed": "Not confirmed",
+      "open": "Open",
+      "view": "View",
+      "securePrint": "Secure print"
+    }
   },
   "openIssues": {
     "eyebrow": "Status snapshot",
