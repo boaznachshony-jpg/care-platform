@@ -41,6 +41,10 @@ export function BillingPage() {
   );
 
   const isSponsored = Boolean(plan && plan.effectivePriceAgorot === 0);
+  // A failed recurring charge must never present as an active subscription:
+  // 'past_due' replaces the green "subscription active" note with a warning
+  // and a direct path back into the hosted card-setup flow.
+  const isPastDue = plan?.status === 'past_due';
   const chargeDate = plan?.nextChargeOn ?? plan?.chargingStartsAt ?? null;
 
   const load = useCallback(async () => {
@@ -93,6 +97,29 @@ export function BillingPage() {
     if (!checked) return;
     if (recipientContact.name) setBillingName(recipientContact.name);
     if (recipientContact.email) setBillingEmail(recipientContact.email);
+  }
+
+  /**
+   * Past-due recovery: re-enter the existing hosted card-setup (connectCard)
+   * flow with the payer details already on file. Completing it stores a fresh
+   * verified token, after which the next collection run retries the charge.
+   */
+  async function reconnectCard() {
+    if (!plan?.canManage || !plan.providerConfigured) return;
+    setBusy(true);
+    setError(false);
+    try {
+      const result = await startBillingPaymentMethodSetup({
+        billingName: (plan.billingName ?? billingName).trim(),
+        billingEmail: (plan.billingEmail ?? billingEmail).trim(),
+        acceptsRecurringCharge: true,
+        termsVersion: BILLING_TERMS_VERSION,
+      });
+      window.location.assign(result.checkoutUrl);
+    } catch {
+      setBusy(false);
+      setError(true);
+    }
   }
 
   async function cancelSubscription() {
@@ -176,23 +203,40 @@ export function BillingPage() {
                 <dd>{money(plan.effectivePriceAgorot, i18n.language)}</dd>
               </div>
             </dl>
-            <div className={`billing-safety-note ${isSponsored ? '' : 'paid'}`}>
-              <strong>
-                {isSponsored ? t('billing.noChargeTitle') : t('billing.paidChargeTitle')}
-              </strong>
-              <p>
-                {isSponsored
-                  ? t('billing.noChargeBody')
-                  : chargeDate
-                    ? t('billing.paidChargeBody', {
-                        amount: money(plan.effectivePriceAgorot, i18n.language),
-                        date: date(chargeDate, i18n.language),
-                      })
-                    : t('billing.paidChargeDatePending', {
-                        amount: money(plan.effectivePriceAgorot, i18n.language),
-                      })}
-              </p>
-            </div>
+            {isPastDue ? (
+              <div className="billing-safety-note past-due" role="alert">
+                <strong>{t('billing.pastDueTitle')}</strong>
+                <p>{t('billing.pastDueBody')}</p>
+                {plan.canManage && plan.providerConfigured ? (
+                  <button
+                    className="primary-button billing-past-due-button"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void reconnectCard()}
+                  >
+                    {busy ? t('billing.redirecting') : t('billing.pastDueCta')}
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div className={`billing-safety-note ${isSponsored ? '' : 'paid'}`}>
+                <strong>
+                  {isSponsored ? t('billing.noChargeTitle') : t('billing.paidChargeTitle')}
+                </strong>
+                <p>
+                  {isSponsored
+                    ? t('billing.noChargeBody')
+                    : chargeDate
+                      ? t('billing.paidChargeBody', {
+                          amount: money(plan.effectivePriceAgorot, i18n.language),
+                          date: date(chargeDate, i18n.language),
+                        })
+                      : t('billing.paidChargeDatePending', {
+                          amount: money(plan.effectivePriceAgorot, i18n.language),
+                        })}
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="card billing-method-card">

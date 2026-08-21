@@ -8,7 +8,12 @@ import type { SensitivityClass } from '@caredesk/domain';
  */
 export interface AuditEventInput {
   tenantId: string;
-  actorId: string;
+  /**
+   * Null only when no authenticated human actor exists — e.g. the recurring
+   * billing cron. The audit table's `actor_id` column is nullable for exactly
+   * this case; authenticated actions must always set it.
+   */
+  actorId: string | null;
   action: string;
   resourceType: string;
   resourceId: string;

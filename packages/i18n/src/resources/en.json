@@ -68,6 +68,10 @@
     "paidChargeTitle": "Monthly subscription active",
     "paidChargeBody": "The next charge of {{amount}} is scheduled for {{date}}.",
     "paidChargeDatePending": "The subscription is {{amount}} per month. The next charge date has not been set; no charge can be made without an active date.",
+    "pastDueTitle": "The last charge failed",
+    "pastDueBody": "The last charge failed — please update the payment method to keep the subscription active.",
+    "pastDueCta": "Update payment method",
+    "pastDueBanner": "The last subscription charge failed. Please update the payment method to keep the subscription active.",
     "paymentMethodTitle": "Payment method",
     "paymentMethodBody": "Card details are entered on Cardcom's secure page. CareDesk does not receive or store the card number or CVV.",
     "billingName": "Invoice name",
@@ -160,7 +164,8 @@
     "skipToContent": "Skip to main content",
     "primaryNavigation": "Primary navigation",
     "emptyDashboardTitle": "Nothing here yet",
-    "emptyDashboardBody": "Once an employment case is opened, it will appear here."
+    "emptyDashboardBody": "Once an employment case is opened, it will appear here.",
+    "themeToggle": "Switch between light and dark display"
   },
   "health": {
     "ok": "System is healthy",
@@ -464,7 +469,15 @@
     "nextActionBody": "Add required documents and expiry dates to receive reminders and an accurate status.",
     "openDocuments": "Open documents",
     "savedContact": "Saved contact",
-    "contactDisclaimer": "The representative is a saved contact only. They do not have an account or user permissions in this version."
+    "contactDisclaimer": "The representative is a saved contact only. They do not have an account or user permissions in this version.",
+    "tabsLabel": "Quick navigation between page sections",
+    "tabOverview": "Overview",
+    "tabPayments": "Payments",
+    "tabCase": "Case details",
+    "scoreTileLabel": "Compliance score",
+    "attentionTileLabel": "Items needing attention",
+    "salaryTileLabel": "Next salary payment",
+    "insuranceTileLabel": "Next National Insurance"
   },
   "openIssues": {
     "eyebrow": "Status snapshot",

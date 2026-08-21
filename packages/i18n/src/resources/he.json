@@ -68,6 +68,10 @@
     "paidChargeTitle": "המנוי החודשי פעיל",
     "paidChargeBody": "החיוב הבא בסך {{amount}} מתוכנן ל־{{date}}.",
     "paidChargeDatePending": "מחיר המנוי הוא {{amount}} לחודש. מועד החיוב הבא עדיין לא נקבע; לא יתבצע חיוב ללא מועד פעיל.",
+    "pastDueTitle": "החיוב האחרון נכשל",
+    "pastDueBody": "החיוב האחרון נכשל — יש לעדכן את אמצעי התשלום כדי לשמור על המנוי פעיל.",
+    "pastDueCta": "עדכון אמצעי התשלום",
+    "pastDueBanner": "החיוב האחרון של המנוי נכשל. יש לעדכן את אמצעי התשלום כדי לשמור על המנוי פעיל.",
     "paymentMethodTitle": "אמצעי תשלום",
     "paymentMethodBody": "הכרטיס מוזן בדף המאובטח של Cardcom. CareDesk אינה מקבלת או שומרת מספר כרטיס או CVV.",
     "billingName": "שם לחשבונית",
@@ -160,7 +164,8 @@
     "skipToContent": "דלג לתוכן הראשי",
     "primaryNavigation": "ניווט ראשי",
     "emptyDashboardTitle": "עדיין אין כאן כלום",
-    "emptyDashboardBody": "כשייפתח תיק העסקה, הוא יופיע כאן."
+    "emptyDashboardBody": "כשייפתח תיק העסקה, הוא יופיע כאן.",
+    "themeToggle": "מעבר בין תצוגה בהירה לכהה"
   },
   "health": {
     "ok": "המערכת פעילה",
@@ -464,7 +469,15 @@
     "nextActionBody": "העלו מסמכי חובה ותאריכי תוקף כדי לקבל התראות וסטטוס מדויק.",
     "openDocuments": "פתיחת המסמכים",
     "savedContact": "איש קשר שמור",
-    "contactDisclaimer": "הנציג נשמר כאיש קשר בלבד. בשלב זה אין לו חשבון או הרשאות משתמש."
+    "contactDisclaimer": "הנציג נשמר כאיש קשר בלבד. בשלב זה אין לו חשבון או הרשאות משתמש.",
+    "tabsLabel": "מעבר מהיר בין אזורי העמוד",
+    "tabOverview": "סקירה",
+    "tabPayments": "תשלומים",
+    "tabCase": "פרטי תיק",
+    "scoreTileLabel": "ציון תקינות",
+    "attentionTileLabel": "נושאים לטיפול",
+    "salaryTileLabel": "תשלום השכר הבא",
+    "insuranceTileLabel": "ביטוח לאומי הקרוב"
   },
   "openIssues": {
     "eyebrow": "תמונת מצב",

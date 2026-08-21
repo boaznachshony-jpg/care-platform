@@ -122,6 +122,66 @@ describe('BillingPage', () => {
     expect(screen.queryByText(/No charge during the pilot/i)).not.toBeInTheDocument();
   });
 
+  // ── Past due: a failed charge must never present as an active subscription ─
+
+  const pastDuePlan: BillingPlanResponse = {
+    ...savedCardPlan,
+    status: 'past_due',
+    launchDiscountPercent: 0,
+    effectivePriceAgorot: 3900,
+    chargingStartsAt: '2026-07-01',
+    nextChargeOn: '2026-08-01',
+    accessState: 'active',
+  };
+
+  it('replaces the "subscription active" note with a failure warning when past_due', async () => {
+    mocks.getBillingSubscription.mockResolvedValue(pastDuePlan);
+    await renderPage();
+
+    expect(await screen.findByText('The last charge failed')).toBeInTheDocument();
+    expect(
+      screen.getByText(/please update the payment method to keep the subscription active/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Monthly subscription active')).not.toBeInTheDocument();
+    // The stale "next charge" date of the failed period must not be promised.
+    expect(screen.queryByText(/August 1, 2026/)).not.toBeInTheDocument();
+  });
+
+  it('reconnects the card through the existing hosted setup flow from the past_due warning', async () => {
+    mocks.getBillingSubscription.mockResolvedValue(pastDuePlan);
+    mocks.startBillingPaymentMethodSetup.mockResolvedValue({
+      checkoutUrl: 'https://secure.cardcom.solutions/hosted/reconnect',
+    });
+    const assignMock = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign: assignMock });
+    await renderPage();
+
+    const reconnect = await screen.findByRole('button', { name: /update payment method/i });
+    await act(async () => {
+      fireEvent.click(reconnect);
+    });
+
+    expect(mocks.startBillingPaymentMethodSetup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        billingName: 'Test Owner',
+        billingEmail: 'owner@example.test',
+        acceptsRecurringCharge: true,
+      }),
+    );
+    expect(assignMock).toHaveBeenCalledWith('https://secure.cardcom.solutions/hosted/reconnect');
+    vi.unstubAllGlobals();
+  });
+
+  it('hides the reconnect button from viewers who cannot manage billing', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({ ...pastDuePlan, canManage: false });
+    await renderPage();
+
+    expect(await screen.findByText('The last charge failed')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /update payment method/i }),
+    ).not.toBeInTheDocument();
+  });
+
   // ── Saved card ────────────────────────────────────────────────────────────
 
   it('displays the saved card last-four digits and expiry when a payment method exists', async () => {

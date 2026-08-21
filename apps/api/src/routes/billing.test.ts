@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { AuthorizationService, BillingDefaults } from '@caredesk/application';
+import { CollectDueProductSubscriptions } from '@caredesk/application';
+import {
+  InMemoryAuditService,
+  InMemoryBillingRepository,
+  MockProductBillingGateway,
+} from '@caredesk/infrastructure';
 import type { BillingPlanResponse } from '@caredesk/schemas';
 import { BILLING_TERMS_VERSION } from '@caredesk/schemas';
-import { DEV_TOKEN } from '../container.js';
+import { buildContainer, DEV_TOKEN } from '../container.js';
 import { buildServer } from '../create-server.js';
 import { loadEnv } from '../env.js';
 
@@ -227,5 +234,139 @@ describe('/billing routes', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ code: 'INVALID_BILLING_WEBHOOK' });
+  });
+});
+
+// ── Recurring charge execution (the cron-driven collection run) ─────────────
+
+const CHARGE_DEFAULTS: BillingDefaults = {
+  priceAgorot: 3900,
+  vatRateBps: 1800,
+  launchDiscountPercent: 0,
+  chargingStartsAt: '2026-08-01',
+};
+
+const SEALED_TOKEN = 'sealed.synthetic.token';
+
+/**
+ * Builds the real server with the real collect route, but wires the collection
+ * use case to a seeded in-memory repository whose claim/succeed/fail semantics
+ * mirror the SQL functions in migration 0014 — one durable charge per
+ * (tenant, billing period) is what makes replays idempotent.
+ */
+async function buildCollectionHarness(billingEmail: string) {
+  const env = loadEnv({ BILLING_PROVIDER: 'mock', CRON_SECRET });
+  const billing = new InMemoryBillingRepository();
+  const audit = new InMemoryAuditService();
+  const authorization: AuthorizationService = {
+    check: async () => ({ allowed: true, reason: 'test' }),
+  };
+
+  await billing.getOrCreate('tenant-1', CHARGE_DEFAULTS);
+  await billing.createSetupIntent({
+    intentId: 'intent-1',
+    tenantId: 'tenant-1',
+    createdBy: 'user-1',
+    billingName: 'Pilot Customer',
+    billingEmail,
+    termsVersion: BILLING_TERMS_VERSION,
+    termsAcceptedAt: '2026-07-01T00:00:00.000Z',
+    providerSetupId: null,
+    status: 'created',
+  });
+  await billing.attachProviderSetup('tenant-1', 'intent-1', 'setup-1');
+  await billing.completePaymentMethodSetup('tenant-1', 'intent-1', {
+    providerSetupId: 'setup-1',
+    sealedToken: SEALED_TOKEN,
+    expiryMonth: 12,
+    expiryYear: 2030,
+    last4: '4242',
+  });
+
+  const container = buildContainer(env);
+  container.collectDueProductSubscriptions = new CollectDueProductSubscriptions({
+    authorization,
+    billing,
+    gateway: new MockProductBillingGateway(),
+    audit,
+    clock: { now: () => new Date('2026-08-21T04:17:00.000Z') },
+    ids: { next: () => 'id-1' },
+    defaults: CHARGE_DEFAULTS,
+  });
+  const app = buildServer(env, container);
+  const collect = () =>
+    app.inject({
+      method: 'GET',
+      url: '/billing/jobs/collect',
+      headers: { authorization: `Bearer ${CRON_SECRET}` },
+    });
+  const subscription = () => billing.getOrCreate('tenant-1', CHARGE_DEFAULTS);
+  return { app, billing, audit, collect, subscription };
+}
+
+describe('recurring charge collection run', () => {
+  it('activates the subscription and advances next_charge_on when the charge succeeds', async () => {
+    const { collect, subscription, audit } = await buildCollectionHarness('pilot@example.test');
+
+    const run = await collect();
+    expect(run.statusCode).toBe(200);
+    expect(run.json()).toEqual({ processed: 1, succeeded: 1, failed: 0 });
+
+    const record = await subscription();
+    expect(record.status).toBe('active');
+    expect(record.nextChargeOn).toBe('2026-09-01');
+    expect(audit.events.some((event) => event.action === 'billing.charge_succeeded')).toBe(true);
+  });
+
+  it('marks the subscription past_due without advancing next_charge_on when the charge declines', async () => {
+    const { collect, subscription, audit } = await buildCollectionHarness('decline@example.test');
+
+    const run = await collect();
+    expect(run.statusCode).toBe(200);
+    expect(run.json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+
+    const record = await subscription();
+    // A failed charge must never present as an active subscription.
+    expect(record.status).toBe('past_due');
+    // The failed period stays due so it is retried — never silently skipped.
+    expect(record.nextChargeOn).toBe('2026-08-01');
+
+    const failedEvent = audit.events.find((event) => event.action === 'billing.charge_failed');
+    expect(failedEvent).toMatchObject({
+      tenantId: 'tenant-1',
+      actorId: null,
+      sensitivity: 'financial_sensitive',
+    });
+    expect(failedEvent!.changeSummary).toContain('MOCK_DECLINED');
+    // Provider code only — no card data in the audit evidence.
+    const serialized = JSON.stringify(audit.events);
+    expect(serialized).not.toContain(SEALED_TOKEN);
+    expect(serialized).not.toContain('4242');
+  });
+
+  it('is replay-idempotent: a rerun after success charges nothing for the same period', async () => {
+    const { collect, subscription } = await buildCollectionHarness('pilot@example.test');
+
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 1, failed: 0 });
+    // Same day, same period — already collected, so the rerun is a no-op.
+    expect((await collect()).json()).toEqual({ processed: 0, succeeded: 0, failed: 0 });
+
+    const record = await subscription();
+    expect(record.status).toBe('active');
+    expect(record.nextChargeOn).toBe('2026-09-01');
+  });
+
+  it('retries a failed period on later runs but stops after three attempts', async () => {
+    const { collect, subscription } = await buildCollectionHarness('decline@example.test');
+
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    // Attempts are capped at three per period, exactly like migration 0014.
+    expect((await collect()).json()).toEqual({ processed: 0, succeeded: 0, failed: 0 });
+
+    const record = await subscription();
+    expect(record.status).toBe('past_due');
+    expect(record.nextChargeOn).toBe('2026-08-01');
   });
 });

@@ -12,7 +12,11 @@ const envSchema = z
     SENSITIVE_OPERATION_MFA_MODE: z.enum(['report', 'enforce']).default('report'),
     // Comma-separated origin allowlist for CORS. Dev default is the local web
     // shell only; production values come from environment, never a wildcard.
-    CORS_ORIGINS: z.string().default('http://localhost:5173,https://care-platform-web.vercel.app'),
+    CORS_ORIGINS: z
+      .string()
+      .default(
+        'http://localhost:5173,https://care-platform-web.vercel.app,https://caredesk-isr.com,https://www.caredesk-isr.com',
+      ),
     // Optional: when set, the case repository is Postgres-backed; when absent,
     // the API falls back to the in-memory repository so tests and a bare
     // `pnpm dev:api` run without any database.

@@ -61,6 +61,14 @@ function readFontScale(): number {
   return fontScales.includes(saved as (typeof fontScales)[number]) ? saved : 1;
 }
 
+/* UI preference only (like the font scale) — never business data. */
+const THEME_KEY = 'caredesk.ui.theme';
+type UiTheme = 'light' | 'dark';
+
+function readTheme(): UiTheme {
+  return window.localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
+}
+
 function currentHebrewDate(): string {
   return new Intl.DateTimeFormat('he-IL', {
     weekday: 'long',
@@ -76,6 +84,7 @@ export function AppShell({ children }: AppShellProps) {
   const auth = useAuth();
   const [profile] = useMvpProfile();
   const [fontScale, setFontScale] = useState(readFontScale);
+  const [theme, setTheme] = useState<UiTheme>(readTheme);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [syncState, setSyncState] = useState<WorkspaceSyncState>(getWorkspaceSyncState);
   const notifications = profile.notificationsEnabled
@@ -91,6 +100,15 @@ export function AppShell({ children }: AppShellProps) {
     document.documentElement.style.setProperty('--ui-scale', String(fontScale));
     window.localStorage.setItem(FONT_SCALE_KEY, String(fontScale));
   }, [fontScale]);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    window.localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     const update = () => setSyncState(getWorkspaceSyncState());
@@ -165,6 +183,15 @@ export function AppShell({ children }: AppShellProps) {
             <Link className="top-client-switch" to="/app" aria-label="החלפת מעסיק">
               ⇄
             </Link>
+            <button
+              type="button"
+              className="theme-toggle-button"
+              aria-label={t('shell.themeToggle')}
+              aria-pressed={theme === 'dark'}
+              onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+            >
+              <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+            </button>
             <div className="font-size-controls" role="group" aria-label="גודל טקסט">
               <button
                 type="button"

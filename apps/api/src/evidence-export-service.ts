@@ -370,7 +370,8 @@ export class PgEvidenceExportService implements EvidenceExportService {
 /** The stored shapes the in-memory audit/timeline mocks already hold. */
 export interface StoredAuditEvent {
   tenantId: string;
-  actorId: string;
+  /** Null for system-initiated events (e.g. the recurring billing cron). */
+  actorId: string | null;
   action: string;
   resourceType: string;
   resourceId: string;

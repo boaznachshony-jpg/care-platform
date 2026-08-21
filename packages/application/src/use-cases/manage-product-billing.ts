@@ -181,6 +181,19 @@ export class CompleteProductBillingSetup {
   }
 }
 
+/**
+ * Extracts a short provider error code for the audit trail. Never card data:
+ * gateway errors carry a `providerCode` (e.g. a Cardcom ResponseCode) or at
+ * worst an error class name — both are safe, length-capped identifiers.
+ */
+function chargeFailureCode(error: unknown): string {
+  if (error && typeof error === 'object' && 'providerCode' in error) {
+    const code = (error as { providerCode: unknown }).providerCode;
+    if (typeof code === 'string' && code.length > 0) return code.slice(0, 60);
+  }
+  return error instanceof Error ? error.name : 'BILLING_CHARGE_FAILED';
+}
+
 export class CollectDueProductSubscriptions {
   constructor(private readonly deps: BillingDeps) {}
 
@@ -190,6 +203,13 @@ export class CollectDueProductSubscriptions {
     let succeeded = 0;
     let failed = 0;
     for (const charge of due) {
+      // The Cardcom charge result is synchronous: a decline surfaces as a
+      // thrown gateway error right here, not via a later webhook. The gateway
+      // call is the only awaited step inside the try — marking the outcome and
+      // auditing happen outside it so an audit hiccup can never turn a
+      // succeeded charge into a recorded failure (or vice versa).
+      let providerTransactionId: string | null = null;
+      let failureCode = 'BILLING_CHARGE_FAILED';
       try {
         const result = await this.deps.gateway.chargeMonthly({
           externalUniqId: charge.externalUniqId,
@@ -201,14 +221,45 @@ export class CollectDueProductSubscriptions {
           expiryMonth: charge.paymentMethod.expiryMonth,
           expiryYear: charge.paymentMethod.expiryYear,
         });
-        await this.deps.billing.markChargeSucceeded(charge.chargeId, result.providerTransactionId);
-        succeeded += 1;
+        providerTransactionId = result.providerTransactionId;
       } catch (error) {
-        await this.deps.billing.markChargeFailed(
-          charge.chargeId,
-          error instanceof Error ? error.name : 'BILLING_CHARGE_FAILED',
-        );
+        failureCode = chargeFailureCode(error);
+      }
+      const occurredAt = this.deps.clock.now().toISOString();
+      if (providerTransactionId !== null) {
+        // markChargeSucceeded flips the subscription to 'active' and advances
+        // next_charge_on by one month (fail path leaves next_charge_on alone).
+        await this.deps.billing.markChargeSucceeded(charge.chargeId, providerTransactionId);
+        succeeded += 1;
+        await this.deps.audit.record({
+          tenantId: charge.tenantId,
+          actorId: null, // system cron; no human actor.
+          action: 'billing.charge_succeeded',
+          resourceType: 'billing_subscription',
+          resourceId: charge.tenantId,
+          correlationId: charge.externalUniqId,
+          occurredAt,
+          changeSummary: `Monthly subscription charge for ${charge.billingPeriod} succeeded.`,
+          sensitivity: 'financial_sensitive',
+        });
+      } else {
+        // markChargeFailed flips the subscription to 'past_due' and does NOT
+        // advance next_charge_on, so the same period is retried (max 3
+        // attempts) and the UI stops presenting the account as active.
+        await this.deps.billing.markChargeFailed(charge.chargeId, failureCode);
         failed += 1;
+        await this.deps.audit.record({
+          tenantId: charge.tenantId,
+          actorId: null, // system cron; no human actor.
+          action: 'billing.charge_failed',
+          resourceType: 'billing_subscription',
+          resourceId: charge.tenantId,
+          correlationId: charge.externalUniqId,
+          occurredAt,
+          // Provider code only — never card data, tokens or amounts owed.
+          changeSummary: `Monthly subscription charge for ${charge.billingPeriod} failed (provider code ${failureCode}); subscription marked past_due.`,
+          sensitivity: 'financial_sensitive',
+        });
       }
     }
     return { processed: due.length, succeeded, failed };
