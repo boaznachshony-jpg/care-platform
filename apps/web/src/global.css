@@ -317,12 +317,23 @@ button {
   cursor: wait;
   opacity: 0.65;
 }
-/* Sits in the top action row next to the icon buttons: same visual weight as
-   its neighbours (44px tap target, medium weight) so "יציאה" reads as one of
-   the row's controls rather than a primary call to action. */
+/* Sits in the top action row next to the icon buttons. Those are all 48px
+   squares with a 14px radius, so "יציאה" matches that block size exactly —
+   at 44px it sat visibly shorter than everything beside it and read as a
+   stray label rather than one of the row's controls. Medium weight keeps it
+   from competing with the primary call to action. */
 .sign-out-button {
-  min-height: 44px;
-  padding: 0 14px;
+  /* A <button> centres its own label, but only while it keeps its default
+     inline-block box. Something in the cascade set display:block, which drops
+     that centring - the 15px line box then sat at the top of a 48px control
+     and "יציאה" read as misaligned against its neighbours. inline-flex puts
+     the label back in the middle on both axes and cannot be undone by a
+     line-height change later. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 16px;
   border: 1px solid #cbd5e1;
   border-radius: 14px;
   background: white;
@@ -343,6 +354,18 @@ button {
 }
 .report-footnote span[aria-hidden] {
   margin-inline-end: 4px;
+}
+/* When a transaction row was recorded — secondary to the amount, but always
+   present, so two conflicting records can be told apart at a glance. */
+.record-timestamp {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.record-timestamp time {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 button,
 input,
@@ -2291,6 +2314,11 @@ dd {
     width: calc(100% - 220px);
     margin-inline-start: 220px;
   }
+  /* The banner clears the sidebar too, so it must track its narrower width. */
+  .account-grace-banner {
+    width: min(100% - 260px, 1160px);
+    margin-inline-start: 220px;
+  }
   .main-content {
     padding: 28px 25px 100px;
   }
@@ -2322,6 +2350,11 @@ dd {
   }
   .sidebar {
     display: none;
+  }
+  /* No sidebar below this width, so the banner takes the full gutter again. */
+  .account-grace-banner {
+    width: min(100% - 40px, 1160px);
+    margin-inline-start: auto;
   }
   .app-body {
     width: 100%;
@@ -5497,13 +5530,44 @@ input[type='number'] {
   width: 100%;
   min-height: 48px;
 }
+/* This banner is a SIBLING of .app-frame, not a child of the content column.
+   Its `100%` therefore resolves against the whole page - sidebar included -
+   so on a 1265px page it took 1160px while the content column beside the
+   260px sidebar was only 1005px. It rendered wider than the column it belongs
+   to, and in any window narrower than its own fixed width it ran straight off
+   the right edge and was clipped. Measured live in production at 1280px:
+   page 1265, banner 1160, content column 1005.
+
+   max-inline-size ties it to the viewport rather than to the page box, which
+   is the guarantee that it can never be cut at any width. Aligning it fully
+   with the content column needs the banner moved inside that column, which is
+   a structural change worth making deliberately rather than guessing at. */
 .account-grace-banner {
-  width: min(100% - 40px, 1160px);
+  /* The sidebar is position:fixed at the inline-start edge and .app-body
+     clears it with a matching margin. This banner is a sibling of .app-frame
+     and had no such margin, so its inline-start end ran underneath the
+     sidebar. Measured in production at a 1280px window: banner 52-1212,
+     sidebar starts at 1005 - 208px of the message sat behind the sidebar,
+     which is what read as a cut-off banner. It has to clear the sidebar
+     exactly the way the content column does. */
+  width: min(100% - 300px, 1160px);
+  max-inline-size: calc(100vw - 40px);
   margin: 16px auto 0;
+  margin-inline-start: 260px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  /* A notice, not a headline: at the inherited 17px/900 it shouted over the
+     screen it sits above. */
+  padding-block: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.account-grace-banner > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .account-grace-banner a {
   color: inherit;
@@ -5688,12 +5752,15 @@ input[type='number'] {
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
-[data-theme='dark'] .report-footnote {
+[data-theme='dark'] .report-footnote,
+[data-theme='dark'] .record-timestamp {
   color: #a3a3b5;
 }
 [data-theme='dark'] .sign-out-button,
 [data-theme='dark'] .font-size-controls {
-  border-color: rgba(255, 255, 255, 0.12);
+  /* On the near-black top bar a 12% edge disappears; the chip has to be
+     visible for the control to read as a button at all. */
+  border-color: rgba(255, 255, 255, 0.22);
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
