@@ -3,6 +3,8 @@ import {
   clearMvpOnboardingDraft,
   createMvpClient,
   emptyMvpProfile,
+  readActiveMvpProfile,
+  withSamePersonFallbacks,
   isNewEmployerLabel,
   readMvpDocuments,
   readMvpClients,
@@ -326,5 +328,56 @@ describe('MVP local storage', () => {
       name: 'אילנה כהן',
       email: 'ilana@example.test',
     });
+  });
+
+  it('reads the active profile from the most recent client when unscoped', () => {
+    const client = createMvpClient();
+    history.replaceState({}, '', `/clients/${client.id}`);
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      recipientName: 'אילנה כהן',
+      caregiverName: 'Maria Santos',
+    });
+
+    history.replaceState({}, '', '/cases/new');
+    expect(readActiveMvpProfile()).toMatchObject({
+      recipientName: 'אילנה כהן',
+      caregiverName: 'Maria Santos',
+    });
+  });
+
+  it('mirrors shared identity fields when the employer is the care recipient', () => {
+    const mirrored = withSamePersonFallbacks({
+      ...emptyMvpProfile,
+      recipientName: 'אילנה כהן',
+      recipientCity: 'חיפה',
+      employerName: 'אילנה כהן',
+      employerIdNumber: '038852562',
+      employerPhone: '050-1111111',
+    });
+
+    expect(mirrored.recipientIdNumber).toBe('038852562');
+    expect(mirrored.recipientPhone).toBe('050-1111111');
+    // Mirroring works in both directions for a single person.
+    expect(mirrored.employerCity).toBe('חיפה');
+  });
+
+  it('never overwrites an entered value or cross-fills two different people', () => {
+    const untouched = withSamePersonFallbacks({
+      ...emptyMvpProfile,
+      recipientName: 'אילנה כהן',
+      employerName: 'דנה כהן',
+      employerPhone: '050-1111111',
+    });
+    expect(untouched.recipientPhone).toBe('');
+
+    const kept = withSamePersonFallbacks({
+      ...emptyMvpProfile,
+      recipientName: 'אילנה כהן',
+      recipientPhone: '050-2222222',
+      employerName: 'אילנה כהן',
+      employerPhone: '050-1111111',
+    });
+    expect(kept.recipientPhone).toBe('050-2222222');
   });
 });

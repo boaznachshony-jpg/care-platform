@@ -7,6 +7,7 @@ import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
+import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
 
 type DashboardTabId = 'overview' | 'payments' | 'case';
 
@@ -16,34 +17,122 @@ const dashboardTabs = [
   ['case', 'dashboard.tabCase'],
 ] as const;
 
-/* Simple inline glyphs (stroke only) for the gradient stat chips — no icon library. */
-const chipIcons = {
-  score: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3z" strokeLinejoin="round" />
-      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+/* Shared gold→royal-blue gradient for the launcher tile icons ("Gold on Night" brand).
+   userSpaceOnUse keeps the gradient visible on straight strokes (zero-area bbox).
+   Default stops are the deeper light-theme pair (legible on white tiles); the dark theme
+   swaps them to the brighter approved stops via `stop-color` CSS on the stop classes
+   (see the [data-theme='dark'] block in global.css). */
+const TILE_GRADIENT_ID = 'cd-tile-grad';
+
+function TileGradientDefs() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient
+          id={TILE_GRADIENT_ID}
+          x1="0"
+          y1="0"
+          x2="24"
+          y2="24"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop className="cd-tile-grad-stop-a" offset="0" stopColor="#b98b2e" />
+          <stop className="cd-tile-grad-stop-b" offset="1" stopColor="#4c6fd1" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function tileSvgProps() {
+  return {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: `url(#${TILE_GRADIENT_ID})`,
+    strokeWidth: 1.8,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  } as const;
+}
+
+/* Hand-drawn outline glyphs (stroke only, 24 viewBox) — no icon library. */
+const tileIcons = {
+  shield: (
+    <svg {...tileSvgProps()}>
+      <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
     </svg>
   ),
-  attention: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7.5v5" strokeLinecap="round" />
-      <path d="M12 16.2v.1" strokeLinecap="round" />
+  alert: (
+    <svg {...tileSvgProps()}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v5" />
+      <path d="M12 16.2v.1" />
     </svg>
   ),
-  salary: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <rect x="3" y="7" width="18" height="10" rx="2" />
+  idCard: (
+    <svg {...tileSvgProps()}>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <circle cx="8.3" cy="11" r="2" />
+      <path d="M5.4 16.4c.7-1.6 1.8-2.4 2.9-2.4s2.2.8 2.9 2.4" />
+      <path d="M14 9.5h4.5M14 13h4.5" />
+    </svg>
+  ),
+  heartPulse: (
+    <svg {...tileSvgProps()}>
+      <path d="M19.6 12.4L12 20l-7.6-7.6a4.9 4.9 0 1 1 7.6-6.1 4.9 4.9 0 1 1 7.6 6.1z" />
+      <path d="M7.5 12h2l1-2 2.5 4.5 1-2.5h2.5" />
+    </svg>
+  ),
+  banknote: (
+    <svg {...tileSvgProps()}>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
       <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 11.5v1M18 11.5v1" />
     </svg>
   ),
-  insurance: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M8 3v4M16 3v4M4 10h16" strokeLinecap="round" />
+  buildingColumns: (
+    <svg {...tileSvgProps()}>
+      <path d="M12 3.5L3.5 9h17L12 3.5z" />
+      <path d="M5.5 9v8M10 9v8M14 9v8M18.5 9v8" />
+      <path d="M3.5 17h17" />
+      <path d="M2.5 20.5h19" />
+    </svg>
+  ),
+  file: (
+    <svg {...tileSvgProps()}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
+      <path d="M14 3v5h5" />
+    </svg>
+  ),
+  checkSquare: (
+    <svg {...tileSvgProps()}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M9 12.5l2.2 2.2 4.3-4.7" />
+    </svg>
+  ),
+  clock: (
+    <svg {...tileSvgProps()}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  ),
+  printer: (
+    <svg {...tileSvgProps()}>
+      <path d="M7 8V4h10v4" />
+      <rect x="4" y="8" width="16" height="8" rx="2" />
+      <path d="M7 13.5h10V20H7z" />
+      <path d="M17 10.8h.1" />
     </svg>
   ),
 } as const;
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function displayDate(value: string): string {
+  return ISO_DATE_PATTERN.test(value) ? formatDisplayDate(value) : value;
+}
 
 export function DashboardPage() {
   const path = useClientPath();
@@ -67,6 +156,89 @@ export function DashboardPage() {
   const nextInsurance = upcomingPayments.find((payment) => payment.id === 'nationalInsurance');
   const attentionCount =
     health?.factors.filter((factor) => factor.status === 'attention').length ?? 0;
+  // Cheap synchronous local-storage reads, sampled once per visit (Constitution: no extra API calls).
+  const [documentCount] = useState(() => readMvpDocuments().length);
+  const [openTaskCount] = useState(
+    () => readMvpTasks().filter((task) => task.status === 'open').length,
+  );
+  /* One screen, every topic as a tappable tile (launcher layout). */
+  const navTiles = [
+    {
+      id: 'score',
+      icon: tileIcons.shield,
+      label: t('dashboard.tiles.score'),
+      value: health ? String(health.score) : '—',
+      to: path('/overview'),
+    },
+    {
+      id: 'attention',
+      icon: tileIcons.alert,
+      label: t('dashboard.tiles.attention'),
+      value: health ? String(attentionCount) : '—',
+      to: path('/overview'),
+    },
+    {
+      id: 'visa',
+      icon: tileIcons.idCard,
+      label: t('dashboard.tiles.visa'),
+      value: profile.visaRenewalDate
+        ? t('dashboard.tiles.untilDate', { date: displayDate(profile.visaRenewalDate) })
+        : t('dashboard.tiles.missingDate'),
+      to: path('/settings'),
+    },
+    {
+      id: 'medicalInsurance',
+      icon: tileIcons.heartPulse,
+      label: t('dashboard.tiles.medicalInsurance'),
+      value:
+        profile.medicalInsuranceConfirmed && profile.medicalInsuranceExpiryDate
+          ? displayDate(profile.medicalInsuranceExpiryDate)
+          : t('dashboard.tiles.notConfirmed'),
+      to: path('/documents'),
+    },
+    {
+      id: 'salary',
+      icon: tileIcons.banknote,
+      label: t('dashboard.tiles.salary'),
+      value: nextSalary ? formatDisplayDate(nextSalary.dueDate) : '—',
+      to: path('/payroll'),
+    },
+    {
+      id: 'nationalInsurance',
+      icon: tileIcons.buildingColumns,
+      label: t('dashboard.tiles.nationalInsurance'),
+      value: nextInsurance ? formatDisplayDate(nextInsurance.dueDate) : '—',
+      to: path('/tasks'),
+    },
+    {
+      id: 'documents',
+      icon: tileIcons.file,
+      label: t('dashboard.tiles.documents'),
+      value: String(documentCount),
+      to: path('/documents'),
+    },
+    {
+      id: 'tasks',
+      icon: tileIcons.checkSquare,
+      label: t('dashboard.tiles.tasks'),
+      value: String(openTaskCount),
+      to: path('/tasks'),
+    },
+    {
+      id: 'timeline',
+      icon: tileIcons.clock,
+      label: t('dashboard.tiles.timeline'),
+      value: t('dashboard.tiles.view'),
+      to: path('/timeline'),
+    },
+    {
+      id: 'binder',
+      icon: tileIcons.printer,
+      label: t('dashboard.tiles.binder'),
+      value: t('dashboard.tiles.securePrint'),
+      to: path('/binder'),
+    },
+  ] as const;
   const missingCount = [
     !profile.employerName.trim(),
     !profile.recipientName.trim(),
@@ -122,40 +294,26 @@ export function DashboardPage() {
           {t(statusChipKey)}
         </span>
       </section>
-      <div className="stat-grid">
-        <article className="stat-tile">
-          <span className="stat-chip teal-blue" aria-hidden="true">
-            {chipIcons.score}
-          </span>
-          <span className="stat-tile-label">{t('dashboard.scoreTileLabel')}</span>
-          <strong className="stat-tile-value">{health ? health.score : '—'}</strong>
-        </article>
-        <article className="stat-tile">
-          <span className="stat-chip violet-pink" aria-hidden="true">
-            {chipIcons.attention}
-          </span>
-          <span className="stat-tile-label">{t('dashboard.attentionTileLabel')}</span>
-          <strong className="stat-tile-value">{health ? attentionCount : '—'}</strong>
-        </article>
-        <article className="stat-tile">
-          <span className="stat-chip blue-violet" aria-hidden="true">
-            {chipIcons.salary}
-          </span>
-          <span className="stat-tile-label">{t('dashboard.salaryTileLabel')}</span>
-          <strong className="stat-tile-value">
-            {nextSalary ? formatDisplayDate(nextSalary.dueDate) : '—'}
-          </strong>
-        </article>
-        <article className="stat-tile">
-          <span className="stat-chip pink-amber" aria-hidden="true">
-            {chipIcons.insurance}
-          </span>
-          <span className="stat-tile-label">{t('dashboard.insuranceTileLabel')}</span>
-          <strong className="stat-tile-value">
-            {nextInsurance ? formatDisplayDate(nextInsurance.dueDate) : '—'}
-          </strong>
-        </article>
-      </div>
+      <TileGradientDefs />
+      <nav className="tile-grid" aria-label={t('dashboard.tiles.gridLabel')}>
+        {navTiles.map((tile) => (
+          /* Explicit accessible name: the label and the value are separate inline elements, so the
+             name computed from content would run them together ("מסמכים0"). Composed from the same
+             translated strings, so it keeps matching the visible text (WCAG 2.5.3 Label in Name). */
+          <Link
+            key={tile.id}
+            className="nav-tile"
+            to={tile.to}
+            aria-label={`${tile.label} ${tile.value}`}
+          >
+            <span className="nav-tile-icon" aria-hidden="true">
+              {tile.icon}
+            </span>
+            <span className="nav-tile-label">{tile.label}</span>
+            <strong className="nav-tile-value">{tile.value}</strong>
+          </Link>
+        ))}
+      </nav>
       <section className="card intelligence-attention" aria-labelledby="attention-title">
         <div className="section-heading">
           <div>

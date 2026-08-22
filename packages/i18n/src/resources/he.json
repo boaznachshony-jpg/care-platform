@@ -474,10 +474,25 @@
     "tabOverview": "סקירה",
     "tabPayments": "תשלומים",
     "tabCase": "פרטי תיק",
-    "scoreTileLabel": "ציון תקינות",
-    "attentionTileLabel": "נושאים לטיפול",
-    "salaryTileLabel": "תשלום השכר הבא",
-    "insuranceTileLabel": "ביטוח לאומי הקרוב"
+    "tiles": {
+      "gridLabel": "ניווט מהיר לכל הנושאים",
+      "score": "ציון תקינות",
+      "attention": "נושאים לטיפול",
+      "visa": "ויזה",
+      "medicalInsurance": "ביטוח רפואי",
+      "salary": "שכר",
+      "nationalInsurance": "ביטוח לאומי",
+      "documents": "מסמכים",
+      "tasks": "משימות",
+      "timeline": "ציר זמן",
+      "binder": "תיק חירום",
+      "untilDate": "עד {{date}}",
+      "missingDate": "חסר תאריך",
+      "notConfirmed": "לא אושר",
+      "open": "פתיחה",
+      "view": "צפייה",
+      "securePrint": "הדפסה מאובטחת"
+    }
   },
   "openIssues": {
     "eyebrow": "תמונת מצב",

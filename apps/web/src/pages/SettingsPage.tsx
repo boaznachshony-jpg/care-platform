@@ -7,7 +7,11 @@ import { RegulationRulesAdmin } from '../components/RegulationRulesAdmin.js';
 import { israeliLocalities } from '../data/israeli-localities.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
-import type { ReminderLeadDays } from '../storage/mvp-storage.js';
+import {
+  withSamePersonFallbacks,
+  type MvpProfile,
+  type ReminderLeadDays,
+} from '../storage/mvp-storage.js';
 import { isValidIsraeliId, normalizeIsraeliId } from '../validation/israeli-id.js';
 import {
   isValidEmail,
@@ -22,8 +26,25 @@ export function SettingsPage() {
   const path = useClientPath();
   const { t } = useTranslation();
   const [profile, setProfile] = useMvpProfile();
-  const [draft, setDraft] = useState(profile);
+  // Setup data must never have to be typed twice: the form starts from the
+  // stored profile synchronously (no flash of empty fields), with the
+  // same-person details already mirrored across the employer/recipient pair.
+  const [draft, setDraftState] = useState(() => withSamePersonFallbacks(profile));
+  const [edited, setEdited] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  function setDraft(next: MvpProfile) {
+    setEdited(true);
+    setDraftState(next);
+  }
+
+  // Cloud workspace hydration lands after the first render. Until the user has
+  // touched a field the form follows the stored profile, so an untouched form
+  // never keeps showing the empty pre-hydration values.
+  useEffect(() => {
+    if (!edited) setDraftState(withSamePersonFallbacks(profile));
+  }, [edited, profile]);
+
   const [notificationResult, setNotificationResult] = useState('');
   const employerIdIsValid = isValidIsraeliId(draft.employerIdNumber);
   const recipientIdIsValid =

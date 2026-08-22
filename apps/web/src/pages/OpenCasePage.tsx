@@ -6,16 +6,23 @@ import { useNavigate } from 'react-router-dom';
 import { openEmploymentCaseRequestSchema, type OpenEmploymentCaseRequest } from '@caredesk/schemas';
 import { Alert, Button, TextField } from '@caredesk/ui';
 import { openEmploymentCase } from '../api/client.js';
+import { readActiveMvpProfile } from '../storage/mvp-storage.js';
 
 /**
  * Milestone 1: opens an employment case. On failure the form data is
  * preserved (Constitution §13 — never erase a form because of a network
  * error); on success we navigate to the case view.
+ *
+ * Every party detail here was already given during client setup, so the form
+ * opens prefilled from the stored setup profile (read synchronously, inside
+ * the useState/useForm initialisers, so no field ever flashes empty). The
+ * write path is unchanged: submitting still posts to the canonical case API.
  */
 export function OpenCasePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState(false);
+  const [setupProfile] = useState(readActiveMvpProfile);
 
   const {
     register,
@@ -23,6 +30,25 @@ export function OpenCasePage() {
     formState: { errors, isSubmitting },
   } = useForm<OpenEmploymentCaseRequest>({
     resolver: zodResolver(openEmploymentCaseRequestSchema),
+    defaultValues: {
+      careRecipient: {
+        fullName: setupProfile.recipientName,
+        careLevel: setupProfile.recipientCareLevel,
+        city: setupProfile.recipientCity,
+      },
+      employer: {
+        fullName: setupProfile.employerName,
+        relationshipToRecipient: setupProfile.employerRelationship,
+        city: setupProfile.employerCity,
+      },
+      caregiver: {
+        legalName: setupProfile.caregiverName,
+        preferredName: '',
+        nationality: setupProfile.caregiverCountry,
+        primaryLanguage: setupProfile.caregiverLanguage,
+      },
+      startDate: setupProfile.employmentStartDate,
+    },
   });
 
   const onSubmit = handleSubmit(async (data) => {
