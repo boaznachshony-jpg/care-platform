@@ -10,12 +10,24 @@ body,
   min-height: 100%;
   margin: 0;
 }
+/* One typographic voice across the whole app. Rubik/Heebo are the Hebrew-first
+   faces; the system stack follows only as a fallback. Every other rule inherits
+   from here — never re-declare a different family per component. */
+:root {
+  --cd-font-family: 'Rubik', 'Heebo', 'Segoe UI', Arial, sans-serif;
+}
 body {
   background: #f4f6f8;
   color: #172033;
-  font-family: Arial, 'Heebo', sans-serif;
+  font-family: var(--cd-font-family);
   font-size: 17px;
   line-height: 1.55;
+}
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
 }
 .environment-banner {
   position: fixed;
@@ -1846,7 +1858,7 @@ a {
   background: #fff;
   box-shadow: 0 12px 34px rgb(28 52 82 / 12%);
   color: #111827;
-  font-family: Arial, sans-serif;
+  font-family: var(--cd-font-family);
 }
 .payroll-print-preview header {
   display: flex;
@@ -2062,7 +2074,7 @@ a {
     direction: rtl;
     color: #111827;
     background: #fff;
-    font-family: Arial, sans-serif;
+    font-family: var(--cd-font-family);
     font-size: 8.3pt;
   }
 
@@ -5290,7 +5302,7 @@ input[type='number'] {
   .binder-document {
     box-shadow: none;
     border: 0;
-    font-family: Arial, sans-serif;
+    font-family: var(--cd-font-family);
   }
   .binder-document section {
     break-inside: avoid-page;
