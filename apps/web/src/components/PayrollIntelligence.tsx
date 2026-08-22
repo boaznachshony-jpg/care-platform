@@ -7,6 +7,7 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
+import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 const money = new Intl.NumberFormat('he-IL', {
   style: 'currency',
@@ -287,7 +288,15 @@ export function PayrollIntelligence({
               .sort((a, b) => b.month.localeCompare(a.month))
               .map((c) => (
                 <li key={c.id}>
-                  {c.month} — הושלם · שולם {c.paymentDate}
+                  {c.month} — הושלם · שולם {formatDateOnly(c.paymentDate) ?? c.paymentDate}
+                  {toIsoAttribute(c.closedAt) ? (
+                    <>
+                      {' · נסגר '}
+                      <time dateTime={toIsoAttribute(c.closedAt) ?? undefined}>
+                        {formatDateTime(c.closedAt)}
+                      </time>
+                    </>
+                  ) : null}
                 </li>
               ))}
           </ul>

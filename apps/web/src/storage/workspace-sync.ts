@@ -33,11 +33,44 @@ let listening = false;
 let hydrationInFlight: Promise<void> | undefined;
 let flushInFlight: Promise<void> | undefined;
 let flushQueued = false;
+/**
+ * True only once this session has actually read the account's workspace from
+ * the server. Until then an empty local cache means "we do not know yet", not
+ * "the customer has no data" - see the guard in persistSnapshot.
+ */
+let hydratedThisSession = false;
 
 function fingerprint(snapshot: MvpWorkspaceSnapshot): string {
   return JSON.stringify(
     Object.entries(snapshot.entries).sort(([left], [right]) => left.localeCompare(right)),
   );
+}
+
+const EMPTY_FINGERPRINT = fingerprint({ schemaVersion: 1, entries: {} });
+
+/**
+ * Refuses to overwrite a non-empty server workspace with an empty local one
+ * that we cannot account for.
+ *
+ * startWorkspaceSync clears the local cache before the server responds, so
+ * between that clear and a successful hydration the device holds nothing. If
+ * hydration fails there - a network blip, an expired token, a cold API - the
+ * device is empty for reasons that have nothing to do with the customer's
+ * data. Persisting that state would destroy the real workspace on the server,
+ * and the optimistic version check would not catch it because the version is
+ * exactly the one this tab last saw.
+ *
+ * Deleting every client on purpose is still allowed: that path runs after a
+ * successful hydration, so hydratedThisSession is true and the save proceeds.
+ *
+ * The rule deliberately does not consult remoteFingerprint. On the failure
+ * path that fingerprint is still the empty string - we never got a response -
+ * so testing it would make this guard unreachable. "We have not read the
+ * server yet" is the whole signal, and an empty PUT is the whole risk.
+ */
+function wouldDestroyRemoteData(snapshot: MvpWorkspaceSnapshot): boolean {
+  if (hydratedThisSession) return false;
+  return fingerprint(snapshot) === EMPTY_FINGERPRINT;
 }
 
 function metaKey(userId: string): string {
@@ -119,6 +152,14 @@ async function persistSnapshot(): Promise<void> {
   const generation = syncGeneration;
   setState('saving');
   const snapshot = captureMvpWorkspace();
+  if (wouldDestroyRemoteData(snapshot)) {
+    // Keep the pending flag so a later successful hydration can reconcile,
+    // and surface the error rather than silently wiping the account.
+    dirty = true;
+    writeMeta();
+    setState('error');
+    return;
+  }
   try {
     const response = await saveWorkspace({
       expectedVersion: remoteVersion,
@@ -224,6 +265,9 @@ function handleVisibilityChange(): void {
 }
 
 function detachWorkspaceSync(): void {
+  // A detached session knows nothing about the server again, so the empty
+  // workspace guard must re-arm for whatever session comes next.
+  hydratedThisSession = false;
   listening = false;
   window.removeEventListener(MVP_PROFILE_CHANGED, scheduleFlush);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -250,6 +294,9 @@ async function hydrateWorkspace(
 ): Promise<void> {
   const response = await getWorkspace();
   if (!isCurrentSync(userId, generation)) return;
+  // The account's server state is now known, so an empty local workspace from
+  // here on is a real customer decision rather than a failed load.
+  hydratedThisSession = true;
 
   if (hasUsableCache && dirty) {
     // Preserve a snapshot that failed to save on a previous visit. It can be
@@ -279,6 +326,7 @@ async function hydrateWorkspace(
  */
 export async function startWorkspaceSync(userId: string): Promise<void> {
   detachWorkspaceSync();
+  hydratedThisSession = false;
   const generation = ++syncGeneration;
   setState('loading');
   activeUserId = userId;

@@ -70,6 +70,37 @@ describe('workspace sync', () => {
     expect(localStorage.getItem('caredesk.ui.font-scale.v1')).toBe('1.3');
   });
 
+  it('never uploads an empty workspace when the account was never read from the server', async () => {
+    // startWorkspaceSync clears an unrecognised local cache before the server
+    // answers. If that answer never arrives, the device is empty for reasons
+    // that have nothing to do with the customer's data - and uploading it
+    // would destroy the real workspace held on the server.
+    localStorage.setItem('caredesk.mvp.clients.v1', '[{"id":"unrecognised-cache"}]');
+    mocks.getWorkspace.mockRejectedValue(new Error('NETWORK_DOWN'));
+
+    await expect(startWorkspaceSync('user-a')).rejects.toThrow();
+    expect(captureMvpWorkspace().entries['caredesk.mvp.clients.v1']).toBeUndefined();
+
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(mocks.saveWorkspace).not.toHaveBeenCalled();
+    expect(getWorkspaceSyncState()).toBe('error');
+  });
+
+  it('still saves a deliberate deletion once the server state is known', async () => {
+    await startWorkspaceSync('user-a');
+    // Hydration succeeded, so an empty workspace now reflects a real choice.
+    localStorage.removeItem('caredesk.mvp.clients.v1');
+    window.dispatchEvent(new CustomEvent(MVP_PROFILE_CHANGED));
+
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(mocks.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ snapshot: expect.objectContaining({ entries: {} }) }),
+    );
+  });
+
   it('persists changes with optimistic concurrency', async () => {
     await startWorkspaceSync('user-a');
     localStorage.setItem('caredesk.mvp.tasks.v1.client.remote', '[]');
