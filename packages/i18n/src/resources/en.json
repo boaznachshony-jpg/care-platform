@@ -41,7 +41,7 @@
     "forbiddenError": "Only the account owner can send invitations. Sign in again as the owner and retry.",
     "readOnlyNotice": "You can view permissions. Only the owner can invite people, change roles or remove access.",
     "contactDisclaimer": "An authorized contact in the employment details does not receive account access automatically. Invite that person separately here if access is required.",
-    "ownershipNotice": "During the closed pilot, ownership transfer uses a verified support process to prevent accidental lockout or account takeover."
+    "ownershipNotice": "During the pilot, transferring ownership of a case goes through support and requires identity verification. That is deliberate: access cannot be lost by accident, and a case cannot be moved to someone else without your knowledge."
   },
   "billing": {
     "frozenTitle": "Account frozen",
