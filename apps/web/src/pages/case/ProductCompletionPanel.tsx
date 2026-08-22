@@ -15,6 +15,7 @@ import {
   type ProfessionalReviewStatus,
   type ProfessionalReviewTransitionResponse,
 } from '../../api/client.js';
+import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
 
 /**
  * Mirror of the server-side lifecycle. The server is authoritative — this map
@@ -176,6 +177,25 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                 {t(`escalation.status.${review.status}`)}
               </strong>{' '}
               — {review.reason}
+              <small className="record-timestamp">
+                {toIsoAttribute(review.createdAt) ? (
+                  <>
+                    {t('escalation.openedAt')}{' '}
+                    <time dateTime={toIsoAttribute(review.createdAt) ?? undefined}>
+                      {formatDateTime(review.createdAt)}
+                    </time>
+                  </>
+                ) : null}
+                {toIsoAttribute(review.resolvedAt) ? (
+                  <>
+                    {' · '}
+                    {t('escalation.resolvedAt')}{' '}
+                    <time dateTime={toIsoAttribute(review.resolvedAt) ?? undefined}>
+                      {formatDateTime(review.resolvedAt)}
+                    </time>
+                  </>
+                ) : null}
+              </small>
               {review.assignedTo ? (
                 <p>
                   {t('escalation.assignedToDisplay')}: {review.assignedTo}{' '}
@@ -238,6 +258,20 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                       {t(`escalation.status.${item.fromStatus}`)} →{' '}
                       {t(`escalation.status.${item.toStatus}`)}
                       {item.assignedTo ? ` · ${item.assignedTo}` : ''}
+                      {/* This list is the escalation's audit trail. It carried
+                          changedBy and createdAt all along and rendered
+                          neither, so it recorded what changed but never who
+                          did it or when - the two things an audit trail is
+                          for. */}
+                      <small className="record-timestamp">
+                        {item.changedBy ? `${t('escalation.changedBy')} ${item.changedBy}` : null}
+                        {item.changedBy && toIsoAttribute(item.createdAt) ? ' · ' : null}
+                        {toIsoAttribute(item.createdAt) ? (
+                          <time dateTime={toIsoAttribute(item.createdAt) ?? undefined}>
+                            {formatDateTime(item.createdAt)}
+                          </time>
+                        ) : null}
+                      </small>
                     </li>
                   ))}
                 </ul>

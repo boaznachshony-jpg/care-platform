@@ -19,17 +19,21 @@ import {
   type CanonicalPayrollClose,
 } from '../api/client.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { readMvpMedications, type MvpMedication } from '../storage/mvp-storage.js';
 
 const presets = {
-  full: ['case', 'caregiver', 'documents', 'payroll', 'tasks', 'contacts'],
+  full: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
   review: ['case', 'caregiver', 'documents', 'payroll'],
-  handoff: ['case', 'caregiver', 'tasks', 'contacts'],
+  // A handover is the case this binder exists for, so the standing
+  // medications belong in it before anything administrative does.
+  handoff: ['case', 'caregiver', 'medications', 'tasks', 'contacts'],
   documents: ['documents'],
 } as const;
 type Section = (typeof presets.full)[number];
 const labels: Record<Section, string> = {
   case: 'סיכום המטופל ותיק ההעסקה',
   caregiver: 'סיכום המטפל/ת',
+  medications: 'תרופות קבועות',
   documents: 'מסמכים שנבחרו',
   payroll: 'היסטוריית תשלומים סגורה',
   tasks: 'משימות פעילות',
@@ -75,6 +79,9 @@ export function EmergencyBinderPage() {
     'idle',
   );
   const [receipt, setReceipt] = useState<BinderExportReceiptResponse>();
+  // Medications live in the client's own local record rather than on the
+  // server, so they are read directly instead of arriving with the case.
+  const [medications] = useState<MvpMedication[]>(() => readMvpMedications());
   const generatedAt = useMemo(
     () =>
       new Intl.DateTimeFormat('he-IL', { dateStyle: 'long', timeStyle: 'short' }).format(
@@ -331,6 +338,56 @@ export function EmergencyBinderPage() {
                 </ul>
               ) : (
                 <p>אנשי קשר לא הוגדרו.</p>
+              )}
+            </section>
+          )}
+          {selected.includes('medications') && (
+            <section id="binder-medications">
+              <h3>{labels.medications}</h3>
+              {medications.length ? (
+                <>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>תרופה</th>
+                        <th>מינון</th>
+                        <th>מתי</th>
+                        <th>רופא/ה ממליץ/ה</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {medications.map((medication) => (
+                        <tr key={medication.id}>
+                          <td>{medication.name}</td>
+                          <td>{medication.dosage || '—'}</td>
+                          <td>
+                            {medication.daily ? 'כל יום' : 'לא כל יום'}
+                            {medication.timesOfDay.length
+                              ? ` · ${medication.timesOfDay
+                                  .map(
+                                    (time) =>
+                                      ({
+                                        morning: 'בוקר',
+                                        noon: 'צהריים',
+                                        evening: 'ערב',
+                                        night: 'לילה',
+                                      })[time],
+                                  )
+                                  .join(', ')}`
+                              : ' · לפי הצורך'}
+                          </td>
+                          <td>{medication.prescribingDoctor || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="report-footnote">
+                    <span aria-hidden="true">*</span> הרישום מבוסס על המידע שמסר הלקוח ואינו המלצה
+                    רפואית או מרשם.
+                  </p>
+                </>
+              ) : (
+                <p>לא נרשמו תרופות קבועות.</p>
               )}
             </section>
           )}

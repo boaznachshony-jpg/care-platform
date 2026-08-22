@@ -323,6 +323,15 @@ button {
    stray label rather than one of the row's controls. Medium weight keeps it
    from competing with the primary call to action. */
 .sign-out-button {
+  /* A <button> centres its own label, but only while it keeps its default
+     inline-block box. Something in the cascade set display:block, which drops
+     that centring - the 15px line box then sat at the top of a 48px control
+     and "יציאה" read as misaligned against its neighbours. inline-flex puts
+     the label back in the middle on both axes and cannot be undone by a
+     line-height change later. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 48px;
   padding: 0 16px;
   border: 1px solid #cbd5e1;
@@ -357,6 +366,63 @@ button {
 .record-timestamp time {
   direction: ltr;
   unicode-bidi: isolate;
+}
+/* Who wrote this entry. Sits above the message body so a thread reads as a
+   conversation - side first, then what was said, then when. */
+.thread-author {
+  margin: 0 0 2px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+[data-theme='dark'] .thread-author {
+  color: #b9b9c8;
+}
+/* Standing medications. The disclaimer sits above the data on purpose and is
+   not a dismissible banner: it has to be read every time, because the list
+   looks like clinical instruction and is not. */
+.medications-disclaimer {
+  margin-block: 12px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.medications-times {
+  margin-block: 16px;
+  padding: 12px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+}
+.medications-times legend {
+  padding-inline: 6px;
+  font-weight: 700;
+}
+.medications-times label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 18px;
+  min-height: 44px;
+}
+.medications-times small {
+  display: block;
+  margin-block-start: 4px;
+  color: #64748b;
+}
+.medications-daily {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.medications-list small {
+  display: block;
+}
+[data-theme='dark'] .medications-times {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+[data-theme='dark'] .medications-times small {
+  color: #a3a3b5;
 }
 button,
 input,
@@ -2305,6 +2371,11 @@ dd {
     width: calc(100% - 220px);
     margin-inline-start: 220px;
   }
+  /* The banner clears the sidebar too, so it must track its narrower width. */
+  .account-grace-banner {
+    width: min(100% - 260px, 1160px);
+    margin-inline-start: 220px;
+  }
   .main-content {
     padding: 28px 25px 100px;
   }
@@ -2336,6 +2407,11 @@ dd {
   }
   .sidebar {
     display: none;
+  }
+  /* No sidebar below this width, so the banner takes the full gutter again. */
+  .account-grace-banner {
+    width: min(100% - 40px, 1160px);
+    margin-inline-start: auto;
   }
   .app-body {
     width: 100%;
@@ -5524,9 +5600,17 @@ input[type='number'] {
    with the content column needs the banner moved inside that column, which is
    a structural change worth making deliberately rather than guessing at. */
 .account-grace-banner {
-  width: min(100% - 40px, 1160px);
+  /* The sidebar is position:fixed at the inline-start edge and .app-body
+     clears it with a matching margin. This banner is a sibling of .app-frame
+     and had no such margin, so its inline-start end ran underneath the
+     sidebar. Measured in production at a 1280px window: banner 52-1212,
+     sidebar starts at 1005 - 208px of the message sat behind the sidebar,
+     which is what read as a cut-off banner. It has to clear the sidebar
+     exactly the way the content column does. */
+  width: min(100% - 300px, 1160px);
   max-inline-size: calc(100vw - 40px);
   margin: 16px auto 0;
+  margin-inline-start: 260px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

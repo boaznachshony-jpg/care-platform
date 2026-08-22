@@ -601,6 +601,7 @@ const DOCUMENTS_KEY = 'caredesk.mvp.documents.v1';
 const PAYROLL_STORAGE_NAME = 'caredesk.mvp.payroll.v1';
 const EMPLOYMENT_EXPENSES_STORAGE_NAME = 'caredesk.mvp.employment-expenses.v1';
 const TASKS_STORAGE_NAME = 'caredesk.mvp.tasks.v1';
+const MEDICATIONS_STORAGE_NAME = 'caredesk.mvp.medications.v1';
 const MONTHLY_CLOSE_STORAGE_NAME = 'caredesk.mvp.monthly-close.v1';
 
 function readList<T>(key: string): T[] {
@@ -722,6 +723,47 @@ export function closeMvpPayrollMonth(
   };
   saveList(MONTHLY_CLOSE_STORAGE_NAME, [...readMvpMonthlyCloses(), close]);
   return close;
+}
+
+/**
+ * A standing medication the care recipient takes.
+ *
+ * This is a transcription of what the family already knows, kept so that a
+ * replacement caregiver or a family member stepping in has the information in
+ * one place. It is explicitly NOT a prescription and NOT medical advice - the
+ * same stance the product takes on payroll: the record belongs to the client,
+ * and the system stores it faithfully without interpreting it.
+ *
+ * `timesOfDay` is deliberately a set of named slots rather than clock times.
+ * Households say "morning and evening", not "08:00 and 20:00", and a slot
+ * cannot be silently wrong the way a specific hour can.
+ */
+export const MEDICATION_TIMES = ['morning', 'noon', 'evening', 'night'] as const;
+export type MvpMedicationTime = (typeof MEDICATION_TIMES)[number];
+
+export interface MvpMedication {
+  id: string;
+  /** Medication name exactly as written on the box or the prescription. */
+  name: string;
+  /** Free text: "1 tablet", "5ml" - never parsed, never calculated on. */
+  dosage: string;
+  /** Empty means "as needed" rather than "unknown"; the UI states which. */
+  timesOfDay: MvpMedicationTime[];
+  /** True when it is taken every day, as opposed to specific days only. */
+  daily: boolean;
+  /** The doctor who prescribed it, so a stand-in knows who to call. */
+  prescribingDoctor: string;
+  /** Anything the family wants the next person to know. */
+  notes: string;
+  updatedAt: string;
+}
+
+export function readMvpMedications(): MvpMedication[] {
+  return readList<MvpMedication>(MEDICATIONS_STORAGE_NAME);
+}
+
+export function saveMvpMedications(medications: MvpMedication[]): void {
+  saveList(MEDICATIONS_STORAGE_NAME, medications);
 }
 
 export function readMvpEmploymentExpenses(): MvpEmploymentExpense[] {
