@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../api/client.js';
+import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
 
 type Member = { id: string; display_name: string; role: string; status: string };
 type Assignment = { responsibility: string; assignee_membership_id: string };
@@ -10,6 +12,10 @@ type Request = {
   message: string;
   status: string;
   assigned_membership_id: string | null;
+  // Already selected by the API (wave5-service), previously dropped here - so
+  // the manager read a request with no idea when the caregiver sent it.
+  created_at?: string;
+  updated_at?: string;
 };
 type Collaboration = {
   members: Member[];
@@ -28,6 +34,7 @@ const kinds = [
 const key = () => crypto.randomUUID();
 
 export function CollaborationPanel({ caseId }: { caseId: string }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<Collaboration | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(
@@ -115,7 +122,30 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
         data.requests.map((request) => (
           <article key={request.id} className="worker-card">
             <strong>{request.request_type}</strong>
+            {/* Worker requests are always authored by the caregiver - the
+                table has no other author - so the side is stated plainly
+                rather than left for the reader to infer. */}
+            <p className="thread-author">{t('collaboration.fromCaregiver')}</p>
             <p>{request.message}</p>
+            <small className="record-timestamp">
+              {toIsoAttribute(request.created_at) ? (
+                <>
+                  {t('collaboration.receivedAt')}{' '}
+                  <time dateTime={toIsoAttribute(request.created_at) ?? undefined}>
+                    {formatDateTime(request.created_at)}
+                  </time>
+                </>
+              ) : null}
+              {toIsoAttribute(request.updated_at) && request.updated_at !== request.created_at ? (
+                <>
+                  {' · '}
+                  {t('collaboration.handledAt')}{' '}
+                  <time dateTime={toIsoAttribute(request.updated_at) ?? undefined}>
+                    {formatDateTime(request.updated_at)}
+                  </time>
+                </>
+              ) : null}
+            </small>
             <label>
               Status
               <select

@@ -19,13 +19,14 @@
     "db:rls-test": "node --env-file=.env.local --import tsx packages/db/src/rls-check.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "node scripts/check-source-encoding.mjs && eslint .",
+    "lint": "node scripts/check-source-encoding.mjs && node scripts/check-imports-resolve.mjs && eslint .",
     "lint:encoding": "node scripts/check-source-encoding.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "test:a11y": "pnpm --filter @caredesk/web test:a11y",
     "build": "pnpm -r --if-present build",
-    "check": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test"
+    "check": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test",
+    "shipped": "node scripts/check-shipped.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

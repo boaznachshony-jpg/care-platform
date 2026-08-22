@@ -43,6 +43,14 @@ export function CaseTimelineSection({ caseId }: { caseId: string }) {
                 {event.occurredAt.slice(0, 16).replace('T', ' ')}
               </time>{' '}
               {t(event.summaryKey)}
+              {/* actorDisplay has always been on the payload. A timeline that
+                  says what happened and when, but not who did it, cannot
+                  answer the question people actually bring to it. */}
+              {event.actorDisplay ? (
+                <small className="record-timestamp">
+                  {t('timeline.byActor')} {event.actorDisplay}
+                </small>
+              ) : null}
             </li>
           ))}
         </ol>

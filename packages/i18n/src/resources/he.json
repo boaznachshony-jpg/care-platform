@@ -849,7 +849,8 @@
       "event_plan_committed": {
         "summary": "בוצעה תוכנית אירוע"
       }
-    }
+    },
+    "byActor": "בוצע על ידי"
   },
   "visaRenewal": {
     "eyebrow": "תהליך מפוקח",
@@ -1004,7 +1005,10 @@
       "in_review": "התחלת בדיקה",
       "resolved": "סיום וסגירה",
       "cancelled": "ביטול הבקשה"
-    }
+    },
+    "changedBy": "שונה על ידי",
+    "openedAt": "נפתח",
+    "resolvedAt": "נסגר"
   },
   "worker": {
     "title": "האזור שלי",
@@ -1041,7 +1045,10 @@
     "phoneUnavailable": "WhatsApp ו-SMS אינם מוגדרים כעת ולא יישלחו.",
     "download": "הורדה מאובטחת",
     "language": "שפה",
-    "savePreferences": "שמירת העדפות"
+    "savePreferences": "שמירת העדפות",
+    "sentByYou": "נשלח על ידך",
+    "sentAt": "נשלח",
+    "answeredAt": "נענה"
   },
   "regulation": {
     "title": "כללי רגולציה — תוכן מאושר",
@@ -1076,5 +1083,10 @@
     "statement": "ניסוח עובדתי",
     "createFailed": "יצירת הטיוטה נכשלה.",
     "createDraft": "שמירת טיוטה"
+  },
+  "collaboration": {
+    "fromCaregiver": "מהמטפל/ת",
+    "receivedAt": "התקבל",
+    "handledAt": "טופל"
   }
 }
