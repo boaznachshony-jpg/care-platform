@@ -10,12 +10,24 @@ body,
   min-height: 100%;
   margin: 0;
 }
+/* One typographic voice across the whole app. Rubik/Heebo are the Hebrew-first
+   faces; the system stack follows only as a fallback. Every other rule inherits
+   from here — never re-declare a different family per component. */
+:root {
+  --cd-font-family: 'Rubik', 'Heebo', 'Segoe UI', Arial, sans-serif;
+}
 body {
   background: #f4f6f8;
   color: #172033;
-  font-family: Arial, 'Heebo', sans-serif;
+  font-family: var(--cd-font-family);
   font-size: 17px;
   line-height: 1.55;
+}
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
 }
 .environment-banner {
   position: fixed;
@@ -1846,7 +1858,7 @@ a {
   background: #fff;
   box-shadow: 0 12px 34px rgb(28 52 82 / 12%);
   color: #111827;
-  font-family: Arial, sans-serif;
+  font-family: var(--cd-font-family);
 }
 .payroll-print-preview header {
   display: flex;
@@ -2062,7 +2074,7 @@ a {
     direction: rtl;
     color: #111827;
     background: #fff;
-    font-family: Arial, sans-serif;
+    font-family: var(--cd-font-family);
     font-size: 8.3pt;
   }
 
@@ -5290,7 +5302,7 @@ input[type='number'] {
   .binder-document {
     box-shadow: none;
     border: 0;
-    font-family: Arial, sans-serif;
+    font-family: var(--cd-font-family);
   }
   .binder-document section {
     break-inside: avoid-page;
@@ -5517,63 +5529,54 @@ input[type='number'] {
   color: #172033;
   box-shadow: 0 3px 10px rgba(24, 52, 89, 0.12);
 }
-.stat-grid {
+/* Tile launcher — one screen, every topic as a tappable tile (car-companion reference). */
+.tile-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
 }
-.stat-tile {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 14px;
-  row-gap: 2px;
-  padding: 18px 20px;
+.nav-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px 20px;
   border: 1px solid var(--cd-border);
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--cd-surface, #fff);
   box-shadow: var(--cd-shadow);
-  transition: background 0.18s ease;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
-.stat-chip {
-  grid-row: 1 / span 2;
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  color: #fff;
+.nav-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(24, 52, 89, 0.14);
 }
-.stat-chip svg {
-  width: 22px;
-  height: 22px;
+.nav-tile-icon {
   display: block;
 }
-.stat-chip.teal-blue {
-  background: linear-gradient(135deg, #14b8a6, #3b82f6);
+.nav-tile-icon svg {
+  width: 34px;
+  height: 34px;
+  display: block;
 }
-.stat-chip.blue-violet {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-}
-.stat-chip.violet-pink {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-}
-.stat-chip.pink-amber {
-  background: linear-gradient(135deg, #ec4899, #f59e0b);
-}
-.stat-tile-label {
+.nav-tile-label {
   color: #6f7b8d;
   font-size: 13px;
   font-weight: 700;
 }
-.stat-tile-value {
-  font-size: 27px;
+.nav-tile-value {
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 480px) {
-  .stat-grid {
+  .tile-grid {
     grid-template-columns: 1fr;
     gap: 12px;
   }
@@ -5583,8 +5586,8 @@ input[type='number'] {
    Additive only: with the attribute absent, the light theme is untouched. */
 [data-theme='dark'] {
   color-scheme: dark;
-  --cd-ink: #f1f3f6;
-  --cd-muted: #9aa0a6;
+  --cd-ink: #f2f0f7;
+  --cd-muted: #a3a3b5;
   --cd-primary: #5b96f5;
   --cd-primary-hover: #7cabf7;
   --cd-primary-soft: rgba(59, 130, 246, 0.18);
@@ -5592,20 +5595,33 @@ input[type='number'] {
   --cd-success-soft: rgba(52, 196, 141, 0.16);
   --cd-warning: #f5b342;
   --cd-warning-soft: rgba(245, 179, 66, 0.16);
-  --cd-surface: #1a1c1f;
-  --cd-canvas: #111214;
-  --cd-border: rgba(255, 255, 255, 0.06);
+  --cd-surface: #1c1c26;
+  --cd-canvas: #14141c;
+  --cd-border: rgba(255, 255, 255, 0.05);
   --cd-focus: #8ab8ff;
-  --cd-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  --cd-surface-raised: #202327;
-  --cd-pill: #26292e;
+  --cd-shadow: 0 8px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --cd-surface-raised: #22222e;
+  --cd-pill: #262630;
+  --cd-gold-edge: rgba(230, 190, 90, 0.3);
+  --cd-gold-edge-strong: rgba(230, 190, 90, 0.35);
+  --cd-card-gradient: linear-gradient(180deg, #22222e, #1a1a24);
+  --cd-card-gradient-hover: linear-gradient(180deg, #262630, #1a1a24);
+}
+
+/* "Gold on Night" icon gradient — brighter approved stops on dark tiles only.
+   The SVG defs live in DashboardPage.tsx with deeper default stops for light. */
+[data-theme='dark'] .cd-tile-grad-stop-a {
+  stop-color: #eac25e;
+}
+[data-theme='dark'] .cd-tile-grad-stop-b {
+  stop-color: #7ea6ff;
 }
 
 /* App shell chrome. */
 [data-theme='dark'] .topbar,
 [data-theme='dark'] .sidebar,
 [data-theme='dark'] .mobile-nav {
-  background: rgba(17, 18, 20, 0.94);
+  background: rgba(20, 20, 28, 0.94);
 }
 [data-theme='dark'] .sidebar {
   border-inline-end-color: var(--cd-border);
@@ -5635,6 +5651,12 @@ input[type='number'] {
 [data-theme='dark'] .mobile-nav button.active {
   background: var(--cd-pill);
   color: #fff;
+}
+/* Gold edge-light on the active nav pill (inset shadow: no layout shift on borderless links). */
+[data-theme='dark'] .desktop-nav a.active,
+[data-theme='dark'] .mobile-nav a.active,
+[data-theme='dark'] .mobile-nav button.active {
+  box-shadow: inset 0 1px 0 var(--cd-gold-edge-strong);
 }
 [data-theme='dark'] .sidebar-help {
   background: var(--cd-surface-raised);
@@ -5694,11 +5716,20 @@ input[type='number'] {
   border-radius: 16px;
   box-shadow: none;
 }
-[data-theme='dark'] .card:hover,
-[data-theme='dark'] .stat-tile:hover {
-  background: var(--cd-surface-raised);
+/* Primary surfaces get the "Gold on Night" treatment: soft vertical gradient,
+   gold edge-light on the top border and the layered depth shadow. */
+[data-theme='dark'] .card,
+[data-theme='dark'] .status-card {
+  background: var(--cd-card-gradient);
+  border-top-color: var(--cd-gold-edge);
+  box-shadow: var(--cd-shadow);
 }
-[data-theme='dark'] .status-card.good,
+[data-theme='dark'] .card:hover {
+  background: var(--cd-card-gradient-hover);
+}
+[data-theme='dark'] .status-card.good {
+  background: var(--cd-card-gradient);
+}
 [data-theme='dark'] .task-card.done {
   background: var(--cd-surface);
 }
@@ -5734,7 +5765,7 @@ input[type='number'] {
 [data-theme='dark'] .pay-summary small,
 [data-theme='dark'] .attention-item small,
 [data-theme='dark'] .trust-message-card small,
-[data-theme='dark'] .stat-tile-label,
+[data-theme='dark'] .nav-tile-label,
 [data-theme='dark'] dt {
   color: var(--cd-muted);
 }
@@ -5848,15 +5879,17 @@ input[type='number'] {
   border-color: var(--cd-success);
 }
 
-/* Buttons and links. */
+/* Buttons and links. Primary keeps its existing gradient shape, restopped to
+   muted gold→royal ("Gold on Night"), plus a subtle gold top-edge highlight. */
 [data-theme='dark'] .primary-button {
   border-color: transparent;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, #b98b2e, #4c6fd1);
   color: #fff;
+  box-shadow: inset 0 1px 0 var(--cd-gold-edge-strong);
 }
 [data-theme='dark'] .primary-button:hover {
   border-color: transparent;
-  background: linear-gradient(135deg, #2f6fe0, #7c4fe0);
+  background: linear-gradient(135deg, #a87c25, #4363c0);
 }
 [data-theme='dark'] .secondary-button,
 [data-theme='dark'] .danger-button,
@@ -5905,22 +5938,38 @@ input[type='number'] {
 }
 [data-theme='dark'] .save-bar {
   border-color: var(--cd-border);
-  background: rgba(26, 28, 31, 0.96);
+  background: rgba(28, 28, 38, 0.96);
 }
 [data-theme='dark'] .save-bar span {
   color: #7ee2b8;
 }
 
-/* Dashboard tabs + tiles in dark. */
+/* Dashboard tabs + launcher tiles in dark — "Gold on Night" (זהב על לילה). */
+[data-theme='dark'] .nav-tile {
+  background: var(--cd-card-gradient);
+  border-color: var(--cd-border);
+  border-top-color: var(--cd-gold-edge);
+  box-shadow: var(--cd-shadow);
+}
+[data-theme='dark'] .nav-tile:hover {
+  background: var(--cd-card-gradient-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--cd-shadow);
+}
+/* Gold glow on the tile icons only — never on text. */
+[data-theme='dark'] .nav-tile svg {
+  filter: drop-shadow(0 0 5px rgba(220, 180, 80, 0.4));
+}
 [data-theme='dark'] .dash-tabs {
   background: var(--cd-surface);
   border-color: var(--cd-border);
 }
 [data-theme='dark'] .dash-tab {
-  color: var(--cd-muted);
+  color: #8d8d9d;
 }
 [data-theme='dark'] .dash-tab.active {
   background: var(--cd-pill);
   color: #fff;
-  box-shadow: none;
+  /* Gold top edge via inset shadow: pill buttons are borderless, so no layout shift. */
+  box-shadow: inset 0 1px 0 var(--cd-gold-edge-strong);
 }
