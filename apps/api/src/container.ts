@@ -99,6 +99,7 @@ import type { Pool } from 'pg';
 import type { Env } from './env.js';
 import { SupabaseAuthService } from './auth/supabase-auth-service.js';
 import { SupabaseInvitationService } from './auth/supabase-invitation-service.js';
+import { resolveInvitationRedirect } from './auth/invitation-redirect.js';
 import { SupabaseDocumentStorage } from './storage/supabase-document-storage.js';
 import { MirroredDocumentStorage } from './storage/mirrored-document-storage.js';
 import { CardcomProductBillingGateway } from './billing/cardcom-gateway.js';
@@ -440,8 +441,11 @@ export function buildContainer(env: Env): Container {
         )
       : primaryStorage;
 
-  const invitationRedirect =
-    env.FAMILY_INVITE_REDIRECT_URL ?? `${env.CORS_ORIGINS.split(',')[0]?.trim()}/app`;
+  const invitationRedirect = resolveInvitationRedirect({
+    familyInviteRedirectUrl: env.FAMILY_INVITE_REDIRECT_URL,
+    corsOrigins: env.CORS_ORIGINS,
+    nodeEnv: env.NODE_ENV,
+  });
   const invitations: IdentityInvitationService =
     env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
       ? new SupabaseInvitationService(

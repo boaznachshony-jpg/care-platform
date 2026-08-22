@@ -332,6 +332,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   min-height: 48px;
   padding: 0 16px;
   border: 1px solid #cbd5e1;
@@ -781,6 +782,16 @@ a {
   border-radius: 14px;
   cursor: pointer;
 }
+/* This rule shapes the row's ICON buttons, and it forced its fixed 44px box
+   onto "יציאה" too - a text button that needs 68px. Its specificity (0,1,1)
+   beats .sign-out-button (0,1,0), so every previous attempt to size that
+   button was silently overridden and the label spilled 8px past each edge.
+   Measured in production: button 44px, label 36px, padding 32px. Two classes
+   (0,2,0) is what it takes to win, and the button sizes to its own text. */
+.top-actions .sign-out-button {
+  width: auto;
+  height: auto;
+}
 .avatar {
   width: 44px;
   height: 44px;
@@ -939,10 +950,37 @@ a {
   padding-inline: 26px;
   font-size: 18px;
 }
+/* One row, four controls, one size.
+   As a flex row these sized themselves from their own text - measured in
+   production at 131 / 187 / 70 / 184 wide and 56 / 56 / 48 / 60 tall, which
+   read as four unrelated buttons. A grid with equal auto-fit columns gives
+   every control the same box and re-flows on its own: the columns shrink
+   together, and once one cannot hold 170px the whole row stacks. No breakpoint
+   decides that - the content does - so it holds at any screen width. */
 .clients-hero-actions {
-  display: flex;
-  align-items: end;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  align-items: stretch;
   gap: 12px;
+}
+/* Two classes (0,2,0) so these provably beat .secondary-button, .primary-button
+   and .clients-add-button (0,1,0). Colours are deliberately untouched here:
+   "פתיחת תיק חדש" keeps its gradient and stays the one obvious primary action
+   in the row - same size, different weight. */
+.clients-hero-actions > .secondary-button,
+.clients-hero-actions > .primary-button,
+.clients-hero-actions > .sign-out-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  min-height: 58px;
+  padding-inline: 18px;
+  font-size: 17px;
+  line-height: 1.2;
+  text-align: center;
 }
 .clients-home-link {
   text-decoration: none;

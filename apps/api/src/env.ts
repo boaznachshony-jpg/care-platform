@@ -12,10 +12,17 @@ const envSchema = z
     SENSITIVE_OPERATION_MFA_MODE: z.enum(['report', 'enforce']).default('report'),
     // Comma-separated origin allowlist for CORS. Dev default is the local web
     // shell only; production values come from environment, never a wildcard.
+    /**
+     * The canonical production origin is listed FIRST among the https entries.
+     * CORS itself does not care about order, but resolveInvitationRedirect
+     * falls back to the first real https origin when FAMILY_INVITE_REDIRECT_URL
+     * is unset - so this ordering is what makes invitations land on the custom
+     * domain without needing an environment variable set in the host.
+     */
     CORS_ORIGINS: z
       .string()
       .default(
-        'http://localhost:5173,https://care-platform-web.vercel.app,https://caredesk-isr.com,https://www.caredesk-isr.com',
+        'https://caredesk-isr.com,https://www.caredesk-isr.com,https://care-platform-web.vercel.app,http://localhost:5173',
       ),
     // Optional: when set, the case repository is Postgres-backed; when absent,
     // the API falls back to the in-memory repository so tests and a bare
