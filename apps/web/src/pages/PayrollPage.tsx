@@ -17,6 +17,7 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
+import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
@@ -1725,6 +1726,14 @@ export function PayrollPage() {
                       ? ` · שכר יחסי מ־${record.prorationStartDate} (${record.prorationDays ?? 0} ימים)`
                       : ''}
                   </small>
+                  {toIsoAttribute(record.savedAt) ? (
+                    <small className="record-timestamp">
+                      נשמר{' '}
+                      <time dateTime={toIsoAttribute(record.savedAt) ?? undefined}>
+                        {formatDateTime(record.savedAt)}
+                      </time>
+                    </small>
+                  ) : null}
                 </span>
                 <strong>{money.format(record.total)}</strong>
                 <button

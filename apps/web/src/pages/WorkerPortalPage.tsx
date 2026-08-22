@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../api/client.js';
+import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 type Portal = {
   payments: Array<{
@@ -103,7 +104,9 @@ export function WorkerPortalPage() {
                 <strong>{p.month}</strong>
                 <p>
                   {p.amountPaid === null ? t('worker.amountUnavailable') : `₪${p.amountPaid}`} ·{' '}
-                  {p.paymentDate}
+                  <time dateTime={toIsoAttribute(p.paymentDate) ?? undefined}>
+                    {formatDateOnly(p.paymentDate) ?? p.paymentDate}
+                  </time>
                 </p>
                 {p.acknowledgement === 'pending' ? (
                   <>
@@ -121,7 +124,10 @@ export function WorkerPortalPage() {
                   </>
                 ) : (
                   <p>
-                    {t('worker.acknowledged')} {p.acknowledgedAt}
+                    {t('worker.acknowledged')}{' '}
+                    <time dateTime={toIsoAttribute(p.acknowledgedAt) ?? undefined}>
+                      {formatDateTime(p.acknowledgedAt) ?? p.acknowledgedAt}
+                    </time>
                   </p>
                 )}
               </article>

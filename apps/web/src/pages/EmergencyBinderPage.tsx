@@ -18,6 +18,7 @@ import {
   type BinderExportReceiptResponse,
   type CanonicalPayrollClose,
 } from '../api/client.js';
+import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 const presets = {
   full: ['case', 'caregiver', 'documents', 'payroll', 'tasks', 'contacts'],
@@ -342,6 +343,8 @@ export function EmergencyBinderPage() {
                     <tr>
                       <th>חודש</th>
                       <th>סכום</th>
+                      <th>תאריך תשלום</th>
+                      <th>נסגר בתאריך ובשעה</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -352,6 +355,24 @@ export function EmergencyBinderPage() {
                           {record.total === null
                             ? 'לא ידוע'
                             : `₪${record.total.toLocaleString('he-IL')}`}
+                        </td>
+                        <td>
+                          {toIsoAttribute(record.paymentDate) ? (
+                            <time dateTime={toIsoAttribute(record.paymentDate) ?? undefined}>
+                              {formatDateOnly(record.paymentDate)}
+                            </time>
+                          ) : (
+                            'לא ידוע'
+                          )}
+                        </td>
+                        <td>
+                          {toIsoAttribute(record.closedAt) ? (
+                            <time dateTime={toIsoAttribute(record.closedAt) ?? undefined}>
+                              {formatDateTime(record.closedAt)}
+                            </time>
+                          ) : (
+                            'לא ידוע'
+                          )}
                         </td>
                       </tr>
                     ))}
