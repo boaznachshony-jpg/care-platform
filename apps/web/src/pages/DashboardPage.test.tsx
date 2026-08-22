@@ -38,6 +38,8 @@ const mockProfile = {
   medicalInsuranceExpiryDate: '2027-06-30',
 };
 
+const originalProfile = { ...mockProfile };
+
 const mockGetCaseHealth = vi.fn();
 
 vi.mock('../hooks/use-mvp-profile.js', () => ({
@@ -70,6 +72,7 @@ function renderPage(clientId = 'client-001') {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mockProfile, originalProfile);
     mockGetCaseHealth.mockResolvedValue({
       score: 90,
       actionsRemaining: 1,
@@ -141,37 +144,78 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'סקירה' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('renders the stat tiles with score, attention count and payment due dates', async () => {
+  it('renders every launcher tile as a link to its destination', () => {
     renderPage();
-    expect(screen.getByText('ציון תקינות')).toBeInTheDocument();
-    expect(screen.getByText('נושאים לטיפול')).toBeInTheDocument();
-    expect(screen.getByText('תשלום השכר הבא')).toBeInTheDocument();
-    expect(screen.getByText('ביטוח לאומי הקרוב')).toBeInTheDocument();
+    const payments = createUpcomingPayments();
+    const salaryDate = formatDisplayDate(
+      payments.find((payment) => payment.id === 'salary')?.dueDate ?? '',
+    );
+    const insuranceDate = formatDisplayDate(
+      payments.find((payment) => payment.id === 'nationalInsurance')?.dueDate ?? '',
+    );
 
-    // Score appears both in the tile and in the score ring once health loads.
-    await waitFor(() => expect(screen.getAllByText('90').length).toBeGreaterThanOrEqual(1));
-    expect(screen.getByText('0')).toBeInTheDocument();
-
-    for (const payment of createUpcomingPayments()) {
-      expect(screen.getByText(formatDisplayDate(payment.dueDate))).toBeInTheDocument();
+    const expectations: Array<[RegExp, string]> = [
+      [/^ציון תקינות/, '/overview'],
+      [/^נושאים לטיפול/, '/overview'],
+      [/^ויזה/, '/settings'],
+      [/^ביטוח רפואי/, '/documents'],
+      [new RegExp(`^שכר ${salaryDate.replaceAll('.', '\\.')}$`), '/payroll'],
+      [new RegExp(`^ביטוח לאומי ${insuranceDate.replaceAll('.', '\\.')}$`), '/tasks'],
+      [/^מסמכים/, '/documents'],
+      [/^משימות/, '/tasks'],
+      [/^ציר זמן צפייה$/, '/timeline'],
+      [/^תיק חירום הדפסה מאובטחת$/, '/binder'],
+    ];
+    for (const [name, href] of expectations) {
+      expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
     }
   });
 
-  it('counts attention factors in the attention stat tile', async () => {
+  it('shows the health score in the score tile once loaded, with a fallback before', async () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: 'ציון תקינות —' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'נושאים לטיפול —' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'ציון תקינות 90' })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('link', { name: 'נושאים לטיפול 0' })).toBeInTheDocument();
+  });
+
+  it('shows the visa and medical insurance dates from the profile', () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: 'ויזה עד 01.06.2027' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ביטוח רפואי 30.06.2027' })).toBeInTheDocument();
+  });
+
+  it('shows fallbacks when the visa date is missing and the insurance is not confirmed', () => {
+    mockProfile.visaRenewalDate = '';
+    mockProfile.medicalInsuranceConfirmed = false;
+    renderPage();
+    expect(screen.getByRole('link', { name: 'ויזה חסר תאריך' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ביטוח רפואי לא אושר' })).toBeInTheDocument();
+  });
+
+  it('shows the document and open task counts from local storage', () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: 'מסמכים 0' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'משימות 0' })).toBeInTheDocument();
+  });
+
+  it('counts attention factors in the attention tile', async () => {
     mockGetCaseHealth.mockResolvedValue({
       score: 70,
       actionsRemaining: 2,
       factors: [
         {
           id: 'factor-1',
-          title: 'ביטוח רפואי',
+          title: 'ביטוח רפואי לחידוש',
           explanation: 'יש לחדש את הביטוח',
           status: 'attention',
           provenance: { sourceType: 'documents', sourceIds: ['doc-1'] },
         },
         {
           id: 'factor-2',
-          title: 'שכר',
+          title: 'שכר חודשי',
           explanation: 'תקין',
           status: 'good',
           provenance: { sourceType: 'payroll', sourceIds: ['pay-1'] },
@@ -179,6 +223,8 @@ describe('DashboardPage', () => {
       ],
     });
     renderPage();
-    await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'נושאים לטיפול 1' })).toBeInTheDocument(),
+    );
   });
 });
