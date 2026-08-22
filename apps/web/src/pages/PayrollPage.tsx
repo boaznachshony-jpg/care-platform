@@ -1703,9 +1703,11 @@ export function PayrollPage() {
               <span>סה״כ לתשלום בשנת {reportYear}</span>
               <strong>{money.format(annualReport.totalPaid)}</strong>
             </div>
-            <p>
-              מקור הנתונים: רישומי השכר החודשיים שנשמרו במערכת. הדוח הוא כלי תיעוד וסיכום אריתמטי
-              ואינו מחליף תלוש שכר או בדיקה מקצועית.
+            {/* Footnote, not a banner: the caveat stays available without competing
+                with the figures it annotates. */}
+            <p className="report-footnote">
+              <span aria-hidden="true">*</span> מקור הנתונים: רישומי השכר החודשיים שנשמרו במערכת.
+              הדוח הוא כלי תיעוד וסיכום אריתמטי ואינו מחליף תלוש שכר או בדיקה מקצועית.
             </p>
           </div>
           <h3>פירוט לפי חודש</h3>

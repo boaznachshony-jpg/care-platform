@@ -437,6 +437,54 @@ export function clearMvpOnboardingDraft(): void {
 }
 
 /**
+ * The profile that should prefill a form on the current screen. Client-scoped
+ * routes resolve to their own client; screens that live outside those routes
+ * (billing, open-case) fall back to the most recently updated client so setup
+ * data still flows forward instead of being typed a second time.
+ */
+export function readActiveMvpProfile(): MvpProfile {
+  const direct = readMvpProfile();
+  if (direct.onboardingCompleted || direct.recipientName || direct.employerName) return direct;
+  const [latest] = readMvpClients();
+  return latest ? readMvpProfileForClient(latest.id) : direct;
+}
+
+/**
+ * Identity details that describe one human being, so when the employer and the
+ * care recipient are the same person a value typed on either side also answers
+ * the other.
+ */
+const SAME_PERSON_MIRRORED_FIELDS = [
+  ['employerIdNumber', 'recipientIdNumber'],
+  ['employerPhone', 'recipientPhone'],
+  ['employerEmail', 'recipientEmail'],
+  ['employerAddress', 'recipientAddress'],
+  ['employerCity', 'recipientCity'],
+  ['employerPostalCode', 'recipientPostalCode'],
+] as const;
+
+/** True when onboarding recorded the employer and the recipient as one person. */
+export function isSameEmployerAndRecipient(profile: MvpProfile): boolean {
+  return Boolean(profile.employerName) && profile.employerName === profile.recipientName;
+}
+
+/**
+ * Mirrors the shared identity fields between the employer and the recipient
+ * when they are the same person, so a detail given once during setup is never
+ * asked for again. Only empty fields are filled — an explicitly entered value
+ * is never overwritten — and different people are never cross-filled.
+ */
+export function withSamePersonFallbacks(profile: MvpProfile): MvpProfile {
+  if (!isSameEmployerAndRecipient(profile)) return profile;
+  const next = { ...profile };
+  for (const [employerKey, recipientKey] of SAME_PERSON_MIRRORED_FIELDS) {
+    if (!next[recipientKey] && next[employerKey]) next[recipientKey] = next[employerKey];
+    else if (!next[employerKey] && next[recipientKey]) next[employerKey] = next[recipientKey];
+  }
+  return next;
+}
+
+/**
  * Recipient contact details for prefilling payer/billing forms. Billing lives
  * outside the client-scoped routes, so when the current path carries no
  * client the most recently updated client profile is used as a fallback.

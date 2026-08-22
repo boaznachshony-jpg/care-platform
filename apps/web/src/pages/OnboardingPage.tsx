@@ -15,6 +15,7 @@ import {
   clearMvpOnboardingDraft,
   readMvpOnboardingDraft,
   saveMvpOnboardingDraft,
+  withSamePersonFallbacks,
   type MvpProfile,
 } from '../storage/mvp-storage.js';
 import {
@@ -268,17 +269,20 @@ export function OnboardingPage() {
   }
 
   function commitStep(next: MvpProfile) {
-    setDraft(next);
-    setProfile(next);
-    saveMvpOnboardingDraft(next, { samePersonChoice: samePerson, helperChoice });
+    // When the employer is the care recipient, the ID/phone/address typed on
+    // the employer step also answer the recipient fields elsewhere in the app.
+    const committed = withSamePersonFallbacks(next);
+    setDraft(committed);
+    setProfile(committed);
+    saveMvpOnboardingDraft(committed, { samePersonChoice: samePerson, helperChoice });
   }
 
   function complete() {
-    const completed = {
+    const completed = withSamePersonFallbacks({
       ...draft,
       salaryEffectiveDate: draft.salaryEffectiveDate || draft.employmentStartDate,
       onboardingCompleted: true,
-    };
+    });
     setDraft(completed);
     setProfile(completed);
     clearMvpOnboardingDraft();

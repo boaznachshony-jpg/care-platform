@@ -17,8 +17,13 @@ export default [
       '**/playwright-report/**',
       '**/test-results/**',
       'docs/**',
-      'גרסה2.0/**',
-      'CareDesk_Claude_Code_Handoff_*/**',
+      // Archived copies of older releases that live inside the working folder
+      // but are NOT tracked by git. They were matched only at the repo root
+      // before, so a nested copy (care-platform/גרסה2.0/...) still produced
+      // ~156 phantom lint errors on every run and masked real ones.
+      '**/גרסה2.0/**',
+      '**/care-platform-main/**',
+      '**/CareDesk_Claude_Code_Handoff_*/**',
     ],
   },
   js.configs.recommended,
