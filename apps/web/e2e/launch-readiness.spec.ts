@@ -379,7 +379,9 @@ test.describe('launch readiness interactions', () => {
       name: 'היסטוריית סגירות קנונית',
     });
     await expect(persistedCloseHistory).toContainText('2026-07');
-    await expect(persistedCloseHistory).toContainText('שולם 2026-08-09');
+    await expect(persistedCloseHistory).toContainText('שולם 09.08.2026');
+    // The close timestamp has to survive a reload too - it is evidence.
+    await expect(persistedCloseHistory).toContainText(/נסגר \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/);
     await expect(
       page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
     ).toContainText('בפועל');
