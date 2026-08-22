@@ -27,6 +27,7 @@ const nav = [
   ['/', '⌂', 'ראשי'],
   ['/tasks', '✓', 'משימות'],
   ['/employee', '♙', 'עובד'],
+  ['/medications', '✚', 'תרופות'],
   ['/trust', '♥', 'טיפים'],
   ['/glossary', 'ⓘ', 'מושגים'],
   ['/documents', '▣', 'מסמכים'],
@@ -45,6 +46,7 @@ const mobileNav = [
 
 const mobileMoreNav = [
   ['/employee', '♙', 'פרטי המטפל'],
+  ['/medications', '✚', 'תרופות קבועות'],
   ['/trust', '♥', 'מסרים לבניית אמון'],
   ['/glossary', 'ⓘ', 'מושגים חשובים'],
   ['/timeline', '◷', 'ציר זמן'],

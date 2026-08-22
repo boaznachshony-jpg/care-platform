@@ -10,6 +10,7 @@ import { TimelinePage } from './pages/TimelinePage.js';
 import { PayrollPage } from './pages/PayrollPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { OnboardingPage } from './pages/OnboardingPage.js';
+import { MedicationsPage } from './pages/MedicationsPage.js';
 import { TrustMessagesPage } from './pages/TrustMessagesPage.js';
 import { GlossaryPage } from './pages/GlossaryPage.js';
 import { ClientsPage } from './pages/ClientsPage.js';
@@ -159,6 +160,14 @@ function AuthenticatedApp() {
             }
           />
           <Route
+            path="/clients/:clientId/medications"
+            element={
+              <ClientApp>
+                <MedicationsPage />
+              </ClientApp>
+            }
+          />
+          <Route
             path="/clients/:clientId/trust"
             element={
               <ClientApp>
@@ -243,6 +252,14 @@ function AuthenticatedApp() {
             element={
               <ClientApp>
                 <EmployeePage />
+              </ClientApp>
+            }
+          />
+          <Route
+            path="/medications"
+            element={
+              <ClientApp>
+                <MedicationsPage />
               </ClientApp>
             }
           />

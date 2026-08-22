@@ -56,7 +56,7 @@ const DEMO_RECEIPT = {
   id: 'receipt-demo-001',
   caseId: 'case-demo-001',
   manifest: {
-    sections: ['case', 'caregiver', 'documents', 'payroll', 'tasks', 'contacts'],
+    sections: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
     documentIds: [],
   },
   contentHash: 'ab'.repeat(32),
@@ -142,7 +142,7 @@ describe('EmergencyBinderPage', () => {
     expect(mocks.createBinderExport).toHaveBeenCalledWith(
       'case-demo-001',
       {
-        sections: ['case', 'caregiver', 'documents', 'payroll', 'tasks', 'contacts'],
+        sections: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
         documentIds: [],
       },
       expect.any(String),
@@ -163,7 +163,7 @@ describe('EmergencyBinderPage', () => {
 
     await waitFor(() => expect(mocks.createBinderExport).toHaveBeenCalledOnce());
     expect(mocks.createBinderExport.mock.calls[0]?.[1]).toEqual({
-      sections: ['case', 'caregiver', 'documents', 'payroll', 'tasks', 'contacts'],
+      sections: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
       documentIds: ['doc-demo-001'],
     });
   });

@@ -849,7 +849,8 @@
       "event_plan_committed": {
         "summary": "Event action plan committed"
       }
-    }
+    },
+    "byActor": "By"
   },
   "visaRenewal": {
     "eyebrow": "Governed workflow",
@@ -1004,7 +1005,10 @@
       "in_review": "Start review",
       "resolved": "Resolve and close",
       "cancelled": "Cancel request"
-    }
+    },
+    "changedBy": "Changed by",
+    "openedAt": "Opened",
+    "resolvedAt": "Closed"
   },
   "worker": {
     "title": "My CareDesk",
@@ -1041,7 +1045,10 @@
     "phoneUnavailable": "WhatsApp and SMS are not configured and will not be sent.",
     "download": "Download securely",
     "language": "Language",
-    "savePreferences": "Save preferences"
+    "savePreferences": "Save preferences",
+    "sentByYou": "Sent by you",
+    "sentAt": "Sent",
+    "answeredAt": "Answered"
   },
   "regulation": {
     "title": "Regulation rules — reviewed content",
@@ -1076,5 +1083,48 @@
     "statement": "Factual statement",
     "createFailed": "Creating the draft failed.",
     "createDraft": "Save draft"
+  },
+  "collaboration": {
+    "fromCaregiver": "From the caregiver",
+    "receivedAt": "Received",
+    "handledAt": "Handled"
+  },
+  "medications": {
+    "eyebrow": "Handover information",
+    "title": "Standing medications",
+    "intro": "The medications taken regularly, so that whoever steps in - a replacement caregiver, a family member, or medical staff - gets the full picture in one place.",
+    "disclaimer": "This record is based on information provided by the client. It is not medical advice, not a prescription, and not a substitute for consulting a doctor. Responsibility for its accuracy rests solely with the client.",
+    "listTitle": "Recorded medications",
+    "empty": "No medications recorded yet.",
+    "addTitle": "Add a medication",
+    "editTitle": "Edit medication",
+    "name": "Medication name",
+    "dosage": "Dosage",
+    "dosagePlaceholder": "e.g. one tablet",
+    "doctor": "Prescribing doctor",
+    "timesLegend": "When it is taken",
+    "timesHint": "More than one may be selected. With none selected the medication is shown as taken as needed.",
+    "time": {
+      "morning": "Morning",
+      "noon": "Noon",
+      "evening": "Evening",
+      "night": "Night"
+    },
+    "daily": "Every day",
+    "notDaily": "Not every day",
+    "dailyLabel": "Taken every day",
+    "asNeeded": "As needed",
+    "notes": "Notes",
+    "notesPlaceholder": "What the next person should know",
+    "add": "Add",
+    "save": "Save",
+    "cancelEdit": "Cancel",
+    "edit": "Edit",
+    "remove": "Remove",
+    "removeConfirm": "Remove this medication from the list?",
+    "savedNotice": "The list has been saved.",
+    "updatedAt": "Updated",
+    "footnote": "The list is stored with the case and also appears in the emergency binder, so it is available to whoever steps in.",
+    "binderSection": "Standing medications"
   }
 }
