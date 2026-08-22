@@ -350,7 +350,12 @@ test.describe('launch readiness interactions', () => {
     const closeHistory = page.getByRole('list', { name: 'היסטוריית סגירות קנונית' });
     await expect(closeHistory).toBeVisible();
     await expect(closeHistory).toContainText('2026-07');
-    await expect(closeHistory).toContainText('שולם 2026-08-09');
+    // Dates are shown the way an Israeli reader writes them, not as the raw
+    // ISO string the API returns, and each close now carries the moment it
+    // was recorded so two records that disagree can be told apart.
+    await expect(closeHistory).toContainText('שולם 09.08.2026');
+    await expect(closeHistory).toContainText('נסגר');
+    await expect(closeHistory).toContainText(/\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/);
     await expect(
       page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
     ).toContainText('בפועל');
