@@ -13,7 +13,16 @@ type Portal = {
     acknowledgedAt?: string;
   }>;
   leave: { availableBalance: number | null; used: number; planned: number };
-  requests: Array<{ id: string; request_type: string; message: string; status: string }>;
+  requests: Array<{
+    id: string;
+    request_type: string;
+    message: string;
+    status: string;
+    // The API has always returned these; the client type simply dropped them,
+    // so a request thread showed no sense of when anything happened.
+    created_at?: string;
+    updated_at?: string;
+  }>;
   documents: Array<{ id: string; document_type: string }>;
 };
 
@@ -201,8 +210,30 @@ export function WorkerPortalPage() {
           {data.requests.map((r) => (
             <article className="worker-card" key={r.id}>
               <strong>{r.request_type}</strong>
+              <p className="thread-author">{t('worker.sentByYou')}</p>
               <p>{r.message}</p>
               <small>{r.status}</small>
+              <small className="record-timestamp">
+                {toIsoAttribute(r.created_at) ? (
+                  <>
+                    {t('worker.sentAt')}{' '}
+                    <time dateTime={toIsoAttribute(r.created_at) ?? undefined}>
+                      {formatDateTime(r.created_at)}
+                    </time>
+                  </>
+                ) : null}
+                {/* Only worth showing when the status actually moved after the
+                    request was filed - that is the reply the worker waits for. */}
+                {toIsoAttribute(r.updated_at) && r.updated_at !== r.created_at ? (
+                  <>
+                    {' · '}
+                    {t('worker.answeredAt')}{' '}
+                    <time dateTime={toIsoAttribute(r.updated_at) ?? undefined}>
+                      {formatDateTime(r.updated_at)}
+                    </time>
+                  </>
+                ) : null}
+              </small>
             </article>
           ))}
         </section>
