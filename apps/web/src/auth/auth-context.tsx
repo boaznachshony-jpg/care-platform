@@ -79,6 +79,12 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
   const explicitSignOutRef = useRef(false);
+  /**
+   * The user whose workspace has actually been hydrated from the server. A ref
+   * because both the auth effect and signOut have to clear it, and because it
+   * must survive re-renders without triggering one.
+   */
+  const hydratedUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!client) return undefined;
@@ -96,9 +102,19 @@ export function AuthProvider({
         window.clearTimeout(recoveryTimer);
         recoveryTimer = undefined;
       }
-      if (nextUser && currentUserId === nextUser.id) {
+      if (nextUser && currentUserId === nextUser.id && hydratedUserRef.current === nextUser.id) {
         // TOKEN_REFRESHED and USER_UPDATED should refresh context without
         // restarting hydration or briefly covering the app with a loader.
+        //
+        // `hydratedUserRef` is what makes this safe. Testing only "same user"
+        // meant that once currentUserId was set, hydration could be skipped
+        // forever: a returning customer whose device cache is unreadable (the
+        // cache key lives in sessionStorage and dies with the browser, while
+        // the data lives in localStorage and survives) would load the app,
+        // never call /workspace, and be shown "you have no cases" while their
+        // workspace sat intact on the server. Verified in production: zero
+        // /workspace requests, 27 local keys none of which decrypted, and 8.5KB
+        // of real data at version 295 server-side.
         if (active) {
           setUser(nextUser);
           setState('ready');
@@ -137,10 +153,12 @@ export function AuthProvider({
         await prewarmApi();
         await startWorkspaceSync(nextUser.id);
         if (!active || requestId !== sessionId) return;
+        hydratedUserRef.current = nextUser.id;
         setUser(nextUser);
         setState('ready');
       } catch {
         if (!active || requestId !== sessionId) return;
+        hydratedUserRef.current = null;
         if (canResumeImmediately) {
           setUser(nextUser);
           setState('ready');
@@ -284,6 +302,7 @@ export function AuthProvider({
           explicitSignOutRef.current = false;
           return false;
         }
+        hydratedUserRef.current = null;
         stopWorkspaceSync();
         setUser(null);
         setState('ready');

@@ -168,8 +168,16 @@
     "themeToggle": "מעבר בין תצוגה בהירה לכהה"
   },
   "health": {
-    "ok": "המערכת פעילה",
-    "unreachable": "לא ניתן להתחבר לשרת"
+    "factor": {
+      "passport": "דרכון",
+      "visa": "אשרה והיתר עבודה",
+      "medical_insurance": "ביטוח רפואי",
+      "governed_tasks": "משימות פתוחות"
+    },
+    "documentValid": "קיים מסמך בתוקף בתיק",
+    "documentMissing": "לא נמצא מסמך בתוקף — נדרש חידוש או העלאה",
+    "tasksNone": "אין משימות פתוחות",
+    "tasksOpen": "{{count}} משימות פתוחות ממתינות לטיפול"
   },
   "nav": {
     "dashboard": "ראשי",

@@ -8,6 +8,7 @@ import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
 import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
+import { healthFactorExplanation, healthFactorTitle } from '../health-factors.js';
 
 type DashboardTabId = 'overview' | 'payments' | 'case';
 
@@ -348,8 +349,11 @@ export function DashboardPage() {
         )}
       </section>
       <section className="card health-card" aria-labelledby="health-title">
+        {/* dir=ltr: a score reads "82 / 100" left to right even inside an RTL
+            page, where the browser would otherwise place the slash before the
+            number and render it as "100/". */}
         {health ? (
-          <div className="score-ring" aria-label={`${health.score} מתוך 100`}>
+          <div className="score-ring" dir="ltr" aria-label={`${health.score} מתוך 100`}>
             <strong>{health.score}</strong>
             <span>/100</span>
           </div>
@@ -361,7 +365,7 @@ export function DashboardPage() {
             {(health?.factors ?? []).map((factor) => (
               <li key={factor.id}>
                 <span aria-hidden="true">{factor.status === 'good' ? '✓' : '!'}</span>{' '}
-                {factor.title}: {factor.explanation}
+                {healthFactorTitle(factor, t)}: {healthFactorExplanation(factor, t)}
               </li>
             ))}
           </ul>

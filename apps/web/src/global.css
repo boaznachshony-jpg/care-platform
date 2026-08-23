@@ -951,31 +951,40 @@ a {
   font-size: 18px;
 }
 /* One row, four controls, one size.
-   As a flex row these sized themselves from their own text - measured in
-   production at 131 / 187 / 70 / 184 wide and 56 / 56 / 48 / 60 tall, which
-   read as four unrelated buttons. A grid with equal auto-fit columns gives
-   every control the same box and re-flows on its own: the columns shrink
-   together, and once one cannot hold 170px the whole row stacks. No breakpoint
-   decides that - the content does - so it holds at any screen width. */
+   As a plain flex row these sized themselves from their own text - measured in
+   production at 131 / 187 / 70 / 184 wide and 56 / 56 / 48 / 60 tall, four
+   unrelated buttons rather than one row.
+
+   The first attempt used a grid of auto-fit columns. It made the widths equal
+   but broke the layout: a grid's min-content is one column, so the parent
+   collapsed this container to 188px and stacked all four vertically even on a
+   3127px screen. Flex keeps a max-content of "all four side by side", so the
+   parent keeps giving the row real width.
+
+   `flex: 1 1 170px` is what makes them identical: same basis, same grow, same
+   shrink, so they always resolve to the same width - and they wrap to a new
+   line by themselves when the row can no longer hold them. No breakpoint
+   decides that; the content does. */
 .clients-hero-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
-  align-items: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
 }
 /* Two classes (0,2,0) so these provably beat .secondary-button, .primary-button
-   and .clients-add-button (0,1,0). Colours are deliberately untouched here:
-   "פתיחת תיק חדש" keeps its gradient and stays the one obvious primary action
-   in the row - same size, different weight. */
+   and .clients-add-button (0,1,0) rather than depending on source order.
+   Colours are deliberately untouched: "פתיחת תיק חדש" keeps its gradient and
+   stays the one obvious primary action - same size, different weight. */
 .clients-hero-actions > .secondary-button,
 .clients-hero-actions > .primary-button,
 .clients-hero-actions > .sign-out-button {
+  flex: 1 1 170px;
+  min-width: 170px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
   width: auto;
-  height: auto;
+  height: 58px;
   min-height: 58px;
   padding-inline: 18px;
   font-size: 17px;

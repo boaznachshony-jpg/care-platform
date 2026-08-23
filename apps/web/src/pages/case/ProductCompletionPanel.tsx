@@ -16,6 +16,7 @@ import {
   type ProfessionalReviewTransitionResponse,
 } from '../../api/client.js';
 import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
+import { healthFactorExplanation, healthFactorTitle } from '../../health-factors.js';
 
 /**
  * Mirror of the server-side lifecycle. The server is authoritative — this map
@@ -100,7 +101,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       <h2 id="case-health-title">{t('completion.health')}</h2>
       {health ? (
         <>
-          <p className="completion-score">
+          <p className="completion-score" dir="ltr">
             <strong>{health.score}</strong> / 100
           </p>
           <p>{t('completion.disclaimer')}</p>
@@ -108,9 +109,9 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
             {health.factors.map((factor) => (
               <li key={factor.id}>
                 <strong>
-                  {factor.status === 'good' ? '✓' : '!'} {factor.title}
+                  {factor.status === 'good' ? '✓' : '!'} {healthFactorTitle(factor, t)}
                 </strong>{' '}
-                — {factor.explanation}{' '}
+                — {healthFactorExplanation(factor, t)}{' '}
                 <small>
                   {factor.points}/{factor.weight}
                 </small>

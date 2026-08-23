@@ -168,8 +168,16 @@
     "themeToggle": "Switch between light and dark display"
   },
   "health": {
-    "ok": "System is healthy",
-    "unreachable": "Unable to reach the server"
+    "factor": {
+      "passport": "Passport",
+      "visa": "Visa and work authorization",
+      "medical_insurance": "Medical insurance",
+      "governed_tasks": "Open tasks"
+    },
+    "documentValid": "A valid document is stored in the case",
+    "documentMissing": "No currently valid document was found - renewal or upload required",
+    "tasksNone": "No open tasks",
+    "tasksOpen": "{{count}} open tasks require attention"
   },
   "nav": {
     "dashboard": "Home",

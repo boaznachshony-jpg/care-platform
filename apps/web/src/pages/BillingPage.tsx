@@ -27,9 +27,13 @@ export function BillingPage() {
   const authEmail = auth.user?.email ?? '';
   const [searchParams] = useSearchParams();
   const [plan, setPlan] = useState<BillingPlanResponse | null>(null);
-  const [billingName, setBillingName] = useState('');
-  const [billingEmail, setBillingEmail] = useState(authEmail);
   const [recipientContact] = useState(readMvpRecipientContact);
+  // The invoice is almost always issued to the care recipient, and the name is
+  // already on file from the case setup. Starting empty made the customer
+  // retype something the system already knew; it stays fully editable for the
+  // cases where the payer is someone else.
+  const [billingName, setBillingName] = useState(recipientContact.name);
+  const [billingEmail, setBillingEmail] = useState(authEmail);
   const [sameAsRecipient, setSameAsRecipient] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
