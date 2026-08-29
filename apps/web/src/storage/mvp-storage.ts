@@ -788,15 +788,38 @@ export interface MvpWorkspaceSnapshot {
   entries: Record<string, string>;
 }
 
+export interface MvpWorkspaceCapture extends MvpWorkspaceSnapshot {
+  /**
+   * Keys that exist in localStorage but could not be decrypted.
+   *
+   * The device cache is encrypted with a key held in sessionStorage while the
+   * data itself lives in localStorage, so the data outlives the key: a
+   * returning visitor has 27 stored keys and no way to read any of them. This
+   * count is the difference between "the customer has no data" and "we cannot
+   * read the data we have", and callers must not persist a capture where it is
+   * above zero.
+   */
+  unreadableKeys: number;
+}
+
 /** Captures only CareDesk business data; UI preferences remain device-local. */
-export function captureMvpWorkspace(): MvpWorkspaceSnapshot {
-  if (!isBrowser()) return { schemaVersion: 1, entries: {} };
-  const entries = Object.fromEntries(
-    Object.keys(window.localStorage)
-      .filter((key) => key.startsWith(MVP_STORAGE_PREFIX))
-      .map((key) => [key, readBusinessItem(key) ?? '']),
-  );
-  return { schemaVersion: 1, entries };
+export function captureMvpWorkspace(): MvpWorkspaceCapture {
+  if (!isBrowser()) return { schemaVersion: 1, entries: {}, unreadableKeys: 0 };
+  const entries: Record<string, string> = {};
+  let unreadableKeys = 0;
+  for (const key of Object.keys(window.localStorage)) {
+    if (!key.startsWith(MVP_STORAGE_PREFIX)) continue;
+    const value = readBusinessItem(key);
+    if (value === null) {
+      // Previously this became '' and was uploaded as if it were the
+      // customer's real, now-blank record. A failed read is not a deletion:
+      // the key is omitted and reported so the caller can refuse to save.
+      unreadableKeys += 1;
+      continue;
+    }
+    entries[key] = value;
+  }
+  return { schemaVersion: 1, entries, unreadableKeys };
 }
 
 /** Replaces all local business data so accounts never share a browser cache. */

@@ -26,7 +26,12 @@ export class SaveWorkspace {
 
   async execute(
     actor: Actor,
-    input: { schemaVersion: number; payload: Record<string, string>; expectedVersion: number },
+    input: {
+      schemaVersion: number;
+      payload: Record<string, string>;
+      expectedVersion: number;
+      allowShrink?: boolean;
+    },
   ): Promise<WorkspaceRecord | null> {
     await authorizeOrThrow(this.deps, actor, { resourceType: 'workspace', action: 'update' });
     const now = this.deps.clock.now();
@@ -37,6 +42,7 @@ export class SaveWorkspace {
       expectedVersion: input.expectedVersion,
       updatedBy: actor.userId,
       updatedAt: now.toISOString(),
+      allowShrink: input.allowShrink === true,
     });
     if (!saved) return null;
 

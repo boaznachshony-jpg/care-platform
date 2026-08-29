@@ -11,6 +11,13 @@ export const workspaceSnapshotSchema = z.object({
 export const saveWorkspaceRequestSchema = z.object({
   expectedVersion: z.number().int().nonnegative(),
   snapshot: workspaceSnapshotSchema,
+  /**
+   * Opt-in permission to replace a populated workspace with a near-empty one.
+   * Absent by default, so a save that lost its content by accident is rejected
+   * by the server rather than committed. Only an explicit, confirmed deletion
+   * in the UI sets it.
+   */
+  allowShrink: z.boolean().optional(),
 });
 
 export type WorkspaceSnapshot = z.infer<typeof workspaceSnapshotSchema>;

@@ -1,5 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { AuthorizationError, DOWNLOAD_URL_TTL_SECONDS } from '@caredesk/application';
+import {
+  AuthorizationError,
+  DOWNLOAD_URL_TTL_SECONDS,
+  WorkspaceShrinkRejectedError,
+} from '@caredesk/application';
 import {
   MAX_WORKSPACE_FILE_BYTES,
   saveWorkspaceRequestSchema,
@@ -55,6 +59,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, container: Contain
         schemaVersion: parsed.data.snapshot.schemaVersion,
         payload: parsed.data.snapshot.entries,
         expectedVersion: parsed.data.expectedVersion,
+        allowShrink: parsed.data.allowShrink === true,
       });
       if (!saved) return sendError(request, reply, 409, 'VERSION_CONFLICT');
       const body: WorkspaceResponse = {
@@ -65,6 +70,16 @@ export function registerWorkspaceRoutes(app: FastifyInstance, container: Contain
       reply.send(body);
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
+      if (error instanceof WorkspaceShrinkRejectedError) {
+        // 409, not 400: the request is well formed, it just conflicts with
+        // what is already stored. The client shows the customer a warning and
+        // keeps the pending save rather than discarding it.
+        request.log.warn(
+          { currentEntries: error.currentEntries, incomingEntries: error.incomingEntries },
+          'workspace save rejected as destructive',
+        );
+        return sendError(request, reply, 409, 'WORKSPACE_SHRINK_REJECTED');
+      }
       throw error;
     }
   });
