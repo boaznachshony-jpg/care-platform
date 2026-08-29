@@ -4,6 +4,7 @@ import {
   clearMvpWorkspace,
   MVP_PROFILE_CHANGED,
   replaceMvpWorkspace,
+  type MvpWorkspaceCapture,
   type MvpWorkspaceSnapshot,
 } from './mvp-storage.js';
 import { clearLocalDocumentFileCache } from './document-file-store.js';
@@ -14,7 +15,6 @@ export const WORKSPACE_SYNC_CHANGED = 'caredesk:workspace-sync-changed';
 
 const WORKSPACE_OWNER_KEY = 'caredesk.workspace-owner.v1';
 const WORKSPACE_META_PREFIX = 'caredesk.workspace-sync.v1.';
-const MVP_STORAGE_PREFIX = 'caredesk.mvp.';
 
 interface WorkspaceSyncMeta {
   version: number;
@@ -68,9 +68,15 @@ const EMPTY_FINGERPRINT = fingerprint({ schemaVersion: 1, entries: {} });
  * so testing it would make this guard unreachable. "We have not read the
  * server yet" is the whole signal, and an empty PUT is the whole risk.
  */
-function wouldDestroyRemoteData(snapshot: MvpWorkspaceSnapshot): boolean {
+function wouldDestroyRemoteData(capture: MvpWorkspaceCapture): boolean {
+  // Checked before hydration matters, because it is not a question about the
+  // server at all. Some keys on this device cannot be decrypted, so whatever
+  // we are holding is an incomplete picture of the customer's data, and
+  // uploading it would delete every key we failed to read. There is no state
+  // of the server that makes that acceptable.
+  if (capture.unreadableKeys > 0) return true;
   if (hydratedThisSession) return false;
-  return fingerprint(snapshot) === EMPTY_FINGERPRINT;
+  return fingerprint(capture) === EMPTY_FINGERPRINT;
 }
 
 function metaKey(userId: string): string {
@@ -101,12 +107,10 @@ function writeMeta(): void {
 }
 
 function localWorkspaceIsReadable(): boolean {
-  const rawKeys = Object.keys(window.localStorage).filter((key) =>
-    key.startsWith(MVP_STORAGE_PREFIX),
-  );
-  if (rawKeys.length === 0) return true;
-  const entries = captureMvpWorkspace().entries;
-  return rawKeys.every((key) => Object.hasOwn(entries, key) && entries[key] !== '');
+  // A stored value that is legitimately the empty string used to be
+  // indistinguishable from one that failed to decrypt. captureMvpWorkspace now
+  // reports the failures directly, so this asks the only question that matters.
+  return captureMvpWorkspace().unreadableKeys === 0;
 }
 
 /**
@@ -151,8 +155,14 @@ async function persistSnapshot(): Promise<void> {
   const userId = activeUserId;
   const generation = syncGeneration;
   setState('saving');
-  const snapshot = captureMvpWorkspace();
-  if (wouldDestroyRemoteData(snapshot)) {
+  const capture = captureMvpWorkspace();
+  // Only the two fields the API contract defines are sent; unreadableKeys is a
+  // local diagnostic and has no business crossing the wire.
+  const snapshot: MvpWorkspaceSnapshot = {
+    schemaVersion: capture.schemaVersion,
+    entries: capture.entries,
+  };
+  if (wouldDestroyRemoteData(capture)) {
     // Keep the pending flag so a later successful hydration can reconcile,
     // and surface the error rather than silently wiping the account.
     dirty = true;

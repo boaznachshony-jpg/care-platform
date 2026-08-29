@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createCipheriv } from 'node:crypto';
 import type { Pool } from 'pg';
 import { PgWorkspaceRepository } from './workspace-repository.js';
 
@@ -88,7 +89,9 @@ describe('PgWorkspaceRepository.save', () => {
       }),
     ).resolves.toMatchObject({ tenantId: TENANT_ID, version: 2 });
 
-    const saveSql = db.query.mock.calls[3]?.[0];
+    // One extra call ahead of the write: the `select ... for update` that reads
+    // the stored workspace so a destructive save can be refused.
+    const saveSql = db.query.mock.calls[4]?.[0];
     expect(saveSql).toContain('update tenant_workspace');
     expect(saveSql).toContain('version = version + 1');
     expect(saveSql).toContain('where tenant_id = $1 and version = $4');
@@ -137,5 +140,113 @@ describe('PgWorkspaceRepository.save', () => {
     expect(saved?.payload).toEqual({
       'caredesk.mvp.clients.v1': '[{"identityNumber":"123456782"}]',
     });
+  });
+});
+
+/**
+ * The last line of defence for the incident that started this work: a device
+ * whose cache key had expired produced a snapshot of 29 keys whose values were
+ * all empty strings, and the server committed it because the request was well
+ * formed and the version matched.
+ *
+ * The client no longer builds such a snapshot. These tests cover the case where
+ * one nevertheless arrives - an old tab, a stale build, a future regression.
+ */
+describe('PgWorkspaceRepository.save destructive-write guard', () => {
+  const POPULATED = Object.fromEntries(
+    Array.from({ length: 12 }, (_, index) => [`caredesk.mvp.key.${index}`, `value ${index}`]),
+  );
+
+  /** Mirrors the repository's own envelope so the guard must really decrypt. */
+  function encryptForTest(
+    payload: Record<string, string>,
+    encodedKey: string,
+  ): Record<string, string> {
+    const iv = Buffer.alloc(12, 3);
+    const cipher = createCipheriv('aes-256-gcm', Buffer.from(encodedKey, 'base64'), iv);
+    cipher.setAAD(Buffer.from(TENANT_ID, 'utf8'));
+    const ciphertext = Buffer.concat([
+      cipher.update(JSON.stringify(payload), 'utf8'),
+      cipher.final(),
+    ]);
+    return {
+      __caredesk_encrypted_workspace_v1: 'aes-256-gcm',
+      iv: iv.toString('base64'),
+      ciphertext: ciphertext.toString('base64'),
+      authTag: cipher.getAuthTag().toString('base64'),
+    };
+  }
+
+  /** A pool whose stored row holds `payload`, encrypted when a key is given. */
+  function poolHolding(payload: Record<string, string>, encodedKey?: string) {
+    const storedPayload = encodedKey ? encryptForTest(payload, encodedKey) : payload;
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('for update')) {
+        return { rows: [{ ...workspaceRow(1), payload: storedPayload }] };
+      }
+      if (sql.includes('update tenant_workspace')) return { rows: [workspaceRow(2)] };
+      return { rows: [] };
+    });
+    return {
+      pool: { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool,
+      query,
+    };
+  }
+
+  const executedSql = (query: ReturnType<typeof vi.fn>): string[] =>
+    query.mock.calls.map(([sql]) => String(sql));
+
+  const blankedOut = Object.fromEntries(Object.keys(POPULATED).map((key) => [key, '']));
+
+  const attempt = (
+    db: { pool: Pool },
+    payload: Record<string, string>,
+    allowShrink?: boolean,
+    encodedKey?: string,
+  ) =>
+    new PgWorkspaceRepository(db.pool, encodedKey).save({
+      tenantId: TENANT_ID,
+      schemaVersion: 1,
+      payload,
+      expectedVersion: 1,
+      updatedBy: USER_ID,
+      updatedAt: UPDATED_AT,
+      ...(allowShrink === undefined ? {} : { allowShrink }),
+    });
+
+  it('refuses a save that blanks every value of a populated workspace', async () => {
+    const db = poolHolding(POPULATED);
+    await expect(attempt(db, blankedOut)).rejects.toThrow(/Refusing to reduce workspace/);
+    // The point is not only that it threw, but that nothing was written and the
+    // transaction was rolled back.
+    expect(executedSql(db.query).some((sql) => sql.includes('update tenant_workspace'))).toBe(
+      false,
+    );
+    expect(executedSql(db.query).at(-1)).toBe('rollback');
+  });
+
+  it('reads through the encryption envelope rather than trusting the raw column', async () => {
+    const db = poolHolding(POPULATED, ENCRYPTION_KEY);
+    await expect(attempt(db, blankedOut, undefined, ENCRYPTION_KEY)).rejects.toThrow(
+      /Refusing to reduce workspace/,
+    );
+  });
+
+  it('permits the same save when the customer explicitly confirmed the deletion', async () => {
+    const db = poolHolding(POPULATED);
+    await expect(attempt(db, blankedOut, true)).resolves.toMatchObject({ version: 2 });
+  });
+
+  it('does not stand in the way of ordinary editing', async () => {
+    const db = poolHolding(POPULATED);
+    const edited = { ...POPULATED, 'caredesk.mvp.key.0': '', 'caredesk.mvp.key.1': '' };
+    await expect(attempt(db, edited)).resolves.toMatchObject({ version: 2 });
+  });
+
+  it('holds the row for the duration of the check', async () => {
+    const db = poolHolding(POPULATED);
+    await attempt(db, POPULATED);
+    const guardSql = executedSql(db.query).find((sql) => sql.includes('for update'));
+    expect(guardSql).toContain('from tenant_workspace');
   });
 });

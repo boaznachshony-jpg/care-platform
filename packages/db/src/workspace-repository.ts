@@ -3,6 +3,11 @@ import type {
   WorkspaceRecord,
   WorkspaceRepository,
 } from '@caredesk/application';
+import {
+  isDestructiveShrink,
+  populatedEntryCount,
+  WorkspaceShrinkRejectedError,
+} from '@caredesk/application';
 import type { Pool } from 'pg';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { withTenant } from './pool.js';
@@ -118,6 +123,32 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
 
   async save(input: SaveWorkspaceRecord): Promise<WorkspaceRecord | null> {
     return withTenant(this.pool, input.tenantId, async (client) => {
+      // Read the stored row inside the same transaction as the write, so the
+      // comparison cannot be made against a version that has since moved.
+      // `for update` holds the row for the duration, which also serialises two
+      // concurrent tabs attempting the same destructive save.
+      // expectedVersion 0 is the create path: it is an `on conflict do nothing`
+      // insert, so it cannot overwrite anything and needs no guard.
+      if (!input.allowShrink && input.expectedVersion > 0) {
+        const existing = await client.query<WorkspaceRow>(
+          `select tenant_id, schema_version, payload, version, updated_at
+             from tenant_workspace
+            where tenant_id = $1
+              for update`,
+          [input.tenantId],
+        );
+        const current = existing.rows[0];
+        if (current) {
+          const stored = decryptPayload(current.payload, current.tenant_id, this.encryptionKey);
+          if (isDestructiveShrink(stored, input.payload)) {
+            throw new WorkspaceShrinkRejectedError(
+              populatedEntryCount(stored),
+              populatedEntryCount(input.payload),
+            );
+          }
+        }
+      }
+
       const result =
         input.expectedVersion === 0
           ? await client.query<WorkspaceRow>(
