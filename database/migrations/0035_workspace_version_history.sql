@@ -59,6 +59,11 @@ begin
 end;
 $$;
 
+-- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. The trigger
+-- is an internal database boundary and must not become a browser-facing
+-- executable surface merely because it exists in the public schema.
+revoke all on function archive_tenant_workspace_version() from public;
+
 create trigger tenant_workspace_archive_previous
   before update on tenant_workspace
   for each row
