@@ -120,6 +120,9 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerErrorHandler(app);
   const supportRateLimiter = new InMemoryRateLimiter();
   const productRateLimiter = new InMemoryRateLimiter();
+  // Separate from the product limiter so a burst against the scheduler's bearer
+  // token cannot spend a signed-in tenant's allowance, or the reverse.
+  const cronRateLimiter = new InMemoryRateLimiter();
 
   app.get('/health', async () => {
     const response: HealthResponse = {
@@ -167,9 +170,9 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseDocumentRoutes(app, container);
   registerWorkspaceRoutes(app, container);
   registerWorkspaceVersionRoutes(app, container, env);
-  registerDataIntegrityRoutes(app, container, env);
+  registerDataIntegrityRoutes(app, container, env, cronRateLimiter);
   registerFamilyAccessRoutes(app, container, env);
-  registerBillingRoutes(app, container, env);
+  registerBillingRoutes(app, container, env, cronRateLimiter);
   registerVisaRenewalRoutes(app, container);
   registerSupportRequestRoutes(app, env, supportRateLimiter);
   registerWave5Routes(app, container);

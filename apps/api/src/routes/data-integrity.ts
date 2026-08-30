@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { Container } from '../container.js';
-import { rejectUnauthorizedCron } from '../cron-auth.js';
+import { CRON_RATE_LIMIT, makeCronRateLimit, rejectUnauthorizedCron } from '../cron-auth.js';
 import type { Env } from '../env.js';
 import { safeErrorDetails } from '../plugins/safe-error.js';
+import type { RateLimiter } from '../rate-limit.js';
 import { sendError } from './http-errors.js';
 
 /**
@@ -21,26 +22,34 @@ export function registerDataIntegrityRoutes(
   app: FastifyInstance,
   container: Container,
   env: Env,
+  rateLimiter: RateLimiter,
 ): void {
-  app.get('/internal/jobs/data-integrity-scan', async (request, reply) => {
-    if (rejectUnauthorizedCron(request, reply, env)) return;
-    try {
-      const result = await container.scanForSilentDataLoss.execute();
-      if (result.signals.length > 0) {
-        // Logged here as well as by the alert sink, at the request level, so
-        // the scan's own request line carries the finding. The two paths fail
-        // for different reasons and this is the cheaper of them.
-        request.log.error(
-          { signals: result.signals.length, scannedAt: result.scannedAt },
-          'data-loss scan raised signals',
-        );
+  app.get(
+    '/internal/jobs/data-integrity-scan',
+    {
+      config: { rateLimit: CRON_RATE_LIMIT },
+      preHandler: makeCronRateLimit(rateLimiter),
+    },
+    async (request, reply) => {
+      if (rejectUnauthorizedCron(request, reply, env)) return;
+      try {
+        const result = await container.scanForSilentDataLoss.execute();
+        if (result.signals.length > 0) {
+          // Logged here as well as by the alert sink, at the request level, so
+          // the scan's own request line carries the finding. The two paths fail
+          // for different reasons and this is the cheaper of them.
+          request.log.error(
+            { signals: result.signals.length, scannedAt: result.scannedAt },
+            'data-loss scan raised signals',
+          );
+        }
+        reply.send(result);
+      } catch (error) {
+        request.log.error(safeErrorDetails(error), 'Data-loss scan failed');
+        // 503 rather than 500: a scan that could not run is a missing
+        // measurement, and Vercel retries a failed cron invocation.
+        return sendError(request, reply, 503, 'DATA_INTEGRITY_SCAN_UNAVAILABLE');
       }
-      reply.send(result);
-    } catch (error) {
-      request.log.error(safeErrorDetails(error), 'Data-loss scan failed');
-      // 503 rather than 500: a scan that could not run is a missing
-      // measurement, and Vercel retries a failed cron invocation.
-      return sendError(request, reply, 503, 'DATA_INTEGRITY_SCAN_UNAVAILABLE');
-    }
-  });
+    },
+  );
 }

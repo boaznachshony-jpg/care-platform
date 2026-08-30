@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import type { Env } from './env.js';
+import type { RateLimiter, RouteRateLimit } from './rate-limit.js';
 import { sendError } from './routes/http-errors.js';
 
 /**
@@ -36,4 +37,42 @@ export function rejectUnauthorizedCron(
   if (isAuthorizedCronRequest(request, env)) return false;
   sendError(request, reply, 401, 'UNAUTHENTICATED');
   return true;
+}
+
+const MINUTE_MS = 60_000;
+
+/**
+ * `CRON_SECRET` is a bearer token on a publicly reachable URL, and
+ * `isAuthorizedCronRequest` is a constant-time comparison against it - which
+ * defeats a timing attack but does nothing about an attacker who simply keeps
+ * guessing. Ten attempts a minute per address is far more than the scheduler
+ * needs (these endpoints run nightly and are otherwise called by hand during a
+ * restore drill) and far less than a guessing run wants.
+ */
+export const CRON_RATE_LIMIT = {
+  max: 10,
+  timeWindow: MINUTE_MS,
+  bucket: 'cron',
+} as const satisfies RouteRateLimit;
+
+/**
+ * Keyed by address rather than by principal, and registered as a `preHandler`
+ * so it runs *before* the route body checks the secret: a limiter that only
+ * counted authorized calls would be counting the requests that are not the
+ * problem.
+ */
+export function makeCronRateLimit(
+  limiter: RateLimiter,
+  policy: RouteRateLimit = CRON_RATE_LIMIT,
+): preHandlerHookHandler {
+  return async (request, reply) => {
+    const decision = await limiter.consume(
+      `cron:${policy.bucket}:${request.ip}`,
+      policy.max,
+      policy.timeWindow,
+    );
+    if (decision.allowed) return;
+    if (decision.retryAfterSeconds) reply.header('retry-after', decision.retryAfterSeconds);
+    sendError(request, reply, 429, 'RATE_LIMITED');
+  };
 }
