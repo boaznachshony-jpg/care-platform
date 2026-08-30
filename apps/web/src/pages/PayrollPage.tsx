@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
@@ -157,6 +158,7 @@ function withNationalInsuranceTracking(
 }
 
 export function PayrollPage() {
+  const { t } = useTranslation();
   const { clientId } = useParams<{ clientId: string }>();
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
@@ -949,6 +951,9 @@ export function PayrollPage() {
                 </span>
                 <strong>{money.format(calculation.saturdayPay)}</strong>
               </div>
+              {/* The Saturday figure is the first calculated amount in the wizard,
+                  so the qualification is stated here rather than only at step 5. */}
+              <p className="legal-note">{t('liability.calculation')}</p>
               <label>
                 ימי חג שעבדו
                 <input

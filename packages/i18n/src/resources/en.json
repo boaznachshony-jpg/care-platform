@@ -1,4 +1,11 @@
 {
+  "liability": {
+    "data": "The values shown here come from what was entered into the system. Accuracy, completeness and currency of the data are the user's responsibility alone.",
+    "calculation": "The calculation is an arithmetic summary of the amounts and days that were entered. It does not determine entitlements or payment rates and is not a substitute for a payslip or for review by a professional.",
+    "forecast": "The forecast projects the entered data forward and does not account for changes in rates, entitlements or circumstances. It is a planning estimate only and is not financial advice.",
+    "score": "The score is not a substitute for independent checking or professional advice, and it does not guarantee that no obligations or deadlines remain open.",
+    "reminder": "Dates and alerts are calculated from the dates that were entered. Delivery of any alert is not guaranteed, and tracking and meeting the deadlines remains the user's responsibility."
+  },
   "app": {
     "name": "CareDesk"
   },
@@ -1134,5 +1141,42 @@
     "updatedAt": "Updated",
     "footnote": "The list is stored with the case and also appears in the emergency binder, so it is available to whoever steps in.",
     "binderSection": "Standing medications"
+  },
+  "reminderRecipients": {
+    "title": "Who receives reminders",
+    "intro": "The people who are told when a dose is due. Each one has their own channel - someone abroad on a data-only plan will not receive an SMS, so pick WhatsApp or email for them.",
+    "privacyNotice": "A medication reminder is health information about another person. Do not add anyone who has not explicitly agreed, and every recipient can remove themselves at any time. The message body never names the medication.",
+    "listTitle": "Recipients",
+    "empty": "No recipients yet. Without one, no reminder is sent.",
+    "addTitle": "Add a recipient",
+    "editTitle": "Edit recipient",
+    "name": "Name",
+    "relationship": "Relationship",
+    "relationshipPlaceholder": "e.g. daughter, son, nephew",
+    "phone": "Phone",
+    "phonePlaceholder": "International format, e.g. +972501234567",
+    "email": "Email",
+    "channelLegend": "Preferred channel",
+    "channel": {
+      "sms": "SMS",
+      "whatsapp": "WhatsApp",
+      "email": "Email"
+    },
+    "channelHint": "WhatsApp and email travel over the internet and arrive abroad. SMS needs an active cellular line.",
+    "consentLabel": "This person agreed to receive reminders",
+    "consentHint": "Nothing is sent without agreement. The time it was given is recorded.",
+    "activeLabel": "Active",
+    "statusReady": "Will receive reminders",
+    "statusNoConsent": "Waiting for their agreement",
+    "statusPaused": "Paused",
+    "statusNoContact": "Missing contact details for the chosen channel",
+    "add": "Add recipient",
+    "save": "Save recipient",
+    "cancelEdit": "Cancel recipient edit",
+    "edit": "Edit recipient details",
+    "remove": "Remove recipient",
+    "removeConfirm": "Remove this person from the reminder list?",
+    "savedNotice": "Recipients saved.",
+    "updatedAt": "Updated"
   }
 }

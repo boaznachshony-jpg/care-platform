@@ -8,6 +8,7 @@ import {
   type MvpMedicationTime,
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { ReminderRecipientsSection } from '../components/ReminderRecipientsSection.js';
 
 /**
  * Standing medications, kept for handover.
@@ -228,6 +229,11 @@ export function MedicationsPage() {
         ) : null}
         {saved ? <p className="success-box">{t('medications.savedNotice')}</p> : null}
       </form>
+
+      {/* Kept on the same screen as the medication list on purpose: the person
+          deciding who to tell is the person who just wrote down what is taken
+          and when, and separating the two invites a list with no recipients. */}
+      <ReminderRecipientsSection />
 
       <p className="report-footnote">
         <span aria-hidden="true">*</span> {t('medications.footnote')}

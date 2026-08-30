@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax -- Hebrew-first pilot surface; i18n extraction follows canonical cutover */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { projectFutureCost } from '@caredesk/application';
 import {
   ApiRequestError,
@@ -96,6 +97,7 @@ function legacyExpenseToScenario(expense: MvpEmploymentExpense): SaveScenarioExp
 
 /** The authenticated EmploymentCase is the sole authority for this canonical payroll surface. */
 export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<PayrollEntryResponse[]>();
   const [closes, setCloses] = useState<CanonicalPayrollClose[]>([]);
   const [scenarioExpenses, setScenarioExpenses] = useState<ScenarioExpenseResponse[]>([]);
@@ -420,6 +422,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       <p className="payroll-live-total">
         סה״כ מחושב: <strong>{money.format(calculatedTotal)}</strong>
       </p>
+      <p className="legal-note">{t('liability.calculation')}</p>
       <button
         className="primary-button"
         type="button"
@@ -594,6 +597,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
         </p>
       ) : null}
       <h3>עלות עתידית — קדימות מקור סמכות</h3>
+      <p className="legal-note">{t('liability.forecast')}</p>
       <ul aria-label="תחזית קנונית">
         {forecast.months.slice(0, 3).map((item) => (
           <li key={item.month}>

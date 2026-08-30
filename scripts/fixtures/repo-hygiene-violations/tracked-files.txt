@@ -1,0 +1,20 @@
+# Synthetic `git ls-files` output. One path per line; blank lines and lines
+# starting with "#" are ignored. See README.md in this directory.
+
+# --- clean files, must NOT be reported ---------------------------------
+package.json
+apps/web/src/main.tsx
+packages/i18n/src/resources/he.json
+apps/web/src/components/copy-button.tsx
+docs/governance/copy-review.md
+
+# --- rule 1: files inside an archived directory ------------------------
+# (the Hebrew directory name is the same one the guard matches, UTF-8)
+גרסה2.0/care-platform-main/package.json
+גרסה2.0/care-platform-main/pnpm-lock.yaml
+גרסה2.0/care-platform-main/care-platform-main/apps/web/package.json
+
+# --- rule 2: Windows "- Copy" duplicates -------------------------------
+eslint.config - Copy.js
+README - Copy.md
+notes - Copy (2).txt

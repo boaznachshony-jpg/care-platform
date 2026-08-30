@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax -- legacy MVP Hebrew-first surface; localization extraction is tracked */
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { payrollIntelligence } from '../product-intelligence.js';
 import {
   type MvpEmploymentExpense,
@@ -25,6 +26,7 @@ export function PayrollIntelligence({
   baseSalary: number | null;
   caseId?: string;
 }) {
+  const { t } = useTranslation();
   const [closes, setCloses] = useState<MvpMonthlyClose[]>([]);
   const closeKey = useRef(crypto.randomUUID());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -97,6 +99,9 @@ export function PayrollIntelligence({
             <h2 id="analytics-title">עלות ההעסקה לאורך זמן</h2>
           </div>
         </div>
+        {/* Above the metric grid: the aggregate figures are the first thing read,
+            so the qualification has to precede them. */}
+        <p className="legal-note">{t('liability.calculation')}</p>
         {analytics.trend.length === 0 ? (
           <p>עדיין אין נתוני שכר שמורים להצגה.</p>
         ) : (
@@ -268,6 +273,7 @@ export function PayrollIntelligence({
             <p>
               סכום ששמור לתשלום: <strong>{money.format(open.total)}</strong>
             </p>
+            <p className="legal-note">{t('liability.calculation')}</p>
             <button
               className="primary-button"
               type="button"

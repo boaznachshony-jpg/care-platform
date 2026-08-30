@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   deleteDocumentFile,
   readDocumentFile,
@@ -39,6 +40,7 @@ const emptyDraft = {
 };
 
 export function DocumentsPage() {
+  const { t } = useTranslation();
   const auth = useAuth();
   const [documents, setDocuments] = useState(readMvpDocuments);
   const [draft, setDraft] = useState(emptyDraft);
@@ -258,48 +260,55 @@ export function DocumentsPage() {
           <p>המסך אינו מציג עוד מסמכי הדגמה. לחצו על “הוספת מסמך” כדי להתחיל.</p>
         </section>
       ) : (
-        <section className="document-grid">
-          {documents.map((document) => (
-            <article className="document-card" key={document.id}>
-              <div className="doc-icon" aria-hidden="true">
-                ▤
-              </div>
-              <div>
-                <h3>{document.name}</h3>
-                <p>
-                  {document.category} · {document.dateLabel}
-                </p>
-                <small>{document.fileName}</small>
-              </div>
-              <span className={`pill ${document.status === 'attention' ? 'amber' : 'green'}`}>
-                {document.status === 'attention' ? 'דורש טיפול' : 'תקין'}
-              </span>
-              <div className="document-actions">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => void openDocument(document)}
-                >
-                  פתיחה
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => startEdit(document)}
-                >
-                  עריכה
-                </button>
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => void removeDocument(document)}
-                >
-                  מחיקה
-                </button>
-              </div>
-            </article>
-          ))}
-        </section>
+        <>
+          {/* The validity label and the status pill repeat what was entered on the
+              upload form; nothing here is verified against an outside register. */}
+          <p className="legal-note" id="documents-liability-note">
+            {t('liability.data')}
+          </p>
+          <section className="document-grid" aria-describedby="documents-liability-note">
+            {documents.map((document) => (
+              <article className="document-card" key={document.id}>
+                <div className="doc-icon" aria-hidden="true">
+                  ▤
+                </div>
+                <div>
+                  <h3>{document.name}</h3>
+                  <p>
+                    {document.category} · {document.dateLabel}
+                  </p>
+                  <small>{document.fileName}</small>
+                </div>
+                <span className={`pill ${document.status === 'attention' ? 'amber' : 'green'}`}>
+                  {document.status === 'attention' ? 'דורש טיפול' : 'תקין'}
+                </span>
+                <div className="document-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void openDocument(document)}
+                  >
+                    פתיחה
+                  </button>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => startEdit(document)}
+                  >
+                    עריכה
+                  </button>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={() => void removeDocument(document)}
+                  >
+                    מחיקה
+                  </button>
+                </div>
+              </article>
+            ))}
+          </section>
+        </>
       )}
     </div>
   );

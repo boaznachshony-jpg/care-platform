@@ -27,3 +27,32 @@ pnpm-debug.log*
 # Editor/OS
 .DS_Store
 Thumbs.db
+
+# Archived copies of older releases.
+#
+# These live in the working folder but are dead: nothing imports from them,
+# no tool builds them, and they are already excluded from eslint and
+# prettier. They were tracked, though, and the package manifests and lock
+# files inside them were scanned by Dependabot - which is where 12 of the
+# repository's 13 security alerts came from. Untracked with
+# `git rm -r --cached`, so every file remains on disk and every version
+# remains in history; only tracking stopped.
+#
+# Enforced by scripts/check-repo-hygiene.mjs, wired into `pnpm lint`.
+גרסה2.0/
+care-platform-main/
+
+# Windows Explorer "- Copy" duplicates.
+#
+# The duplicated documents are noise. The duplicated CONFIG files
+# (`eslint.config - Copy.js`, `package - Copy.json`, `tsconfig.base - Copy.json`,
+# `pnpm-lock - Copy.yaml`) are the actual hazard: editing one and wondering
+# why nothing changes costs about an hour. The patterns below cover the plain
+# form, the numbered form Explorer produces on a second copy, and the
+# extensionless form.
+#
+# Enforced by scripts/check-repo-hygiene.mjs, wired into `pnpm lint`.
+* - Copy.*
+* - Copy
+* - Copy (*).*
+* - Copy (*)

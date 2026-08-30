@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   readMvpTasks,
   saveMvpTasks,
@@ -44,6 +45,7 @@ function displayDate(value: string): string {
 }
 
 export function TasksPage({ today }: { today?: Date } = {}) {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState(readMvpTasks);
   const [filter, setFilter] = useState<TaskFilter>('open');
   const [showForm, setShowForm] = useState(false);
@@ -204,6 +206,8 @@ export function TasksPage({ today }: { today?: Date } = {}) {
           <p>{quarterlyInsurance.paymentWindow}</p>
           <strong>{quarterlyInsurance.deadlineLabel}</strong>
         </div>
+        {/* The quarterly window and deadline are computed, not stored facts. */}
+        <p className="legal-note">{t('liability.reminder')}</p>
         {quarterlyInsurance.preparationOnly ? (
           <p className="form-note">
             היום מכינים ומרכזים את נתוני שלושת חודשי הרבעון. אפשרות הדיווח והתשלום תיפתח מחר.
