@@ -8,8 +8,11 @@ At C:\Users\boazn\AppData\Roaming\npm\pnpm.ps1:24 char:5
 
 [1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/dev/care-platform/apps/web[39m
 
- [32mΓ£ô[39m src/pages/MedicationsPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1462[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m MedicationsPage[2m > [22mrecords a medication with its dosage, schedule and prescribing doctor [33m 403[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CanonicalPayrollIntelligence.test.tsx[2m > [22m[2mCanonicalPayrollIntelligence ΓÇö 
+reconciliation[2m > [22m[2mrenders the canonical payroll section
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
 [90mstderr[2m | src/pages/case/CanonicalPayrollIntelligence.test.tsx[2m > [22m[2mCanonicalPayrollIntelligence ΓÇö Future Cost 
 canonical inputs[2m > [22m[2mfeeds the projection exclusively from canonical server sources
 [22m[39mWarning: A component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from 
@@ -19,88 +22,137 @@ of the component. More info: https://reactjs.org/link/controlled-components
     at label
     at div
     at section
-    at CanonicalPayrollIntelligence (C:\dev\care-platform\apps\web\src\pages\case\CanonicalPayrollIntelligence.tsx:84:41)
+    at CanonicalPayrollIntelligence (C:\dev\care-platform\apps\web\src\pages\case\CanonicalPayrollIntelligence.tsx:85:41)
 
+ [32mΓ£ô[39m src/pages/EmergencyBinderPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1532[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m EmergencyBinderPage[2m > [22mloads and displays employment cases for selection [33m 339[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/MedicationsPage.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1517[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/DashboardPage.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 1752[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m DashboardPage[2m > [22mshows the greeting with employer name [33m 384[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/CanonicalPayrollIntelligence.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 2070[2mms[22m[39m
+[90mstderr[2m | src/pages/PayrollPage.test.tsx[2m > [22m[2mPayrollPage annual report[2m > [22m[2mstarts a retroactive 
+sequence at the first missing month and skips existing months
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
+ [32mΓ£ô[39m src/pages/SettingsPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1809[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m SettingsPage complete client profile[2m > [22medits and persists recipient, employer, and representative details [33m 780[2mms[22m[39m
+[90mstderr[2m | src/App.test.tsx[2m > [22m[2mApp[2m > [22m[2mhas no detectable accessibility violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/App.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1363[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m App[2m > [22mrenders the public Hebrew landing page before the private workspace [33m 641[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m App[2m > [22mhas no detectable accessibility violations [33m 509[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/OpenIssuesPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 718[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m OpenIssuesPage[2m > [22mshows the page title [33m 339[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/BillingPage.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 1084[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m BillingPage[2m > [22mshows the VAT-inclusive 39 ILS price and the current 100% sponsored charge [33m 418[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/OnboardingPage.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1064[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m ATM onboarding validation and persistence[2m > [22mshows a specific checksum error and prevents continuing [33m 452[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CaseDocumentsSection.test.tsx[2m > [22m[2mCaseDocumentsSection[2m > [22m[2mwith no 
+documents[2m > [22m[2mhas no detectable accessibility violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+[90mstderr[2m | src/pages/case/CaseDocumentsSection.test.tsx[2m > [22m[2mCaseDocumentsSection[2m > [22m[2mwith 
+documents[2m > [22m[2mhas no detectable accessibility violations with a populated list
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/case/CaseDocumentsSection.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1024[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseDocumentsSection[2m > [22mwith no documents[2m > [22mhas no detectable accessibility violations [33m 473[2mms[22m[39m
 [90mstderr[2m | src/pages/ContactPage.test.tsx[2m > [22m[2mContactPage[2m > [22m[2mhas no detectable accessibility 
 violations
 [22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
 
- [32mΓ£ô[39m src/pages/ContactPage.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 988[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m ContactPage[2m > [22mopens a short in-app request form and keeps the destination email hidden [33m 428[2mms[22m[39m
- [32mΓ£ô[39m src/pages/EmergencyBinderPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1983[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m EmergencyBinderPage[2m > [22mloads and displays employment cases for selection [33m 615[2mms[22m[39m
- [32mΓ£ô[39m src/pages/DashboardPage.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 2142[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m DashboardPage[2m > [22mshows the greeting with employer name [33m 554[2mms[22m[39m
- [32mΓ£ô[39m src/pages/case/CanonicalPayrollIntelligence.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 2397[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CanonicalPayrollIntelligence ΓÇö reconciliation[2m > [22mcleanup button appears after successful canonical save of a migration [33m 393[2mms[22m[39m
- [32mΓ£ô[39m src/pages/SettingsPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1933[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m SettingsPage complete client profile[2m > [22medits and persists recipient, employer, and representative details [33m 971[2mms[22m[39m
- [32mΓ£ô[39m src/pages/TasksPage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 822[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m TasksPage[2m > [22mcreates and persists a new task from the primary action [33m 355[2mms[22m[39m
- [32mΓ£ô[39m src/pages/OnboardingPage.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 952[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m ATM onboarding validation and persistence[2m > [22mshows a specific checksum error and prevents continuing [33m 370[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/ContactPage.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1013[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m ContactPage[2m > [22mopens a short in-app request form and keeps the destination email hidden [33m 467[2mms[22m[39m
 [90mstderr[2m | src/AppShell.test.tsx[2m > [22m[2mAppShell text size controls[2m > [22m[2menlarges the entire interface and 
 persists the selected size
 [22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
 [32m'NO_I18NEXT_INSTANCE'[39m }
 
- [32mΓ£ô[39m src/pages/PayrollPage.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 4348[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mstarts a retroactive sequence at the first missing month and skips existing months [33m 657[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mshows a reconciled report and changes the monthly detail with the selected year [33m 432[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mcalculates Saturdays, additions and advances and saves the month cumulatively [33m 607[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mcreates one quarterly national-insurance tracking item after payroll save without requiring an amount [33m 586[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mblocks negative, non-numeric and unreasonable base payroll values [33m 313[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22madvances for the exact July payroll values and counts four Saturdays [33m 305[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22madds multiple named additional payments to the saved calculation and print summary [33m 527[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mkeeps values across back and forward navigation and calculates the summary from them [33m 653[2mms[22m[39m
- [32mΓ£ô[39m src/pages/BillingPage.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 1094[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m BillingPage[2m > [22mshows the VAT-inclusive 39 ILS price and the current 100% sponsored charge [33m 360[2mms[22m[39m
- [32mΓ£ô[39m src/AppShell.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 927[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m AppShell text size controls[2m > [22menlarges the entire interface and persists the selected size [33m 382[2mms[22m[39m
- [32mΓ£ô[39m src/pages/CasePage.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1087[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CasePage[2m > [22mloaded state[2m > [22mshows the case view title [33m 584[2mms[22m[39m
-[90mstderr[2m | src/App.test.tsx[2m > [22m[2mApp[2m > [22m[2mhas no detectable accessibility violations
-[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
-
- [32mΓ£ô[39m src/App.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1507[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m App[2m > [22mrenders the public Hebrew landing page before the private workspace [33m 754[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m App[2m > [22mhas no detectable accessibility violations [33m 629[2mms[22m[39m
- [32mΓ£ô[39m src/pages/OpenIssuesPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1163[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m OpenIssuesPage[2m > [22mshows the page title [33m 538[2mms[22m[39m
- [32mΓ£ô[39m src/components/RegulationRulesAdmin.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1247[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m RegulationRulesAdmin[2m > [22moffers only the legal transition for each status and activates on click [33m 466[2mms[22m[39m
- [32mΓ£ô[39m src/pages/LoginPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1500[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m login progress[2m > [22mexplains the secure authentication delay and prevents duplicate submissions [33m 767[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m registration validation[2m > [22mlets an unconfirmed user request a fresh verification email [33m 607[2mms[22m[39m
-[90mstderr[2m | src/pages/case/CaseDocumentsSection.test.tsx[2m > [22m[2mCaseDocumentsSection[2m > [22m[2mwith no 
-documents[2m > [22m[2mhas no detectable accessibility violations
-[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
-
- [32mΓ£ô[39m src/pages/FamilyAccessPage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1351[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m FamilyAccessPage[2m > [22mshows the current member and sends a manager invitation [33m 1104[2mms[22m[39m
-[90mstderr[2m | src/pages/case/CaseDocumentsSection.test.tsx[2m > [22m[2mCaseDocumentsSection[2m > [22m[2mwith 
-documents[2m > [22m[2mhas no detectable accessibility violations with a populated list
-[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
-
- [32mΓ£ô[39m src/pages/case/CaseDocumentsSection.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1846[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CaseDocumentsSection[2m > [22mwith no documents[2m > [22mshows the empty state in Hebrew from i18n [33m 398[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CaseDocumentsSection[2m > [22mwith no documents[2m > [22mhas no detectable accessibility violations [33m 1031[2mms[22m[39m
+ [31mΓ¥»[39m src/pages/PayrollPage.test.tsx [2m([22m[2m34 tests[22m[2m | [22m[31m7 failed[39m[2m)[22m[33m 6658[2mms[22m[39m
+   [32mΓ£ô[39m PayrollPage retroactive sequence helpers[2m > [22mcreates an inclusive month range across a year boundary[32m 5[2mms[22m[39m
+   [32mΓ£ô[39m PayrollPage retroactive sequence helpers[2m > [22mcopies only fixed payroll values into the next month[32m 2[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mstarts a retroactive sequence at the first missing month and skips existing months [33m 712[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mshows a reconciled report and changes the monthly detail with the selected year [33m 479[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mcalculates Saturdays, additions and advances and saves the month cumulatively [33m 794[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mcreates one quarterly national-insurance tracking item after payroll save without requiring an amount [33m 620[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mblocks negative, non-numeric and unreasonable base payroll values [33m 383[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22madvances for the exact July payroll values and counts four Saturdays [33m 369[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mblocks text and extreme values in additions and deductions [33m 369[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22madds multiple named additional payments to the saved calculation and print summary [33m 611[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mkeeps values across back and forward navigation and calculates the summary from them [33m 820[2mms[22m[39m
+   [32mΓ£ô[39m national insurance wage period[2m > [22manchors a quarterly period on the month before the due date[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance wage period[2m > [22mcovers a single month for monthly and one-time payments[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance wage period[2m > [22mcovers twelve months for an annual payment[32m 1[2mms[22m[39m
+   [32mΓ£ô[39m national insurance wage period[2m > [22mfalls back to the current month when no due date was entered yet[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance wage base and amount[2m > [22mcounts wage additions but not employer contributions or deductions[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance wage base and amount[2m > [22mrounds to agorot and never returns NaN[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mfills each line from that month and falls back to the contract salary[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mleaves a line empty rather than guessing when there is no wage at all[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mreports a month marked "╫£╫É" as zero and keeps its wage out of the totals[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mcloses a month later than today and does not let an override reopen it[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mtakes the shared rate per line and lets one line depart from it[32m 1[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mkeeps whole shekels in the wage and agorot in the amount, and never yields NaN[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m national insurance monthly reporting lines[2m > [22mnames a month the way the Institute form prints it[32m 0[2mms[22m[39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22mopens one reporting line per month of the quarter, filled from that month[39m[32m 134[2mms[22m[39m
+[31m     ΓåÆ expected [ '1╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö╫Ö╫ò╫£╫Ö 2020', ΓÇª(2) ] to deeply equal [ '1 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö ╫Ö╫ò╫£╫Ö 2020', ΓÇª(2) ][39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22msums the lines into the two summary rows and into the amount field[39m[32m 126[2mms[22m[39m
+[31m     ΓåÆ expected '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥21,500.00 Γé¬' to be '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥ 21,500.00 Γé¬' // Object.is equality[39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22mreports a month marked ╫£╫É as zero and locks its wage[39m[32m 144[2mms[22m[39m
+[31m     ΓåÆ expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù0.00 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 0.00 Γé¬' // Object.is equality[39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22mcloses a month later than the current month and says so in the formΓÇÖs own words[39m[32m 181[2mms[22m[39m
+[31m     ΓåÆ expected '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥0.00 Γé¬' to be '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥ 0.00 Γé¬' // Object.is equality[39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22mdrives every line from the shared rate and lets one line depart from it[39m[32m 196[2mms[22m[39m
+[31m     ΓåÆ expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù266.40 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 266.40 Γé¬' // Object.is equality[39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22mkeeps an emptied wage at zero rather than NaN[39m[32m 99[2mms[22m[39m
+[31m     ΓåÆ expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù0.00 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 0.00 Γé¬' // Object.is equality[39m
+[31m   [31m├ù[31m PayrollPage national insurance monthly report[2m > [22mreports the wage in whole shekels and the insurance to agorot[39m[32m 117[2mms[22m[39m
+[31m     ΓåÆ expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù266.44 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 266.44 Γé¬' // Object.is equality[39m
+   [32mΓ£ô[39m PayrollPage national insurance monthly report[2m > [22mlets a typed amount override the total and saves the typed one[32m 234[2mms[22m[39m
+   [32mΓ£ô[39m PayrollPage national insurance monthly report[2m > [22msaves the total to pay when the customer does not override it[32m 139[2mms[22m[39m
+   [32mΓ£ô[39m PayrollPage national insurance monthly report[2m > [22mhides the reporting table when the category is not national insurance[32m 114[2mms[22m[39m
 [90mstderr[2m | src/pages/OpenCasePage.test.tsx[2m > [22m[2mOpenCasePage[2m > [22m[2mhas no detectable accessibility 
 violations
 [22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
 
- [32mΓ£ô[39m src/pages/OpenCasePage.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1551[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m OpenCasePage[2m > [22mrenders the three party sections with labeled fields (Hebrew, from i18n) [33m 463[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m OpenCasePage[2m > [22mhas no detectable accessibility violations [33m 895[2mms[22m[39m
- [32mΓ£ô[39m src/pages/case/ProductCompletionPanel.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1179[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m ProductCompletionPanel[2m > [22mrenders the case health heading [33m 443[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m ProductCompletionPanel[2m > [22mescalation lifecycle[2m > [22mshows the status badge, the manual-handoff disclaimer and the legal transition buttons [33m 315[2mms[22m[39m
- [32mΓ£ô[39m src/pages/case/AutomationPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 951[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m AutomationPanel[2m > [22mrenders the home view with two primary action buttons [33m 394[2mms[22m[39m
- [32mΓ£ô[39m src/components/AutocompleteField.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 730[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m AutocompleteField[2m > [22mshows filtered suggestions and selects one with the mouse [33m 566[2mms[22m[39m
- [32mΓ£ô[39m src/components/LicensedBureauSelector.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1315[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m LicensedBureauSelector[2m > [22mfills the published bureau and contact details from the official selection [33m 1135[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/OpenCasePage.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1023[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m OpenCasePage[2m > [22mhas no detectable accessibility violations [33m 645[2mms[22m[39m
+[90mstderr[2m | src/pages/TasksPage.test.tsx[2m > [22m[2mTasksPage[2m > [22m[2mcreates and persists a new task from the 
+primary action
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
+ [32mΓ£ô[39m src/AppShell.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1002[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AppShell text size controls[2m > [22menlarges the entire interface and persists the selected size [33m 465[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/TasksPage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 871[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m TasksPage[2m > [22mcreates and persists a new task from the primary action [33m 361[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/CasePage.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1061[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CasePage[2m > [22mloaded state[2m > [22mshows the case view title [33m 536[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/AutomationPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 555[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CaseTasksSection.test.tsx[2m > [22m[2mCaseTasksSection[2m > [22m[2mwith no tasks[2m > 
+[22m[2mhas no detectable accessibility violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/case/CaseTasksSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 669[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseTasksSection[2m > [22mwith no tasks[2m > [22mhas no detectable accessibility violations [33m 393[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/TimelinePage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 529[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m TimelinePage canonical API projection[2m > [22mshows the canonical empty state without fabricating deadlines [33m 302[2mms[22m[39m
+ [32mΓ£ô[39m src/components/RegulationRulesAdmin.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 834[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m RegulationRulesAdmin[2m > [22moffers only the legal transition for each status and activates on click [33m 301[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/LoginPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m login progress[2m > [22mexplains the secure authentication delay and prevents duplicate submissions [33m 398[2mms[22m[39m
+ [32mΓ£ô[39m src/components/LicensedBureauSelector.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 721[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m LicensedBureauSelector[2m > [22mfills the published bureau and contact details from the official selection [33m 636[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/CaseContactsSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 521[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CollaborationPanel.test.tsx[2m > [22m[2mCollaborationPanel[2m > [22m[2mloading state[2m > 
+[22m[2mshows loading indicator while fetching
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
+ [32mΓ£ô[39m src/pages/case/CollaborationPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 459[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/FamilyAccessPage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 482[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m FamilyAccessPage[2m > [22mshows the current member and sends a manager invitation [33m 441[2mms[22m[39m
 [90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mrecovers a temporary null auth event before showing the login screen
 [22m[39m[auth] Empty session observed; verifying persisted session before sign-out.
 
@@ -116,66 +168,207 @@ violations
 [90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mfails closed after the grace period when session recovery is not valid
 [22m[39m[auth] Empty session observed; verifying persisted session before sign-out.
 
- [32mΓ£ô[39m src/auth/auth-context.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 807[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m authentication gate[2m > [22mreturns passwordless first-time entry to client onboarding [33m 540[2mms[22m[39m
-[90mstderr[2m | src/pages/case/CollaborationPanel.test.tsx[2m > [22m[2mCollaborationPanel[2m > [22m[2mloading state[2m > 
-[22m[2mshows loading indicator while fetching
-[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
-[32m'NO_I18NEXT_INSTANCE'[39m }
-
- [32mΓ£ô[39m src/pages/case/CollaborationPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 775[2mms[22m[39m
- [32mΓ£ô[39m src/components/AccountFrozenGate.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 701[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m AccountFrozenGate[2m > [22mlocks the app when the account is frozen and links to the billing page [33m 497[2mms[22m[39m
-[90mstderr[2m | src/pages/case/CaseTasksSection.test.tsx[2m > [22m[2mCaseTasksSection[2m > [22m[2mwith no tasks[2m > 
-[22m[2mhas no detectable accessibility violations
-[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
-
- [32mΓ£ô[39m src/pages/case/CaseTasksSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1011[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CaseTasksSection[2m > [22mwith no tasks[2m > [22mhas no detectable accessibility violations [33m 591[2mms[22m[39m
- [32mΓ£ô[39m src/pages/case/VisaRenewalSection.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 791[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m VisaRenewalSection[2m > [22mstarts through the API and handles conflict feedback [33m 477[2mms[22m[39m
- [32mΓ£ô[39m src/pages/WorkerPortalPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 526[2mms[22m[39m
- [32mΓ£ô[39m src/pages/TimelinePage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 755[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m TimelinePage canonical API projection[2m > [22mshows the canonical empty state without fabricating deadlines [33m 444[2mms[22m[39m
+ [32mΓ£ô[39m src/auth/auth-context.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 437[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/VisaRenewalSection.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 516[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/ProductCompletionPanel.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 603[2mms[22m[39m
+ [32mΓ£ô[39m src/components/AccountFrozenGate.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 356[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/DemoOverviewPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 370[2mms[22m[39m
+ [32mΓ£ô[39m src/components/UpcomingPaymentsCard.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 328[2mms[22m[39m
 [90mstderr[2m | src/AppShell.sync.test.tsx[2m > [22m[2mAppShell cloud save recovery[2m > [22m[2mretries without telling the 
 user to reload and lose local edits
 [22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
 [32m'NO_I18NEXT_INSTANCE'[39m }
 
- [32mΓ£ô[39m src/AppShell.sync.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 633[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m AppShell cloud save recovery[2m > [22mretries without telling the user to reload and lose local edits [33m 631[2mms[22m[39m
- [32mΓ£ô[39m src/pages/DemoOverviewPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 725[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m DemoOverviewPage[2m > [22mrenders the same glance layout with demo issues [33m 473[2mms[22m[39m
- [32mΓ£ô[39m src/pages/DocumentsPage.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 634[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m DocumentsPage[2m > [22moffers a native calendar picker for the document expiry date [33m 561[2mms[22m[39m
- [32mΓ£ô[39m src/pages/EmployeePage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 597[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m EmployeePage[2m > [22mshows the caregiver name as the page heading [33m 448[2mms[22m[39m
- [32mΓ£ô[39m src/pages/case/CaseContactsSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 836[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CaseContactsSection[2m > [22mempty state[2m > [22mshows the section heading [33m 340[2mms[22m[39m
- [32mΓ£ô[39m src/auth/auth-hydration.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 197[2mms[22m[39m
- [32mΓ£ô[39m src/components/UpcomingPaymentsCard.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 671[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m UpcomingPaymentsCard[2m > [22malways shows both payment obligations with due dates and day counts [33m 560[2mms[22m[39m
- [32mΓ£ô[39m src/pages/case/CaseTimelineSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 576[2mms[22m[39m
-   [33m[2mΓ£ô[22m[39m CaseTimelineSection[2m > [22mempty state[2m > [22mshows the section heading [33m 470[2mms[22m[39m
- [32mΓ£ô[39m src/notifications.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 16[2mms[22m[39m
- [32mΓ£ô[39m src/storage/mvp-storage.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 154[2mms[22m[39m
- [32mΓ£ô[39m src/storage/workspace-sync.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 106[2mms[22m[39m
- [32mΓ£ô[39m src/validation/onboarding-fields.test.ts [2m([22m[2m39 tests[22m[2m)[22m[32m 28[2mms[22m[39m
- [32mΓ£ô[39m src/payroll-report.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 28[2mms[22m[39m
- [32mΓ£ô[39m src/reminders/schedule.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 47[2mms[22m[39m
- [32mΓ£ô[39m src/storage/reminder-recipients.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 37[2mms[22m[39m
- [32mΓ£ô[39m src/api/client.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 17[2mms[22m[39m
- [32mΓ£ô[39m src/caregiver-options.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
- [32mΓ£ô[39m src/quarterly-national-insurance.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
- [32mΓ£ô[39m src/validation/israeli-id.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32mΓ£ô[39m src/payroll-calculation.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
- [32mΓ£ô[39m src/format-timestamp.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32mΓ£ô[39m src/storage/unreadable-cache-guard.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 11[2mms[22m[39m
- [32mΓ£ô[39m src/upcoming-payments.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32mΓ£ô[39m src/environment.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32mΓ£ô[39m src/AppShell.sync.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 332[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AppShell cloud save recovery[2m > [22mretries without telling the user to reload and lose local edits [33m 330[2mms[22m[39m
+[90mstderr[2m | src/pages/DocumentsPage.test.tsx[2m > [22m[2mDocumentsPage[2m > [22m[2moffers a native calendar picker for 
+the document expiry date
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
 
-[2m Test Files [22m [1m[32m54 passed[39m[22m[90m (54)[39m
-[2m      Tests [22m [1m[32m453 passed[39m[22m[90m (453)[39m
-[2m   Start at [22m 05:22:48
-[2m   Duration [22m 31.63s[2m (transform 4.14s, setup 26.78s, collect 20.18s, tests 45.21s, environment 95.17s, prepare 10.57s)[22m
+ [32mΓ£ô[39m src/pages/DocumentsPage.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 423[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m DocumentsPage[2m > [22moffers a native calendar picker for the document expiry date [33m 380[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/CaseTimelineSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 363[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/EmployeePage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 291[2mms[22m[39m
+ [32mΓ£ô[39m src/components/AutocompleteField.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 343[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/WorkerPortalPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+ [32mΓ£ô[39m src/auth/auth-hydration.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 103[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/mvp-storage.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 86[2mms[22m[39m
+ [32mΓ£ô[39m src/reminders/schedule.test.ts [2m([22m[2m47 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/workspace-sync.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32mΓ£ô[39m src/payroll-report.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32mΓ£ô[39m src/validation/onboarding-fields.test.ts [2m([22m[2m39 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/reminder-recipients.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32mΓ£ô[39m src/api/client.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32mΓ£ô[39m src/notifications.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32mΓ£ô[39m src/upcoming-payments.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32mΓ£ô[39m src/quarterly-national-insurance.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/unreadable-cache-guard.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32mΓ£ô[39m src/payroll-calculation.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32mΓ£ô[39m src/validation/israeli-id.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32mΓ£ô[39m src/format-timestamp.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32mΓ£ô[39m src/environment.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32mΓ£ô[39m src/caregiver-options.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
 
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m[1m[41m Failed Tests 7 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > [22mopens 
+one reporting line per month of the quarter, filled from that month
+[31m[1mAssertionError[22m: expected [ '1╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö╫Ö╫ò╫£╫Ö 2020', ΓÇª(2) ] to deeply equal [ '1 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö 
+╫Ö╫ò╫£╫Ö 2020', ΓÇª(2) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "1 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö ╫Ö╫ò╫£╫Ö 2020",[39m
+[32m-   "2 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö ╫É╫ò╫Æ╫ò╫í╫ÿ 2020",[39m
+[32m-   "3 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö ╫í╫ñ╫ÿ╫₧╫æ╫¿ 2020",[39m
+[31m+   "1╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö╫Ö╫ò╫£╫Ö 2020",[39m
+[31m+   "2╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö╫É╫ò╫Æ╫ò╫í╫ÿ 2020",[39m
+[31m+   "3╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö╫í╫ñ╫ÿ╫₧╫æ╫¿ 2020",[39m
+[2m  ][22m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m687:93[22m[39m
+    [90m685| [39m
+    [90m686| [39m    [34mexpect[39m([34mreportingLines[39m())[33m.[39m[34mtoHaveLength[39m([34m3[39m)[33m;[39m
+    [90m687| [39m    expect(reportingLines().map((line) => plainText(line.querySelectorΓÇª
+    [90m   | [39m                                                                                            [31m^[39m
+    [90m688| [39m      ['1 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö ╫Ö╫ò╫£╫Ö 2020', '2 ╫ù╫ò╫ô╫⌐ ╫ö╫ó╫í╫º╫ö ╫É╫ò╫Æ╫ò╫í╫ÿ 2020', '3 ╫ù╫ò╫ô╫⌐ ╫öΓÇª
+    [90m689| [39m    )[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/7]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > [22msums 
+the lines into the two summary rows and into the amount field
+[31m[1mAssertionError[22m: expected '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥21,500.00 Γé¬' to be '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥ 21,500.00 Γé¬' 
+// Object.is equality[39m
+
+Expected: [32m"╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥[7m [27m21,500.00 Γé¬"[39m
+Received: [31m"╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥21,500.00 Γé¬"[39m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m708:31[22m[39m
+    [90m706| [39m    [34menterDueDate[39m([33mPAST_DUE_DATE[39m)[33m;[39m
+    [90m707| [39m
+    [90m708| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m0[39m])[33m.[39m[34mtoBe[39m([32m'╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ 
+╫⌐╫⌐╫ò╫£╫¥ 21,500.00 Γé¬'[39m)[33m;[39m
+    [90m   | [39m                              [31m^[39m
+    [90m709| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m1[39m])[33m.[39m[34mtoContain[39m([32m'╫í╫ö╫┤╫¢ 
+╫£╫¬╫⌐╫£╫ò╫¥'[39m)[33m;[39m
+    [90m710| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m1[39m])[33m.[39m[34mtoContain[39m([32m'774.00 
+Γé¬'[39m)[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/7]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > 
+[22mreports a month marked ╫£╫É as zero and locks its wage
+[31m[1mAssertionError[22m: expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù0.00 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 0.00 Γé¬' // Object.is equality[39m
+
+Expected: [32m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù[7m [27m0.00 Γé¬"[39m
+Received: [31m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù0.00 Γé¬"[39m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m726:27[22m[39m
+    [90m724| [39m    [34mexpect[39m([34mrateField[39m([32m'╫É╫ò╫Æ╫ò╫í╫ÿ 
+2020'[39m))[33m.[39m[34mtoBeDisabled[39m()[33m;[39m
+    [90m725| [39m    expect(reportingLines()[1]?.className).toContain('is-not-employed'ΓÇª
+    [90m726| [39m    [34mexpect[39m([34mlineAmount[39m([34m1[39m))[33m.[39m[34mtoBe[39m([32m'╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 0.00 
+Γé¬'[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m727| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m0[39m])[33m.[39m[34mtoBe[39m([32m'╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ 
+╫⌐╫⌐╫ò╫£╫¥ 14,500.00 Γé¬'[39m)[33m;[39m
+    [90m728| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByLabelText[39m([36m/^╫í╫¢╫ò╫¥ 
+╫æ╫⌐╫┤╫ù/[39m))[33m.[39m[34mtoHaveValue[39m([34m522[39m)[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/7]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > [22mcloses 
+a month later than the current month and says so in the formΓÇÖs own words
+[31m[1mAssertionError[22m: expected '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥0.00 Γé¬' to be '╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥ 0.00 Γé¬' // 
+Object.is equality[39m
+
+Expected: [32m"╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥[7m [27m0.00 Γé¬"[39m
+Received: [31m"╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ ╫⌐╫⌐╫ò╫£╫¥0.00 Γé¬"[39m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m751:31[22m[39m
+    [90m749| [39m    )[33m;[39m
+    [90m750| [39m    [34mexpect[39m([34mreportingLines[39m()[[34m2[39m][33m?.[39mclassName)[33m.[39m[34mtoContain[39m(
+[32m'is-future'[39m)[33m;[39m
+    [90m751| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m0[39m])[33m.[39m[34mtoBe[39m([32m'╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ 
+╫⌐╫⌐╫ò╫£╫¥ 0.00 Γé¬'[39m)[33m;[39m
+    [90m   | [39m                              [31m^[39m
+    [90m752| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByLabelText[39m([36m/^╫í╫¢╫ò╫¥ 
+╫æ╫⌐╫┤╫ù/[39m))[33m.[39m[34mtoHaveValue[39m([35mnull[39m)[33m;[39m
+    [90m753| [39m    [34mexpect[39m([34mplainText[39m([34mcalculator[39m()))[33m.[39mnot[33m.[39m[34mtoContain[39m([3
+2m'NaN'[39m)[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/7]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > [22mdrives 
+every line from the shared rate and lets one line depart from it
+[31m[1mAssertionError[22m: expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù266.40 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 266.40 Γé¬' // Object.is equality[39m
+
+Expected: [32m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù[7m [27m266.40 Γé¬"[39m
+Received: [31m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù266.40 Γé¬"[39m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m770:27[22m[39m
+    [90m768| [39m    fireEvent.change(rateField('╫Ö╫ò╫£╫Ö 2020'), { target: { value: '3.6' ΓÇª
+    [90m769| [39m
+    [90m770| [39m    [34mexpect[39m([34mlineAmount[39m([34m0[39m))[33m.[39m[34mtoBe[39m([32m'╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 266.40 
+Γé¬'[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m771| [39m    [34mexpect[39m([34mrateField[39m([32m'╫É╫ò╫Æ╫ò╫í╫ÿ 
+2020'[39m))[33m.[39m[34mtoHaveValue[39m([34m4[39m)[33m;[39m
+    [90m772| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByLabelText[39m([36m/^╫í╫¢╫ò╫¥ 
+╫æ╫⌐╫┤╫ù/[39m))[33m.[39m[34mtoHaveValue[39m([34m830.4[39m)[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/7]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > [22mkeeps 
+an emptied wage at zero rather than NaN
+[31m[1mAssertionError[22m: expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù0.00 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 0.00 Γé¬' // Object.is equality[39m
+
+Expected: [32m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù[7m [27m0.00 Γé¬"[39m
+Received: [31m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù0.00 Γé¬"[39m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m781:27[22m[39m
+    [90m779| [39m    fireEvent.change(wageField('╫Ö╫ò╫£╫Ö 2020'), { target: { value: '' } }ΓÇª
+    [90m780| [39m
+    [90m781| [39m    [34mexpect[39m([34mlineAmount[39m([34m0[39m))[33m.[39m[34mtoBe[39m([32m'╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 0.00 
+Γé¬'[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m782| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m0[39m])[33m.[39m[34mtoBe[39m([32m'╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ 
+╫⌐╫⌐╫ò╫£╫¥ 14,100.00 Γé¬'[39m)[33m;[39m
+    [90m783| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByLabelText[39m([36m/^╫í╫¢╫ò╫¥ 
+╫æ╫⌐╫┤╫ù/[39m))[33m.[39m[34mtoHaveValue[39m([34m507.6[39m)[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[6/7]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/PayrollPage.test.tsx[2m > [22mPayrollPage national insurance monthly report[2m > 
+[22mreports the wage in whole shekels and the insurance to agorot
+[31m[1mAssertionError[22m: expected '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù266.44 Γé¬' to be '╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 266.44 Γé¬' // Object.is equality[39m
+
+Expected: [32m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù[7m [27m266.44 Γé¬"[39m
+Received: [31m"╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù266.44 Γé¬"[39m
+
+[36m [2mΓ¥»[22m src/pages/PayrollPage.test.tsx:[2m794:27[22m[39m
+    [90m792| [39m
+    [90m793| [39m    // 7,400.75 is reported as 7,401 "╫£╫£╫É ╫É╫Æ╫│", and 7,401 x 3.6% is 26ΓÇª
+    [90m794| [39m    [34mexpect[39m([34mlineAmount[39m([34m0[39m))[33m.[39m[34mtoBe[39m([32m'╫ô╫₧╫Ö ╫æ╫Ö╫ÿ╫ò╫ù 266.44 
+Γé¬'[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m795| [39m    [34mexpect[39m([34msummaryLines[39m()[[34m0[39m])[33m.[39m[34mtoBe[39m([32m'╫í╫ö╫┤╫¢ ╫⌐╫¢╫¿ 
+╫⌐╫⌐╫ò╫£╫¥ 21,501.00 Γé¬'[39m)[33m;[39m
+    [90m796| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByLabelText[39m([36m/^╫í╫¢╫ò╫¥ 
+╫æ╫⌐╫┤╫ù/[39m))[33m.[39m[34mtoHaveValue[39m([34m774.04[39m)[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[7/7]ΓÄ»[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m53 passed[39m[22m[90m (54)[39m
+[2m      Tests [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m487 passed[39m[22m[90m (494)[39m
+[2m   Start at [22m 12:37:49
+[2m   Duration [22m 26.29s[2m (transform 3.30s, setup 21.77s, collect 15.08s, tests 36.06s, environment 79.65s, prepare 8.58s)[22m
+
+C:\dev\care-platform\apps\web:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @caredesk/web@0.0.0 test: `vitest run`
+Exit status 1

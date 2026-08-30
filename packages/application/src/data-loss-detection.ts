@@ -57,8 +57,12 @@ export function detectDataLoss(
   current: TenantCensus,
 ): DataLossSignal[] {
   const signals: DataLossSignal[] = [];
-  const at = (code: DataLossSignalCode, measure: string, before: number | null, after: number | null) =>
-    signals.push({ tenantId: current.tenantId, code, measure, before, after });
+  const at = (
+    code: DataLossSignalCode,
+    measure: string,
+    before: number | null,
+    after: number | null,
+  ) => signals.push({ tenantId: current.tenantId, code, measure, before, after });
 
   // Checked without reference to the previous census: history proves the
   // workspace existed, so its absence is loss even on the very first run.

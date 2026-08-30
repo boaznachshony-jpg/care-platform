@@ -417,11 +417,39 @@ const LIABILITY_CALCULATION_HE =
   'החישוב מסכם אריתמטית את הסכומים והימים שהוזנו. הוא אינו קובע זכויות או שיעורי תשלום ואינו תחליף לתלוש שכר או לבדיקה של גורם מקצועי.';
 
 /** Intl inserts bidi marks around currency; strip them before comparing text. */
-function plainText(element: Element | null | undefined): string {
-  return (element?.textContent ?? '')
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? '')
     .replace(/[\u200e\u200f\u061c]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function plainText(element: Element | null | undefined): string {
+  return normalizeText(element?.textContent);
+}
+
+/**
+ * `textContent` concatenates adjacent elements with nothing between them, so a
+ * label and a value that sit on two separate lines come back glued together:
+ * `דמי ביטוח266.44 ₪`. That is a property of the DOM API, not a defect in the
+ * markup - the two are grid children with a gap, and a reader sees them on
+ * separate rows. Reading the element children and joining them restores the
+ * separation the layout already has, so the assertions can stay written the way
+ * a person would read the card.
+ */
+function stackedText(element: Element | null | undefined): string {
+  if (!element) return '';
+  // Recursive, because the nesting is two deep in places: the month header wraps
+  // its label and its value in one span, and stopping at the top level would
+  // leave those two glued to each other while separating the index in front of
+  // them. Walking to the leaves treats every element boundary the same way.
+  const parts: string[] = [];
+  for (const node of Array.from(element.childNodes)) {
+    const text =
+      node.nodeType === 1 ? stackedText(node as Element) : normalizeText(node.textContent);
+    if (text.length > 0) parts.push(text);
+  }
+  return parts.join(' ');
 }
 
 function payrollRecord(month: string, overrides: Partial<MvpPayrollRecord> = {}): MvpPayrollRecord {
@@ -637,12 +665,12 @@ describe('PayrollPage national insurance monthly report', () => {
   }
 
   function lineAmount(index: number): string {
-    return plainText(reportingLines()[index]?.querySelector('.ni-month-amount'));
+    return stackedText(reportingLines()[index]?.querySelector('.ni-month-amount'));
   }
 
   function summaryLines(): string[] {
     return Array.from(calculator().querySelectorAll('.payroll-live-total')).map((element) =>
-      plainText(element),
+      stackedText(element),
     );
   }
 
@@ -684,9 +712,9 @@ describe('PayrollPage national insurance monthly report', () => {
     enterDueDate(PAST_DUE_DATE);
 
     expect(reportingLines()).toHaveLength(3);
-    expect(reportingLines().map((line) => plainText(line.querySelector('.ni-month-name')))).toEqual(
-      ['1 חודש העסקה יולי 2020', '2 חודש העסקה אוגוסט 2020', '3 חודש העסקה ספטמבר 2020'],
-    );
+    expect(
+      reportingLines().map((line) => stackedText(line.querySelector('.ni-month-name'))),
+    ).toEqual(['1 חודש העסקה יולי 2020', '2 חודש העסקה אוגוסט 2020', '3 חודש העסקה ספטמבר 2020']);
     expect(wageField('יולי 2020')).toHaveValue(7_400);
     expect(wageField('אוגוסט 2020')).toHaveValue(7_000);
     expect(wageField('ספטמבר 2020')).toHaveValue(7_100);

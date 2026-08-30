@@ -124,7 +124,16 @@ describe('runMigrations', () => {
     const db = fakePool();
 
     await expect(runMigrations(db.pool, dir)).resolves.toEqual(['0001_self']);
-    const insert = db.statements.find((s) => /insert into schema_migrations \(version\)/i.test(s));
+    // Two inserts reach the database here, and only one of them is the runner's.
+    // The first is the migration file's own insert, replayed verbatim as part of
+    // the file body; it is a literal `values ('0001_self')` and it is immutable,
+    // so asserting against it tests the fixture rather than the code. The
+    // runner's insert is the parameterised one, and `$1` is what tells them
+    // apart.
+    const insert = db.statements.find((s) =>
+      /insert into schema_migrations \(version\) values \(\$1\)/i.test(s),
+    );
+    expect(insert).toBeDefined();
     expect(insert).toMatch(/on conflict do nothing/i);
   });
 

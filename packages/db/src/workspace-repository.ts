@@ -12,11 +12,7 @@ import type { Pool } from 'pg';
 import { withTenant } from './pool.js';
 // The envelope moved to its own module once the version-history read path and
 // the nightly census also had to open it. Same format, one definition.
-import {
-  decryptPayload,
-  encryptPayload,
-  isEncryptedEnvelope,
-} from './workspace-payload-crypto.js';
+import { decryptPayload, encryptPayload, isEncryptedEnvelope } from './workspace-payload-crypto.js';
 
 interface WorkspaceRow {
   tenant_id: string;
