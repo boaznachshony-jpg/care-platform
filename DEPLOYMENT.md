@@ -1,5 +1,12 @@
 # CareDesk deployment
 
+> Preview and Production must not share a Supabase project. The per-environment
+> variable scoping that keeps them apart is dashboard state, not repository
+> state, so it is written down and verified separately:
+> [`docs/governance/ENVIRONMENT-SEPARATION.md`](docs/governance/ENVIRONMENT-SEPARATION.md).
+> The API refuses to start when a non-production deployment is handed the
+> production database, but only once `PRODUCTION_SUPABASE_PROJECT_REF` is set.
+
 ## Environment promotion model
 
 - `staging` is the closed-release rehearsal branch. Every push must pass the same CI gates as `main` and produces a Vercel Preview deployment.

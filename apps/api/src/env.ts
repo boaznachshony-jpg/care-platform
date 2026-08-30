@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { nodeEnvSchema, parseEnv } from '@caredesk/config';
+import { extractSupabaseProjectRef } from '@caredesk/db';
+import { getDeploymentEnvironment } from './deployment-environment.js';
 
 const envSchema = z
   .object({
@@ -74,6 +76,18 @@ const envSchema = z
       .transform((value) => value === 'true'),
     CRON_SECRET: z.string().min(24).optional(),
     AI_PROVIDER: z.enum(['mock', 'openai', 'anthropic']).default('mock'),
+    // Injected by Vercel, never set by hand. Read as free-form strings rather
+    // than as an enum: a value Vercel adds later must degrade to "not
+    // production" instead of failing the parse in a way an operator would be
+    // tempted to work around.
+    VERCEL: z.string().optional(),
+    VERCEL_ENV: z.string().optional(),
+    // The project ref of the one Supabase project that holds customer data.
+    // It is not a secret - it appears in every connection string - so it is the
+    // one variable that is safe, and correct, to set on all environments. It is
+    // what lets a preview deployment recognise that it has been handed the
+    // production database. See docs/governance/ENVIRONMENT-SEPARATION.md.
+    PRODUCTION_SUPABASE_PROJECT_REF: z.string().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (Boolean(value.SUPABASE_URL) !== Boolean(value.SUPABASE_PUBLISHABLE_KEY)) {
@@ -188,10 +202,97 @@ const envSchema = z
         message: 'WORKSPACE_ENCRYPTION_KEY is required for a production database',
       });
     }
+    // DB-03. Every setting below was already required by `readiness()`, which
+    // reports but does not gate: with DATABASE_URL unset the container silently
+    // swaps in the in-memory repositories and the API answers 200 to writes
+    // that land in process memory and are gone on the next invocation. Moving
+    // the same list to parse time turns that into a startup failure, which
+    // index.ts already renders as a 503-everything app carrying the real
+    // message - the fail-closed behaviour the documentation claims.
+    if (value.NODE_ENV === 'production') {
+      const requiredInProduction = [
+        ['DATABASE_URL', 'the API would silently run on the in-memory repositories'],
+        ['SUPABASE_URL', 'authentication would fall back to the mock auth service'],
+        ['SUPABASE_PUBLISHABLE_KEY', 'authentication would fall back to the mock auth service'],
+        ['SUPABASE_SERVICE_ROLE_KEY', 'private document storage would be unconfigured'],
+        ['SUPABASE_STORAGE_BUCKET', 'private document storage would be unconfigured'],
+      ] as const;
+      for (const [field, consequence] of requiredInProduction) {
+        if (!value[field]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required in production: without it, ${consequence}`,
+          });
+        }
+      }
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;
 
+/**
+ * REL-02 / DR-08. Refuses to start when a deployment that is not production has
+ * been handed the production database.
+ *
+ * Preview deployments are built from unmerged branches, with half-finished
+ * write paths and loops that re-save workspaces. Nothing in the platform stops
+ * a preview from inheriting the production `DATABASE_URL` except the Vercel
+ * variable scoping the operator set by hand in a dashboard - and a dashboard
+ * setting has no test, no diff and no review. This is the code that notices.
+ *
+ * Three deliberate choices:
+ *
+ * - Production is exempt. Production is allowed to hold the production
+ *   database, and a guard that could refuse to boot production would be a new
+ *   way to take the customer offline rather than a way to protect them.
+ *
+ * - A non-production Vercel deployment with `PRODUCTION_SUPABASE_PROJECT_REF`
+ *   unset is refused. Without the ref the guard cannot prove the target is not
+ *   production, and "cannot prove" must not read as "probably fine". This is
+ *   the fail-closed half; the alternative silently disarms the whole check the
+ *   first time somebody forgets one variable.
+ *
+ * - A local process with the ref configured is refused too. Running the API on
+ *   a laptop against production is the same accident with a shorter blast
+ *   radius, and there is no reason to keep it available.
+ *
+ * A `DATABASE_URL` whose project ref cannot be read is allowed: production is a
+ * Supabase project, so an unreadable ref is by construction a different target
+ * (the CI Postgres container, a local database).
+ */
+export function assertDatabaseMatchesDeployment(env: Env): void {
+  const environment = getDeploymentEnvironment(env);
+  if (environment === 'production') return;
+  if (!env.DATABASE_URL) return;
+
+  const productionRef = env.PRODUCTION_SUPABASE_PROJECT_REF?.trim().toLowerCase();
+
+  if (environment === 'staging' && !productionRef) {
+    throw new Error(
+      'Refusing to start: this is a non-production deployment ' +
+        `(VERCEL_ENV=${env.VERCEL_ENV ?? 'unset'}) with a DATABASE_URL configured, but ` +
+        'PRODUCTION_SUPABASE_PROJECT_REF is not set, so the target cannot be proved to be ' +
+        'anything other than the production database. Set PRODUCTION_SUPABASE_PROJECT_REF on all ' +
+        'environments. See docs/governance/ENVIRONMENT-SEPARATION.md.',
+    );
+  }
+
+  if (!productionRef) return;
+
+  const configuredRef = extractSupabaseProjectRef(env.DATABASE_URL);
+  if (configuredRef !== productionRef) return;
+
+  throw new Error(
+    `Refusing to start: DATABASE_URL points at the production Supabase project (${productionRef}) ` +
+      `from a ${environment} deployment (VERCEL_ENV=${env.VERCEL_ENV ?? 'unset'}). ` +
+      'Scope DATABASE_URL per Vercel environment so this deployment gets its own database. ' +
+      'See docs/governance/ENVIRONMENT-SEPARATION.md.',
+  );
+}
+
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
-  return parseEnv(envSchema, source);
+  const env = parseEnv(envSchema, source);
+  assertDatabaseMatchesDeployment(env);
+  return env;
 }

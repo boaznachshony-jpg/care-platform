@@ -63,9 +63,16 @@ Two things to know about that URL:
 ## Commands
 
 ```bash
-pnpm db:migrate    # apply pending migrations (idempotent)
-pnpm db:rls-test   # live tenant-isolation check; exits non-zero on any leak
+pnpm db:migrate --dry-run   # print the pending list and exit, changing nothing
+pnpm db:migrate             # apply pending migrations (idempotent)
+pnpm db:rls-test            # live tenant-isolation check; exits non-zero on any leak
 ```
+
+`db:migrate` refuses any non-loopback target unless
+`PRODUCTION_SUPABASE_PROJECT_REF` and `CAREDESK_MIGRATE_PROJECT_REF` are both
+set and the second matches the ref the connection string resolves to;
+production additionally requires `CAREDESK_MIGRATE_ALLOW_PRODUCTION=1`. The run
+holds a session advisory lock, so two operators cannot interleave.
 
 Both read `DATABASE_URL` from `.env.local` via `node --env-file`, so the secret
 never appears in shell history or a process listing.
@@ -79,8 +86,18 @@ migrations and common destructive or rolling-deployment-incompatible changes.
 ## Migrations
 
 Named `NNNN_snake_case.sql`, applied in ascending order, each in its own
-transaction, each recording its own version in `schema_migrations`. Never edit
-an applied migration — add a new one.
+transaction. **The runner records the version** — `packages/db/src/migrate.ts`
+inserts into `schema_migrations` inside that same transaction, `on conflict do
+nothing`, so a migration is recorded if and only if it took effect. Most of the
+existing files also end with their own insert; that is harmless history, not a
+requirement for a new one. Never edit an applied migration — add a new one.
+
+Until 2026-08-30 the runner did not do this, and `0024`, `0027` and `0030` were
+never recorded — so `db:migrate` re-applied them on every run and failed on
+`already exists`, blocking every later migration. See
+[`docs/governance/MIGRATION-LEDGER-RECONCILIATION.md`](../docs/governance/MIGRATION-LEDGER-RECONCILIATION.md)
+for the production ledger repair, and `scripts/check-migration-ledger.mjs` for
+the guard that keeps numbers unique and the `/ready` migration list in sync.
 
 | Migration | Purpose |
 |---|---|

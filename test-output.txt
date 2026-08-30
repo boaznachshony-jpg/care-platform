@@ -1,0 +1,181 @@
+﻿node.exe : $ vitest run
+At C:\Users\boazn\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.mjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ vitest run:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/dev/care-platform/apps/web[39m
+
+ [32mΓ£ô[39m src/pages/MedicationsPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1462[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m MedicationsPage[2m > [22mrecords a medication with its dosage, schedule and prescribing doctor [33m 403[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CanonicalPayrollIntelligence.test.tsx[2m > [22m[2mCanonicalPayrollIntelligence ΓÇö Future Cost 
+canonical inputs[2m > [22m[2mfeeds the projection exclusively from canonical server sources
+[22m[39mWarning: A component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from 
+a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime 
+of the component. More info: https://reactjs.org/link/controlled-components
+    at input
+    at label
+    at div
+    at section
+    at CanonicalPayrollIntelligence (C:\dev\care-platform\apps\web\src\pages\case\CanonicalPayrollIntelligence.tsx:84:41)
+
+[90mstderr[2m | src/pages/ContactPage.test.tsx[2m > [22m[2mContactPage[2m > [22m[2mhas no detectable accessibility 
+violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/ContactPage.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 988[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m ContactPage[2m > [22mopens a short in-app request form and keeps the destination email hidden [33m 428[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/EmergencyBinderPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1983[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m EmergencyBinderPage[2m > [22mloads and displays employment cases for selection [33m 615[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/DashboardPage.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 2142[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m DashboardPage[2m > [22mshows the greeting with employer name [33m 554[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/CanonicalPayrollIntelligence.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 2397[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CanonicalPayrollIntelligence ΓÇö reconciliation[2m > [22mcleanup button appears after successful canonical save of a migration [33m 393[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/SettingsPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1933[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m SettingsPage complete client profile[2m > [22medits and persists recipient, employer, and representative details [33m 971[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/TasksPage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 822[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m TasksPage[2m > [22mcreates and persists a new task from the primary action [33m 355[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/OnboardingPage.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 952[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m ATM onboarding validation and persistence[2m > [22mshows a specific checksum error and prevents continuing [33m 370[2mms[22m[39m
+[90mstderr[2m | src/AppShell.test.tsx[2m > [22m[2mAppShell text size controls[2m > [22m[2menlarges the entire interface and 
+persists the selected size
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
+ [32mΓ£ô[39m src/pages/PayrollPage.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 4348[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mstarts a retroactive sequence at the first missing month and skips existing months [33m 657[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mshows a reconciled report and changes the monthly detail with the selected year [33m 432[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mcalculates Saturdays, additions and advances and saves the month cumulatively [33m 607[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mcreates one quarterly national-insurance tracking item after payroll save without requiring an amount [33m 586[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mblocks negative, non-numeric and unreasonable base payroll values [33m 313[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22madvances for the exact July payroll values and counts four Saturdays [33m 305[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22madds multiple named additional payments to the saved calculation and print summary [33m 527[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m PayrollPage annual report[2m > [22mkeeps values across back and forward navigation and calculates the summary from them [33m 653[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/BillingPage.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 1094[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m BillingPage[2m > [22mshows the VAT-inclusive 39 ILS price and the current 100% sponsored charge [33m 360[2mms[22m[39m
+ [32mΓ£ô[39m src/AppShell.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 927[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AppShell text size controls[2m > [22menlarges the entire interface and persists the selected size [33m 382[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/CasePage.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1087[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CasePage[2m > [22mloaded state[2m > [22mshows the case view title [33m 584[2mms[22m[39m
+[90mstderr[2m | src/App.test.tsx[2m > [22m[2mApp[2m > [22m[2mhas no detectable accessibility violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/App.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1507[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m App[2m > [22mrenders the public Hebrew landing page before the private workspace [33m 754[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m App[2m > [22mhas no detectable accessibility violations [33m 629[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/OpenIssuesPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1163[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m OpenIssuesPage[2m > [22mshows the page title [33m 538[2mms[22m[39m
+ [32mΓ£ô[39m src/components/RegulationRulesAdmin.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1247[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m RegulationRulesAdmin[2m > [22moffers only the legal transition for each status and activates on click [33m 466[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/LoginPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1500[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m login progress[2m > [22mexplains the secure authentication delay and prevents duplicate submissions [33m 767[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m registration validation[2m > [22mlets an unconfirmed user request a fresh verification email [33m 607[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CaseDocumentsSection.test.tsx[2m > [22m[2mCaseDocumentsSection[2m > [22m[2mwith no 
+documents[2m > [22m[2mhas no detectable accessibility violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/FamilyAccessPage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1351[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m FamilyAccessPage[2m > [22mshows the current member and sends a manager invitation [33m 1104[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CaseDocumentsSection.test.tsx[2m > [22m[2mCaseDocumentsSection[2m > [22m[2mwith 
+documents[2m > [22m[2mhas no detectable accessibility violations with a populated list
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/case/CaseDocumentsSection.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1846[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseDocumentsSection[2m > [22mwith no documents[2m > [22mshows the empty state in Hebrew from i18n [33m 398[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseDocumentsSection[2m > [22mwith no documents[2m > [22mhas no detectable accessibility violations [33m 1031[2mms[22m[39m
+[90mstderr[2m | src/pages/OpenCasePage.test.tsx[2m > [22m[2mOpenCasePage[2m > [22m[2mhas no detectable accessibility 
+violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/OpenCasePage.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1551[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m OpenCasePage[2m > [22mrenders the three party sections with labeled fields (Hebrew, from i18n) [33m 463[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m OpenCasePage[2m > [22mhas no detectable accessibility violations [33m 895[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/ProductCompletionPanel.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1179[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m ProductCompletionPanel[2m > [22mrenders the case health heading [33m 443[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m ProductCompletionPanel[2m > [22mescalation lifecycle[2m > [22mshows the status badge, the manual-handoff disclaimer and the legal transition buttons [33m 315[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/AutomationPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 951[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AutomationPanel[2m > [22mrenders the home view with two primary action buttons [33m 394[2mms[22m[39m
+ [32mΓ£ô[39m src/components/AutocompleteField.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 730[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AutocompleteField[2m > [22mshows filtered suggestions and selects one with the mouse [33m 566[2mms[22m[39m
+ [32mΓ£ô[39m src/components/LicensedBureauSelector.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1315[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m LicensedBureauSelector[2m > [22mfills the published bureau and contact details from the official selection [33m 1135[2mms[22m[39m
+[90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mrecovers a temporary null auth event before showing the login screen
+[22m[39m[auth] Empty session observed; verifying persisted session before sign-out.
+
+[90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mrecovers a temporary null auth event before showing the login screen
+[22m[39m[auth] Session recovered from persisted state.
+
+[90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mrefreshes the token when persisted state is still empty
+[22m[39m[auth] Empty session observed; verifying persisted session before sign-out.
+
+[90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mrefreshes the token when persisted state is still empty
+[22m[39m[auth] Session recovered by token refresh.
+
+[90mstdout[2m | src/auth/auth-context.test.ts[2m > [22m[2mauthentication gate[2m > [22m[2mfails closed after the grace period when session recovery is not valid
+[22m[39m[auth] Empty session observed; verifying persisted session before sign-out.
+
+ [32mΓ£ô[39m src/auth/auth-context.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 807[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m authentication gate[2m > [22mreturns passwordless first-time entry to client onboarding [33m 540[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CollaborationPanel.test.tsx[2m > [22m[2mCollaborationPanel[2m > [22m[2mloading state[2m > 
+[22m[2mshows loading indicator while fetching
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
+ [32mΓ£ô[39m src/pages/case/CollaborationPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 775[2mms[22m[39m
+ [32mΓ£ô[39m src/components/AccountFrozenGate.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 701[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AccountFrozenGate[2m > [22mlocks the app when the account is frozen and links to the billing page [33m 497[2mms[22m[39m
+[90mstderr[2m | src/pages/case/CaseTasksSection.test.tsx[2m > [22m[2mCaseTasksSection[2m > [22m[2mwith no tasks[2m > 
+[22m[2mhas no detectable accessibility violations
+[22m[39mNot implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ [32mΓ£ô[39m src/pages/case/CaseTasksSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1011[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseTasksSection[2m > [22mwith no tasks[2m > [22mhas no detectable accessibility violations [33m 591[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/VisaRenewalSection.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 791[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m VisaRenewalSection[2m > [22mstarts through the API and handles conflict feedback [33m 477[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/WorkerPortalPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 526[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/TimelinePage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 755[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m TimelinePage canonical API projection[2m > [22mshows the canonical empty state without fabricating deadlines [33m 444[2mms[22m[39m
+[90mstderr[2m | src/AppShell.sync.test.tsx[2m > [22m[2mAppShell cloud save recovery[2m > [22m[2mretries without telling the 
+user to reload and lose local edits
+[22m[39mreact-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next { code: 
+[32m'NO_I18NEXT_INSTANCE'[39m }
+
+ [32mΓ£ô[39m src/AppShell.sync.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 633[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m AppShell cloud save recovery[2m > [22mretries without telling the user to reload and lose local edits [33m 631[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/DemoOverviewPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 725[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m DemoOverviewPage[2m > [22mrenders the same glance layout with demo issues [33m 473[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/DocumentsPage.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 634[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m DocumentsPage[2m > [22moffers a native calendar picker for the document expiry date [33m 561[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/EmployeePage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 597[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m EmployeePage[2m > [22mshows the caregiver name as the page heading [33m 448[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/CaseContactsSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 836[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseContactsSection[2m > [22mempty state[2m > [22mshows the section heading [33m 340[2mms[22m[39m
+ [32mΓ£ô[39m src/auth/auth-hydration.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 197[2mms[22m[39m
+ [32mΓ£ô[39m src/components/UpcomingPaymentsCard.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 671[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m UpcomingPaymentsCard[2m > [22malways shows both payment obligations with due dates and day counts [33m 560[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/case/CaseTimelineSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 576[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m CaseTimelineSection[2m > [22mempty state[2m > [22mshows the section heading [33m 470[2mms[22m[39m
+ [32mΓ£ô[39m src/notifications.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/mvp-storage.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 154[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/workspace-sync.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 106[2mms[22m[39m
+ [32mΓ£ô[39m src/validation/onboarding-fields.test.ts [2m([22m[2m39 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32mΓ£ô[39m src/payroll-report.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32mΓ£ô[39m src/reminders/schedule.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/reminder-recipients.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32mΓ£ô[39m src/api/client.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32mΓ£ô[39m src/caregiver-options.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32mΓ£ô[39m src/quarterly-national-insurance.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32mΓ£ô[39m src/validation/israeli-id.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32mΓ£ô[39m src/payroll-calculation.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32mΓ£ô[39m src/format-timestamp.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32mΓ£ô[39m src/storage/unreadable-cache-guard.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32mΓ£ô[39m src/upcoming-payments.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32mΓ£ô[39m src/environment.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m54 passed[39m[22m[90m (54)[39m
+[2m      Tests [22m [1m[32m453 passed[39m[22m[90m (453)[39m
+[2m   Start at [22m 05:22:48
+[2m   Duration [22m 31.63s[2m (transform 4.14s, setup 26.78s, collect 20.18s, tests 45.21s, environment 95.17s, prepare 10.57s)[22m
+

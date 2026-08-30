@@ -51,6 +51,41 @@ export function createPool(connectionString: string, ssl = true): Pool {
  * a far worse outcome than a redundant statement. (`db:rls-test` is where an
  * explicit "the connected role is not an admin" assertion belongs.)
  */
+/**
+ * The same transaction and the same least-privilege role as `withTenant`, but
+ * with no tenant context set.
+ *
+ * There is exactly one caller and there should stay exactly one: the nightly
+ * data-loss scan, which has to ask a question that spans tenants before it
+ * knows which tenants exist. Without `app.tenant_id`, every RLS policy in the
+ * schema evaluates `current_setting('app.tenant_id', true)::uuid` to null and
+ * matches nothing, so a query that forgets it is scanning zero rows rather than
+ * everyone's - the safe direction to fail. The scan reaches its data only
+ * through `caredesk_tenant_data_census()`, a narrow SECURITY DEFINER function
+ * that returns counts and no content (migration 0038).
+ *
+ * This is deliberately NOT a general-purpose escape hatch from tenant scoping.
+ * Anything that touches customer rows uses `withTenant`.
+ */
+export async function withAppRole<T>(
+  pool: Pool,
+  work: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    await client.query('set local role caredesk_app');
+    const result = await work(client);
+    await client.query('commit');
+    return result;
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function withTenant<T>(
   pool: Pool,
   tenantId: string,
