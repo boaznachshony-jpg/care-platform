@@ -1,0 +1,8 @@
+// Synthetic /ready contract for scripts/check-migration-ledger.mjs: the list a
+// developer forgot to extend when they added the last migration. Rule 5 fails
+// against it, naming exactly the migration the deployment gate cannot see.
+export const REQUIRED_MIGRATIONS: readonly string[] = [
+  '0040_unrecorded',
+  '0041_transposed',
+  '0042_first',
+];

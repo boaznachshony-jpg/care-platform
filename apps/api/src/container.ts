@@ -71,6 +71,8 @@ import {
   PgVisaRenewalEvaluationRepository,
   PgIdempotencyRepository,
   PgVisaRenewalProgressRepository,
+  missingMigrations,
+  REQUIRED_MIGRATIONS,
 } from '@caredesk/db';
 import {
   InMemoryActorResolver,
@@ -620,6 +622,12 @@ export function buildContainer(env: Env): Container {
       if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
       if (pool) {
         try {
+          // Two questions, deliberately kept separate. The object probes below
+          // ask "does the pilot schema exist at all"; the ledger comparison
+          // that follows asks "is this database as new as the code". The
+          // object list is frozen at migration 0021 and is not extended: it
+          // was the only check for a year, and it reported ready: true on a
+          // database fourteen migrations behind the deployed API (REL-05).
           const result = await pool.query<{
             actor_resolver: string | null;
             workspace_table: string | null;
@@ -627,6 +635,7 @@ export function buildContainer(env: Env): Container {
             family_members_function: string | null;
             billing_table: string | null;
             workflow_table: string | null;
+            ledger_table: string | null;
           }>(
             `select
                to_regprocedure('public.resolve_caredesk_actor(text)')::text as actor_resolver,
@@ -634,7 +643,8 @@ export function buildContainer(env: Env): Container {
                to_regclass('public.workspace_file')::text as workspace_file_table,
                to_regprocedure('public.list_caredesk_family_members(uuid)')::text as family_members_function,
                to_regclass('public.product_subscription')::text as billing_table,
-               to_regclass('public.workflow_instance')::text as workflow_table`,
+               to_regclass('public.workflow_instance')::text as workflow_table,
+               to_regclass('public.schema_migrations')::text as ledger_table`,
           );
           const row = result.rows[0];
           if (
@@ -647,6 +657,26 @@ export function buildContainer(env: Env): Container {
           ) {
             reasons.push('Required pilot database migrations are missing');
             checks.database = 'migration-required';
+          }
+
+          if (!row?.ledger_table) {
+            reasons.push('schema_migrations does not exist; no migration has ever been recorded');
+            checks.database = 'migration-required';
+          } else {
+            const ledger = await pool.query<{ version: string }>(
+              'select version from schema_migrations',
+            );
+            const missing = missingMigrations(ledger.rows.map((entry) => entry.version));
+            if (missing.length > 0) {
+              // Named, not counted: the oldest missing version is the one the
+              // operator has to act on, and a bare count is what let a hand-
+              // applied migration go unnoticed in the first place.
+              reasons.push(
+                `Database is behind the code: ${missing.length} of ${REQUIRED_MIGRATIONS.length} ` +
+                  `migration(s) are not recorded in schema_migrations, starting at ${missing[0]}`,
+              );
+              checks.database = 'migration-required';
+            }
           }
         } catch {
           reasons.push('Database is unreachable');

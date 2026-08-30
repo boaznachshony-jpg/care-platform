@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { createPool, withTenant } from './pool.js';
+import { assertRlsTestTargetIsSafe } from './rls-check-target.js';
 
 const NORMALIZED_TABLES = [
   'care_recipient',
@@ -253,6 +254,17 @@ async function main(): Promise<void> {
   if (!appUrl || !adminUrl) {
     throw new Error('DATABASE_URL and DATABASE_ADMIN_URL are both required.');
   }
+
+  // Before any pool is opened: the cleanup block below deletes from sixteen
+  // tables over the BYPASSRLS owner connection, so the target has to be proved
+  // non-production first. See rls-check-target.ts for the rules.
+  assertRlsTestTargetIsSafe({
+    connections: [
+      { name: 'DATABASE_URL', url: appUrl },
+      { name: 'DATABASE_ADMIN_URL', url: adminUrl },
+    ],
+    source: process.env,
+  });
 
   const ciRoleSwitch = process.env.RLS_TEST_MODE === 'ci-role-switch';
   const pool = createPool(appUrl, !ciRoleSwitch);

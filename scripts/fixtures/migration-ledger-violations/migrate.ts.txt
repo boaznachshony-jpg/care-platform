@@ -1,0 +1,9 @@
+// Synthetic runner for scripts/check-migration-ledger.mjs. This is the runner
+// as it stood before 2026-08-30: it applies the file and then trusts the SQL
+// to have recorded itself. Rule 1 fails against it, which in turn re-imposes
+// the self-recording requirement on every migration file (rule 2).
+export async function runMigrations(client, sql) {
+  await client.query('begin');
+  await client.query(sql);
+  await client.query('commit');
+}
