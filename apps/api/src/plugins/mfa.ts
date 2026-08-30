@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastif
 import type { Env } from '../env.js';
 import { sendError } from '../routes/http-errors.js';
 
-export type SensitiveOperation = 'billing.manage' | 'membership.manage';
+export type SensitiveOperation = 'billing.manage' | 'membership.manage' | 'workspace.restore';
 
 export function requireMfa(env: Env, operation: SensitiveOperation): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {

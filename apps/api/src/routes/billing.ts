@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { AuthorizationError } from '@caredesk/application';
 import {
   cardcomWebhookSchema,
@@ -8,18 +7,13 @@ import {
 } from '@caredesk/schemas';
 import type { FastifyInstance } from 'fastify';
 import { deriveBillingAccessState } from '../billing/access-state.js';
+import { rejectUnauthorizedCron } from '../cron-auth.js';
 import type { Container } from '../container.js';
 import type { Env } from '../env.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { requireMfa } from '../plugins/mfa.js';
 import { safeErrorDetails } from '../plugins/safe-error.js';
 import { sendError, sendValidationError } from './http-errors.js';
-
-function secureEqual(actual: string, expected: string): boolean {
-  const left = createHash('sha256').update(actual).digest();
-  const right = createHash('sha256').update(expected).digest();
-  return timingSafeEqual(left, right);
-}
 
 function webhookId(value: unknown): string | null {
   const parsed = cardcomWebhookSchema.safeParse(value);
@@ -114,10 +108,7 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
   });
 
   app.get('/billing/jobs/collect', async (request, reply) => {
-    const authorization = request.headers.authorization ?? '';
-    if (!env.CRON_SECRET || !secureEqual(authorization, `Bearer ${env.CRON_SECRET}`)) {
-      return sendError(request, reply, 401, 'UNAUTHENTICATED');
-    }
+    if (rejectUnauthorizedCron(request, reply, env)) return;
     try {
       reply.send(await container.collectDueProductSubscriptions.execute());
     } catch (error) {

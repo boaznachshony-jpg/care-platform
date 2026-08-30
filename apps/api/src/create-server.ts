@@ -10,6 +10,8 @@ import { registerCaseRoutes } from './routes/cases.js';
 import { registerCaseSubResourceRoutes } from './routes/case-contacts.js';
 import { registerCaseDocumentRoutes } from './routes/case-documents.js';
 import { registerWorkspaceRoutes } from './routes/workspace.js';
+import { registerWorkspaceVersionRoutes } from './routes/workspace-versions.js';
+import { registerDataIntegrityRoutes } from './routes/data-integrity.js';
 import { registerFamilyAccessRoutes } from './routes/family-access.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerSupportRequestRoutes } from './routes/support-requests.js';
@@ -164,6 +166,8 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseSubResourceRoutes(app, container);
   registerCaseDocumentRoutes(app, container);
   registerWorkspaceRoutes(app, container);
+  registerWorkspaceVersionRoutes(app, container, env);
+  registerDataIntegrityRoutes(app, container, env);
   registerFamilyAccessRoutes(app, container, env);
   registerBillingRoutes(app, container, env);
   registerVisaRenewalRoutes(app, container);

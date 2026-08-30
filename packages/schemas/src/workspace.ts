@@ -42,3 +42,35 @@ export interface WorkspaceFileUrlResponse {
   url: string;
   expiresInSeconds: number;
 }
+
+/**
+ * Per-tenant restore (DR-02). The version is named twice on purpose: once in
+ * the path and once in the body. A restore is the only write in the product
+ * that deliberately replaces current data with older data, and a client that
+ * built the request from a stale version list cannot satisfy both.
+ */
+export const restoreWorkspaceVersionRequestSchema = z.object({
+  confirmVersion: z.number().int().positive(),
+});
+
+export type RestoreWorkspaceVersionRequest = z.infer<typeof restoreWorkspaceVersionRequestSchema>;
+
+/**
+ * Metadata only. The list is rendered in a browser by somebody who thinks data
+ * is missing; shipping twenty versions of their workspace to draw it would
+ * widen the exposure of the recovery screen well beyond the recovery itself.
+ * `populatedEntries` is null when the archived version does not decrypt under
+ * the current key.
+ */
+export interface WorkspaceVersionSummaryResponse {
+  version: number;
+  schemaVersion: number;
+  updatedAt: string;
+  archivedAt: string;
+  populatedEntries: number | null;
+  payloadBytes: number;
+}
+
+export interface WorkspaceVersionListResponse {
+  versions: WorkspaceVersionSummaryResponse[];
+}

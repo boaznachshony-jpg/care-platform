@@ -4,5 +4,8 @@
   "buildCommand": "pnpm --filter @caredesk/api... build",
   "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
-  "crons": [{ "path": "/billing/jobs/collect", "schedule": "17 4 * * *" }]
+  "crons": [
+    { "path": "/billing/jobs/collect", "schedule": "17 4 * * *" },
+    { "path": "/internal/jobs/data-integrity-scan", "schedule": "42 3 * * *" }
+  ]
 }

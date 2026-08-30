@@ -14,7 +14,10 @@ import type {
   TimelineRepository,
   TimelineService,
   WorkspaceRepository,
+  WorkspaceHistoryRepository,
   WorkspaceFileRepository,
+  TenantCensusRepository,
+  DataLossAlertSink,
   VisaRenewalEvaluationRepository,
 } from '@caredesk/application';
 import {
@@ -38,6 +41,9 @@ import {
   ListFamilyMembers,
   OpenEmploymentCase,
   SaveWorkspace,
+  ListWorkspaceVersions,
+  RestoreWorkspaceVersion,
+  ScanForSilentDataLoss,
   PutWorkspaceFile,
   RevokeFamilyMember,
   StartProductBillingSetup,
@@ -65,7 +71,9 @@ import {
   PgTaskRepository,
   PgTimelineService,
   PgWorkspaceRepository,
+  PgWorkspaceHistoryRepository,
   PgWorkspaceFileRepository,
+  PgTenantCensusRepository,
   PgVisaRenewalRepository,
   PgVisaRenewalSideEffects,
   PgVisaRenewalEvaluationRepository,
@@ -87,7 +95,10 @@ import {
   InMemoryTimelineRepository,
   InMemoryTimelineService,
   InMemoryWorkspaceRepository,
+  InMemoryWorkspaceHistoryRepository,
   InMemoryWorkspaceFileRepository,
+  InMemoryTenantCensusRepository,
+  LoggingDataLossAlertSink,
   MembershipAuthorizationService,
   MockAuthService,
   MockIdentityInvitationService,
@@ -137,6 +148,10 @@ const ROLE_PERMISSIONS = {
     'document:read',
     'workspace:read',
     'workspace:update',
+    // Restoring an archived version is separable from saving on purpose. It is
+    // the one write that deliberately replaces current data with older data,
+    // so the account owner holds it and a manager does not.
+    'workspace:restore',
     'membership:read',
     'membership:manage',
     'billing:read',
@@ -234,6 +249,20 @@ export interface Container {
   getDocumentDownloadUrl: GetDocumentDownloadUrl;
   getWorkspace: GetWorkspace;
   saveWorkspace: SaveWorkspace;
+  /** Read side of the 0035 archive: which versions exist, in metadata only. */
+  listWorkspaceVersions: ListWorkspaceVersions;
+  /** Per-tenant restore (DR-02), as an audited server-side operation. */
+  restoreWorkspaceVersion: RestoreWorkspaceVersion;
+  /** The nightly detector (DR-03). Runs from the scheduler, has no actor. */
+  scanForSilentDataLoss: ScanForSilentDataLoss;
+  /**
+   * Also raised synchronously when the shrink guard refuses a save. The guard
+   * has always refused correctly and always refused silently: a customer's
+   * client attempting to erase their account is exactly the event worth being
+   * told about, and waiting for the nightly scan would miss it entirely,
+   * because the write it describes never landed.
+   */
+  dataLossAlerts: DataLossAlertSink;
   putWorkspaceFile: PutWorkspaceFile;
   getWorkspaceFileUrl: GetWorkspaceFileUrl;
   deleteWorkspaceFile: DeleteWorkspaceFile;
@@ -302,7 +331,9 @@ export function buildContainer(env: Env): Container {
   let timelineRepository: TimelineRepository;
   let audit: AuditService;
   let workspaceRepository: WorkspaceRepository;
+  let workspaceHistoryRepository: WorkspaceHistoryRepository;
   let workspaceFileRepository: WorkspaceFileRepository;
+  let censusRepository: TenantCensusRepository;
   let familyMembershipRepository: FamilyMembershipRepository;
   let billingRepository: BillingRepository;
   const memoryVisaRenewals = new InMemoryVisaRenewalRepository();
@@ -338,7 +369,12 @@ export function buildContainer(env: Env): Container {
     // Postgres whenever a database is configured.
     audit = new PgAuditService(pool);
     workspaceRepository = new PgWorkspaceRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
+    workspaceHistoryRepository = new PgWorkspaceHistoryRepository(
+      pool,
+      env.WORKSPACE_ENCRYPTION_KEY,
+    );
     workspaceFileRepository = new PgWorkspaceFileRepository(pool);
+    censusRepository = new PgTenantCensusRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
     familyMembershipRepository = new PgFamilyMembershipRepository(pool);
     billingRepository = new PgBillingRepository(pool);
   } else {
@@ -351,7 +387,9 @@ export function buildContainer(env: Env): Container {
     timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
     audit = new InMemoryAuditService();
     workspaceRepository = new InMemoryWorkspaceRepository();
+    workspaceHistoryRepository = new InMemoryWorkspaceHistoryRepository();
     workspaceFileRepository = new InMemoryWorkspaceFileRepository();
+    censusRepository = new InMemoryTenantCensusRepository();
     familyMembershipRepository = new InMemoryFamilyMembershipRepository();
     billingRepository = new InMemoryBillingRepository();
   }
@@ -485,6 +523,13 @@ export function buildContainer(env: Env): Container {
     ids,
   };
   const workspaceDeps = { authorization, workspaces: workspaceRepository, audit, clock };
+  // The only destination that exists. See DataLossAlertSink for what is still
+  // missing and what it should become.
+  const dataLossAlerts = new LoggingDataLossAlertSink();
+  const workspaceRestoreDeps = {
+    ...workspaceDeps,
+    history: workspaceHistoryRepository,
+  };
   const workspaceFileDeps = {
     authorization,
     files: workspaceFileRepository,
@@ -589,6 +634,16 @@ export function buildContainer(env: Env): Container {
     getDocumentDownloadUrl: new GetDocumentDownloadUrl(documentDeps),
     getWorkspace: new GetWorkspace(workspaceDeps),
     saveWorkspace: new SaveWorkspace(workspaceDeps),
+    listWorkspaceVersions: new ListWorkspaceVersions(workspaceRestoreDeps),
+    restoreWorkspaceVersion: new RestoreWorkspaceVersion(workspaceRestoreDeps),
+    dataLossAlerts,
+    scanForSilentDataLoss: new ScanForSilentDataLoss({
+      census: censusRepository,
+      alerts: dataLossAlerts,
+      audit,
+      clock,
+      ids,
+    }),
     putWorkspaceFile: new PutWorkspaceFile(workspaceFileDeps),
     getWorkspaceFileUrl: new GetWorkspaceFileUrl(workspaceFileDeps),
     deleteWorkspaceFile: new DeleteWorkspaceFile(workspaceFileDeps),
