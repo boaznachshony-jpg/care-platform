@@ -28,6 +28,13 @@ import {
 /** The width below which `.sidebar` is display:none (global.css `@media (max-width: 760px)`). */
 const SIDEBAR_BREAKPOINT_PX = 760;
 
+/**
+ * Below this, the hero actions are supposed to wrap: four buttons at
+ * `flex: 1 1 170px` plus gaps need roughly 700px before they fit on one line.
+ * The equal-size rule is only meaningful once they actually share a row.
+ */
+const ACTION_ROW_MIN_WIDTH_PX = 768;
+
 const completedProfile = {
   employerName: 'מעסיק מטריצת רוחבים',
   employerIdNumber: '123456782',
@@ -118,10 +125,18 @@ test.describe('מטריצת רוחבים ויזואלית (שער שחרור §2
       await expect(page.getByRole('heading', { name: 'תיקי ההעסקה שלי' })).toBeVisible();
       const listSnapshot = await auditScreen(page, width, '/app — רשימת תיקים מאוכלסת');
       // The four hero buttons that stacked on a 3127px screen in production live here.
-      expect(
-        listSnapshot.actionRows.length,
-        `מטריצת רוחבים — לא זוהתה אף שורת פעולה ב-/app ברוחב ${width}px`,
-      ).toBeGreaterThan(0);
+      //
+      // Only asserted from 768px up. The defect this guards against is buttons
+      // stacking where they had room to sit side by side; below that width they
+      // are meant to stack, `flex: 1 1 170px` wraps them, and "no action row"
+      // is the correct outcome rather than a finding. Demanding a row at 360px
+      // would make the matrix red for doing its job properly.
+      if (width >= ACTION_ROW_MIN_WIDTH_PX) {
+        expect(
+          listSnapshot.actionRows.length,
+          `מטריצת רוחבים — לא זוהתה אף שורת פעולה ב-/app ברוחב ${width}px`,
+        ).toBeGreaterThan(0);
+      }
 
       // --- an authenticated screen, which is the only place the fixed sidebar exists.
       await page.goto(clientHome);
