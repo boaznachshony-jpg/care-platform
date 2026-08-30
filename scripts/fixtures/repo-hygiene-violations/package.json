@@ -1,0 +1,6 @@
+{
+  "name": "repo-hygiene-violations-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Fixture only. Declares no pnpm.overrides, so the lock fixture's overrides are undeclared."
+}

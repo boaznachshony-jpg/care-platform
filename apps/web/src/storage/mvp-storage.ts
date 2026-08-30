@@ -766,6 +766,74 @@ export function saveMvpMedications(medications: MvpMedication[]): void {
   saveList(MEDICATIONS_STORAGE_NAME, medications);
 }
 
+/**
+ * Who gets told, and how.
+ *
+ * The channel belongs to the recipient rather than to the account, and that is
+ * not a preference setting - it is a correctness requirement. A daughter
+ * travelling abroad on an eSIM data plan has internet but no cellular line, so
+ * an SMS to her never arrives and nobody finds out it didn't. She needs
+ * WhatsApp or email; her brother at home is fine with SMS. One global channel
+ * would quietly fail exactly the person most likely to be relied upon.
+ *
+ * WhatsApp and email travel over data and are immune to that gap. SMS is the
+ * bridge until WhatsApp Business is approved, which is why the field exists
+ * from the start even while only some channels are wired up.
+ */
+export const REMINDER_CHANNELS = ['sms', 'whatsapp', 'email'] as const;
+export type MvpReminderChannel = (typeof REMINDER_CHANNELS)[number];
+
+export interface MvpReminderRecipient {
+  id: string;
+  name: string;
+  /** "בת", "בן", "אחיין" - free text, shown so the reader knows who this is. */
+  relationship: string;
+  /** International format is expected; stored exactly as entered. */
+  phone: string;
+  email: string;
+  channel: MvpReminderChannel;
+  /**
+   * When this person agreed to receive reminders. Empty means no consent yet.
+   *
+   * A medication reminder about someone else is health information about a
+   * third party. Consent is recorded per recipient, is never assumed from the
+   * account holder, and is the gate that `canReceiveReminders` enforces.
+   */
+  consentAt: string;
+  /** Who recorded the consent, so the record can be audited later. */
+  consentBy: string;
+  /** Lets a recipient be paused without deleting the consent history. */
+  active: boolean;
+  updatedAt: string;
+}
+
+const REMINDER_RECIPIENTS_STORAGE_NAME = 'caredesk.mvp.reminder-recipients.v1';
+
+/** The contact field a channel actually delivers to. */
+export function reminderContactFor(recipient: MvpReminderRecipient): string {
+  return recipient.channel === 'email' ? recipient.email.trim() : recipient.phone.trim();
+}
+
+/**
+ * The single gate every send must pass. Deliberately conservative: a recipient
+ * who is paused, who never consented, or whose chosen channel has no address
+ * is not contacted, and the caller is expected to surface that rather than
+ * silently skip them.
+ */
+export function canReceiveReminders(recipient: MvpReminderRecipient): boolean {
+  return (
+    recipient.active && recipient.consentAt.trim() !== '' && reminderContactFor(recipient) !== ''
+  );
+}
+
+export function readMvpReminderRecipients(): MvpReminderRecipient[] {
+  return readList<MvpReminderRecipient>(REMINDER_RECIPIENTS_STORAGE_NAME);
+}
+
+export function saveMvpReminderRecipients(recipients: MvpReminderRecipient[]): void {
+  saveList(REMINDER_RECIPIENTS_STORAGE_NAME, recipients);
+}
+
 export function readMvpEmploymentExpenses(): MvpEmploymentExpense[] {
   return readList<MvpEmploymentExpense>(EMPLOYMENT_EXPENSES_STORAGE_NAME);
 }

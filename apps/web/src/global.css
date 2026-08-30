@@ -16,9 +16,10 @@ body,
 :root {
   --cd-font-family: 'Rubik', 'Heebo', 'Segoe UI', Arial, sans-serif;
 }
+/* No background/color here on purpose: the later `body` rule next to the token
+   block sets both from --cd-canvas/--cd-ink and wins on document order. A
+   hardcoded pair here would look authoritative and change nothing. */
 body {
-  background: #f4f6f8;
-  color: #172033;
   font-family: var(--cd-font-family);
   font-size: 17px;
   line-height: 1.55;
@@ -3013,6 +3014,49 @@ body {
   --cd-border: #d3dde9;
   --cd-focus: #0b4f9c;
   --cd-shadow: 0 12px 32px rgba(20, 47, 82, 0.09);
+
+  /* Canonical token set (docs/governance/DESIGN-PALETTE-AUDIT.md section 4).
+     Nothing references these yet, and that is deliberate: they are declared in
+     their own change so the migration that starts using them is a pure
+     search-and-replace with no new values introduced alongside it.
+
+     They exist because the audit found 47 near-duplicate colour clusters —
+     e.g. 44 different border greys, 22 different secondary-text greys — that
+     each already have one obvious canonical member. Every value below is a
+     colour that is already somewhere in this file today; the audit chose the
+     most frequent member of each cluster. No new design decisions here.
+
+     The -on-soft trio names the foreground that belongs on each *-soft
+     background. Those pairings currently exist only inside the dark block, so
+     light rules keep re-inventing them.
+
+     Semantic aliases resolve through var() rather than repeating a literal, so
+     the dark block only has to override the base token once. */
+  --cd-text-primary: var(--cd-ink);
+  --cd-text-secondary: var(--cd-muted);
+  --cd-accent: var(--cd-primary);
+  --cd-accent-hover: var(--cd-primary-hover);
+  --cd-accent-soft: var(--cd-primary-soft);
+  --cd-accent-on-soft: #124f9f;
+  --cd-success-on-soft: #17653a;
+  --cd-warning-on-soft: #6f5212;
+
+  /* Danger is the one genuinely missing role: 13 red variants in use and no
+     token at all, even though .danger-button already gets a dark override. */
+  --cd-danger: #a52f27;
+  --cd-danger-soft: #fff0f0;
+  --cd-danger-on-soft: #a52f27;
+
+  /* Light-mode counterparts for tokens that so far existed only in the dark
+     block. Without these, any light rule adopting them would silently resolve
+     to nothing. The gold edge and the card gradient are dark-only decoration,
+     so light neutralises them rather than inventing a light equivalent. */
+  --cd-surface-raised: #f5f8fc;
+  --cd-pill: #eef2f7;
+  --cd-gold-edge: transparent;
+  --cd-gold-edge-strong: transparent;
+  --cd-card-gradient: var(--cd-surface);
+  --cd-card-gradient-hover: var(--cd-surface);
 }
 
 body {
@@ -5030,15 +5074,13 @@ input[type='number'] {
   font-size: 20px;
   font-weight: 900;
 }
-.billing-safety-note,
-.billing-provider-notice {
+.billing-safety-note {
   padding: 16px 18px;
   border-radius: 16px;
   background: #eaf8f0;
   color: #17653a;
 }
-.billing-safety-note p,
-.billing-provider-notice {
+.billing-safety-note p {
   margin: 5px 0 0;
 }
 .billing-safety-note.paid {
@@ -5088,7 +5130,16 @@ input[type='number'] {
   height: 24px;
   flex: 0 0 auto;
 }
+/* Single source for this notice. It used to be declared three times — twice
+   grouped with .billing-safety-note (green "all good") and once alone in amber
+   ("provider not configured yet"). Two contradictory semantics under one name,
+   with the last one silently winning. The amber values below are exactly what
+   the browser already computed; the geometry is inlined from the groups it was
+   removed from, so nothing moves. */
 .billing-provider-notice {
+  margin: 5px 0 0;
+  padding: 16px 18px;
+  border-radius: 16px;
   background: #fff7df;
   color: #6f5212;
 }
@@ -5790,6 +5841,19 @@ input[type='number'] {
   --cd-gold-edge-strong: rgba(230, 190, 90, 0.35);
   --cd-card-gradient: linear-gradient(180deg, #22222e, #1a1a24);
   --cd-card-gradient-hover: linear-gradient(180deg, #262630, #1a1a24);
+
+  /* Dark half of the canonical set. The semantic aliases (--cd-text-primary,
+     --cd-accent, …) are absent on purpose: they resolve through var() to the
+     base tokens overridden above, so restating them here would just create a
+     second place to forget. Only tokens with an independent dark value belong
+     below. Each value is lifted verbatim from a rule already in this block —
+     these are the chip and icon foregrounds the dark theme hardcodes today. */
+  --cd-accent-on-soft: #a8c7fa;
+  --cd-success-on-soft: #7ee2b8;
+  --cd-warning-on-soft: #fbd38d;
+  --cd-danger: #f4645c;
+  --cd-danger-soft: rgba(244, 100, 92, 0.18);
+  --cd-danger-on-soft: #f4a19b;
 }
 
 /* "Gold on Night" icon gradient — brighter approved stops on dark tiles only.

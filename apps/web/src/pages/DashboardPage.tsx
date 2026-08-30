@@ -322,6 +322,9 @@ export function DashboardPage() {
             <h2 id="attention-title">{t('intelligence.attention')}</h2>
           </div>
         </div>
+        {/* The attention list is derived output, not user input: the caveat sits
+            above the items so it is read together with them. */}
+        <p className="legal-note">{t('liability.reminder')}</p>
         {health?.factors.some((factor) => factor.status === 'attention') ? (
           <div className="attention-list">
             {health.factors
@@ -361,6 +364,9 @@ export function DashboardPage() {
         <div>
           <h2 id="health-title">{t('intelligence.health')}</h2>
           <p>{health ? t('intelligence.healthDisclaimer') : t('dashboard.scoreUnavailable')}</p>
+          {/* healthDisclaimer covers what the score measures; this line adds the
+              part it leaves out - the score does not replace an outside check. */}
+          {health ? <p className="legal-note">{t('liability.score')}</p> : null}
           <ul>
             {(health?.factors ?? []).map((factor) => (
               <li key={factor.id}>

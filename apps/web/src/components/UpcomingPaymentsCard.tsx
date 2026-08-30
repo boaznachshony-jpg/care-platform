@@ -26,6 +26,9 @@ export function UpcomingPaymentsCard({ today }: { today?: Date } = {}) {
         <h2 id="upcoming-payments-title">{t('payments.upcomingTitle')}</h2>
       </div>
       <p>{t('payments.upcomingSummary')}</p>
+      {/* Placed above the dates, not after them: the reader must see the caveat
+          while looking at the due dates, not once they have already acted. */}
+      <p className="legal-note">{t('liability.reminder')}</p>
       <div className="attention-list">
         {payments.map((payment) => (
           <article className="attention-item" key={payment.id}>

@@ -109,6 +109,9 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
           <h2 id="visa-renewal-heading">{t('visaRenewal.heading')}</h2>
         </div>
       </header>
+      {/* Renewal steps, blockers and review dates are engine output; the caveat
+          is stated once, above every workflow card it applies to. */}
+      <p className="legal-note">{t('liability.reminder')}</p>
       {state.kind === 'loading' ? (
         <Skeleton loadingLabel={t('visaRenewal.loading')} height="8rem" />
       ) : null}

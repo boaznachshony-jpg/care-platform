@@ -105,6 +105,9 @@ export function WorkerPortalPage() {
       {tab === 'payments' && (
         <section>
           <h2>{t('worker.payments')}</h2>
+          {/* The worker sees amounts the employer entered and the system summed;
+              the caveat precedes the list so it covers every row. */}
+          <p className="legal-note">{t('liability.calculation')}</p>
           {data.payments.length === 0 ? (
             <p>{t('worker.noPayments')}</p>
           ) : (

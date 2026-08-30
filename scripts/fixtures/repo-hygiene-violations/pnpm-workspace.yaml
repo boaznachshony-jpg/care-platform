@@ -1,0 +1,10 @@
+# Fixture, not a real workspace file. See README.md in this directory.
+#
+# Two of the lock file's overrides (nanoid, postcss) are missing entirely -
+# the "protected only by the lock file" failure mode. The third (js-yaml) is
+# declared but at a version that disagrees with the lock - the "declaration
+# has drifted from what is installed" failure mode.
+packages:
+  - 'apps/*'
+overrides:
+  js-yaml@4.3.0: 4.2.0

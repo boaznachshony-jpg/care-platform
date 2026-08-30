@@ -40,6 +40,9 @@ export function OpenIssuesGlance({ issues, score }: { issues: OpenIssue[]; score
         <div className="section-heading">
           <h2 id="open-issues-counts-title">{t('openIssues.countsTitle')}</h2>
         </div>
+        {/* The buckets below are computed from entered expiry dates, so the
+            caveat belongs next to the counts rather than at the page foot. */}
+        <p className="legal-note">{t('liability.reminder')}</p>
         <div className="metric-grid">
           {SEVERITY_ORDER.map((severity) => (
             <div className={`issues-count-${severity}`} key={severity}>
@@ -57,6 +60,7 @@ export function OpenIssuesGlance({ issues, score }: { issues: OpenIssue[]; score
         <div>
           <h2 id="open-issues-health-title">{t('openIssues.healthTitle')}</h2>
           <p>{t('openIssues.healthDisclaimer')}</p>
+          <p className="legal-note">{t('liability.score')}</p>
         </div>
       </section>
       {SEVERITY_ORDER.map((severity) => {
