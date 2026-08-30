@@ -78,6 +78,18 @@ const ALL_TENANT_TABLES = [
   'binder_export_receipt',
   'regulation_rule',
   'regulation_rule_transition',
+  // Root 6 (DB-09) - six tenant-scoped tables were created after this list was
+  // written and nobody added them, so the live guard reported "all tenant-owned
+  // tables retain enabled, forced RLS" while never looking at them. A guard
+  // with a hand-maintained subject list is only as good as the last person who
+  // remembered it; `tenant-table-coverage.test.ts` now derives the expected set
+  // from the migrations and fails when this list falls behind again.
+  'ai_action_confirmation', // 0027
+  'professional_review_request', // 0027
+  'leave_entry', // 0033
+  'scenario_expense', // 0034
+  'tenant_workspace_history', // 0035
+  'tenant_data_census', // 0038
 ] as const;
 
 interface Fixture {

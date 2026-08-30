@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax -- Seeded regulation statements and their official source citations are reviewed source data mirrored from migration 0032, not interface copy (same exemption as licensed-bureaus.ts). */
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { withTenant } from '@caredesk/db';
 
 /**
  * Regulation Engine review lifecycle (capability #11, migration 0032).
@@ -265,20 +266,19 @@ function rowToRule(row: RuleRow): RegulationRule {
 export class PgRegulationRuleService implements RegulationRuleService {
   constructor(private readonly pool: Pool) {}
 
-  private async tx<T>(tenantId: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('begin');
-      await client.query("select set_config('app.tenant_id',$1,true)", [tenantId]);
-      const result = await work(client);
-      await client.query('commit');
-      return result;
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
+  /**
+   * Root 6 (API-01) - delegates to the one path to the database.
+   *
+   * The private copy this replaces opened the transaction and set
+   * `app.tenant_id`, but never `set local role caredesk_app`. The role is the
+   * control that matters: an administrative role carries BYPASSRLS, and under
+   * BYPASSRLS every tenant policy is skipped silently - the tenant setting is
+   * then read by policies that never run. Eight services each had their own
+   * copy of this helper and all eight omitted the role. See
+   * scripts/check-tenant-db-path.mjs, which fails CI if a ninth appears.
+   */
+  private tx<T>(tenantId: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
+    return withTenant(this.pool, tenantId, work);
   }
 
   /** RLS scopes the membership lookup to the actor's own tenant. */

@@ -1,0 +1,14 @@
+// Fixture for scripts/check-tenant-db-path.mjs. NOT compiled, NOT shipped.
+//
+// A statement issued straight at the pool. There is no transaction, so
+// `set_config(..., true)` could not have applied even if somebody had called it,
+// which means this read has no tenant context at all. It needs a stated reason
+// or it needs withTenant(); the guard must not let it through unremarked.
+export class RepositoryThatSkipsTheTransaction {
+  constructor(private pool) {}
+
+  async listEverything() {
+    const result = await this.pool.query('select id, tenant_id from employment_case');
+    return result.rows;
+  }
+}

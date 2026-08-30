@@ -1,0 +1,27 @@
+// Fixture for scripts/check-tenant-db-path.mjs. NOT compiled, NOT shipped.
+//
+// This is a verbatim copy of the private `tx()` helper that existed in eight
+// services before root 6 was closed (API-01). It sets the tenant and never the
+// role, so every statement inside it runs with whatever privileges the pooled
+// connection happens to carry. The guard must report the raw client, the
+// transaction control and the tenant-context statement separately, because a
+// future variant may only have one of the three.
+export class ServiceWithItsOwnTransaction {
+  constructor(private pool) {}
+
+  private async tx(tenantId, work) {
+    const c = await this.pool.connect();
+    try {
+      await c.query('begin');
+      await c.query("select set_config('app.tenant_id',$1,true)", [tenantId]);
+      const r = await work(c);
+      await c.query('commit');
+      return r;
+    } catch (e) {
+      await c.query('rollback');
+      throw e;
+    } finally {
+      c.release();
+    }
+  }
+}

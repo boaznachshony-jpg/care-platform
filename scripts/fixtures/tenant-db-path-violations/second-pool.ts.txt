@@ -1,0 +1,8 @@
+// Fixture for scripts/check-tenant-db-path.mjs. NOT compiled, NOT shipped.
+//
+// A second pool built by hand. It misses createPool()'s TLS settings and the
+// DATE_OID parser, and - the reason this rule exists - it can be pointed at
+// DATABASE_ADMIN_URL, which carries BYPASSRLS. One pool, created in one place.
+import { Pool } from 'pg';
+
+export const analyticsPool = new Pool({ connectionString: process.env.DATABASE_ADMIN_URL });

@@ -1,0 +1,18 @@
+// Fixture for scripts/check-tenant-db-path.mjs. NOT compiled, NOT shipped.
+//
+// The negative control. This file must NOT be reported: the waiver is present
+// and states a real reason. A guard that fires on everything is a guard people
+// disable, so the fixture proves the waiver works as well as proving the rules
+// do.
+export class SignInResolver {
+  constructor(private pool) {}
+
+  async tenantFor(authSubject: string) {
+    // db-path-exception: this is the lookup that discovers the tenant, so there
+    // is no tenant context to run it in. SECURITY DEFINER, returns ids only.
+    const result = await this.pool.query('select tenant_id from resolve_caredesk_actor($1)', [
+      authSubject,
+    ]);
+    return result.rows[0]?.tenant_id ?? null;
+  }
+}

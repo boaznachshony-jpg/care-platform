@@ -683,6 +683,11 @@ export function buildContainer(env: Env): Container {
           // object list is frozen at migration 0021 and is not extended: it
           // was the only check for a year, and it reported ready: true on a
           // database fourteen migrations behind the deployed API (REL-05).
+          // db-path-exception: /ready is a control-plane probe, not a tenant
+          // request. It asks whether schema objects exist; to_regclass and
+          // to_regprocedure read catalogue metadata that carries no tenant_id
+          // and is not subject to RLS. Wrapping it in withTenant() would need a
+          // tenant id the probe does not have and must not invent. (Root 6)
           const result = await pool.query<{
             actor_resolver: string | null;
             workspace_table: string | null;
@@ -718,6 +723,9 @@ export function buildContainer(env: Env): Container {
             reasons.push('schema_migrations does not exist; no migration has ever been recorded');
             checks.database = 'migration-required';
           } else {
+            // db-path-exception: schema_migrations is the migration ledger. It
+            // has no tenant_id and belongs to the deployment, not to a customer;
+            // /ready compares it against REQUIRED_MIGRATIONS. (Root 6)
             const ledger = await pool.query<{ version: string }>(
               'select version from schema_migrations',
             );

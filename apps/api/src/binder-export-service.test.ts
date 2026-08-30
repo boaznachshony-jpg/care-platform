@@ -137,9 +137,16 @@ describe('PgBinderExportService', () => {
     const service = new PgBinderExportService(pool);
     const result = await service.create(ACTOR, CASE_ID, MANIFEST, 'key-service-1');
 
+    // Root 6 (API-01): the role assertion is the one that was missing. This
+    // test previously checked `begin` then `set_config` and passed against a
+    // private transaction helper that never switched off whatever role the
+    // pooled connection carried - which under an administrative DATABASE_URL
+    // means BYPASSRLS and no tenant policy at all. Asserting the exact prologue
+    // pins the service to withTenant() rather than to a lookalike.
     expect(queries[0]?.text).toBe('begin');
-    expect(queries[1]?.text).toContain('set_config');
-    expect(queries[1]?.values).toEqual([ACTOR.tenantId]);
+    expect(queries[1]?.text).toBe('set local role caredesk_app');
+    expect(queries[2]?.text).toContain('set_config');
+    expect(queries[2]?.values).toEqual([ACTOR.tenantId]);
     expect(queries.at(-1)?.text).toBe('commit');
 
     const receiptInsert = queries.find((q) => q.text.includes('insert into binder_export_receipt'));

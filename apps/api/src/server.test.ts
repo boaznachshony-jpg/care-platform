@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { loadEnv } from './env.js';
 import { buildServer } from './create-server.js';
 
+/**
+ * DB-03 made a production environment refuse to parse unless it is complete, so
+ * a case that only needs "some production deployment" has to carry the whole
+ * set even when it asserts one header. Keeping that here lets each test pass
+ * only the setting it is actually about.
+ */
+function productionEnv(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://caredesk_app@localhost:5432/caredesk',
+    WORKSPACE_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
+    SUPABASE_URL: 'https://primary.supabase.co',
+    SUPABASE_PUBLISHABLE_KEY: 'publishable-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'primary-server-only',
+    SUPABASE_STORAGE_BUCKET: 'private-documents',
+    BACKUP_SUPABASE_URL: 'https://backup.supabase.co',
+    BACKUP_SUPABASE_SERVICE_ROLE_KEY: 'backup-server-only',
+    BACKUP_SUPABASE_STORAGE_BUCKET: 'private-documents-backup',
+    ...overrides,
+  };
+}
+
 describe('apps/api server', () => {
   it('GET /health returns a schema-shaped 200', async () => {
     const app = buildServer(loadEnv({}));
@@ -26,7 +48,7 @@ describe('apps/api server', () => {
     });
     expect(response.headers).not.toHaveProperty('strict-transport-security');
 
-    const production = buildServer(loadEnv({ NODE_ENV: 'production' }));
+    const production = buildServer(loadEnv(productionEnv()));
     const productionResponse = await production.inject({ method: 'GET', url: '/health' });
     expect(productionResponse.headers['strict-transport-security']).toBe(
       'max-age=31536000; includeSubDomains',
@@ -37,22 +59,25 @@ describe('apps/api server', () => {
     const development = buildServer(loadEnv({}));
     expect((await development.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200);
 
-    const production = buildServer(loadEnv({ NODE_ENV: 'production' }));
-    const response = await production.inject({ method: 'GET', url: '/ready' });
-    expect(response.statusCode).toBe(503);
-    expect(response.json().reasons).toEqual(
-      expect.arrayContaining([
-        'DATABASE_URL is not configured',
-        'Supabase authentication is not configured',
-        'Private document storage is not configured',
-      ]),
-    );
-    expect(response.json().checks).toMatchObject({
-      database: 'unconfigured',
-      authentication: 'unconfigured',
-      privateStorage: 'unconfigured',
-    });
-    expect(response.json().rateLimiting).toEqual({ support: 'memory' });
+    // DB-03 moved this guarantee to an earlier boundary. An unconfigured
+    // production deployment used to build a server that reported itself
+    // unhealthy on /ready; it now refuses to parse at all, and index.ts renders
+    // the refusal as a 503-everything app carrying this message. Asserting the
+    // throw is asserting the same fail-closed behaviour where it now lives -
+    // and each setting is named individually, because the point of the rule is
+    // that the operator is told which one is missing rather than that something
+    // somewhere is wrong.
+    const parseUnconfiguredProduction = () => loadEnv({ NODE_ENV: 'production' });
+    expect(parseUnconfiguredProduction).toThrow(/Invalid environment configuration/);
+    for (const setting of [
+      'DATABASE_URL',
+      'SUPABASE_URL',
+      'SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_STORAGE_BUCKET',
+    ]) {
+      expect(parseUnconfiguredProduction).toThrow(`${setting} is required in production`);
+    }
   });
 
   it('echoes a client-supplied correlation id and generates one otherwise', async () => {
@@ -79,7 +104,7 @@ describe('apps/api server', () => {
 
   it('allows production browser preflights for every mutating API method', async () => {
     const origin = 'https://care-platform-web.vercel.app';
-    const app = buildServer(loadEnv({ NODE_ENV: 'production', CORS_ORIGINS: origin }));
+    const app = buildServer(loadEnv(productionEnv({ CORS_ORIGINS: origin })));
 
     for (const method of ['PUT', 'PATCH', 'DELETE']) {
       const response = await app.inject({

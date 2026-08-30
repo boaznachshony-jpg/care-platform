@@ -73,7 +73,16 @@ function stubPool(knownCaseIds: string[]) {
     query: async (text: string, values?: unknown[]) => {
       queries.push({ text, values });
       const sql = text.toLowerCase();
-      if (sql === 'begin' || sql === 'commit' || sql === 'rollback' || sql.includes('set_config')) {
+      if (
+        sql === 'begin' ||
+        sql === 'commit' ||
+        sql === 'rollback' ||
+        // Root 6 (API-01): withTenant() switches to caredesk_app before it sets
+        // the tenant. The stub must let it through, and the assertions below
+        // require it to have happened.
+        sql.startsWith('set local role') ||
+        sql.includes('set_config')
+      ) {
         return { rows: [], rowCount: 0 };
       }
       if (sql.includes('select 1 from employment_case')) {
@@ -190,9 +199,16 @@ describe('ScenarioExpenseService.save', () => {
     });
 
     const statements = queries.map((query) => query.text.toLowerCase());
+    // Root 6 (API-01): the role assertion is the one that was missing. This
+    // test previously checked `begin` then `set_config` and passed against a
+    // private transaction helper that never switched off whatever role the
+    // pooled connection carried - which under an administrative DATABASE_URL
+    // means BYPASSRLS and no tenant policy at all. Asserting the exact prologue
+    // pins the service to withTenant() rather than to a lookalike.
     expect(statements[0]).toBe('begin');
-    expect(statements[1]).toContain('set_config');
-    expect(queries[1]?.values).toEqual([TENANT_ID]);
+    expect(statements[1]).toBe('set local role caredesk_app');
+    expect(statements[2]).toContain('set_config');
+    expect(queries[2]?.values).toEqual([TENANT_ID]);
     expect(statements.at(-1)).toBe('commit');
 
     const audit = queries.find((query) => query.text.includes('insert into audit_event'));

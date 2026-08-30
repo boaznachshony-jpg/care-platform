@@ -15,6 +15,12 @@ export class PgActorResolver implements ActorResolver {
   constructor(private readonly pool: Pool) {}
 
   async resolveActor(session: AuthSession): Promise<ResolvedActor | null> {
+    // db-path-exception: this IS the step that discovers the tenant. Every
+    // request arrives with an auth-provider subject and nothing else; there is
+    // no tenant context to establish until this returns one. resolve_caredesk_
+    // actor() is SECURITY DEFINER and returns only (user_id, tenant_id) for an
+    // exact subject match. Everything downstream runs inside withTenant() with
+    // the tenant id it produced. (Root 6)
     const result = await this.pool.query<ActorRow>(
       'select user_id, tenant_id from resolve_caredesk_actor($1)',
       [session.authSubject],
