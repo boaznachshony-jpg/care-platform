@@ -1064,10 +1064,13 @@ a {
   cursor: pointer;
   color: #245da9;
   font-weight: 700;
-  /* Measured at 29.69px by the width matrix, 14.31px short of the 44px a
-     fingertip needs. The height comes from padding rather than a fixed value so
-     the label can still wrap at 360px instead of being clipped. */
-  min-height: 44px;
+  /* Measured at 29.69px by the width matrix. 48px rather than the WCAG AA
+     floor of 44px because atm-onboarding-mobile.spec.ts already holds mobile
+     touch targets to 48, and one standard beats two: a 46px control passed the
+     matrix and failed that older spec. The height comes from padding rather
+     than a fixed value so the label can still wrap at 360px instead of being
+     clipped. */
+  min-height: 48px;
   display: inline-flex;
   align-items: center;
   padding-block: 8px;
@@ -5792,6 +5795,11 @@ input[type='number'] {
   background: #eef1f5;
 }
 .dash-tab {
+  /* The container already scrolls, but flex items shrink before a container
+     overflows, so at 360px the padding squeezed the content box under the
+     label: "סקירה" needed 51px inside a 45.98px box. Refusing to shrink lets
+     the row overflow and the existing overflow-x: auto do its job. */
+  flex-shrink: 0;
   min-height: 48px;
   border: 0;
   border-radius: 999px;
