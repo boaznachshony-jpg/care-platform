@@ -14,14 +14,19 @@ files, 0 failures). Every blocker is invisible to CI: no test executes SQL
 against a real database as `caredesk_app`, so production's permission model is
 never exercised.
 
-| Report | Scope | BLOCKER | HIGH |
-|---|---|---|---|
-| [01-backend-api.md](01-backend-api.md) | `apps/api`, `packages/infrastructure` | 1 | 3 |
-| [02-frontend.md](02-frontend.md) | `apps/web`, `packages/ui`, `i18n` | 4 | 9 |
-| [03-database.md](03-database.md) | 36 migrations, `packages/db` | 0 | 6 |
-| [04-backup-dr.md](04-backup-dr.md) | backup, restore, DR readiness | 3 | 7 |
-| [05-release-safety.md](05-release-safety.md) | migrations, deploy, rollback | 2 | 4 |
-| [06-domain-logic.md](06-domain-logic.md) | domain, application, rules, schemas | 3 | 9 |
+**One document with everything: [FINDINGS.md](FINDINGS.md)** — all 112 findings
+merged and ordered by severity, each with a stable ID. Work from that file; the
+per-area reports below hold the same findings plus each reviewer's summary and
+coverage notes.
+
+| Report                                       | Scope                                 | BLOCKER | HIGH |
+| -------------------------------------------- | ------------------------------------- | ------- | ---- |
+| [01-backend-api.md](01-backend-api.md)       | `apps/api`, `packages/infrastructure` | 1       | 3    |
+| [02-frontend.md](02-frontend.md)             | `apps/web`, `packages/ui`, `i18n`     | 4       | 9    |
+| [03-database.md](03-database.md)             | 36 migrations, `packages/db`          | 0       | 6    |
+| [04-backup-dr.md](04-backup-dr.md)           | backup, restore, DR readiness         | 3       | 7    |
+| [05-release-safety.md](05-release-safety.md) | migrations, deploy, rollback          | 2       | 4    |
+| [06-domain-logic.md](06-domain-logic.md)     | domain, application, rules, schemas   | 3       | 9    |
 
 ## The critical chain
 
