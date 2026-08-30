@@ -114,6 +114,13 @@ export function collectLayoutSnapshot(): LayoutSnapshot {
     'button, [role="button"], a[class*="button"], input[type="submit"], input[type="button"]';
   const MAX_REPORTED = 40;
   const ROW_TOLERANCE_PX = 4;
+  // Declared here and not taken from module scope on purpose. Playwright
+  // serialises this function to a string and evals it inside the page, so any
+  // identifier it closes over in Node is simply absent at run time - the first
+  // CI run failed on exactly that, at all seven widths, with
+  // "SUBPIXEL_TOLERANCE_PX is not defined". The module-level export below is
+  // kept for findLayoutViolations, which really does run in Node.
+  const SUBPIXEL_TOLERANCE_PX = 1;
 
   const round = (value: number): number => Math.round(value * 100) / 100;
 
