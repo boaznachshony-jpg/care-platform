@@ -43,6 +43,8 @@ function plan(overrides: Partial<BillingPlanResponse> = {}): BillingPlanResponse
     termsVersion: '2026-08-04',
     accessState: 'active',
     graceDaysRemaining: null,
+    graceDays: 7,
+    accessGraceStartsAt: null,
     ...overrides,
   };
 }

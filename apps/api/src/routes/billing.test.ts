@@ -8,6 +8,7 @@ import {
 } from '@caredesk/infrastructure';
 import type { BillingPlanResponse } from '@caredesk/schemas';
 import { BILLING_TERMS_VERSION } from '@caredesk/schemas';
+import { deriveBillingAccessState } from '../billing/access-state.js';
 import { buildContainer, DEV_TOKEN } from '../container.js';
 import { buildServer } from '../create-server.js';
 import { loadEnv } from '../env.js';
@@ -50,6 +51,9 @@ describe('/billing routes', () => {
       canManage: true,
       accessState: 'active',
       graceDaysRemaining: null,
+      // The cancellation dialog needs the window length before the window
+      // exists, so it is always part of the plan response.
+      graceDays: 7,
     });
   });
 
@@ -247,6 +251,7 @@ const CHARGE_DEFAULTS: BillingDefaults = {
 };
 
 const SEALED_TOKEN = 'sealed.synthetic.token';
+const COLLECTION_NOW = '2026-08-21T04:17:00.000Z';
 
 /**
  * Builds the real server with the real collect route, but wires the collection
@@ -256,7 +261,9 @@ const SEALED_TOKEN = 'sealed.synthetic.token';
  */
 async function buildCollectionHarness(billingEmail: string) {
   const env = loadEnv({ BILLING_PROVIDER: 'mock', CRON_SECRET });
-  const billing = new InMemoryBillingRepository();
+  // Same instant the collection run uses, so a restored charge date is
+  // deterministic instead of depending on the machine's calendar.
+  const billing = new InMemoryBillingRepository(() => new Date(COLLECTION_NOW));
   const audit = new InMemoryAuditService();
   const authorization: AuthorizationService = {
     check: async () => ({ allowed: true, reason: 'test' }),
@@ -289,7 +296,7 @@ async function buildCollectionHarness(billingEmail: string) {
     billing,
     gateway: new MockProductBillingGateway(),
     audit,
-    clock: { now: () => new Date('2026-08-21T04:17:00.000Z') },
+    clock: { now: () => new Date(COLLECTION_NOW) },
     ids: { next: () => 'id-1' },
     defaults: CHARGE_DEFAULTS,
   });
@@ -368,5 +375,178 @@ describe('recurring charge collection run', () => {
     const record = await subscription();
     expect(record.status).toBe('past_due');
     expect(record.nextChargeOn).toBe('2026-08-01');
+  });
+});
+
+// ── Lifecycle recovery: the three ways a customer could be left in a wrong
+//    state with nobody telling them (G-1, G-3/G-4, G-5) ─────────────────────
+
+const GRACE_DAYS = 7;
+
+/** Runs the hosted card-setup flow against the seeded in-memory repository. */
+async function connectCard(
+  billing: InMemoryBillingRepository,
+  intentId: string,
+  billingEmail: string,
+  last4: string,
+) {
+  await billing.createSetupIntent({
+    intentId,
+    tenantId: 'tenant-1',
+    createdBy: 'user-1',
+    billingName: 'Pilot Customer',
+    billingEmail,
+    termsVersion: BILLING_TERMS_VERSION,
+    termsAcceptedAt: '2026-07-01T00:00:00.000Z',
+    providerSetupId: null,
+    status: 'created',
+  });
+  await billing.attachProviderSetup('tenant-1', intentId, `setup-${intentId}`);
+  await billing.completePaymentMethodSetup('tenant-1', intentId, {
+    providerSetupId: `setup-${intentId}`,
+    sealedToken: SEALED_TOKEN,
+    expiryMonth: 12,
+    expiryYear: 2030,
+    last4,
+  });
+}
+
+describe('abandoned card-update checkout (G-1)', () => {
+  it('keeps billing a customer who opens a card update and never finishes it', async () => {
+    const { collect, billing, subscription } = await buildCollectionHarness('pilot@example.test');
+
+    // The customer taps "update payment method" and a Cardcom session opens…
+    await billing.createSetupIntent({
+      intentId: 'intent-abandoned',
+      tenantId: 'tenant-1',
+      createdBy: 'user-1',
+      billingName: 'Pilot Customer',
+      billingEmail: 'pilot@example.test',
+      termsVersion: BILLING_TERMS_VERSION,
+      termsAcceptedAt: '2026-08-20T00:00:00.000Z',
+      providerSetupId: null,
+      status: 'created',
+    });
+    await billing.attachProviderSetup('tenant-1', 'intent-abandoned', 'setup-abandoned');
+    // …and then they close the tab. No webhook ever arrives.
+
+    const afterAbandon = await subscription();
+    // The working card is still on file, so the billing state must not have
+    // been overwritten with the uncollectable 'payment_method_pending'.
+    expect(afterAbandon.status).toBe('payment_method_ready');
+    expect(afterAbandon.paymentMethod).not.toBeNull();
+    // The in-flight setup is still recorded — just not at the cost of billing.
+    expect(afterAbandon.pendingSetupStartedAt).not.toBeNull();
+
+    // The whole point: the daily job still collects from them.
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 1, failed: 0 });
+    expect((await subscription()).status).toBe('active');
+  });
+
+  it('still marks a subscription with no stored card as payment_method_pending', async () => {
+    // The guard must not swing the other way: a first-time setup has no card
+    // to protect, and 'payment_method_pending' is the honest state for it.
+    const billing = new InMemoryBillingRepository(() => new Date(COLLECTION_NOW));
+    await billing.getOrCreate('tenant-1', CHARGE_DEFAULTS);
+    await billing.createSetupIntent({
+      intentId: 'intent-first',
+      tenantId: 'tenant-1',
+      createdBy: 'user-1',
+      billingName: 'Pilot Customer',
+      billingEmail: 'pilot@example.test',
+      termsVersion: BILLING_TERMS_VERSION,
+      termsAcceptedAt: '2026-07-01T00:00:00.000Z',
+      providerSetupId: null,
+      status: 'created',
+    });
+    await billing.attachProviderSetup('tenant-1', 'intent-first', 'setup-first');
+
+    expect((await billing.getOrCreate('tenant-1', CHARGE_DEFAULTS)).status).toBe(
+      'payment_method_pending',
+    );
+  });
+});
+
+describe('cancellation (G-3, G-4)', () => {
+  it('starts the grace window at the cancellation instead of freezing on the next render', async () => {
+    const { billing, subscription } = await buildCollectionHarness('pilot@example.test');
+    // Charging started on 2026-08-01 and it is now the 21st: anchored on that
+    // historic date the window is twenty days gone.
+    await billing.cancel('tenant-1', COLLECTION_NOW);
+
+    const cancelled = await subscription();
+    expect(cancelled.status).toBe('cancelled');
+    expect(cancelled.paymentMethod).toBeNull();
+    expect(cancelled.accessGraceStartsAt).toBe('2026-08-21');
+
+    // Exactly the composition the GET /billing/subscription route performs.
+    expect(deriveBillingAccessState(cancelled, GRACE_DAYS, new Date(COLLECTION_NOW))).toEqual({
+      accessState: 'grace',
+      graceDaysRemaining: 7,
+    });
+  });
+
+  it('restores a real charge date when a card is re-added after cancelling', async () => {
+    const { collect, billing, subscription } = await buildCollectionHarness('pilot@example.test');
+    await billing.cancel('tenant-1', COLLECTION_NOW);
+    expect((await subscription()).nextChargeOn).toBeNull();
+
+    await connectCard(billing, 'intent-reconnect', 'pilot@example.test', '1881');
+
+    const restored = await subscription();
+    // Without this the customer is unfrozen but never charged again — free
+    // service for as long as they keep using the product.
+    expect(restored.nextChargeOn).toBe('2026-08-21');
+    expect(restored.status).toBe('payment_method_ready');
+    // The new card ends the cancellation grace window.
+    expect(restored.accessGraceStartsAt).toBeNull();
+    expect(deriveBillingAccessState(restored, GRACE_DAYS, new Date(COLLECTION_NOW))).toEqual({
+      accessState: 'active',
+      graceDaysRemaining: null,
+    });
+
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 1, failed: 0 });
+  });
+
+  it('does not move a charge date that is already scheduled', async () => {
+    const { billing, subscription } = await buildCollectionHarness('pilot@example.test');
+    // A routine card update, no cancellation: the due date must be left alone.
+    await connectCard(billing, 'intent-routine', 'pilot@example.test', '1881');
+    expect((await subscription()).nextChargeOn).toBe('2026-08-01');
+  });
+});
+
+describe('exhausted retry attempts (G-5)', () => {
+  it('lets a new payment method reopen a period that used up all three attempts', async () => {
+    const { collect, billing, subscription } = await buildCollectionHarness('decline@example.test');
+
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    // Dead end: previously this required manual SQL to escape.
+    expect((await collect()).json()).toEqual({ processed: 0, succeeded: 0, failed: 0 });
+
+    // The customer does what the past-due banner tells them to do — and the
+    // mock gateway stops declining once the billing email is no longer a
+    // decline address, standing in for a card that actually works.
+    await connectCard(billing, 'intent-working-card', 'pilot@example.test', '1881');
+
+    expect((await collect()).json()).toEqual({ processed: 1, succeeded: 1, failed: 0 });
+    const record = await subscription();
+    expect(record.status).toBe('active');
+    expect(record.nextChargeOn).toBe('2026-09-01');
+  });
+
+  it('does not reopen the period on its own while the same card stays on file', async () => {
+    const { collect } = await buildCollectionHarness('decline@example.test');
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect((await collect()).json()).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+    }
+    // The exit is a customer action, never the passage of time: repeated runs
+    // must not quietly re-bill a card that has already been declined three
+    // times, or the exit becomes an unattended retry loop.
+    expect((await collect()).json()).toEqual({ processed: 0, succeeded: 0, failed: 0 });
+    expect((await collect()).json()).toEqual({ processed: 0, succeeded: 0, failed: 0 });
   });
 });

@@ -9,6 +9,13 @@ export interface BillingAccessInput {
   launchDiscountPercent: number;
   /** ISO date (YYYY-MM-DD) on which paid charging begins; null = no policy. */
   chargingStartsAt: string | null;
+  /**
+   * ISO date on which the *current* need for a payment method began — set when
+   * the customer cancels and the stored card is removed. It overrides
+   * chargingStartsAt as the grace anchor because chargingStartsAt is a historic
+   * date: anchoring on it made cancellation an instant lockout.
+   */
+  accessGraceStartsAt: string | null;
   paymentMethod: unknown | null;
 }
 
@@ -33,11 +40,15 @@ const ACTIVE: BillingAccessDerivation = { accessState: 'active', graceDaysRemain
  *   - chargingStartsAt is still in the future (payment not yet required).
  *
  * Otherwise payment is required but missing. The grace window is anchored on
- * chargingStartsAt: the subscription record has no creation timestamp, and
- * chargingStartsAt is set exactly when sponsorship ends and paid billing is
- * switched on for the tenant — i.e. the first moment a payment method becomes
- * necessary. Within `graceDays` calendar days of that anchor the state is
- * 'grace'; from day `graceDays` onward it is 'frozen'.
+ * the latest moment at which a payment method became necessary — normally
+ * chargingStartsAt (set exactly when sponsorship ends and paid billing is
+ * switched on), but accessGraceStartsAt when it is later. Cancellation sets
+ * accessGraceStartsAt to that day; without it the window was measured from a
+ * date months in the past and had therefore already expired, so cancelling
+ * locked the customer out of the product on the very next render.
+ *
+ * Within `graceDays` calendar days of the anchor the state is 'grace'; from day
+ * `graceDays` onward it is 'frozen'.
  */
 export function deriveBillingAccessState(
   plan: BillingAccessInput,
@@ -51,8 +62,18 @@ export function deriveBillingAccessState(
   // 'YYYY-MM-DD' parses as UTC midnight; full ISO timestamps also work. An
   // unparseable value fails open ('active') — a data glitch must never lock
   // a paying customer out of the product.
-  const anchorMs = Date.parse(plan.chargingStartsAt);
-  if (Number.isNaN(anchorMs)) return ACTIVE;
+  const chargingMs = Date.parse(plan.chargingStartsAt);
+  if (Number.isNaN(chargingMs)) return ACTIVE;
+
+  // The later anchor wins. An unparseable cancellation date also fails open
+  // rather than falling back to the historic (already-expired) anchor.
+  let anchorMs = chargingMs;
+  if (plan.accessGraceStartsAt !== null) {
+    const cancelledMs = Date.parse(plan.accessGraceStartsAt);
+    if (Number.isNaN(cancelledMs)) return ACTIVE;
+    if (cancelledMs > anchorMs) anchorMs = cancelledMs;
+  }
+
   if (now.getTime() < anchorMs) return ACTIVE;
 
   const elapsedDays = Math.floor((now.getTime() - anchorMs) / MS_PER_DAY);

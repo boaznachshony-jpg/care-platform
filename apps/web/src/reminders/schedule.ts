@@ -1,8 +1,15 @@
+import type {
+  CommunicationChannel,
+  CommunicationPreference,
+  SupportedLocale,
+} from '@caredesk/application';
 import {
+  MEDICATION_DAYS,
   MEDICATION_TIMES,
   canReceiveReminders,
   reminderContactFor,
   type MvpMedication,
+  type MvpMedicationDay,
   type MvpMedicationTime,
   type MvpReminderChannel,
   type MvpReminderRecipient,
@@ -56,21 +63,62 @@ export const MEDICATION_SLOT_TIMES: Readonly<Record<MvpMedicationTime, string>> 
 export const SLOT_GRACE_MINUTES = 60;
 
 /**
- * i18n key for the message body. The payload carries a key, never rendered
- * text, so the send layer resolves it in the recipient's language - and so no
- * Hebrew string literal has to live in source (Constitution 8).
+ * The fields below are not this module's invention. They are the columns of
+ * `notification_intent` (migration 0025) and the fields of the application-layer
+ * `NotificationIntent`. This module produces a draft of that row - it does not
+ * define a second message format alongside the one the product already has.
+ *
+ * `event_type` names what happened in the product; `template_key` +
+ * `template_version` select the wording the send layer renders in the
+ * recipient's locale. Neither is rendered text, so no Hebrew string literal has
+ * to live in source (Constitution 8), and a wording change is a version bump
+ * rather than a code change here.
  */
-export const REMINDER_MESSAGE_KEY = 'medicationReminder.body';
+export const REMINDER_EVENT_TYPE = 'medication.dose_due';
+export const REMINDER_TEMPLATE_KEY = 'medication.dose_due';
+export const REMINDER_TEMPLATE_VERSION = 1;
 
-/** In-app destination the message links to; the details live behind the login. */
+/**
+ * In-app destination the message links to; the details live behind the login.
+ * `notification_intent.authenticated_path` is constrained to `like '/%'`.
+ */
 export const REMINDER_APP_PATH = '/medications';
+
+/**
+ * The locale used when the recipient has no recorded preference.
+ *
+ * `communication_preference.preferred_locale` is per participant server-side.
+ * The workspace recipient model has no locale field at all, so every reminder
+ * currently renders in Hebrew unless the caller says otherwise. That is stated
+ * here rather than hidden, because a daughter who reads English gets a Hebrew
+ * message and nobody finds out.
+ */
+export const REMINDER_DEFAULT_LOCALE: SupportedLocale = 'he';
+
+/**
+ * Compile-time proof that the workspace channel union and the pipeline channel
+ * union stay identical. If either side gains a channel the other lacks, this
+ * stops the build instead of silently producing an intent the orchestrator has
+ * no provider for.
+ */
+type ChannelUnionsAligned = MvpReminderChannel extends CommunicationChannel
+  ? CommunicationChannel extends MvpReminderChannel
+    ? true
+    : never
+  : never;
+export const REMINDER_CHANNELS_MATCH_PIPELINE: ChannelUnionsAligned = true;
 
 /** Why a recipient on the list will not be contacted. Mirrors `canReceiveReminders`. */
 export type RecipientSkipReason = 'paused' | 'no-consent' | 'no-contact';
 
 /** Why a dose that exists in the list did not turn into a message. */
 export type MedicationSkipReason =
-  'as-needed' | 'not-daily' | 'already-sent' | 'quiet-hours' | 'no-eligible-recipients';
+  | 'as-needed'
+  | 'not-daily'
+  | 'not-today'
+  | 'already-sent'
+  | 'quiet-hours'
+  | 'no-eligible-recipients';
 
 /** A recipient this send would actually go to, resolved to one address. */
 export interface ReminderTarget {
@@ -95,34 +143,85 @@ export interface SkippedMedication {
 }
 
 /**
- * What is sent. Note what is absent: no medication name, no dosage, no notes.
+ * The only values the rendered message may interpolate.
  *
- * A family phone in Israel is a shared object - it sits on the kitchen table,
- * the screen lights up in front of guests, a grandchild picks it up. Naming the
- * drug on a lock screen discloses the diagnosis of a third party to whoever is
- * in the room. The message says a dose is due and links into the app, where the
- * reader is authenticated.
+ * Note what is absent: no medication name, no dosage, no notes. A family phone
+ * in Israel is a shared object - it sits on the kitchen table, the screen
+ * lights up in front of guests, a grandchild picks it up. Naming the drug on a
+ * lock screen discloses the diagnosis of a third party to whoever is in the
+ * room. The message says a dose is due and links into the app, where the reader
+ * is authenticated. This type is the enforcement point: a template can only
+ * interpolate what this object carries.
  */
-export interface ReminderPayload {
-  messageKey: string;
+export interface ReminderTemplateVariables {
   slot: MvpMedicationTime;
   /** The slot's local clock time, for a message like "the 08:00 dose". */
   slotTime: string;
-  appPath: string;
+  /** Local (Asia/Jerusalem) calendar day, yyyy-mm-dd. */
+  localDate: string;
+}
+
+/**
+ * One `notification_intent` row waiting for the fields only the server owns.
+ *
+ * Absent on purpose: `id` and `tenant_id` (assigned inside the tenant
+ * transaction) and `status` (the pipeline's, not the planner's). Everything
+ * else is filled in here so the server side is an insert plus a call to
+ * `NotificationOrchestrator.deliver`, with no reshaping in between.
+ */
+export interface ReminderIntentDraft {
+  /** `notification_intent.recipient_type`. Reminder recipients are family. */
+  recipientType: 'family_member';
+  /**
+   * `notification_intent.recipient_id`.
+   *
+   * Today this is a workspace-local recipient id, which is not the uuid the
+   * column expects. It is named `recipientRef` rather than `recipientId` so the
+   * mismatch is visible at the call site: whatever persists these intents must
+   * resolve this reference to a server-side recipient before inserting. See
+   * `docs/governance/REMINDERS-INTEGRATION.md`.
+   */
+  recipientRef: string;
+  /** Local display only - who the household sees on the plan. Never sent. */
+  recipientName: string;
+  eventType: typeof REMINDER_EVENT_TYPE;
+  templateKey: typeof REMINDER_TEMPLATE_KEY;
+  templateVersion: number;
+  locale: SupportedLocale;
+  authenticatedPath: string;
+  /**
+   * `notification_intent.idempotency_key`, unique per tenant. One dose produces
+   * one intent per recipient, so the recipient is part of the key: without it
+   * the second recipient's insert would collide with the first one's and one
+   * person would silently never be told.
+   */
+  idempotencyKey: string;
+  templateVariables: ReminderTemplateVariables;
+  /** Passed straight to `NotificationOrchestrator.deliver`. */
+  destinationByChannel: Partial<Record<CommunicationChannel, string>>;
+  /**
+   * The recipient's workspace consent and channel expressed in the pipeline's
+   * own preference shape, so `eligibleChannels` gates the send rather than a
+   * second, parallel consent rule.
+   */
+  preference: CommunicationPreference;
 }
 
 export interface DueReminder {
   /**
-   * The idempotency key. The caller persists it after a successful send and
+   * The dose-level key. The caller persists it after a successful send and
    * passes it back on the next tick; this module never remembers anything.
+   * Per-recipient idempotency lives on each intent's `idempotencyKey`.
    */
   key: string;
   medicationId: string;
   slot: MvpMedicationTime;
   /** Local (Asia/Jerusalem) calendar day, yyyy-mm-dd. */
   localDate: string;
-  payload: ReminderPayload;
+  /** Who would be told, resolved to one address each. */
   targets: ReminderTarget[];
+  /** One draft intent per target, in the same order. */
+  intents: ReminderIntentDraft[];
 }
 
 export interface ReminderPlan {
@@ -146,6 +245,12 @@ export interface ReminderPlanInput {
   quietHoursEnd: string;
   /** Keys already sent, from the caller's own store. */
   alreadySent?: Iterable<string>;
+  /**
+   * Locale for every intent this tick. A single value because the workspace
+   * recipient model records no per-recipient locale; once recipients live in
+   * `communication_preference` this is read per recipient instead.
+   */
+  locale?: SupportedLocale;
 }
 
 /** The household's wall clock at a given instant, in Asia/Jerusalem. */
@@ -192,6 +297,32 @@ export function jerusalemWallClock(instant: Date): WallClock {
   };
 }
 
+const weekdayFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: REMINDER_TIME_ZONE,
+  weekday: 'long',
+});
+
+/** English weekday name to the stored day token. Keyed by what Intl emits. */
+const WEEKDAY_BY_NAME: Readonly<Record<string, MvpMedicationDay>> = Object.fromEntries(
+  MEDICATION_DAYS.map((day) => [day, day]),
+);
+
+/**
+ * The Jerusalem calendar day of the week at an instant.
+ *
+ * Deliberately not a field on `WallClock`: the wall clock is compared for
+ * equality all over the tests, and a day name is a different question from
+ * "what time is it". It is also computed from the tz database rather than from
+ * `getDay()`, because `getDay()` answers for the machine's zone - a server in
+ * UTC would call Friday 23:30 in Tel Aviv a Friday, which it is not.
+ *
+ * Returns null if the formatter ever emits something unrecognised, so the
+ * caller decides what to do rather than this function inventing a day.
+ */
+export function jerusalemWeekday(instant: Date): MvpMedicationDay | null {
+  return WEEKDAY_BY_NAME[weekdayFormat.format(instant).toLowerCase()] ?? null;
+}
+
 /** "HH:MM" to minutes since midnight; null when the value is not a usable time. */
 export function minutesFromTime(time: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
@@ -236,6 +367,56 @@ export function reminderKeyFor(
   return `medication:${medicationId}:${slot}:${localDate}`;
 }
 
+/**
+ * The per-recipient idempotency key for one dose.
+ *
+ * `notification_intent.idempotency_key` is unique per tenant, and a dose fans
+ * out to several people, so the dose key alone would let the first recipient's
+ * row swallow everyone else's under `on conflict do nothing`.
+ */
+export function reminderIntentKeyFor(doseKey: string, recipientId: string): string {
+  return `${doseKey}:${recipientId}`;
+}
+
+/**
+ * The recipient's workspace consent, expressed in the pipeline's preference
+ * shape.
+ *
+ * The two models say the same thing differently. The workspace records one
+ * consent moment per person plus the one channel they chose; the pipeline
+ * records a per-channel enable flag plus a per-channel consent state. The
+ * translation is deliberately narrow: only the chosen channel is enabled, and
+ * only the chosen channel is granted. Enabling the others "because they
+ * consented" would send over a channel the person never agreed to, and for the
+ * daughter abroad on a data-only eSIM it would pick SMS and reach nobody.
+ *
+ * `canReceiveReminders` has already been applied before this is called, so an
+ * unconsented recipient never reaches here; the granted state is a
+ * restatement of a gate that has passed, not a second opinion.
+ */
+export function reminderPreferenceFor(
+  recipient: MvpReminderRecipient,
+  locale: SupportedLocale,
+): CommunicationPreference {
+  const channel: CommunicationChannel = recipient.channel;
+  return {
+    emailEnabled: channel === 'email',
+    whatsappEnabled: channel === 'whatsapp',
+    smsEnabled: channel === 'sms',
+    preferredChannel: channel,
+    preferredLocale: locale,
+    whatsappConsent: channel === 'whatsapp' ? 'granted' : 'unknown',
+    smsConsent: channel === 'sms' ? 'granted' : 'unknown',
+  };
+}
+
+/** The single destination the recipient's chosen channel delivers to. */
+export function reminderDestinationsFor(
+  recipient: MvpReminderRecipient,
+): Partial<Record<CommunicationChannel, string>> {
+  return { [recipient.channel]: reminderContactFor(recipient) };
+}
+
 /** True when `now` is inside the slot's send window on the local clock. */
 export function isSlotDue(slot: MvpMedicationTime, nowMinutes: number): boolean {
   const slotMinutes = minutesFromTime(MEDICATION_SLOT_TIMES[slot]);
@@ -263,27 +444,48 @@ export function recipientSkipReason(recipient: MvpReminderRecipient): RecipientS
  * A dose that is taken when a symptom appears has no schedule to remind about,
  * so it never generates a message.
  *
- * `daily: false` means the family said this is taken on specific days - and the
- * model records no day list, because the form never asked for one. Rather than
- * guess (every other day? weekdays? the day it was entered?), nothing is sent
- * and the medication is reported as skipped. A reminder for a dose that is not
- * due today is not a harmless extra: it is the message that teaches a household
- * to swipe reminders away, which then costs them a real one. When per-day
- * scheduling is added to the model this rule is the single place to change.
+ * `daily: false` means the family said this is taken on specific days. Which
+ * days is now recorded, so the rule splits three ways:
+ *
+ * - days chosen, today is one of them: it fires like any daily medication.
+ * - days chosen, today is not one: skipped as `not-today`. Reported rather than
+ *   dropped, because "why did nothing arrive on Tuesday" has to be answerable.
+ * - no days chosen, or the field absent because the record predates it: nothing
+ *   is sent and the skip is reported as `not-daily`, exactly as before. Guessing
+ *   (every other day? weekdays? the day it was entered?) is the worse failure:
+ *   a reminder for a dose that is not due teaches a household to swipe
+ *   reminders away, which then costs them a real one. The screen that owns the
+ *   day picker says out loud that no reminder will be sent until days are set,
+ *   so this silence is stated to the user rather than only logged here.
+ *
+ * A medication marked `daily` fires every day whatever the day list says; the
+ * list only describes the non-daily case.
  */
-function medicationSkipReason(medication: MvpMedication): MedicationSkipReason | null {
+function medicationSkipReason(
+  medication: MvpMedication,
+  today: MvpMedicationDay | null,
+): MedicationSkipReason | null {
   if (medication.timesOfDay.length === 0) return 'as-needed';
-  if (!medication.daily) return 'not-daily';
+  if (medication.daily) return null;
+  const days = medication.daysOfWeek ?? [];
+  if (days.length === 0) return 'not-daily';
+  // A day we cannot name is a day we cannot match: fail closed rather than fire
+  // a non-daily reminder on a day nobody asked for.
+  if (today === null || !days.includes(today)) return 'not-today';
   return null;
 }
 
 export function planMedicationReminders(input: ReminderPlanInput): ReminderPlan {
   const { medications, recipients, now, quietHoursStart, quietHoursEnd } = input;
   const clock = jerusalemWallClock(now);
+  const today = jerusalemWeekday(now);
   const quiet = isWithinQuietHours(clock.minutes, quietHoursStart, quietHoursEnd);
   const alreadySent = new Set(input.alreadySent ?? []);
 
+  const locale = input.locale ?? REMINDER_DEFAULT_LOCALE;
+
   const targets: ReminderTarget[] = [];
+  const eligible: MvpReminderRecipient[] = [];
   const skippedRecipients: SkippedRecipient[] = [];
   for (const recipient of recipients) {
     const reason = recipientSkipReason(recipient);
@@ -291,6 +493,7 @@ export function planMedicationReminders(input: ReminderPlanInput): ReminderPlan 
       skippedRecipients.push({ recipientId: recipient.id, name: recipient.name, reason });
       continue;
     }
+    eligible.push(recipient);
     targets.push({
       recipientId: recipient.id,
       name: recipient.name,
@@ -306,7 +509,7 @@ export function planMedicationReminders(input: ReminderPlanInput): ReminderPlan 
   const plannedKeys = new Set<string>();
 
   for (const medication of medications) {
-    const skip = medicationSkipReason(medication);
+    const skip = medicationSkipReason(medication, today);
     if (skip) {
       skippedMedications.push({ medicationId: medication.id, reason: skip });
       continue;
@@ -342,18 +545,31 @@ export function planMedicationReminders(input: ReminderPlanInput): ReminderPlan 
       }
 
       plannedKeys.add(key);
+      const templateVariables: ReminderTemplateVariables = {
+        slot,
+        slotTime: MEDICATION_SLOT_TIMES[slot],
+        localDate: clock.date,
+      };
       due.push({
         key,
         medicationId: medication.id,
         slot,
         localDate: clock.date,
-        payload: {
-          messageKey: REMINDER_MESSAGE_KEY,
-          slot,
-          slotTime: MEDICATION_SLOT_TIMES[slot],
-          appPath: REMINDER_APP_PATH,
-        },
         targets,
+        intents: eligible.map((recipient) => ({
+          recipientType: 'family_member',
+          recipientRef: recipient.id,
+          recipientName: recipient.name,
+          eventType: REMINDER_EVENT_TYPE,
+          templateKey: REMINDER_TEMPLATE_KEY,
+          templateVersion: REMINDER_TEMPLATE_VERSION,
+          locale,
+          authenticatedPath: REMINDER_APP_PATH,
+          idempotencyKey: reminderIntentKeyFor(key, recipient.id),
+          templateVariables,
+          destinationByChannel: reminderDestinationsFor(recipient),
+          preference: reminderPreferenceFor(recipient, locale),
+        })),
       });
     }
   }

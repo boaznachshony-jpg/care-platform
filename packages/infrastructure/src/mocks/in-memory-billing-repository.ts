@@ -15,6 +15,14 @@ interface InMemoryChargeRecord {
   amountAgorot: number;
   status: 'processing' | 'succeeded' | 'failed';
   attempts: number;
+  attemptCycle: number;
+  /**
+   * Mirrors product_billing_charge.payment_method_refreshed_at. The SQL stores
+   * a timestamp; here it is the monotonic revision below, so the "is this card
+   * newer than the one that failed?" comparison cannot be made flaky by two
+   * writes landing in the same millisecond.
+   */
+  paymentMethodRevision: number | null;
   providerTransactionId: string | null;
   failureCode: string | null;
 }
@@ -28,11 +36,21 @@ function addOneMonth(isoDate: string): string {
 
 /** Synthetic/test-only billing store. It never contains real payment details. */
 export class InMemoryBillingRepository implements BillingRepository {
+  /**
+   * The SQL uses `current_date` when it restores a charge date; the fake needs
+   * the same clock the collection run uses, or a restored date could land after
+   * the run's "today" and look uncollectable for reasons the code never has.
+   */
+  constructor(private readonly clock: () => Date = () => new Date()) {}
+
   private readonly subscriptions = new Map<string, ProductSubscriptionRecord>();
   private readonly intents = new Map<string, BillingSetupIntentRecord>();
   /** Keyed by `${tenantId}:${billingPeriod}` — same uniqueness as the table. */
   private readonly charges = new Map<string, InMemoryChargeRecord>();
   private chargeSequence = 0;
+  /** Stand-in for product_subscription.payment_method_updated_at, per tenant. */
+  private readonly paymentMethodRevisions = new Map<string, number>();
+  private paymentMethodSequence = 0;
 
   async getOrCreate(
     tenantId: string,
@@ -49,6 +67,8 @@ export class InMemoryBillingRepository implements BillingRepository {
         billingEmail: null,
         termsVersion: null,
         termsAcceptedAt: null,
+        accessGraceStartsAt: null,
+        pendingSetupStartedAt: null,
         paymentMethod: null,
       };
       this.subscriptions.set(tenantId, record);
@@ -70,7 +90,12 @@ export class InMemoryBillingRepository implements BillingRepository {
     intent.providerSetupId = providerSetupId;
     intent.status = 'pending';
     const subscription = this.subscriptions.get(intent.tenantId);
-    if (subscription) subscription.status = 'payment_method_pending';
+    if (!subscription) return;
+    subscription.pendingSetupStartedAt = new Date().toISOString();
+    // Mirrors the SQL guard: only a subscription with no stored card can be
+    // moved to 'payment_method_pending'. Opening a checkout must never take a
+    // customer who already has a working card out of the collection run.
+    if (!subscription.paymentMethod) subscription.status = 'payment_method_pending';
   }
 
   async findSetupIntentByProviderId(
@@ -98,6 +123,17 @@ export class InMemoryBillingRepository implements BillingRepository {
     subscription.termsAcceptedAt = intent.termsAcceptedAt;
     subscription.paymentMethod = structuredClone(paymentMethod);
     subscription.status = subscription.chargingStartsAt ? 'payment_method_ready' : 'sponsored';
+    // Restores a real charge date after a cancellation cleared it — otherwise
+    // re-adding a card buys unlimited free service (mirrors the SQL `greatest`).
+    if (subscription.chargingStartsAt && subscription.nextChargeOn === null) {
+      const today = this.clock().toISOString().slice(0, 10);
+      subscription.nextChargeOn =
+        subscription.chargingStartsAt > today ? subscription.chargingStartsAt : today;
+    }
+    subscription.accessGraceStartsAt = null;
+    subscription.pendingSetupStartedAt = null;
+    this.paymentMethodSequence += 1;
+    this.paymentMethodRevisions.set(intent.tenantId, this.paymentMethodSequence);
     return structuredClone(subscription);
   }
 
@@ -106,12 +142,16 @@ export class InMemoryBillingRepository implements BillingRepository {
     if (intent) intent.status = 'failed';
   }
 
-  async cancel(tenantId: string, _cancelledAt: string): Promise<void> {
+  async cancel(tenantId: string, cancelledAt: string): Promise<void> {
     const subscription = this.subscriptions.get(tenantId);
     if (!subscription) return;
     subscription.status = 'cancelled';
     subscription.nextChargeOn = null;
     subscription.paymentMethod = null;
+    subscription.pendingSetupStartedAt = null;
+    // Removing the card is the moment a payment method becomes necessary, so
+    // the grace window starts here rather than at the historic charging date.
+    subscription.accessGraceStartsAt = cancelledAt.slice(0, 10);
   }
 
   /**
@@ -141,6 +181,7 @@ export class InMemoryBillingRepository implements BillingRepository {
       if (claimed.length >= Math.max(1, Math.min(limit, 100))) break;
       const period = subscription.nextChargeOn!;
       const key = `${subscription.tenantId}:${period}`;
+      const revision = this.paymentMethodRevisions.get(subscription.tenantId) ?? null;
       let charge = this.charges.get(key);
       if (!charge) {
         this.chargeSequence += 1;
@@ -152,6 +193,8 @@ export class InMemoryBillingRepository implements BillingRepository {
           amountAgorot: subscription.priceAgorot,
           status: 'processing',
           attempts: 1,
+          attemptCycle: 1,
+          paymentMethodRevision: revision,
           providerTransactionId: null,
           failureCode: null,
         };
@@ -159,9 +202,25 @@ export class InMemoryBillingRepository implements BillingRepository {
       } else if (charge.status === 'failed' && charge.attempts < 3) {
         charge.status = 'processing';
         charge.attempts += 1;
+        charge.paymentMethodRevision = revision;
+        charge.failureCode = null;
+      } else if (
+        charge.status === 'failed' &&
+        // The exit from an exhausted period: the customer stored a payment
+        // method newer than the one the failed cycle kept trying. Attempts
+        // restart at 1 in a new cycle, exactly as the SQL does; nothing here
+        // resets on time alone, so this cannot become an unattended retry loop.
+        revision !== null &&
+        (charge.paymentMethodRevision === null || revision > charge.paymentMethodRevision) &&
+        charge.attemptCycle < 10
+      ) {
+        charge.status = 'processing';
+        charge.attempts = 1;
+        charge.attemptCycle += 1;
+        charge.paymentMethodRevision = revision;
         charge.failureCode = null;
       } else {
-        // Succeeded, still processing, or out of attempts: not re-claimable.
+        // Succeeded, still processing, or out of attempts with the same card.
         continue;
       }
       claimed.push({

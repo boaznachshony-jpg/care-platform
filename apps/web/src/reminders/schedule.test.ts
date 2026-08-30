@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { MEDICATION_DAYS } from '../storage/mvp-storage.js';
 import type { MvpMedication, MvpReminderRecipient } from '../storage/mvp-storage.js';
 import {
   MEDICATION_SLOT_TIMES,
   REMINDER_APP_PATH,
-  REMINDER_MESSAGE_KEY,
+  REMINDER_EVENT_TYPE,
+  REMINDER_TEMPLATE_KEY,
+  REMINDER_TEMPLATE_VERSION,
   isSlotDue,
   isWithinQuietHours,
   jerusalemWallClock,
+  jerusalemWeekday,
   minutesFromTime,
   planMedicationReminders,
   recipientSkipReason,
@@ -193,10 +197,88 @@ describe('medication rules', () => {
     expect(result.skippedMedications).toEqual([{ medicationId: 'med-1', reason: 'as-needed' }]);
   });
 
-  it('never fires a medication that is not taken daily, because no day list exists', () => {
-    const result = plan({ medications: [medication({ daily: false })] });
+  it('never fires a medication that is not taken daily and names no days', () => {
+    const result = plan({ medications: [medication({ daily: false, daysOfWeek: [] })] });
     expect(result.due).toHaveLength(0);
     expect(result.skippedMedications).toEqual([{ medicationId: 'med-1', reason: 'not-daily' }]);
+  });
+
+  it('leaves a record saved before the day field existed exactly as it was', () => {
+    // A legacy row has no `daysOfWeek` at all. Adding the field must not make
+    // it start firing on a guess, and must not change what it already did.
+    const legacyDaily = medication();
+    const legacyNonDaily = medication({ id: 'med-legacy', daily: false });
+    expect('daysOfWeek' in legacyDaily).toBe(false);
+    expect('daysOfWeek' in legacyNonDaily).toBe(false);
+
+    const stillFires = plan({ medications: [legacyDaily] });
+    expect(stillFires.due.map((item) => item.medicationId)).toEqual(['med-1']);
+    expect(stillFires.skippedMedications).toHaveLength(0);
+
+    const stillSilent = plan({ medications: [legacyNonDaily] });
+    expect(stillSilent.due).toHaveLength(0);
+    expect(stillSilent.skippedMedications).toEqual([
+      { medicationId: 'med-legacy', reason: 'not-daily' },
+    ]);
+  });
+
+  it('survives a round trip through the workspace JSON blob', () => {
+    // The store keeps medications as a JSON blob, so the representation has to
+    // mean the same thing after JSON.parse(JSON.stringify(x)) - which is why
+    // the days are names rather than a Set, a bitmask or Date objects.
+    const saved = medication({ daily: false, daysOfWeek: ['sunday', 'thursday'] });
+    const reloaded = JSON.parse(JSON.stringify([saved])) as MvpMedication[];
+    expect(reloaded[0]).toEqual(saved);
+    expect(plan({ medications: reloaded }).due).toHaveLength(1);
+  });
+
+  it('fires a non-daily medication on a day it was marked for', () => {
+    // 2026-08-20 is a Thursday in Jerusalem.
+    const result = plan({
+      medications: [medication({ daily: false, daysOfWeek: ['sunday', 'thursday'] })],
+    });
+    expect(result.due.map((item) => item.slot)).toEqual(['morning']);
+    expect(result.skippedMedications).toHaveLength(0);
+  });
+
+  it('says why nothing was sent on a day the medication is not taken', () => {
+    const result = plan({
+      medications: [medication({ daily: false, daysOfWeek: ['sunday', 'friday'] })],
+    });
+    expect(result.due).toHaveLength(0);
+    expect(result.skippedMedications).toEqual([{ medicationId: 'med-1', reason: 'not-today' }]);
+  });
+
+  it('reads the day of the week on the Jerusalem clock, not the machine zone', () => {
+    // 21:30Z on a Thursday in summer is already Friday 00:30 in Tel Aviv.
+    expect(jerusalemWeekday(new Date('2026-08-20T05:05:00Z'))).toBe('thursday');
+    expect(jerusalemWeekday(new Date('2026-08-20T21:30:00Z'))).toBe('friday');
+    expect(jerusalemWeekday(new Date('2026-08-22T09:00:00Z'))).toBe('saturday');
+    expect(jerusalemWeekday(new Date('2026-08-23T09:00:00Z'))).toBe('sunday');
+  });
+
+  it('keeps the Israeli week order, Sunday first', () => {
+    expect(MEDICATION_DAYS).toEqual([
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ]);
+  });
+
+  it('ignores the day list when the medication is taken every day', () => {
+    const result = plan({ medications: [medication({ daily: true, daysOfWeek: ['sunday'] })] });
+    expect(result.due).toHaveLength(1);
+  });
+
+  it('still refuses an as-needed medication even when days are chosen', () => {
+    const result = plan({
+      medications: [medication({ timesOfDay: [], daily: false, daysOfWeek: ['thursday'] })],
+    });
+    expect(result.skippedMedications).toEqual([{ medicationId: 'med-1', reason: 'as-needed' }]);
   });
 
   it('only fires the slot whose window is open', () => {
@@ -317,30 +399,87 @@ describe('recipients', () => {
   });
 });
 
-describe('message payload', () => {
+describe('notification intent drafts', () => {
   it('never carries the medication name, dosage or notes', () => {
     const result = plan({
       medications: [
         medication({ name: 'Eliquis', dosage: '5mg twice daily', notes: 'after food' }),
       ],
     });
-    const serialised = JSON.stringify(result.due[0]?.payload);
+    const serialised = JSON.stringify(result.due[0]?.intents);
     expect(serialised).not.toContain('Eliquis');
     expect(serialised).not.toContain('5mg');
     expect(serialised).not.toContain('after food');
   });
 
-  it('says a dose is due and links into the app', () => {
-    expect(plan().due[0]?.payload).toEqual({
-      messageKey: REMINDER_MESSAGE_KEY,
-      slot: 'morning',
-      slotTime: '08:00',
-      appPath: REMINDER_APP_PATH,
-    });
+  it('fills every notification_intent field the server does not own', () => {
+    expect(plan().due[0]?.intents).toEqual([
+      {
+        recipientType: 'family_member',
+        recipientRef: 'rec-1',
+        recipientName: 'Dana',
+        eventType: REMINDER_EVENT_TYPE,
+        templateKey: REMINDER_TEMPLATE_KEY,
+        templateVersion: REMINDER_TEMPLATE_VERSION,
+        locale: 'he',
+        authenticatedPath: REMINDER_APP_PATH,
+        idempotencyKey: 'medication:med-1:morning:2026-08-20:rec-1',
+        templateVariables: { slot: 'morning', slotTime: '08:00', localDate: '2026-08-20' },
+        destinationByChannel: { sms: '+972501234567' },
+        preference: {
+          emailEnabled: false,
+          whatsappEnabled: false,
+          smsEnabled: true,
+          preferredChannel: 'sms',
+          preferredLocale: 'he',
+          whatsappConsent: 'unknown',
+          smsConsent: 'granted',
+        },
+      },
+    ]);
   });
 
-  it('carries a translation key rather than rendered text', () => {
-    expect(plan().due[0]?.payload.messageKey).toBe('medicationReminder.body');
+  it('carries a template key and version rather than rendered text', () => {
+    const intent = plan().due[0]?.intents[0];
+    expect(intent?.templateKey).toBe('medication.dose_due');
+    expect(intent?.templateVersion).toBe(1);
+  });
+
+  it('links to an authenticated in-app path, as the intent contract requires', () => {
+    expect(plan().due[0]?.intents[0]?.authenticatedPath).toMatch(/^\//);
+  });
+
+  it('gives each recipient its own idempotency key so one send cannot swallow another', () => {
+    const result = plan({
+      recipients: [recipient({ id: 'rec-1' }), recipient({ id: 'rec-2' })],
+    });
+    expect(result.due[0]?.intents.map((intent) => intent.idempotencyKey)).toEqual([
+      'medication:med-1:morning:2026-08-20:rec-1',
+      'medication:med-1:morning:2026-08-20:rec-2',
+    ]);
+  });
+
+  it('enables only the channel the recipient chose, per recipient', () => {
+    const result = plan({
+      recipients: [
+        recipient({ id: 'sms-son', channel: 'sms', phone: '+972500000001' }),
+        recipient({ id: 'email-abroad', channel: 'email', email: 'dana@example.com' }),
+      ],
+    });
+    expect(result.due[0]?.intents.map((intent) => intent.destinationByChannel)).toEqual([
+      { sms: '+972500000001' },
+      { email: 'dana@example.com' },
+    ]);
+    expect(result.due[0]?.intents.map((intent) => intent.preference.preferredChannel)).toEqual([
+      'sms',
+      'email',
+    ]);
+  });
+
+  it('renders in the locale the caller asked for', () => {
+    const result = plan({ locale: 'en' });
+    expect(result.due[0]?.intents[0]?.locale).toBe('en');
+    expect(result.due[0]?.intents[0]?.preference.preferredLocale).toBe('en');
   });
 });
 

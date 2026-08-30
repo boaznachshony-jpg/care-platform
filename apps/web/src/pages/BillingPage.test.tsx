@@ -44,6 +44,8 @@ const sponsoredPlan: BillingPlanResponse = {
   termsVersion: '2026-08-04',
   accessState: 'active',
   graceDaysRemaining: null,
+  graceDays: 7,
+  accessGraceStartsAt: null,
 };
 
 async function renderPage(initialPath = '/billing') {
@@ -79,6 +81,8 @@ const savedCardPlan: BillingPlanResponse = {
   termsVersion: '2026-08-04',
   accessState: 'active',
   graceDaysRemaining: null,
+  graceDays: 7,
+  accessGraceStartsAt: null,
 };
 
 describe('BillingPage', () => {
@@ -230,6 +234,23 @@ describe('BillingPage', () => {
     expect(
       await screen.findByRole('button', { name: /securely connect a card/i }),
     ).toBeInTheDocument();
+  });
+
+  it('warns in the confirm dialog that access ends, and when', async () => {
+    // Cancelling removes the card, and a missing card is what freezes the
+    // account. Saying only "stop future charges" made the lockout a surprise.
+    mocks.getBillingSubscription.mockResolvedValue({ ...savedCardPlan, graceDays: 7 });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await renderPage();
+    const cancelBtn = await screen.findByRole('button', { name: /remove payment method/i });
+    fireEvent.click(cancelBtn);
+
+    const message = confirm.mock.calls[0]?.[0] ?? '';
+    expect(message).toMatch(/access to CareDesk will be blocked/i);
+    expect(message).toContain('7 days');
+    // It must also say the data survives, so the warning does not read as
+    // "cancelling deletes everything".
+    expect(message).toMatch(/data is kept/i);
   });
 
   it('does not call cancelBillingSubscription when the owner dismisses the confirm dialog', async () => {

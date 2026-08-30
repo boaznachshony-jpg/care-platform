@@ -42,6 +42,9 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
       const response: BillingPlanResponse = {
         ...plan,
         ...deriveBillingAccessState(plan, env.BILLING_GRACE_DAYS, new Date()),
+        // Sent unconditionally so the cancellation dialog can tell the customer
+        // how long access survives losing the card, before any window opens.
+        graceDays: env.BILLING_GRACE_DAYS,
       };
       reply.send(response);
     } catch (error) {

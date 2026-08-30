@@ -38,6 +38,8 @@ export interface ProductSubscriptionPlan {
   effectivePriceAgorot: number;
   chargingStartsAt: string | null;
   nextChargeOn: string | null;
+  /** Cancellation-anchored grace start; see BillingAccessInput in the API. */
+  accessGraceStartsAt: string | null;
   billingName: string | null;
   billingEmail: string | null;
   paymentMethod: { last4: string; expiryMonth: number; expiryYear: number } | null;
@@ -73,6 +75,7 @@ function toPlan(
     effectivePriceAgorot: Math.round(record.priceAgorot * (1 - record.launchDiscountPercent / 100)),
     chargingStartsAt: record.chargingStartsAt,
     nextChargeOn: record.nextChargeOn,
+    accessGraceStartsAt: record.accessGraceStartsAt,
     billingName: record.billingName,
     billingEmail: record.billingEmail,
     paymentMethod: record.paymentMethod

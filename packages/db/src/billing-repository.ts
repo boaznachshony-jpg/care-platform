@@ -27,6 +27,8 @@ interface SubscriptionRow {
   card_expiry_month: number | null;
   card_expiry_year: number | null;
   card_last4: string | null;
+  access_grace_starts_at: string | null;
+  pending_setup_started_at: Date | null;
 }
 
 interface IntentRow {
@@ -60,6 +62,8 @@ function toSubscription(row: SubscriptionRow): ProductSubscriptionRecord {
     billingEmail: row.billing_email,
     termsVersion: row.terms_version,
     termsAcceptedAt: row.terms_accepted_at?.toISOString() ?? null,
+    accessGraceStartsAt: row.access_grace_starts_at,
+    pendingSetupStartedAt: row.pending_setup_started_at?.toISOString() ?? null,
     paymentMethod: hasPaymentMethod
       ? {
           providerSetupId: row.provider_setup_id!,
@@ -89,7 +93,8 @@ function toIntent(row: IntentRow): BillingSetupIntentRecord {
 const SUBSCRIPTION_COLUMNS = `tenant_id, status, price_agorot, vat_rate_bps,
   launch_discount_percent, charging_starts_at, next_charge_on, billing_name,
   billing_email, terms_version, terms_accepted_at, provider_setup_id,
-  sealed_payment_token, card_expiry_month, card_expiry_year, card_last4`;
+  sealed_payment_token, card_expiry_month, card_expiry_year, card_last4,
+  access_grace_starts_at, pending_setup_started_at`;
 
 export class PgBillingRepository implements BillingRepository {
   constructor(private readonly pool: Pool) {}
@@ -159,11 +164,22 @@ export class PgBillingRepository implements BillingRepository {
           where id = $1 and status = 'created'`,
         [intentId, providerSetupId],
       );
+      // G-1: starting a checkout must not suspend billing. The in-flight setup
+      // is recorded in its own columns; the billing status only moves to
+      // 'payment_method_pending' for a subscription that has no working card to
+      // lose. A customer who already has a token keeps their status — and stays
+      // claimable by the collection job — even if they abandon the Cardcom page.
       await client.query(
         `update product_subscription
-            set status = 'payment_method_pending', updated_at = now()
+            set pending_setup_intent_id = $2,
+                pending_setup_started_at = now(),
+                status = case
+                  when sealed_payment_token is null then 'payment_method_pending'
+                  else status
+                end,
+                updated_at = now()
           where tenant_id = $1`,
-        [tenantId],
+        [tenantId, intentId],
       );
     });
   }
@@ -198,6 +214,21 @@ export class PgBillingRepository implements BillingRepository {
         `update product_subscription
             set status = case when charging_starts_at is null then 'sponsored'
                               else 'payment_method_ready' end,
+                -- G-4: cancel() clears next_charge_on, and nothing used to put
+                -- it back, so re-adding a card bought free service forever.
+                -- A subscription that is past its charging start date and has
+                -- no scheduled charge gets one, from today.
+                next_charge_on = case
+                  when charging_starts_at is null then next_charge_on
+                  when next_charge_on is not null then next_charge_on
+                  else greatest(charging_starts_at, current_date)
+                end,
+                -- A fresh card ends the cancellation grace window and opens one
+                -- more collection attempt cycle for a dead-ended period (G-5).
+                access_grace_starts_at = null,
+                payment_method_updated_at = now(),
+                pending_setup_intent_id = null,
+                pending_setup_started_at = null,
                 billing_name = $2, billing_email = $3, terms_version = $4,
                 terms_accepted_at = $5, provider_setup_id = $6,
                 sealed_payment_token = $7, card_expiry_month = $8,
@@ -235,10 +266,16 @@ export class PgBillingRepository implements BillingRepository {
   async cancel(tenantId: string, cancelledAt: string): Promise<void> {
     await withTenant(this.pool, tenantId, async (client) => {
       await client.query(
+        // G-3: removing the card is what makes the account freezable, so the
+        // grace window has to start here. Anchoring it on charging_starts_at
+        // (a date months in the past) meant the window was already spent and
+        // the customer was locked out on the next render.
         `update product_subscription
             set status = 'cancelled', next_charge_on = null,
+                access_grace_starts_at = ($2::timestamptz)::date,
                 provider_setup_id = null, sealed_payment_token = null,
                 card_expiry_month = null, card_expiry_year = null, card_last4 = null,
+                pending_setup_intent_id = null, pending_setup_started_at = null,
                 updated_at = $2::timestamptz
           where tenant_id = $1`,
         [tenantId, cancelledAt],

@@ -741,6 +741,30 @@ export function closeMvpPayrollMonth(
 export const MEDICATION_TIMES = ['morning', 'noon', 'evening', 'night'] as const;
 export type MvpMedicationTime = (typeof MEDICATION_TIMES)[number];
 
+/**
+ * The days a medication may be tied to, in Israeli week order.
+ *
+ * Names, not numbers. A number would have to pick between the two conventions
+ * that both look reasonable in this codebase - JavaScript's `getDay()`, where
+ * Sunday is 0, and ISO-8601, where Monday is 1 and Sunday is 7 - and a JSON
+ * blob written under one convention and read under the other moves every
+ * reminder by a day without anything failing. `'sunday'` cannot be misread.
+ *
+ * The array order is the order the week is spoken and printed in Israel:
+ * Sunday first, Saturday last. Iterating it is what keeps the checkbox row and
+ * any rendered list in that order regardless of the order boxes were ticked.
+ */
+export const MEDICATION_DAYS = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+export type MvpMedicationDay = (typeof MEDICATION_DAYS)[number];
+
 export interface MvpMedication {
   id: string;
   /** Medication name exactly as written on the box or the prescription. */
@@ -751,6 +775,23 @@ export interface MvpMedication {
   timesOfDay: MvpMedicationTime[];
   /** True when it is taken every day, as opposed to specific days only. */
   daily: boolean;
+  /**
+   * The days it is taken when `daily` is false. Only meaningful in that case.
+   *
+   * Optional on purpose, and the three states are distinct on purpose:
+   *
+   * - absent (`undefined`) - a record saved before this field existed. Nothing
+   *   was ever asked, so nothing is assumed: it behaves exactly as it did
+   *   before, which for a non-daily medication means no reminder is sent.
+   * - `[]` - the family reached the day picker and chose nothing yet. Same
+   *   outcome, no reminder, but the screen says so out loud.
+   * - a non-empty list - the days a reminder may fire on.
+   *
+   * Collapsing absent into `[]` would be harmless today; keeping them apart is
+   * what lets a later migration tell "never asked" from "asked, not answered"
+   * without guessing on someone's medication.
+   */
+  daysOfWeek?: MvpMedicationDay[];
   /** The doctor who prescribed it, so a stand-in knows who to call. */
   prescribingDoctor: string;
   /** Anything the family wants the next person to know. */
