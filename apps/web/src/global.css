@@ -1620,6 +1620,121 @@ a {
 .payroll-live-total.deduction strong {
   color: #a52f27;
 }
+
+/* National Insurance monthly report — the Institute's own six-column table.
+   Six columns do not fit 360px and a horizontal scroller would be an overflow
+   offender in the width matrix, so the ROW is the unit that survives: every
+   month is a card that carries its own field captions, and the card flattens
+   into one line only at a width where five controls genuinely fit. Captions
+   are never hoisted into a separate header row, because a header row and its
+   cells drift apart the moment either of them wraps. */
+.national-insurance-calculator {
+  display: grid;
+  gap: 16px;
+  grid-column: 1 / -1;
+}
+.ni-month-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ni-month-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  border: 2px solid var(--cd-border);
+  border-radius: 18px;
+  padding: 14px;
+  background: var(--cd-surface);
+}
+.ni-month-row.is-future,
+.ni-month-row.is-not-employed {
+  background: var(--cd-surface-raised);
+}
+.ni-month-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+}
+.ni-month-name > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ni-month-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--cd-accent-soft);
+  color: var(--cd-accent-on-soft);
+  font-weight: 800;
+}
+.ni-month-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ni-month-name small,
+.ni-month-field > span,
+.ni-month-amount > span {
+  display: block;
+  color: var(--cd-text-secondary);
+  font-size: 0.9rem;
+}
+.ni-month-amount {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: var(--cd-control-height);
+  margin: 0;
+  border-radius: var(--cd-control-radius);
+  padding: 8px var(--cd-control-padding-inline);
+  background: var(--cd-accent-soft);
+}
+.ni-month-amount strong {
+  color: var(--cd-accent-on-soft);
+  font-size: 1.15rem;
+}
+.ni-month-row.is-not-employed .ni-month-amount {
+  background: var(--cd-pill);
+}
+.ni-month-row.is-not-employed .ni-month-amount strong {
+  color: var(--cd-text-secondary);
+}
+.ni-month-future {
+  margin: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--cd-warning-soft);
+  color: var(--cd-warning-on-soft);
+  font-weight: 700;
+}
+.ni-total-wages strong {
+  color: var(--cd-text-primary);
+}
+/* 260px of fixed sidebar plus page gutters means the five controls only have
+   real room from about here; below it the card layout above is the one in use. */
+@media (min-width: 1200px) {
+  .ni-month-row {
+    grid-template-columns:
+      minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 0.9fr)
+      minmax(0, 1fr);
+    align-items: end;
+  }
+  .ni-month-future {
+    grid-column: 1 / -1;
+    order: 1;
+  }
+}
 .additional-payments-editor {
   grid-column: 1 / -1;
   display: grid;

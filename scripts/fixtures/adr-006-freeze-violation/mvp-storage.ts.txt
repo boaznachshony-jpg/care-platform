@@ -1,0 +1,41 @@
+// Synthetic stand-in for apps/web/src/storage/mvp-storage.ts, used to
+// demonstrate scripts/check-adr-006-freeze.mjs failing. It is deliberately NOT
+// a .ts file: it must never be linted, type-checked or imported.
+//
+// It contains one violation of each rule: a new MvpProfile field, a new
+// caredesk.mvp.* storage key, and a new exported payload interface.
+//
+//   pnpm lint:adr-006:demo-failure
+//
+// The fields and interfaces below are a trimmed copy of the real ones; only
+// `guardianEscalationPolicy`, `caredesk.mvp.guardian-escalation.v1` and
+// `MvpGuardianEscalation` are additions.
+
+export interface MvpProfile {
+  employerName: string;
+  recipientName: string;
+  caregiverName: string;
+  notificationsEnabled: boolean;
+  /** Not in the baseline: this is what the guard must catch. */
+  guardianEscalationPolicy: string;
+}
+
+export interface MvpGuardianEscalation {
+  id: string;
+  profileId: string;
+  escalateAfterMinutes: number;
+  updatedAt: string;
+}
+
+// Carried over so the fixture does not also report the recorded
+// reminder-recipients violation as a discharged (stale) ledger entry.
+export interface MvpReminderRecipient {
+  id: string;
+  name: string;
+}
+
+const GUARDIAN_ESCALATION_KEY = 'caredesk.mvp.guardian-escalation.v1';
+
+export function readMvpGuardianEscalations(): MvpGuardianEscalation[] {
+  return readList<MvpGuardianEscalation>(GUARDIAN_ESCALATION_KEY);
+}

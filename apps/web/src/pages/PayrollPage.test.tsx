@@ -1,13 +1,27 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { initI18n } from '@caredesk/i18n';
 import {
   emptyMvpProfile,
   readMvpEmploymentExpenses,
   readMvpPayroll,
   saveMvpPayroll,
   saveMvpProfile,
+  type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
-import { monthsInRange, nextSequencePayrollValues, PayrollPage } from './PayrollPage.js';
+import {
+  DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT,
+  monthsInRange,
+  hebrewMonthLabel,
+  nationalInsuranceAmount,
+  nationalInsuranceMonthRows,
+  nationalInsuranceTotals,
+  nationalInsuranceWageMonths,
+  nextSequencePayrollValues,
+  PayrollPage,
+  recordedGrossWage,
+} from './PayrollPage.js';
 
 describe('PayrollPage retroactive sequence helpers', () => {
   it('creates an inclusive month range across a year boundary', () => {
@@ -396,5 +410,447 @@ describe('PayrollPage annual report', () => {
     expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
     expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();
     expect(screen.getAllByText(/8,150\.00/)).toHaveLength(2);
+  });
+});
+
+const LIABILITY_CALCULATION_HE =
+  'החישוב מסכם אריתמטית את הסכומים והימים שהוזנו. הוא אינו קובע זכויות או שיעורי תשלום ואינו תחליף לתלוש שכר או לבדיקה של גורם מקצועי.';
+
+/** Intl inserts bidi marks around currency; strip them before comparing text. */
+function plainText(element: Element | null | undefined): string {
+  return (element?.textContent ?? '')
+    .replace(/[\u200e\u200f\u061c]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function payrollRecord(month: string, overrides: Partial<MvpPayrollRecord> = {}): MvpPayrollRecord {
+  return {
+    id: `pay-${month}`,
+    month,
+    baseSalary: 7_000,
+    workDays: 26,
+    paidSaturdays: 0,
+    saturdayPay: 0,
+    pocketMoney: 0,
+    otherAddition: 0,
+    advances: 0,
+    agreedDeduction: 0,
+    total: 7_000,
+    savedAt: `${month}-28T12:00:00.000Z`,
+    ...overrides,
+  };
+}
+
+describe('national insurance wage period', () => {
+  it('anchors a quarterly period on the month before the due date', () => {
+    // The Q3 payment falls due on 15 October and covers July to September.
+    expect(nationalInsuranceWageMonths('quarterly', '2026-10-15')).toEqual([
+      '2026-07',
+      '2026-08',
+      '2026-09',
+    ]);
+    expect(nationalInsuranceWageMonths('quarterly', '2026-01-15')).toEqual([
+      '2025-10',
+      '2025-11',
+      '2025-12',
+    ]);
+  });
+
+  it('covers a single month for monthly and one-time payments', () => {
+    expect(nationalInsuranceWageMonths('monthly', '2026-05-15')).toEqual(['2026-04']);
+    expect(nationalInsuranceWageMonths('one_time', '2026-01-05')).toEqual(['2025-12']);
+  });
+
+  it('covers twelve months for an annual payment', () => {
+    const months = nationalInsuranceWageMonths('annual', '2026-04-15');
+    expect(months).toHaveLength(12);
+    expect(months[0]).toBe('2025-04');
+    expect(months[11]).toBe('2026-03');
+  });
+
+  it('falls back to the current month when no due date was entered yet', () => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    expect(nationalInsuranceWageMonths('monthly', '')).toEqual(
+      nationalInsuranceWageMonths('monthly', `${currentMonth}-15`),
+    );
+    expect(nationalInsuranceWageMonths('monthly', 'not-a-date')).toHaveLength(1);
+  });
+});
+
+describe('national insurance wage base and amount', () => {
+  it('counts wage additions but not employer contributions or deductions', () => {
+    expect(
+      recordedGrossWage(
+        payrollRecord('2026-07', {
+          saturdayPay: 400,
+          holidayPay: 100,
+          vacationPay: 50,
+          sickPay: 25,
+          otherAddition: 200,
+          additionalPayments: [{ id: 'a', description: 'בונוס', amount: 125 }],
+          employerContributions: 900,
+          pocketMoney: 300,
+          advances: 500,
+          agreedDeduction: 100,
+        }),
+      ),
+    ).toBe(7_900);
+  });
+
+  it('rounds to agorot and never returns NaN', () => {
+    expect(DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT).toBe(3.6);
+    // 8150 * 3.6 / 100 is 293.40000000000003 in binary floating point.
+    expect(nationalInsuranceAmount(8_150, 3.6)).toBe(293.4);
+    expect(nationalInsuranceAmount(21_500, 3.6)).toBe(774);
+    expect(nationalInsuranceAmount(7_333.33, 3.6)).toBe(264);
+    expect(nationalInsuranceAmount(0, 3.6)).toBe(0);
+    expect(nationalInsuranceAmount(-100, 3.6)).toBe(0);
+    expect(nationalInsuranceAmount(Number.NaN, 3.6)).toBe(0);
+    expect(nationalInsuranceAmount(7_000, Number.NaN)).toBe(0);
+  });
+});
+
+describe('national insurance monthly reporting lines', () => {
+  const months = ['2026-07', '2026-08', '2026-09'];
+
+  it('fills each line from that month and falls back to the contract salary', () => {
+    const records = [payrollRecord('2026-07', { saturdayPay: 400 }), payrollRecord('2026-09')];
+
+    const rows = nationalInsuranceMonthRows(records, months, 7_000, '3.6', {}, '2026-12');
+
+    expect(rows.map((row) => [row.month, row.wage, row.wageSource, row.amount])).toEqual([
+      ['2026-07', 7_400, 'payroll-records', 266.4],
+      ['2026-08', 7_000, 'contract-base-salary', 252],
+      ['2026-09', 7_000, 'payroll-records', 252],
+    ]);
+    expect(nationalInsuranceTotals(rows)).toEqual({ wages: 21_400, amount: 770.4 });
+  });
+
+  it('leaves a line empty rather than guessing when there is no wage at all', () => {
+    const rows = nationalInsuranceMonthRows([], months, null, '3.6', {}, '2026-12');
+
+    expect(rows.every((row) => row.wageValue === '' && row.wageSource === 'none')).toBe(true);
+    expect(nationalInsuranceTotals(rows)).toEqual({ wages: 0, amount: 0 });
+  });
+
+  it('reports a month marked "לא" as zero and keeps its wage out of the totals', () => {
+    const rows = nationalInsuranceMonthRows(
+      [],
+      months,
+      7_000,
+      '3.6',
+      { '2026-08': { employed: false } },
+      '2026-12',
+    );
+
+    expect(rows[1]).toMatchObject({ employed: false, wage: 0, amount: 0 });
+    expect(rows[1]?.wageValue).toBe('7000');
+    expect(nationalInsuranceTotals(rows)).toEqual({ wages: 14_000, amount: 504 });
+  });
+
+  it('closes a month later than today and does not let an override reopen it', () => {
+    const rows = nationalInsuranceMonthRows(
+      [],
+      months,
+      7_000,
+      '3.6',
+      { '2026-09': { employed: true } },
+      '2026-08',
+    );
+
+    expect(rows.map((row) => row.isFuture)).toEqual([false, false, true]);
+    expect(rows[2]).toMatchObject({ employed: false, wage: 0, amount: 0 });
+    expect(nationalInsuranceTotals(rows)).toEqual({ wages: 14_000, amount: 504 });
+  });
+
+  it('takes the shared rate per line and lets one line depart from it', () => {
+    const shared = nationalInsuranceMonthRows([], months, 7_000, '4', {}, '2026-12');
+    expect(shared.map((row) => row.ratePercent)).toEqual([4, 4, 4]);
+    expect(nationalInsuranceTotals(shared)).toEqual({ wages: 21_000, amount: 840 });
+
+    const departed = nationalInsuranceMonthRows(
+      [],
+      months,
+      7_000,
+      '4',
+      { '2026-07': { rate: '3.6' } },
+      '2026-12',
+    );
+    expect(departed.map((row) => row.amount)).toEqual([252, 280, 280]);
+    expect(nationalInsuranceTotals(departed)).toEqual({ wages: 21_000, amount: 812 });
+  });
+
+  it('keeps whole shekels in the wage and agorot in the amount, and never yields NaN', () => {
+    const rows = nationalInsuranceMonthRows(
+      [payrollRecord('2026-07', { saturdayPay: 149.6 })],
+      months,
+      null,
+      '3.6',
+      { '2026-08': { wage: '' }, '2026-09': { wage: 'לא מספר' } },
+      '2026-12',
+    );
+
+    // 7000 + 149.6 rounds to 7150 on the line, and 7150 x 3.6% is 257.4.
+    expect(rows[0]).toMatchObject({ wage: 7_150, amount: 257.4 });
+    expect(rows[1]).toMatchObject({ wage: 0, amount: 0 });
+    expect(rows[2]).toMatchObject({ wage: 0, amount: 0 });
+    expect(nationalInsuranceTotals(rows)).toEqual({ wages: 7_150, amount: 257.4 });
+    expect(
+      Object.values(nationalInsuranceTotals(rows)).every((value) => Number.isFinite(value)),
+    ).toBe(true);
+  });
+
+  it('names a month the way the Institute form prints it', () => {
+    const names = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני'];
+    expect(hebrewMonthLabel('2026-03', names)).toBe('מרץ 2026');
+    expect(hebrewMonthLabel('2026-11', names)).toBe('2026-11');
+  });
+});
+
+describe('PayrollPage national insurance monthly report', () => {
+  /**
+   * A quarter far enough in the past that "later than the current month" can
+   * never leak into it, and one far enough ahead that it stays future. The
+   * page reads the real clock at import time, so the fixtures — not a fake
+   * timer — are what make these assertions stable.
+   */
+  const PAST_DUE_DATE = '2020-10-15';
+  const FUTURE_DUE_DATE = '2999-10-15';
+
+  function renderPage() {
+    return render(
+      <I18nextProvider i18n={initI18n()}>
+        <PayrollPage />
+      </I18nextProvider>,
+    );
+  }
+
+  function calculator(): HTMLElement {
+    const element = document.querySelector<HTMLElement>('.national-insurance-calculator');
+    if (!element) throw new Error('the national insurance calculator is not on screen');
+    return element;
+  }
+
+  function reportingLines(): HTMLElement[] {
+    return Array.from(document.querySelectorAll<HTMLElement>('.ni-month-row'));
+  }
+
+  function lineAmount(index: number): string {
+    return plainText(reportingLines()[index]?.querySelector('.ni-month-amount'));
+  }
+
+  function summaryLines(): string[] {
+    return Array.from(calculator().querySelectorAll('.payroll-live-total')).map((element) =>
+      plainText(element),
+    );
+  }
+
+  function employedField(month: string): HTMLElement {
+    return screen.getByLabelText(`האם הייתה העסקה בחודש ${month}`);
+  }
+
+  function wageField(month: string): HTMLElement {
+    return screen.getByLabelText(`שכר ששולם בחודש (ללא אג׳) ${month}`);
+  }
+
+  function rateField(month: string): HTMLElement {
+    return screen.getByLabelText(`שיעור דמי הביטוח לחודש ${month}`);
+  }
+
+  function enterDueDate(dueDate: string) {
+    fireEvent.change(screen.getByLabelText(/^תאריך יעד/), {
+      target: { value: dueDate },
+    });
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      baseSalary: 7_000,
+      salaryEffectiveDate: '2019-01-01',
+    });
+    saveMvpPayroll([
+      payrollRecord('2020-07', { saturdayPay: 400, total: 7_400 }),
+      payrollRecord('2020-08'),
+      payrollRecord('2020-09', { holidayPay: 100, total: 7_100 }),
+    ]);
+  });
+
+  it('opens one reporting line per month of the quarter, filled from that month', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+
+    expect(reportingLines()).toHaveLength(3);
+    expect(reportingLines().map((line) => plainText(line.querySelector('.ni-month-name')))).toEqual(
+      ['1 חודש העסקה יולי 2020', '2 חודש העסקה אוגוסט 2020', '3 חודש העסקה ספטמבר 2020'],
+    );
+    expect(wageField('יולי 2020')).toHaveValue(7_400);
+    expect(wageField('אוגוסט 2020')).toHaveValue(7_000);
+    expect(wageField('ספטמבר 2020')).toHaveValue(7_100);
+    expect(rateField('יולי 2020')).toHaveValue(DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT);
+    expect(lineAmount(0)).toBe('דמי ביטוח 266.40 ₪');
+    expect(lineAmount(1)).toBe('דמי ביטוח 252.00 ₪');
+    expect(lineAmount(2)).toBe('דמי ביטוח 255.60 ₪');
+    expect(plainText(calculator().querySelector('.form-note'))).toBe(
+      'השכר לחודשים 2020-07, 2020-08, 2020-09 מולא מרישומי השכר השמורים. אפשר לתקן כל שורה.',
+    );
+    expect(plainText(calculator().querySelector('.legal-note'))).toBe(LIABILITY_CALCULATION_HE);
+  });
+
+  it('sums the lines into the two summary rows and into the amount field', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+
+    expect(summaryLines()[0]).toBe('סה״כ שכר ששולם 21,500.00 ₪');
+    expect(summaryLines()[1]).toContain('סה״כ לתשלום');
+    expect(summaryLines()[1]).toContain('774.00 ₪');
+    expect(summaryLines()[1]).toContain('סכום השורות של 3 חודשי העסקה');
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(774);
+  });
+
+  it('reports a month marked לא as zero and locks its wage', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.change(employedField('אוגוסט 2020'), {
+      target: { value: 'no' },
+    });
+
+    expect(wageField('אוגוסט 2020')).toBeDisabled();
+    expect(rateField('אוגוסט 2020')).toBeDisabled();
+    expect(reportingLines()[1]?.className).toContain('is-not-employed');
+    expect(lineAmount(1)).toBe('דמי ביטוח 0.00 ₪');
+    expect(summaryLines()[0]).toBe('סה״כ שכר ששולם 14,500.00 ₪');
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(522);
+
+    fireEvent.change(employedField('אוגוסט 2020'), {
+      target: { value: 'yes' },
+    });
+    expect(wageField('אוגוסט 2020')).not.toBeDisabled();
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(774);
+  });
+
+  it('closes a month later than the current month and says so in the form\u2019s own words', () => {
+    renderPage();
+
+    enterDueDate(FUTURE_DUE_DATE);
+
+    for (const month of ['יולי', 'אוגוסט', 'ספטמבר']) {
+      expect(employedField(`${month} 2999`)).toBeDisabled();
+      expect(employedField(`${month} 2999`)).toHaveValue('no');
+      expect(wageField(`${month} 2999`)).toBeDisabled();
+    }
+    expect(plainText(reportingLines()[2]?.querySelector('.ni-month-future'))).toBe(
+      'ספטמבר (עתידי) לא ניתן לדווח',
+    );
+    expect(reportingLines()[2]?.className).toContain('is-future');
+    expect(summaryLines()[0]).toBe('סה״כ שכר ששולם 0.00 ₪');
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(null);
+    expect(plainText(calculator())).not.toContain('NaN');
+  });
+
+  it('drives every line from the shared rate and lets one line depart from it', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.change(screen.getByLabelText(/^שיעור התשלום/), {
+      target: { value: '4' },
+    });
+
+    expect(rateField('יולי 2020')).toHaveValue(4);
+    expect(rateField('ספטמבר 2020')).toHaveValue(4);
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(860);
+
+    fireEvent.change(rateField('יולי 2020'), { target: { value: '3.6' } });
+
+    expect(lineAmount(0)).toBe('דמי ביטוח 266.40 ₪');
+    expect(rateField('אוגוסט 2020')).toHaveValue(4);
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(830.4);
+  });
+
+  it('keeps an emptied wage at zero rather than NaN', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.change(wageField('יולי 2020'), { target: { value: '' } });
+
+    expect(lineAmount(0)).toBe('דמי ביטוח 0.00 ₪');
+    expect(summaryLines()[0]).toBe('סה״כ שכר ששולם 14,100.00 ₪');
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(507.6);
+    expect(plainText(calculator())).not.toContain('NaN');
+  });
+
+  it('reports the wage in whole shekels and the insurance to agorot', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.change(wageField('יולי 2020'), { target: { value: '7400.75' } });
+
+    // 7,400.75 is reported as 7,401 "ללא אג׳", and 7,401 x 3.6% is 266.436.
+    expect(lineAmount(0)).toBe('דמי ביטוח 266.44 ₪');
+    expect(summaryLines()[0]).toBe('סה״כ שכר ששולם 21,501.00 ₪');
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(774.04);
+  });
+
+  it('lets a typed amount override the total and saves the typed one', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(774);
+
+    fireEvent.change(screen.getByLabelText(/^סכום בש״ח/), {
+      target: { value: '900' },
+    });
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(900);
+    expect(summaryLines()[1]).toContain('774.00 ₪');
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'הוספת תשלום למעקב',
+      }),
+    );
+
+    expect(readMvpEmploymentExpenses()).toEqual([
+      expect.objectContaining({
+        category: 'ביטוח לאומי',
+        frequency: 'quarterly',
+        amount: 900,
+        amountEntered: true,
+        dueDate: PAST_DUE_DATE,
+      }),
+    ]);
+  });
+
+  it('saves the total to pay when the customer does not override it', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'הוספת תשלום למעקב',
+      }),
+    );
+
+    expect(readMvpEmploymentExpenses()[0]).toMatchObject({ amount: 774, amountEntered: true });
+  });
+
+  it('hides the reporting table when the category is not national insurance', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    expect(document.querySelector('.national-insurance-calculator')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^סוג התשלום/), {
+      target: { value: 'ביטוח רפואי' },
+    });
+
+    expect(document.querySelector('.national-insurance-calculator')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('.ni-month-row')).toHaveLength(0);
+    expect(screen.queryByLabelText(/^שיעור התשלום/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(null);
   });
 });
