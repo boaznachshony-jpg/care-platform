@@ -14,7 +14,10 @@ import type {
   TimelineRepository,
   TimelineService,
   WorkspaceRepository,
+  WorkspaceHistoryRepository,
   WorkspaceFileRepository,
+  TenantCensusRepository,
+  DataLossAlertSink,
   VisaRenewalEvaluationRepository,
 } from '@caredesk/application';
 import {
@@ -38,6 +41,9 @@ import {
   ListFamilyMembers,
   OpenEmploymentCase,
   SaveWorkspace,
+  ListWorkspaceVersions,
+  RestoreWorkspaceVersion,
+  ScanForSilentDataLoss,
   PutWorkspaceFile,
   RevokeFamilyMember,
   StartProductBillingSetup,
@@ -65,12 +71,16 @@ import {
   PgTaskRepository,
   PgTimelineService,
   PgWorkspaceRepository,
+  PgWorkspaceHistoryRepository,
   PgWorkspaceFileRepository,
+  PgTenantCensusRepository,
   PgVisaRenewalRepository,
   PgVisaRenewalSideEffects,
   PgVisaRenewalEvaluationRepository,
   PgIdempotencyRepository,
   PgVisaRenewalProgressRepository,
+  missingMigrations,
+  REQUIRED_MIGRATIONS,
 } from '@caredesk/db';
 import {
   InMemoryActorResolver,
@@ -85,7 +95,10 @@ import {
   InMemoryTimelineRepository,
   InMemoryTimelineService,
   InMemoryWorkspaceRepository,
+  InMemoryWorkspaceHistoryRepository,
   InMemoryWorkspaceFileRepository,
+  InMemoryTenantCensusRepository,
+  LoggingDataLossAlertSink,
   MembershipAuthorizationService,
   MockAuthService,
   MockIdentityInvitationService,
@@ -135,6 +148,10 @@ const ROLE_PERMISSIONS = {
     'document:read',
     'workspace:read',
     'workspace:update',
+    // Restoring an archived version is separable from saving on purpose. It is
+    // the one write that deliberately replaces current data with older data,
+    // so the account owner holds it and a manager does not.
+    'workspace:restore',
     'membership:read',
     'membership:manage',
     'billing:read',
@@ -232,6 +249,20 @@ export interface Container {
   getDocumentDownloadUrl: GetDocumentDownloadUrl;
   getWorkspace: GetWorkspace;
   saveWorkspace: SaveWorkspace;
+  /** Read side of the 0035 archive: which versions exist, in metadata only. */
+  listWorkspaceVersions: ListWorkspaceVersions;
+  /** Per-tenant restore (DR-02), as an audited server-side operation. */
+  restoreWorkspaceVersion: RestoreWorkspaceVersion;
+  /** The nightly detector (DR-03). Runs from the scheduler, has no actor. */
+  scanForSilentDataLoss: ScanForSilentDataLoss;
+  /**
+   * Also raised synchronously when the shrink guard refuses a save. The guard
+   * has always refused correctly and always refused silently: a customer's
+   * client attempting to erase their account is exactly the event worth being
+   * told about, and waiting for the nightly scan would miss it entirely,
+   * because the write it describes never landed.
+   */
+  dataLossAlerts: DataLossAlertSink;
   putWorkspaceFile: PutWorkspaceFile;
   getWorkspaceFileUrl: GetWorkspaceFileUrl;
   deleteWorkspaceFile: DeleteWorkspaceFile;
@@ -300,7 +331,9 @@ export function buildContainer(env: Env): Container {
   let timelineRepository: TimelineRepository;
   let audit: AuditService;
   let workspaceRepository: WorkspaceRepository;
+  let workspaceHistoryRepository: WorkspaceHistoryRepository;
   let workspaceFileRepository: WorkspaceFileRepository;
+  let censusRepository: TenantCensusRepository;
   let familyMembershipRepository: FamilyMembershipRepository;
   let billingRepository: BillingRepository;
   const memoryVisaRenewals = new InMemoryVisaRenewalRepository();
@@ -336,7 +369,12 @@ export function buildContainer(env: Env): Container {
     // Postgres whenever a database is configured.
     audit = new PgAuditService(pool);
     workspaceRepository = new PgWorkspaceRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
+    workspaceHistoryRepository = new PgWorkspaceHistoryRepository(
+      pool,
+      env.WORKSPACE_ENCRYPTION_KEY,
+    );
     workspaceFileRepository = new PgWorkspaceFileRepository(pool);
+    censusRepository = new PgTenantCensusRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
     familyMembershipRepository = new PgFamilyMembershipRepository(pool);
     billingRepository = new PgBillingRepository(pool);
   } else {
@@ -349,7 +387,9 @@ export function buildContainer(env: Env): Container {
     timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
     audit = new InMemoryAuditService();
     workspaceRepository = new InMemoryWorkspaceRepository();
+    workspaceHistoryRepository = new InMemoryWorkspaceHistoryRepository();
     workspaceFileRepository = new InMemoryWorkspaceFileRepository();
+    censusRepository = new InMemoryTenantCensusRepository();
     familyMembershipRepository = new InMemoryFamilyMembershipRepository();
     billingRepository = new InMemoryBillingRepository();
   }
@@ -483,6 +523,13 @@ export function buildContainer(env: Env): Container {
     ids,
   };
   const workspaceDeps = { authorization, workspaces: workspaceRepository, audit, clock };
+  // The only destination that exists. See DataLossAlertSink for what is still
+  // missing and what it should become.
+  const dataLossAlerts = new LoggingDataLossAlertSink();
+  const workspaceRestoreDeps = {
+    ...workspaceDeps,
+    history: workspaceHistoryRepository,
+  };
   const workspaceFileDeps = {
     authorization,
     files: workspaceFileRepository,
@@ -587,6 +634,16 @@ export function buildContainer(env: Env): Container {
     getDocumentDownloadUrl: new GetDocumentDownloadUrl(documentDeps),
     getWorkspace: new GetWorkspace(workspaceDeps),
     saveWorkspace: new SaveWorkspace(workspaceDeps),
+    listWorkspaceVersions: new ListWorkspaceVersions(workspaceRestoreDeps),
+    restoreWorkspaceVersion: new RestoreWorkspaceVersion(workspaceRestoreDeps),
+    dataLossAlerts,
+    scanForSilentDataLoss: new ScanForSilentDataLoss({
+      census: censusRepository,
+      alerts: dataLossAlerts,
+      audit,
+      clock,
+      ids,
+    }),
     putWorkspaceFile: new PutWorkspaceFile(workspaceFileDeps),
     getWorkspaceFileUrl: new GetWorkspaceFileUrl(workspaceFileDeps),
     deleteWorkspaceFile: new DeleteWorkspaceFile(workspaceFileDeps),
@@ -620,6 +677,17 @@ export function buildContainer(env: Env): Container {
       if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
       if (pool) {
         try {
+          // Two questions, deliberately kept separate. The object probes below
+          // ask "does the pilot schema exist at all"; the ledger comparison
+          // that follows asks "is this database as new as the code". The
+          // object list is frozen at migration 0021 and is not extended: it
+          // was the only check for a year, and it reported ready: true on a
+          // database fourteen migrations behind the deployed API (REL-05).
+          // db-path-exception: /ready is a control-plane probe, not a tenant
+          // request. It asks whether schema objects exist; to_regclass and
+          // to_regprocedure read catalogue metadata that carries no tenant_id
+          // and is not subject to RLS. Wrapping it in withTenant() would need a
+          // tenant id the probe does not have and must not invent. (Root 6)
           const result = await pool.query<{
             actor_resolver: string | null;
             workspace_table: string | null;
@@ -627,6 +695,7 @@ export function buildContainer(env: Env): Container {
             family_members_function: string | null;
             billing_table: string | null;
             workflow_table: string | null;
+            ledger_table: string | null;
           }>(
             `select
                to_regprocedure('public.resolve_caredesk_actor(text)')::text as actor_resolver,
@@ -634,7 +703,8 @@ export function buildContainer(env: Env): Container {
                to_regclass('public.workspace_file')::text as workspace_file_table,
                to_regprocedure('public.list_caredesk_family_members(uuid)')::text as family_members_function,
                to_regclass('public.product_subscription')::text as billing_table,
-               to_regclass('public.workflow_instance')::text as workflow_table`,
+               to_regclass('public.workflow_instance')::text as workflow_table,
+               to_regclass('public.schema_migrations')::text as ledger_table`,
           );
           const row = result.rows[0];
           if (
@@ -647,6 +717,29 @@ export function buildContainer(env: Env): Container {
           ) {
             reasons.push('Required pilot database migrations are missing');
             checks.database = 'migration-required';
+          }
+
+          if (!row?.ledger_table) {
+            reasons.push('schema_migrations does not exist; no migration has ever been recorded');
+            checks.database = 'migration-required';
+          } else {
+            // db-path-exception: schema_migrations is the migration ledger. It
+            // has no tenant_id and belongs to the deployment, not to a customer;
+            // /ready compares it against REQUIRED_MIGRATIONS. (Root 6)
+            const ledger = await pool.query<{ version: string }>(
+              'select version from schema_migrations',
+            );
+            const missing = missingMigrations(ledger.rows.map((entry) => entry.version));
+            if (missing.length > 0) {
+              // Named, not counted: the oldest missing version is the one the
+              // operator has to act on, and a bare count is what let a hand-
+              // applied migration go unnoticed in the first place.
+              reasons.push(
+                `Database is behind the code: ${missing.length} of ${REQUIRED_MIGRATIONS.length} ` +
+                  `migration(s) are not recorded in schema_migrations, starting at ${missing[0]}`,
+              );
+              checks.database = 'migration-required';
+            }
           }
         } catch {
           reasons.push('Database is unreachable');

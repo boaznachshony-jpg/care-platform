@@ -161,6 +161,44 @@ jobs:
       - name: Run migrations and RLS security integration tests
         run: pnpm --filter @caredesk/db rls-test:ci
 
+  migration-idempotency:
+    # The check that would have caught REL-01. Applying migrations once to an
+    # empty database is the one scenario in which a migration that fails to
+    # record itself is invisible, and it is the only scenario CI ever ran.
+    name: Migration idempotency
+    runs-on: ubuntu-latest
+    needs: guardrails
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: caredesk
+          POSTGRES_PASSWORD: caredesk
+          POSTGRES_DB: caredesk_migrate_twice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U caredesk -d caredesk_migrate_twice"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_ADMIN_URL: postgresql://caredesk:caredesk@127.0.0.1:5432/caredesk_migrate_twice?sslmode=disable
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply every migration twice and require the second run to be empty
+        run: pnpm --filter @caredesk/db migrate-idempotency:ci
+
   e2e:
     name: Playwright end-to-end
     runs-on: ubuntu-latest
@@ -216,6 +254,7 @@ jobs:
       - compile
       - test
       - postgres-rls
+      - migration-idempotency
       - e2e
       - secret-scan
     runs-on: ubuntu-latest
@@ -227,6 +266,7 @@ jobs:
           COMPILE_RESULT: ${{ needs.compile.result }}
           TEST_RESULT: ${{ needs.test.result }}
           POSTGRES_RLS_RESULT: ${{ needs.postgres-rls.result }}
+          MIGRATION_IDEMPOTENCY_RESULT: ${{ needs.migration-idempotency.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
         run: |
@@ -235,6 +275,7 @@ jobs:
           test "$COMPILE_RESULT" = success
           test "$TEST_RESULT" = success
           test "$POSTGRES_RLS_RESULT" = success
+          test "$MIGRATION_IDEMPOTENCY_RESULT" = success
           test "$E2E_RESULT" = success
           test "$SECRET_SCAN_RESULT" = success
 

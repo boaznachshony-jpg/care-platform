@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { createPool, withTenant } from './pool.js';
+import { assertRlsTestTargetIsSafe } from './rls-check-target.js';
 
 const NORMALIZED_TABLES = [
   'care_recipient',
@@ -77,6 +78,18 @@ const ALL_TENANT_TABLES = [
   'binder_export_receipt',
   'regulation_rule',
   'regulation_rule_transition',
+  // Root 6 (DB-09) - six tenant-scoped tables were created after this list was
+  // written and nobody added them, so the live guard reported "all tenant-owned
+  // tables retain enabled, forced RLS" while never looking at them. A guard
+  // with a hand-maintained subject list is only as good as the last person who
+  // remembered it; `tenant-table-coverage.test.ts` now derives the expected set
+  // from the migrations and fails when this list falls behind again.
+  'ai_action_confirmation', // 0027
+  'professional_review_request', // 0027
+  'leave_entry', // 0033
+  'scenario_expense', // 0034
+  'tenant_workspace_history', // 0035
+  'tenant_data_census', // 0038
 ] as const;
 
 interface Fixture {
@@ -253,6 +266,17 @@ async function main(): Promise<void> {
   if (!appUrl || !adminUrl) {
     throw new Error('DATABASE_URL and DATABASE_ADMIN_URL are both required.');
   }
+
+  // Before any pool is opened: the cleanup block below deletes from sixteen
+  // tables over the BYPASSRLS owner connection, so the target has to be proved
+  // non-production first. See rls-check-target.ts for the rules.
+  assertRlsTestTargetIsSafe({
+    connections: [
+      { name: 'DATABASE_URL', url: appUrl },
+      { name: 'DATABASE_ADMIN_URL', url: adminUrl },
+    ],
+    source: process.env,
+  });
 
   const ciRoleSwitch = process.env.RLS_TEST_MODE === 'ci-role-switch';
   const pool = createPool(appUrl, !ciRoleSwitch);

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { withTenant } from '@caredesk/db';
 import { projectSharedLeave, type DocumentStorage } from '@caredesk/application';
 
 export const WORKER_REQUEST_TRANSITIONS = {
@@ -84,29 +85,31 @@ export class Wave5Service {
     return response;
   }
 
-  private async tenantTx<T>(
-    tenantId: string,
-    work: (client: PoolClient) => Promise<T>,
-  ): Promise<T> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('begin');
-      await client.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
-      const result = await work(client);
-      await client.query('commit');
-      return result;
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
+  /**
+   * Root 6 (API-01) - delegates to the one path to the database.
+   *
+   * The private copy this replaces opened the transaction and set
+   * `app.tenant_id`, but never `set local role caredesk_app`. The role is the
+   * control that matters: an administrative role carries BYPASSRLS, and under
+   * BYPASSRLS every tenant policy is skipped silently - the tenant setting is
+   * then read by policies that never run. Eight services each had their own
+   * copy of this helper and all eight omitted the role. See
+   * scripts/check-tenant-db-path.mjs, which fails CI if a ninth appears.
+   */
+  private tenantTx<T>(tenantId: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
+    return withTenant(this.pool, tenantId, work);
   }
 
   async workerContext(userId: string): Promise<WorkerContext | null> {
     // app_user is intentionally global identity data. The security-definer
     // lookup is avoided: query each candidate access under its own tenant RLS
     // context after obtaining only tenant ids linked to this authenticated id.
+    // db-path-exception: a worker signs in with a global Supabase identity and
+    // no tenant, so there is no tenant context to establish yet. This is the
+    // lookup that produces one. It reads only through
+    // resolve_worker_portal_tenants(), a SECURITY DEFINER function whose entire
+    // result is a set of tenant ids - no case data - and every read below runs
+    // inside tenantTx() once a candidate tenant is known. (Root 6)
     const candidates = await this.pool.query<{ tenant_id: string }>(
       `select tenant_id from resolve_worker_portal_tenants($1)`,
       [userId],
@@ -340,6 +343,11 @@ export class Wave5Service {
 
   async consumeInvitation(userId: string, token: string) {
     const digest = hashInvitationToken(token);
+    // db-path-exception: an invitation token is the only thing the caller has;
+    // the tenant it belongs to is what this resolves. resolve_worker_invitation_
+    // tenant() returns a single tenant id for a live, unconsumed token and
+    // nothing else. The invitation row itself is then read and consumed inside
+    // tenantTx() below, under forced RLS. (Root 6)
     const found = await this.pool.query<{ tenant_id: string }>(
       `select tenant_id from resolve_worker_invitation_tenant($1)`,
       [digest],

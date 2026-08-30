@@ -1,0 +1,340 @@
+# תרגיל שחזור — ההפיכה של הנחה לעובדה
+
+> **הכלל:** גיבוי שלא שוחזר מעולם אינו גיבוי. הוא הנחה.
+> נכון להיום יש בייצור נתוני לקוחה אמיתית אחת, כ-17KB. נוהל השחזור מעולם לא הורץ. RTO של 4 שעות שכתוב במסמכי התפעול הוא ניחוש, לא מדידה.
+
+מקור: שורש 7 בתוכנית `REVIEW-REMEDIATION-PLAN.md` — הממצאים DR-01, DR-02, DR-03, DR-13.
+
+נכתב: 30.8.2026
+
+---
+
+## מה השתנה היום, ומה עדיין לא
+
+**נסגר בקוד:**
+
+1. **גילוי.** משימה מתוזמנת יומית — `GET /internal/jobs/data-integrity-scan` — מודדת כל דייר, משווה למדידה של אתמול, ומרימה סימן כשמשהו התכווץ. מיגרציה `0038` הוסיפה את טבלת `tenant_data_census` (הזיכרון) ואת הפונקציה `caredesk_tenant_data_census()` (הקריאה).
+2. **שחזור דייר בודד.** `GET /workspace/versions` ו-`POST /workspace/versions/:version/restore` — צד הקריאה של `tenant_workspace_history` שמיגרציה `0035` נכתבה עבורו ומעולם לא נבנה.
+
+**לא נסגר, ואי אפשר לסגור בקוד:**
+
+- **אין ערוץ התראה מחוץ לאפליקציה.** אין Sentry, אין דואר תפעולי, אין תורנות. הסימן נכתב לשורת לוג מובנית עם המילה `DATA_LOSS_SUSPECTED` וזהו. **מי שלא פותח את הלוגים לא יודע.** לכן פרק 6 להלן הוא חלק מהתרגיל ולא הערת שוליים: כל עוד אין ערוץ, הקריאה היומית של הפלט **היא** הבקרה.
+- **PITR כבוי.** מעטפת ההתאוששות היא שבעה עותקים יומיים. אובדן שלא זוהה תוך שבוע אינו ניתן לשחזור בשום אמצעי.
+- **התרגיל עצמו.** זה מה שהמסמך הזה מבקש ממך לעשות.
+
+---
+
+## שני תרגילים, לא אחד
+
+הם בודקים דברים שונים ונכשלים מסיבות שונות. **אל תמזג אותם.**
+
+| | תרגיל א' — דייר בודד | תרגיל ב' — פרויקט מלא |
+|---|---|---|
+| מה נבדק | היכולת החדשה שנבנתה היום | נוהל הגיבוי והשחזור של Supabase |
+| נגד מה | דייר זמני בייצור | פרויקט Supabase חד-פעמי |
+| תדירות | שבועית בחודש הראשון, אחר כך חודשית | לפני הלקוח החיצוני הראשון, ואז רבעונית |
+| זמן מוערך | דקות | שעות |
+| מה זה מוכיח | שטעות של משתמש אחד הפיכה | שכשל של הפרויקט כולו הפיך |
+
+**תרגיל א' אינו מחליף את תרגיל ב'.** הוא מכסה את התרחיש הסביר בהרבה — משתמש מחק, לקוח שלח snapshot ריק, פריסה גרועה כתבה זבל לדייר אחד. תרגיל ב' מכסה את התרחיש הנדיר והגרוע יותר.
+
+---
+
+## לפני שמתחילים — שלושה דברים
+
+1. **חיבור בעלים.** `DATABASE_ADMIN_URL`, לא `DATABASE_URL`. חלק מהפקודות כאן קוראות בין דיירים, ותפקיד האפליקציה `caredesk_app` חסום מכך בכוונה.
+2. **`WORKSPACE_ENCRYPTION_KEY` בהישג יד.** שחזור בלי המפתח מחזיר ciphertext. ראה `ENCRYPTION-KEY-CUSTODY.md`.
+3. **שעון.** התרגיל מודד זמן. פתח שעון עצר לפני השלב הראשון של כל תרגיל וסגור אותו בסוף. **מספר שלא נמדד לא נרשם.**
+
+---
+
+## תרגיל א' — שחזור דייר בודד
+
+### א.1 יצירת דייר זמני
+
+מזהים קבועים כדי שהניקוי בסוף יהיה חד-משמעי. **אלה מזהים סינתטיים; אל תשנה אותם למזהים אמיתיים.**
+
+```sql
+-- דייר זמני. data_region = 'synthetic' הוא הסימן שזה לא לקוח.
+insert into tenant (id, data_region, status)
+values ('dd000000-0000-4000-8000-000000000001', 'synthetic', 'active')
+on conflict (id) do nothing;
+
+insert into app_user (id, auth_subject, display_name, email, status)
+values ('dd000000-0000-4000-8000-000000000002', 'drill-subject',
+        'Drill operator', 'drill@synthetic.invalid', 'active')
+on conflict (id) do nothing;
+
+insert into tenant_membership (tenant_id, user_id, role, status)
+values ('dd000000-0000-4000-8000-000000000001',
+        'dd000000-0000-4000-8000-000000000002', 'owner', 'active');
+```
+
+### א.2 שתילת נתונים שיש מה לאבד
+
+עשרים ותשעה ערכים מלאים — אותו סדר גודל שיש ללקוחה האמיתית.
+
+```sql
+insert into tenant_workspace (tenant_id, schema_version, payload, version, updated_by, updated_at)
+select 'dd000000-0000-4000-8000-000000000001', 1,
+       (select jsonb_object_agg('caredesk.mvp.drill.' || i, 'value ' || i)
+          from generate_series(1, 29) as i),
+       1, 'dd000000-0000-4000-8000-000000000002', now();
+```
+
+**נקודה חשובה:** ה-payload כאן הוא טקסט גלוי, בעוד שהייצור מוצפן. זה בכוונה — התרגיל בודק את מנגנון הגרסאות. את **פענוח** התוכן בודק תרגיל ב' שלב ב.5, על נתונים שבאמת עברו הצפנה.
+
+### א.3 מדידת בסיס
+
+```sql
+select * from caredesk_tenant_data_census()
+ where tenant_id = 'dd000000-0000-4000-8000-000000000001';
+```
+
+הרץ עכשיו את הסורק פעם אחת כדי לכתוב את הבסיס, ורשום את השעה:
+
+```powershell
+curl.exe -H "Authorization: Bearer $env:CRON_SECRET" `
+  https://<api-host>/internal/jobs/data-integrity-scan
+```
+
+צפוי: `signals: []`. **אם כבר כאן יש סימן — עצור.** או שיש בעיה אמיתית בייצור, או שהגילוי רגיש מדי. שניהם ממצא, ושניהם קודמים להמשך התרגיל.
+
+### א.4 השמדה מכוונת
+
+זה השלב שאי אפשר לדלג עליו. שחזור שנבדק בלי שקדמה לו מחיקה אמיתית אינו בדיקה.
+
+```sql
+-- בדיוק צורת התקלה של 29.8: כל המפתחות נשארים, כל הערכים מתרוקנים.
+-- ה-trigger מ-0035 מארכב את גרסה 1 לפני שהשורה נדרסת.
+update tenant_workspace
+   set payload = (select jsonb_object_agg(key, '')
+                    from jsonb_each_text(payload)),
+       version = version + 1,
+       updated_at = now()
+ where tenant_id = 'dd000000-0000-4000-8000-000000000001';
+```
+
+**הפעל שעון עצר עכשיו.** מכאן נמדד ה-RTO של דייר בודד.
+
+וודא שהארכיון תפס:
+
+```sql
+select version, jsonb_object_keys_count, archived_at from (
+  select version, (select count(*) from jsonb_each_text(payload)
+                    where value <> '') as jsonb_object_keys_count, archived_at
+    from tenant_workspace_history
+   where tenant_id = 'dd000000-0000-4000-8000-000000000001'
+) h order by version;
+```
+
+צפוי: שורה אחת, `version = 1`, ‏29 ערכים מלאים.
+
+### א.5 גילוי
+
+```powershell
+curl.exe -H "Authorization: Bearer $env:CRON_SECRET" `
+  https://<api-host>/internal/jobs/data-integrity-scan
+```
+
+צפוי: `WORKSPACE_BLANKED` וגם `WORKSPACE_SHRANK` על הדייר הזמני.
+**רשום את השעה.** ההפרש בין א.4 לכאן הוא זמן הגילוי בהרצה ידנית. בייצור התזמון הוא יומי, ולכן זמן הגילוי האמיתי הוא **עד 24 שעות** — וזה המספר שצריך להופיע ברישום, לא ההפרש שמדדת.
+
+### א.6 שחזור
+
+```powershell
+# מה יש בארכיון
+curl.exe -H "Authorization: Bearer <owner-token>" https://<api-host>/workspace/versions
+
+# שחזור גרסה 1, עם אישור מפורש
+curl.exe -X POST -H "Authorization: Bearer <owner-token>" `
+  -H "Content-Type: application/json" -d '{\"confirmVersion\":1}' `
+  https://<api-host>/workspace/versions/1/restore
+```
+
+**עצור את השעון.**
+
+### א.7 אימות
+
+```sql
+select version,
+       (select count(*) from jsonb_each_text(payload) where value <> '') as populated
+  from tenant_workspace
+ where tenant_id = 'dd000000-0000-4000-8000-000000000001';
+```
+
+צפוי: ‏29 ערכים מלאים, ו-`version = 3` — **לא** 1. השחזור הוא כתיבה חדשה; הגרסה הריקה נשמרה בארכיון בדרך, כך שגם השחזור עצמו הפיך.
+
+```sql
+-- שלוש גרסאות בארכיון: המקורית, הריקה, וזו שנדרסה על ידי השחזור.
+select version from tenant_workspace_history
+ where tenant_id = 'dd000000-0000-4000-8000-000000000001' order by version;
+```
+
+וודא שהפעולה נרשמה:
+
+```sql
+select action, change_summary, occurred_at
+  from audit_event
+ where tenant_id = 'dd000000-0000-4000-8000-000000000001'
+   and action in ('workspace.versions.listed', 'workspace.version.restored',
+                  'integrity.data_loss_suspected')
+ order by occurred_at;
+```
+
+### א.8 ניקוי
+
+```sql
+-- הדייר הזמני נשאר במסד בכוונה: מחיקתו מצריכה delete על tenant_workspace,
+-- וההרשאה הזו נשללה במיגרציה 0037 מסיבה טובה. הוא מסומן כסגור, מה שמוציא
+-- אותו מהמפקד היומי, ומספיק כדי שלא יופיע כדייר פעיל.
+update tenant set status = 'closed'
+ where id = 'dd000000-0000-4000-8000-000000000001';
+
+update tenant_membership set status = 'revoked'
+ where tenant_id = 'dd000000-0000-4000-8000-000000000001';
+```
+
+**אל תמחק את `audit_event` ואת `tenant_workspace_history` של התרגיל.** הם הראיה שהתרגיל רץ.
+
+### תנאי מעבר — תרגיל א'
+
+התרגיל עבר רק אם **כל** אלה מתקיימים:
+
+1. הסריקה ב-א.3 החזירה `signals: []` על דייר תקין;
+2. הסריקה ב-א.5 החזירה `WORKSPACE_BLANKED` על הדייר שהושמד;
+3. `GET /workspace/versions` החזיר את הגרסה שנמחקה עם `populatedEntries: 29`;
+4. השחזור החזיר ‏29 ערכים מלאים, זהים למקור;
+5. הגרסה הריקה נמצאת בארכיון אחרי השחזור;
+6. `audit_event` מכיל `workspace.version.restored` עם המזהה של מי שביצע;
+7. **הזמן בין א.4 ל-א.6 קטן מ-30 דקות.** אם הוא גדול מכך — הכשל הוא בנוהל, לא בקוד, וצריך לתקן את הנוהל לפני שנרשם RTO.
+
+---
+
+## תרגיל ב' — שחזור פרויקט מלא
+
+הבסיס הוא שבעת תנאי הקבלה שכבר כתובים ב-`docs/operations/production-release-and-recovery.md` תחת "Restore drill acceptance". **הם נכונים ואינם משתנים.** להלן שלושה שלבים שחסרים שם, וכל אחד מהם הוא כשל אפשרי שהתנאים הקיימים לא היו תופסים.
+
+### ב.1 צילום לפני שחזור
+
+לפני כל שחזור — גיבוי של המצב הנוכחי. שחזור לנקודה קודמת מוחק גם את יומן הביקורת של השעות שבחקירה, כלומר את הראיה החשובה ביותר לגבי מה קרה.
+
+### ב.2 הפרויקט החד-פעמי
+
+`Restore to new project` מהגיבוי הרלוונטי. **שים לב:** שם המשתמש של ה-pooler משתנה עם ה-project ref (`database/README.md:48`), כך שמחרוזת החיבור אינה זהה למקור. זה תופס אנשים בלחץ.
+
+### ב.3 שבעת התנאים הקיימים
+
+הרץ אותם כלשונם מ-`production-release-and-recovery.md`.
+
+### ב.4 השלמה: היסטוריית הגרסאות שרדה
+
+```sql
+select count(*) as tenants, count(*) filter (where versions = 0) as without_history
+  from (select tw.tenant_id,
+               (select count(*) from tenant_workspace_history h
+                 where h.tenant_id = tw.tenant_id) as versions
+          from tenant_workspace tw) s;
+```
+
+צפוי: `without_history = 0`. הטבלה נזרעה במיגרציה 0035 לכל דייר קיים, ולכן אפס היסטוריה לדייר עם workspace פירושו ששחזרת מגיבוי שקדם ל-0035 — עובדה שחייבת להירשם.
+
+### ב.5 השלמה: ה-payload באמת נפתח
+
+**זה התנאי שהיה חסר, והוא היחיד שמכשיל שחזור שנראה מושלם.** מסד משוחזר בשלמותו בלי המפתח הוא ciphertext, והנתונים אבודים בדיוק כאילו הגיבוי נכשל.
+
+הדרך הזולה לבדוק היא דרך האפליקציה: הפנה מופע API אל הפרויקט החד-פעמי עם `WORKSPACE_ENCRYPTION_KEY` של הייצור, והרץ:
+
+```powershell
+curl.exe -H "Authorization: Bearer <owner-token>" https://<drill-api-host>/workspace
+```
+
+צפוי: ערכים קריאים, לא מעטפת `__caredesk_encrypted_workspace_v1`.
+
+בדיקה משלימה במסד עצמו — כמה שורות מוצפנות ומה גודלן:
+
+```sql
+select tenant_id,
+       payload ? '__caredesk_encrypted_workspace_v1' as encrypted,
+       octet_length(payload::text) as bytes
+  from tenant_workspace order by tenant_id;
+```
+
+השווה את `bytes` למקור. AES-GCM שומר על אורך הטקסט הגלוי, ולכן פער משמעותי בגודל הוא אובדן תוכן גם בלי לפענח דבר.
+
+### ב.6 השלמה: קבצים מול שורות
+
+```sql
+select count(*) as file_rows, sum(size_bytes) as total_bytes
+  from workspace_file where status = 'active';
+
+select count(*) as tombstones from workspace_file where status = 'deleted';
+```
+
+השווה את `file_rows` למספר האובייקטים בדלי הפרטי. שורות ללא בייטים ובייטים ללא שורות הם שני כשלים שונים, ואף אחד מהם לא מתגלה מעצמו. מיגרציה `0039` הוסיפה את המצבה (`status = 'deleted'`) כדי שמפתח אחסון לעולם לא ייעלם מהסכימה — ה-tombstones הם בדיוק הרשימה שסריקת ההתאמה צריכה לעבור עליה.
+
+### תנאי מעבר — תרגיל ב'
+
+שבעת התנאים מ-`production-release-and-recovery.md`, **וגם**:
+
+8. `without_history = 0` בשאילתת ב.4;
+9. `GET /workspace` בפרויקט המשוחזר מחזיר ערכים קריאים תחת מפתח הייצור;
+10. מספר האובייקטים בדלי תואם את מספר שורות `workspace_file` הפעילות;
+11. נלקח צילום של המצב שלפני השחזור (ב.1) **לפני** שנגעו במשהו.
+
+---
+
+## רישום התוצאה
+
+**תרגיל שלא נרשם לא התרחש.** צור `docs/operations/drill-records/YYYY-MM-DD-restore-drill.md` והעתק לתוכו:
+
+```text
+תאריך:
+מבצע:
+סוג התרגיל:            א' / ב'
+גיבוי מקור:            <מזהה / חותמת זמן>
+פרויקט יעד:            <ref, בתרגיל ב' בלבד>
+
+זמן השמדה (א.4):
+זמן שחזור הושלם (א.6):
+RTO שנמדד:             ___ דקות
+RPO לאובדן שזוהה:      ___
+זמן גילוי מרבי:        24 שעות (תזמון יומי)
+
+תנאי מעבר שעברו:       ___ מתוך ___
+תנאים שנכשלו:          <רשימה, או "אין">
+ניקוי בוצע:            כן / לא
+```
+
+**עדכן את `production-release-and-recovery.md` עם ה-RTO שנמדד**, במקום המספר המשוער. אם המדידה גדולה מהיעד המוצהר — היעד משתנה, לא המדידה.
+
+---
+
+## מה התרגיל הזה אינו מוכיח
+
+רשום כאן במפורש כדי שלא ייחשב כיסוי שאינו קיים:
+
+- **טבלאות קנוניות.** `employment_case`, `document`, `task`, `payroll_entry` — אין להן היסטוריית גרסאות. תרגיל א' מכסה את ה-blob בלבד. מחיקה בטבלה קנונית עדיין דורשת תרגיל ב'.
+- **בייטים של מסמכים.** `tenant_workspace_history` שומר metadata, לא קבצים.
+- **התראה שמגיעה לאדם.** ראה פרק 6 להלן.
+
+---
+
+## 6. הבקרה שאינה בקוד — קריאה יומית
+
+כל עוד אין ערוץ התראה, זו הבקרה, והיא ידנית:
+
+**כל בוקר, פעם אחת:** פתח את לוגי הפונקציה ב-Vercel וחפש `DATA_LOSS_SUSPECTED`.
+
+- אין תוצאות והסריקה רצה → תקין.
+- **הסריקה לא רצה כלל** → זו תקלה באותה חומרה כמו סימן. גלאי שלא רץ אינו שקט, הוא עיוור.
+- יש תוצאה → פתח אירוע. `tenant_id` שבשורה הוא מה שמזין את `GET /workspace/versions` של אותו דייר.
+
+**מה שיחליף את זה**, לפי סדר ערך:
+
+1. **דואר או SMS למפעיל ייצור נקוב בשם.** בפיילוט יש לקוחה אחת ומפעיל אחד — תיבת דואר היא זימונית מספקת. זהו המימוש הבא של `DataLossAlertSink` והוא מתחלף בארגומנט אחד.
+2. שירות ניטור שגיאות, כשייבחר, כדי שהסימן ייכנס לאותו תור עם חריגות לא מטופלות.
+
+**בעלים:** ______________  **מחליף:** ______________
+
+שני השמות האלה חסרים היום, וזה עצמו ממצא פתוח (DR-07).

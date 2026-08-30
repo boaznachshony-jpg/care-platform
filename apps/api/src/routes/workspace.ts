@@ -78,6 +78,24 @@ export function registerWorkspaceRoutes(app: FastifyInstance, container: Contain
           { currentEntries: error.currentEntries, incomingEntries: error.incomingEntries },
           'workspace save rejected as destructive',
         );
+        // The refusal is correct and, until now, nobody was told about it. A
+        // client attempting to replace a populated account with blanks is the
+        // 2026-08-29 incident happening again and being caught - which is
+        // exactly when a person should hear about it, not the next morning.
+        // The write never landed, so the nightly census would never see it.
+        try {
+          await container.dataLossAlerts.raise({
+            tenantId: actor.tenantId,
+            code: 'WORKSPACE_BLANKED',
+            measure: 'workspace_populated_entries_rejected',
+            before: error.currentEntries,
+            after: error.incomingEntries,
+          });
+        } catch {
+          // An alert transport that is down must not turn the customer's 409
+          // into a 500. The save is still refused, which is the part that
+          // protects their data.
+        }
         return sendError(request, reply, 409, 'WORKSPACE_SHRINK_REJECTED');
       }
       throw error;

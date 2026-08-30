@@ -211,6 +211,10 @@ export class PgVisaRenewalRepository implements VisaRenewalRepository {
 export class PgVisaRenewalEvaluationRepository implements VisaRenewalEvaluationRepository {
   constructor(private readonly pool: Pool) {}
   async evaluate(asOf: string): Promise<VisaRuleEvaluation> {
+    // db-path-exception: visa_rule_definition / _version / _source are global
+    // regulatory reference data. They carry no tenant_id, have no RLS policy,
+    // and caredesk_app holds select-only on all three (0021). There is no
+    // tenant to scope this to and nothing tenant-owned is read. (Root 6)
     const result = await this.pool.query<{
       definition_id: string;
       version_id: string;

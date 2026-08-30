@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc -p tsconfig.json",
-    "rls-test:ci": "node --import tsx src/rls-check-ci.ts"
+    "rls-test:ci": "node --import tsx src/rls-check-ci.ts",
+    "migrate-idempotency:ci": "node --import tsx src/migrate-idempotency-ci.ts"
   },
   "dependencies": {
     "@caredesk/application": "workspace:*",

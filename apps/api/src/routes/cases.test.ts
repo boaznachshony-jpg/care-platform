@@ -73,7 +73,23 @@ describe('/cases routes', () => {
   });
 
   it('does not seed the dev identity in production mode', async () => {
-    const app = buildServer(loadEnv({ NODE_ENV: 'production' }));
+    // DB-03: a production environment only parses once it is complete, so this
+    // case has to be configured even though it is about the dev identity and
+    // not about any of these settings.
+    const app = buildServer(
+      loadEnv({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgres://caredesk_app@localhost:5432/caredesk',
+        WORKSPACE_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
+        SUPABASE_URL: 'https://primary.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'publishable-key',
+        SUPABASE_SERVICE_ROLE_KEY: 'primary-server-only',
+        SUPABASE_STORAGE_BUCKET: 'private-documents',
+        BACKUP_SUPABASE_URL: 'https://backup.supabase.co',
+        BACKUP_SUPABASE_SERVICE_ROLE_KEY: 'backup-server-only',
+        BACKUP_SUPABASE_STORAGE_BUCKET: 'private-documents-backup',
+      }),
+    );
     const response = await app.inject({
       method: 'GET',
       url: '/cases',

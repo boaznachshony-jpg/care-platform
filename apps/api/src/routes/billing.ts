@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { AuthorizationError } from '@caredesk/application';
 import {
   cardcomWebhookSchema,
@@ -8,18 +7,14 @@ import {
 } from '@caredesk/schemas';
 import type { FastifyInstance } from 'fastify';
 import { deriveBillingAccessState } from '../billing/access-state.js';
+import { CRON_RATE_LIMIT, makeCronRateLimit, rejectUnauthorizedCron } from '../cron-auth.js';
 import type { Container } from '../container.js';
 import type { Env } from '../env.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { requireMfa } from '../plugins/mfa.js';
 import { safeErrorDetails } from '../plugins/safe-error.js';
+import type { RateLimiter } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
-
-function secureEqual(actual: string, expected: string): boolean {
-  const left = createHash('sha256').update(actual).digest();
-  const right = createHash('sha256').update(expected).digest();
-  return timingSafeEqual(left, right);
-}
 
 function webhookId(value: unknown): string | null {
   const parsed = cardcomWebhookSchema.safeParse(value);
@@ -27,7 +22,12 @@ function webhookId(value: unknown): string | null {
   return parsed.data.LowProfileId ?? parsed.data.lowprofilecode ?? parsed.data.lowProfileId ?? null;
 }
 
-export function registerBillingRoutes(app: FastifyInstance, container: Container, env: Env): void {
+export function registerBillingRoutes(
+  app: FastifyInstance,
+  container: Container,
+  env: Env,
+  rateLimiter: RateLimiter,
+): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
   const manageOptions = { preHandler: [authenticate, requireMfa(env, 'billing.manage')] };
@@ -113,16 +113,20 @@ export function registerBillingRoutes(app: FastifyInstance, container: Container
     }
   });
 
-  app.get('/billing/jobs/collect', async (request, reply) => {
-    const authorization = request.headers.authorization ?? '';
-    if (!env.CRON_SECRET || !secureEqual(authorization, `Bearer ${env.CRON_SECRET}`)) {
-      return sendError(request, reply, 401, 'UNAUTHENTICATED');
-    }
-    try {
-      reply.send(await container.collectDueProductSubscriptions.execute());
-    } catch (error) {
-      request.log.error(safeErrorDetails(error), 'Recurring subscription collection failed');
-      return sendError(request, reply, 503, 'BILLING_COLLECTION_UNAVAILABLE');
-    }
-  });
+  app.get(
+    '/billing/jobs/collect',
+    {
+      config: { rateLimit: CRON_RATE_LIMIT },
+      preHandler: makeCronRateLimit(rateLimiter),
+    },
+    async (request, reply) => {
+      if (rejectUnauthorizedCron(request, reply, env)) return;
+      try {
+        reply.send(await container.collectDueProductSubscriptions.execute());
+      } catch (error) {
+        request.log.error(safeErrorDetails(error), 'Recurring subscription collection failed');
+        return sendError(request, reply, 503, 'BILLING_COLLECTION_UNAVAILABLE');
+      }
+    },
+  );
 }

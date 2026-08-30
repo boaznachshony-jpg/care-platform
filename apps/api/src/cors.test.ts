@@ -16,7 +16,22 @@ function decide(env: ReturnType<typeof loadEnv>, origin: string | undefined): bo
 
 describe('CORS origin policy', () => {
   it('uses the explicit allowlist and nothing else in production', () => {
-    const env = loadEnv({ NODE_ENV: 'production', CORS_ORIGINS: 'https://app.example.com' });
+    // A production environment must now be complete before it parses at all
+    // (DB-03), so this case carries the full set even though it only asserts
+    // the origin allowlist.
+    const env = loadEnv({
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://app.example.com',
+      DATABASE_URL: 'postgres://caredesk_app@localhost:5432/caredesk',
+      WORKSPACE_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
+      SUPABASE_URL: 'https://primary.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'publishable-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'primary-server-only',
+      SUPABASE_STORAGE_BUCKET: 'private-documents',
+      BACKUP_SUPABASE_URL: 'https://backup.supabase.co',
+      BACKUP_SUPABASE_SERVICE_ROLE_KEY: 'backup-server-only',
+      BACKUP_SUPABASE_STORAGE_BUCKET: 'private-documents-backup',
+    });
     expect(buildCorsOrigin(env)).toEqual(['https://app.example.com']);
   });
 

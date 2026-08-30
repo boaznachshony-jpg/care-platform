@@ -188,6 +188,10 @@ export class PgBillingRepository implements BillingRepository {
     providerSetupId: string,
   ): Promise<BillingSetupIntentRecord | null> {
     // Only a server-to-server verified Cardcom webhook calls this global lookup.
+    // db-path-exception: the webhook identifies itself with a Cardcom setup id
+    // and no tenant; this is the lookup that maps one to the other, through the
+    // SECURITY DEFINER find_caredesk_billing_setup_intent(). The write that
+    // follows is tenant-scoped. (Root 6)
     const result = await this.pool.query<IntentRow>(
       'select * from find_caredesk_billing_setup_intent($1)',
       [providerSetupId],
@@ -284,6 +288,12 @@ export class PgBillingRepository implements BillingRepository {
   }
 
   async claimDueCharges(now: string, limit: number): Promise<DueBillingCharge[]> {
+    // db-path-exception: the billing runner has to ask which tenants owe money
+    // before it knows which tenants to scope to - the same shape as the nightly
+    // census. claim_caredesk_product_billing_charges() is SECURITY DEFINER,
+    // claims the rows atomically and returns only the fields needed to charge a
+    // card. It is cross-tenant by definition and cannot be expressed inside
+    // withTenant(). (Root 6)
     const result = await this.pool.query<{
       charge_id: string;
       tenant_id: string;
@@ -317,6 +327,10 @@ export class PgBillingRepository implements BillingRepository {
   }
 
   async markChargeSucceeded(chargeId: string, providerTransactionId: string): Promise<void> {
+    // db-path-exception: the settlement half of claimDueCharges(). The runner
+    // holds a charge id it obtained cross-tenant and never learns the tenant;
+    // complete_caredesk_product_billing_charge() is SECURITY DEFINER and closes
+    // exactly that one charge. (Root 6)
     await this.pool.query('select complete_caredesk_product_billing_charge($1, $2, now())', [
       chargeId,
       providerTransactionId,
@@ -324,6 +338,8 @@ export class PgBillingRepository implements BillingRepository {
   }
 
   async markChargeFailed(chargeId: string, failureCode: string): Promise<void> {
+    // db-path-exception: the failure half of claimDueCharges(); same reasoning
+    // as markChargeSucceeded above. (Root 6)
     await this.pool.query('select fail_caredesk_product_billing_charge($1, $2, now())', [
       chargeId,
       failureCode,

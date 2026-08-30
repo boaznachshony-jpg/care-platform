@@ -22,9 +22,224 @@ import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
+const percent = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
 const MAX_PAYROLL_AMOUNT = 10_000_000;
 const MAX_PAID_SATURDAYS = 6;
 const MAX_PAID_HOLIDAYS = 10;
+
+/** The employment expense category that opens the national insurance calculator. */
+export const NATIONAL_INSURANCE_CATEGORY = 'ביטוח לאומי';
+
+/**
+ * Index order matters: position 0 is month 01. The names themselves live in the
+ * translation resources so the reporting table reads in the interface language.
+ */
+export const MONTH_NAME_KEYS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+] as const;
+
+/**
+ * Starting value, in percent, for the national insurance rate field.
+ *
+ * This is the ONLY place the number appears. The rate is published by the
+ * National Insurance Institute, changes from time to time and differs between
+ * cases, so the field itself stays editable and the product never treats this
+ * constant as authoritative. When the published rate changes, change it here.
+ */
+export const DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT = 3.6;
+
+/** Rounds to agorot and keeps binary floating point artifacts off the screen. */
+function roundMoney(value: number): number {
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
+}
+
+function positiveAmount(value: number | undefined): number {
+  return Number.isFinite(value) && (value ?? 0) > 0 ? (value as number) : 0;
+}
+
+function shiftMonth(month: string, offset: number): string {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+  if (!match) return '';
+  const index = Number(match[1]) * 12 + (Number(match[2]) - 1) + offset;
+  if (index < 0) return '';
+  return `${String(Math.floor(index / 12)).padStart(4, '0')}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+/**
+ * The payroll months whose wages a national insurance payment covers.
+ *
+ * The payment is always made in the month AFTER the wage period it reports on
+ * (a Q3 payment falls due on 15 October), so the period is anchored on the
+ * month before the due date rather than on the due date itself.
+ */
+export function nationalInsuranceWageMonths(
+  frequency: EmploymentExpenseFrequency,
+  dueDate: string,
+): string[] {
+  const dueMonth = /^\d{4}-(0[1-9]|1[0-2])/.test(dueDate) ? dueDate.slice(0, 7) : currentMonth;
+  const lastMonth = shiftMonth(dueMonth, -1);
+  if (!lastMonth) return [];
+  if (frequency === 'quarterly') {
+    const monthNumber = Number(lastMonth.slice(5, 7));
+    const quarterStart = `${lastMonth.slice(0, 4)}-${String(Math.floor((monthNumber - 1) / 3) * 3 + 1).padStart(2, '0')}`;
+    return [0, 1, 2].map((offset) => shiftMonth(quarterStart, offset)).filter(Boolean);
+  }
+  if (frequency === 'annual') {
+    return Array.from({ length: 12 }, (_, index) => shiftMonth(lastMonth, index - 11)).filter(
+      Boolean,
+    );
+  }
+  return [lastMonth];
+}
+
+/**
+ * The gross wage a saved payroll month recorded for the caregiver: the base
+ * salary actually paid plus every wage addition. Employer contributions are
+ * excluded because they are not the caregiver's wage, and deductions are not
+ * subtracted because the wage was earned before them.
+ */
+export function recordedGrossWage(record: MvpPayrollRecord): number {
+  const additionalPayments = (record.additionalPayments ?? []).reduce(
+    (total, payment) => total + positiveAmount(payment.amount),
+    0,
+  );
+  return roundMoney(
+    positiveAmount(record.baseSalary) +
+      positiveAmount(record.saturdayPay) +
+      positiveAmount(record.holidayPay) +
+      positiveAmount(record.vacationPay) +
+      positiveAmount(record.sickPay) +
+      positiveAmount(record.otherAddition) +
+      additionalPayments,
+  );
+}
+
+/** base x rate, in shekels, rounded to agorot. Never returns NaN. */
+export function nationalInsuranceAmount(wageBase: number, ratePercent: number): number {
+  if (!Number.isFinite(wageBase) || !Number.isFinite(ratePercent)) return 0;
+  if (wageBase <= 0 || ratePercent <= 0) return 0;
+  return roundMoney((wageBase * ratePercent) / 100);
+}
+
+/**
+ * What the customer changed on one month's line. Absent keys mean "keep
+ * following the derived value", so re-deriving the period never discards a
+ * correction and a correction never freezes the rest of the line.
+ */
+export interface NationalInsuranceMonthOverride {
+  employed?: boolean;
+  /** Whole shekels, kept as text so an emptied field stays empty. */
+  wage?: string;
+  rate?: string;
+}
+
+export interface NationalInsuranceMonthRow {
+  month: string;
+  /** The reporting line is closed for a month that has not happened yet. */
+  isFuture: boolean;
+  employed: boolean;
+  /** Text in the field. */
+  wageValue: string;
+  rateValue: string;
+  /** Whole shekels — the Institute's form is "ללא אגורות". */
+  wage: number;
+  ratePercent: number;
+  /** wage x rate, to agorot. */
+  amount: number;
+  wageSource: 'payroll-records' | 'contract-base-salary' | 'none';
+}
+
+export interface NationalInsuranceTotals {
+  wages: number;
+  amount: number;
+}
+
+/**
+ * One line per month of the reporting period, in the shape of the National
+ * Insurance Institute's own form.
+ *
+ * The wage of each month comes from that month's saved payroll record; where
+ * no record exists the contract base salary stands in, and where neither
+ * exists the line starts empty rather than guessing. Every line stays
+ * editable, which is why the derived value is only a starting point.
+ *
+ * `today` is a parameter and not `currentMonth` directly so that the rule
+ * "a later month cannot be reported" is testable without a clock.
+ */
+export function nationalInsuranceMonthRows(
+  records: MvpPayrollRecord[],
+  months: string[],
+  contractBaseSalary: number | null,
+  sharedRatePercent: string,
+  overrides: Record<string, NationalInsuranceMonthOverride>,
+  today: string = currentMonth,
+): NationalInsuranceMonthRow[] {
+  return months.map((month) => {
+    const isFuture = month > today;
+    const override = overrides[month] ?? {};
+    const record = records.find((item) => item.month === month);
+    const derivedWage = record
+      ? Math.round(recordedGrossWage(record))
+      : Math.round(positiveAmount(contractBaseSalary ?? 0));
+    const wageSource = record
+      ? 'payroll-records'
+      : derivedWage > 0
+        ? 'contract-base-salary'
+        : 'none';
+    const wageValue = override.wage ?? (derivedWage > 0 ? String(derivedWage) : '');
+    const rateValue = override.rate ?? sharedRatePercent;
+    // A future month is reported as "לא" and cannot be switched back on.
+    const employed = isFuture ? false : (override.employed ?? true);
+    const wage = employed ? Math.round(numeric(wageValue)) : 0;
+    const ratePercent = numeric(rateValue);
+    return {
+      month,
+      isFuture,
+      employed,
+      wageValue,
+      rateValue,
+      wage,
+      ratePercent,
+      amount: employed ? nationalInsuranceAmount(wage, ratePercent) : 0,
+      wageSource,
+    };
+  });
+}
+
+/**
+ * The two summary lines of the form. The total to pay is the sum of the
+ * per-month figures already shown, not a recomputation from the wage total,
+ * so what the customer adds up on screen is what the field says.
+ */
+export function nationalInsuranceTotals(
+  rows: NationalInsuranceMonthRow[],
+): NationalInsuranceTotals {
+  let wages = 0;
+  let amount = 0;
+  for (const row of rows) {
+    wages += row.wage;
+    amount += row.amount;
+  }
+  return { wages: Math.round(wages), amount: roundMoney(amount) };
+}
+
+/** "2026-07" -> "יולי 2026", using the month names the form itself prints. */
+export function hebrewMonthLabel(month: string, monthNames: string[]): string {
+  const index = Number(month.slice(5, 7)) - 1;
+  const name = monthNames[index];
+  return name ? `${name} ${month.slice(0, 4)}` : month;
+}
 
 interface PayrollSequenceState {
   startMonth: string;
@@ -138,7 +353,7 @@ function withNationalInsuranceTracking(
   );
   const trackedExpense: MvpEmploymentExpense = {
     id: existing?.id ?? id,
-    category: 'ביטוח לאומי',
+    category: NATIONAL_INSURANCE_CATEGORY,
     frequency: 'quarterly',
     amount: existing?.amount ?? 0,
     amountEntered: existing?.amountEntered ?? false,
@@ -173,12 +388,21 @@ export function PayrollPage() {
     additionalPaymentDrafts(initialRecord),
   );
   const [expenseDraft, setExpenseDraft] = useState({
-    category: 'ביטוח לאומי',
+    category: NATIONAL_INSURANCE_CATEGORY,
     frequency: 'quarterly' as EmploymentExpenseFrequency,
     amount: '',
     dueDate: '',
     note: '',
   });
+  const [insuranceRate, setInsuranceRate] = useState(
+    String(DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT),
+  );
+  /** Per-month corrections on the reporting table, keyed by "YYYY-MM". */
+  const [insuranceMonthOverrides, setInsuranceMonthOverrides] = useState<
+    Record<string, NationalInsuranceMonthOverride>
+  >({});
+  /** true means the customer typed an amount that replaces the computed one. */
+  const [expenseAmountOverridden, setExpenseAmountOverridden] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -304,6 +528,72 @@ export function PayrollPage() {
       ? `Agreed deduction ${money.format(numeric(values.agreedDeduction))}`
       : '',
   ].filter(Boolean);
+
+  const isNationalInsuranceExpense = expenseDraft.category === NATIONAL_INSURANCE_CATEGORY;
+  const insuranceWageMonths = useMemo(
+    () => nationalInsuranceWageMonths(expenseDraft.frequency, expenseDraft.dueDate),
+    [expenseDraft.frequency, expenseDraft.dueDate],
+  );
+  const insuranceMonthNames = useMemo(
+    () => MONTH_NAME_KEYS.map((key) => t(`payments.monthNames.${key}`)),
+    [t],
+  );
+  const insuranceMonthRows = useMemo(
+    () =>
+      nationalInsuranceMonthRows(
+        records,
+        insuranceWageMonths,
+        profile.baseSalary,
+        insuranceRate,
+        insuranceMonthOverrides,
+      ),
+    [records, insuranceWageMonths, profile.baseSalary, insuranceRate, insuranceMonthOverrides],
+  );
+  const insuranceTotals = useMemo(
+    () => nationalInsuranceTotals(insuranceMonthRows),
+    [insuranceMonthRows],
+  );
+  const computedInsuranceAmount = insuranceTotals.amount;
+  const computedInsuranceAmountValue =
+    computedInsuranceAmount > 0 ? String(computedInsuranceAmount) : '';
+  /**
+   * The single source of truth for the amount field and for the saved record:
+   * the computed figure while the calculator is driving it, the customer's own
+   * text as soon as they type over it.
+   */
+  const expenseAmountValue =
+    isNationalInsuranceExpense && !expenseAmountOverridden
+      ? computedInsuranceAmountValue
+      : expenseDraft.amount;
+  const monthsFromPayrollRecords = insuranceMonthRows
+    .filter((row) => row.wageSource === 'payroll-records')
+    .map((row) => row.month);
+  const monthsFromContractSalary = insuranceMonthRows
+    .filter((row) => row.wageSource === 'contract-base-salary')
+    .map((row) => row.month);
+  const wageSourceNotes = [
+    monthsFromPayrollRecords.length > 0
+      ? t('payments.insuranceTable.wageFromPayroll', {
+          months: monthsFromPayrollRecords.join(', '),
+        })
+      : '',
+    monthsFromContractSalary.length > 0
+      ? t('payments.insuranceTable.wageFromContract', {
+          months: monthsFromContractSalary.join(', '),
+        })
+      : '',
+    insuranceMonthRows.length > 0 && insuranceMonthRows.every((row) => row.wageSource === 'none')
+      ? t('payments.insuranceTable.wageMissing')
+      : '',
+  ].filter(Boolean);
+
+  function updateInsuranceMonth(month: string, change: NationalInsuranceMonthOverride) {
+    setInsuranceMonthOverrides((current) => ({
+      ...current,
+      [month]: { ...current[month], ...change },
+    }));
+    setExpenseAmountOverridden(false);
+  }
 
   function update(key: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -588,8 +878,8 @@ export function PayrollPage() {
       id: existingExpense?.id ?? crypto.randomUUID(),
       category: expenseDraft.category,
       frequency: expenseDraft.frequency,
-      amount: numeric(expenseDraft.amount),
-      amountEntered: expenseDraft.amount.trim() !== '',
+      amount: numeric(expenseAmountValue),
+      amountEntered: expenseAmountValue.trim() !== '',
       dueDate: expenseDraft.dueDate,
       status: existingExpense?.status ?? 'upcoming',
       note: expenseDraft.note,
@@ -603,6 +893,8 @@ export function PayrollPage() {
     saveMvpEmploymentExpenses(next);
     setExpenses(next);
     setExpenseDraft((current) => ({ ...current, amount: '', dueDate: '', note: '' }));
+    setInsuranceMonthOverrides({});
+    setExpenseAmountOverridden(false);
     setEditingExpenseId(null);
     setMessage(
       existingExpense ? 'פרטי התשלום התקופתי עודכנו.' : 'התשלום התקופתי נשמר בלוח עלויות ההעסקה.',
@@ -617,6 +909,10 @@ export function PayrollPage() {
       dueDate: expense.dueDate,
       note: expense.note,
     });
+    // A saved amount is the customer's figure and must not be overwritten by
+    // the calculator; a tracking item with no amount yet is left to compute.
+    setExpenseAmountOverridden(expense.amountEntered !== false);
+    setInsuranceMonthOverrides({});
     setEditingExpenseId(expense.id);
     setMessage('עדכנו את הפרטים בטופס ושמרו.');
   }
@@ -1477,11 +1773,13 @@ export function PayrollPage() {
               סוג התשלום
               <select
                 value={expenseDraft.category}
-                onChange={(event) =>
-                  setExpenseDraft((current) => ({ ...current, category: event.target.value }))
-                }
+                onChange={(event) => {
+                  setExpenseDraft((current) => ({ ...current, category: event.target.value }));
+                  setInsuranceMonthOverrides({});
+                  setExpenseAmountOverridden(false);
+                }}
               >
-                <option>ביטוח לאומי</option>
+                <option>{NATIONAL_INSURANCE_CATEGORY}</option>
                 <option>אגרת רישוי או היתר העסקה</option>
                 <option>תשלום לתאגיד מורשה</option>
                 <option>ביטוח רפואי</option>
@@ -1507,18 +1805,164 @@ export function PayrollPage() {
                 <option value="one_time">חד־פעמי</option>
               </select>
             </label>
+            {isNationalInsuranceExpense ? (
+              <div className="full-width national-insurance-calculator">
+                <div className="form-grid">
+                  <label>
+                    שיעור התשלום, באחוזים
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={insuranceRate}
+                      onChange={(event) => {
+                        setInsuranceRate(event.target.value);
+                        setExpenseAmountOverridden(false);
+                      }}
+                    />
+                    <small>
+                      {`ברירת המחדל היא ${percent.format(DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT)}%. `}
+                      {t('payments.nationalInsuranceRateNote')}
+                    </small>
+                  </label>
+                </div>
+                {/* The Institute's form is a table with one line per month, and the
+                    "was there employment" column is the whole point of it: a month
+                    with no employment is reported and contributes nothing. Six
+                    columns cannot survive a 360px viewport, so the LINE is the unit
+                    that survives — each month is a card carrying its own captions,
+                    and the captions stay visible at every width rather than being
+                    hoisted into a header row that would strand them when it wraps. */}
+                <ol className="ni-month-list">
+                  {insuranceMonthRows.map((row, index) => {
+                    const monthName = insuranceMonthNames[Number(row.month.slice(5, 7)) - 1] ?? '';
+                    const monthLabel = hebrewMonthLabel(row.month, insuranceMonthNames);
+                    const wageDisabled = row.isFuture || !row.employed;
+                    return (
+                      <li
+                        className={[
+                          'ni-month-row',
+                          row.isFuture ? 'is-future' : '',
+                          !row.employed ? 'is-not-employed' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        key={row.month}
+                      >
+                        <p className="ni-month-name">
+                          <span className="ni-month-index" aria-hidden="true">
+                            {index + 1}
+                          </span>
+                          <span>
+                            <small>{t('payments.insuranceTable.monthColumn')}</small>
+                            <strong>{monthLabel}</strong>
+                          </span>
+                        </p>
+                        {row.isFuture ? (
+                          <p className="ni-month-future">
+                            {t('payments.insuranceTable.futureMonth', { month: monthName })}
+                          </p>
+                        ) : null}
+                        <label className="ni-month-field">
+                          <span>{t('payments.insuranceTable.employedColumn')}</span>
+                          <select
+                            aria-label={`${t('payments.insuranceTable.employedColumn')} ${monthLabel}`}
+                            disabled={row.isFuture}
+                            onChange={(event) =>
+                              updateInsuranceMonth(row.month, {
+                                employed: event.target.value === 'yes',
+                              })
+                            }
+                            value={row.employed ? 'yes' : 'no'}
+                          >
+                            <option value="yes">{t('payments.insuranceTable.employedYes')}</option>
+                            <option value="no">{t('payments.insuranceTable.employedNo')}</option>
+                          </select>
+                        </label>
+                        <label className="ni-month-field">
+                          <span>{t('payments.insuranceTable.wageColumn')}</span>
+                          <input
+                            aria-label={`${t('payments.insuranceTable.wageColumn')} ${monthLabel}`}
+                            disabled={wageDisabled}
+                            inputMode="numeric"
+                            min="0"
+                            onChange={(event) =>
+                              updateInsuranceMonth(row.month, { wage: event.target.value })
+                            }
+                            step="1"
+                            type="number"
+                            value={row.wageValue}
+                          />
+                        </label>
+                        <label className="ni-month-field">
+                          <span>{t('payments.insuranceTable.rateColumn')}</span>
+                          <input
+                            aria-label={`${t('payments.insuranceTable.rateColumn')} ${monthLabel}`}
+                            disabled={wageDisabled}
+                            min="0"
+                            onChange={(event) =>
+                              updateInsuranceMonth(row.month, { rate: event.target.value })
+                            }
+                            step="0.01"
+                            type="number"
+                            value={row.rateValue}
+                          />
+                        </label>
+                        <p className="ni-month-amount">
+                          <span>{t('payments.insuranceTable.amountColumn')}</span>
+                          <strong>{money.format(row.amount)}</strong>
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {wageSourceNotes.map((note) => (
+                  <p className="form-note" key={note}>
+                    {note}
+                  </p>
+                ))}
+                <div className="payroll-live-total ni-total-wages" aria-live="polite">
+                  <span>{t('payments.insuranceTable.totalWages')}</span>
+                  <strong>{money.format(insuranceTotals.wages)}</strong>
+                </div>
+                <div className="payroll-live-total" aria-live="polite">
+                  <span>
+                    {t('payments.insuranceTable.totalToPay')}
+                    {/* The rate is per line, so the total cannot be restated as one
+                        multiplication. What it IS, is the sum of the lines above. */}
+                    <small>
+                      {t('payments.insuranceTable.totalToPayNote', {
+                        months: insuranceMonthRows.filter((row) => row.employed).length,
+                      })}
+                    </small>
+                  </span>
+                  <strong>{money.format(insuranceTotals.amount)}</strong>
+                </div>
+                {/* The computed figure is what the customer will pay by, so the
+                    qualification sits beside it and not at the foot of the page. */}
+                <p className="legal-note">{t('liability.calculation')}</p>
+              </div>
+            ) : null}
             <label>
               סכום בש״ח
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                value={expenseDraft.amount}
-                onChange={(event) =>
-                  setExpenseDraft((current) => ({ ...current, amount: event.target.value }))
-                }
+                value={expenseAmountValue}
+                onChange={(event) => {
+                  setExpenseDraft((current) => ({ ...current, amount: event.target.value }));
+                  setExpenseAmountOverridden(true);
+                }}
               />
               <small>אפשר להשאיר ריק ולהוסיף את הסכום בהמשך. המעקב יישמר בכל מקרה.</small>
+              {isNationalInsuranceExpense ? (
+                <small>
+                  {expenseAmountOverridden
+                    ? 'הסכום הוזן ידנית ומחליף את החישוב שלמעלה.'
+                    : 'הסכום מולא מהחישוב שלמעלה. אפשר להקליד כאן סכום אחר.'}
+                </small>
+              ) : null}
             </label>
             <label>
               תאריך יעד
@@ -1562,6 +2006,8 @@ export function PayrollPage() {
                     dueDate: '',
                     note: '',
                   }));
+                  setInsuranceMonthOverrides({});
+                  setExpenseAmountOverridden(false);
                 }}
               >
                 ביטול עריכה

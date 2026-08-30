@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { withTenant } from '@caredesk/db';
 
 /**
  * Planning-only Future Cost scenario expenses (migration 0034). Rows feed the
@@ -40,20 +41,19 @@ export type ScenarioExpense = ReturnType<typeof output>;
 const columns = `id,label,amount::text,kind,start_month::text,end_month::text,status,version,created_at,updated_at`;
 export class ScenarioExpenseService {
   constructor(private pool: Pool) {}
-  private async tx<T>(tenant: string, work: (c: PoolClient) => Promise<T>) {
-    const c = await this.pool.connect();
-    try {
-      await c.query('begin');
-      await c.query("select set_config('app.tenant_id',$1,true)", [tenant]);
-      const r = await work(c);
-      await c.query('commit');
-      return r;
-    } catch (e) {
-      await c.query('rollback');
-      throw e;
-    } finally {
-      c.release();
-    }
+  /**
+   * Root 6 (API-01) - delegates to the one path to the database.
+   *
+   * The private copy this replaces opened the transaction and set
+   * `app.tenant_id`, but never `set local role caredesk_app`. The role is the
+   * control that matters: an administrative role carries BYPASSRLS, and under
+   * BYPASSRLS every tenant policy is skipped silently - the tenant setting is
+   * then read by policies that never run. Eight services each had their own
+   * copy of this helper and all eight omitted the role. See
+   * scripts/check-tenant-db-path.mjs, which fails CI if a ninth appears.
+   */
+  private tx<T>(tenant: string, work: (client: PoolClient) => Promise<T>) {
+    return withTenant(this.pool, tenant, work);
   }
   private async replay(c: PoolClient, operation: string, key: string, hash: string) {
     const existing = await c.query<{ request_hash: string; response: ScenarioExpense }>(

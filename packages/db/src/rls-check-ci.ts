@@ -2,6 +2,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { Pool } from 'pg';
 import { runMigrations } from './migrate.js';
+import { ensureSupabaseCompatibilityRoles } from './ci-postgres-roles.js';
+import { assertRlsTestTargetIsSafe } from './rls-check-target.js';
 
 /**
  * End-to-end CI adapter for a disposable local PostgreSQL service.
@@ -21,23 +23,18 @@ if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) {
   throw new Error(`CI RLS check refuses non-loopback database host: ${hostname}`);
 }
 
+// The loopback check above is host-shaped and the shared guard is project-ref
+// shaped; they fail on different mistakes. This adapter runs migrations before
+// it delegates to rls-check.ts, so it needs its own copy of the ref check
+// rather than inheriting the one that runs later.
+assertRlsTestTargetIsSafe({
+  connections: [{ name: 'DATABASE_ADMIN_URL', url: adminUrl }],
+  source: process.env,
+});
+
 const admin = new Pool({ connectionString: adminUrl, ssl: false, max: 2 });
 try {
-  await admin.query(`
-    do $$
-    begin
-      if not exists (select 1 from pg_roles where rolname = 'postgres') then
-        create role postgres nologin;
-      end if;
-      if not exists (select 1 from pg_roles where rolname = 'anon') then
-        create role anon nologin;
-      end if;
-      if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-        create role authenticated nologin;
-      end if;
-    end
-    $$;
-  `);
+  await ensureSupabaseCompatibilityRoles(admin);
 
   const here = dirname(fileURLToPath(import.meta.url));
   const migrationsDir = resolve(here, '../../../database/migrations');

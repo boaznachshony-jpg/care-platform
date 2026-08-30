@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEV_TOKEN } from '../container.js';
+import type { DataLossSignal } from '@caredesk/application';
+import { buildContainer, DEV_TOKEN } from '../container.js';
 import { loadEnv } from '../env.js';
 import { buildServer } from '../create-server.js';
 
@@ -87,5 +88,91 @@ describe('/workspace routes', () => {
     });
     expect(invalid.statusCode).toBe(400);
     expect(invalid.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+});
+
+/**
+ * The guard has always refused a destructive save correctly, and has always
+ * refused it silently. That refusal is the 2026-08-29 incident being caught in
+ * the act - and because the write never lands, the nightly census cannot see it
+ * afterwards. If nobody is told at this moment, nobody is told at all.
+ */
+describe('a refused destructive save is reported, not only refused', () => {
+  const populated = (count: number): Record<string, string> =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [`caredesk.mvp.key.${index}`, `value ${index}`]),
+    );
+
+  it('raises a data-loss alert alongside the 409', async () => {
+    const env = loadEnv({});
+    const container = buildContainer(env);
+    const raised: DataLossSignal[] = [];
+    container.dataLossAlerts = {
+      async raise(signal) {
+        raised.push(signal);
+      },
+    };
+    const app = buildServer(env, container);
+
+    await app.inject({
+      method: 'PUT',
+      url: '/workspace',
+      headers: AUTH,
+      payload: { expectedVersion: 0, snapshot: { schemaVersion: 1, entries: populated(29) } },
+    });
+    const blanked = await app.inject({
+      method: 'PUT',
+      url: '/workspace',
+      headers: AUTH,
+      payload: {
+        expectedVersion: 1,
+        snapshot: {
+          schemaVersion: 1,
+          entries: Object.fromEntries(Object.keys(populated(29)).map((key) => [key, ''])),
+        },
+      },
+    });
+
+    expect(blanked.statusCode).toBe(409);
+    expect(blanked.json().code).toBe('WORKSPACE_SHRINK_REJECTED');
+    expect(raised).toHaveLength(1);
+    expect(raised[0]).toMatchObject({
+      code: 'WORKSPACE_BLANKED',
+      measure: 'workspace_populated_entries_rejected',
+      before: 29,
+      after: 0,
+    });
+  });
+
+  it('still returns 409 when the alert transport itself fails', async () => {
+    const env = loadEnv({});
+    const container = buildContainer(env);
+    container.dataLossAlerts = {
+      async raise() {
+        throw new Error('no alert transport configured');
+      },
+    };
+    const app = buildServer(env, container);
+
+    await app.inject({
+      method: 'PUT',
+      url: '/workspace',
+      headers: AUTH,
+      payload: { expectedVersion: 0, snapshot: { schemaVersion: 1, entries: populated(29) } },
+    });
+    const blanked = await app.inject({
+      method: 'PUT',
+      url: '/workspace',
+      headers: AUTH,
+      payload: {
+        expectedVersion: 1,
+        snapshot: {
+          schemaVersion: 1,
+          entries: Object.fromEntries(Object.keys(populated(29)).map((key) => [key, ''])),
+        },
+      },
+    });
+
+    expect(blanked.statusCode).toBe(409);
   });
 });

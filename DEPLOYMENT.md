@@ -1,5 +1,12 @@
 # CareDesk deployment
 
+> Preview and Production must not share a Supabase project. The per-environment
+> variable scoping that keeps them apart is dashboard state, not repository
+> state, so it is written down and verified separately:
+> [`docs/governance/ENVIRONMENT-SEPARATION.md`](docs/governance/ENVIRONMENT-SEPARATION.md).
+> The API refuses to start when a non-production deployment is handed the
+> production database, but only once `PRODUCTION_SUPABASE_PROJECT_REF` is set.
+
 ## Environment promotion model
 
 - `staging` is the closed-release rehearsal branch. Every push must pass the same CI gates as `main` and produces a Vercel Preview deployment.
@@ -39,12 +46,26 @@ Both authentication variables are required in Preview and Production. A hosted b
   - `SUPABASE_PUBLISHABLE_KEY=<publishable key>`
   - `SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>`
   - `SUPABASE_STORAGE_BUCKET=caredesk-private-documents`
+  - `WORKSPACE_ENCRYPTION_KEY=<base64-encoded 32-byte key>`
   - `FAMILY_INVITE_REDIRECT_URL=https://care-platform-web.vercel.app/app`
   - `SUPPORT_DESTINATION_EMAIL=<server-only destination address>`
   - `SUPPORT_FROM_EMAIL=<verified sender address>`
   - `RESEND_API_KEY=<server-only Resend key>`
 
 The storage bucket must be private, limited to PDF/JPEG/PNG and 10 MB per object. The service-role key belongs only in the API project. Never add it to the web project or to a `VITE_` variable.
+
+`WORKSPACE_ENCRYPTION_KEY` encrypts `tenant_workspace.payload` and every
+archived version of it, so it is also the key that every backup is encrypted
+under. Production refuses to start without it once a database is configured.
+Losing it loses the customer data and its entire version history, in every copy,
+permanently: see `docs/governance/ENCRYPTION-KEY-CUSTODY.md` for the escrow this
+requires before it is set.
+
+`CRON_SECRET` authenticates both scheduled endpoints declared in
+`apps/api/vercel.json`: the recurring billing collection and the nightly
+data-loss scan (`/internal/jobs/data-integrity-scan`). Without it the scan
+never runs, and a detector that does not run is not silent - it is blind. Check
+that it ran, not only that it reported nothing.
 
 Contact delivery is also API-only. The destination and provider key must be set
 only on the API project; the web project receives neither value. Verify the
