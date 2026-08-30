@@ -20,6 +20,18 @@ export interface ProductSubscriptionRecord {
   billingEmail: string | null;
   termsVersion: string | null;
   termsAcceptedAt: string | null;
+  /**
+   * Later of the two access-grace anchors (ISO date). Set when the customer
+   * cancels and the stored card is removed, so the grace window runs from the
+   * cancellation rather than from the long-past chargingStartsAt.
+   */
+  accessGraceStartsAt: string | null;
+  /**
+   * When a hosted card setup was last started and not yet completed. Recorded
+   * separately from `status` so an abandoned checkout cannot stop billing for a
+   * customer who already has a working card.
+   */
+  pendingSetupStartedAt: string | null;
   paymentMethod: StoredPaymentMethod | null;
 }
 

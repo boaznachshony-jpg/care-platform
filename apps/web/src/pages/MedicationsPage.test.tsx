@@ -3,7 +3,12 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { initI18n } from '@caredesk/i18n';
 import { MedicationsPage } from './MedicationsPage.js';
-import { readMvpMedications } from '../storage/mvp-storage.js';
+import { readMvpMedications, saveMvpMedications } from '../storage/mvp-storage.js';
+import type { MvpMedication } from '../storage/mvp-storage.js';
+
+const DAILY_LABEL = 'נלקחת כל יום';
+const NO_DAYS_NOTICE =
+  'לא סומן אף יום, ולכן לא תישלח תזכורת על התרופה הזו. סמנו לפחות יום אחד כדי שתזכורות יתחילו להישלח.';
 
 const i18n = initI18n();
 
@@ -113,6 +118,101 @@ describe('MedicationsPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole('button', { name: 'מחיקה' }));
     expect(readMvpMedications()).toHaveLength(0);
+  });
+
+  it('asks which days only once the medication is not taken every day', () => {
+    renderPage();
+    // Nothing to answer while it is daily, so nothing is asked.
+    expect(screen.queryByLabelText('ראשון')).not.toBeInTheDocument();
+    expect(screen.queryByText(NO_DAYS_NOTICE)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(DAILY_LABEL));
+    expect(screen.getByLabelText('ראשון')).toBeInTheDocument();
+    expect(screen.getByLabelText('שבת')).toBeInTheDocument();
+
+    // Ticking the box again puts the question away.
+    fireEvent.click(screen.getByLabelText(DAILY_LABEL));
+    expect(screen.queryByLabelText('ראשון')).not.toBeInTheDocument();
+  });
+
+  it('says plainly that no reminder goes out while no day is chosen', () => {
+    renderPage();
+    fireEvent.click(screen.getByLabelText(DAILY_LABEL));
+    expect(screen.getByText(NO_DAYS_NOTICE)).toBeInTheDocument();
+
+    // The medical disclaimer keeps sole ownership of role="note"; a second one
+    // would make neither of them findable.
+    expect(screen.getAllByRole('note')).toHaveLength(1);
+
+    fireEvent.click(screen.getByLabelText('שני'));
+    expect(screen.queryByText(NO_DAYS_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it('records the chosen days in Sunday-first order, whatever order they were ticked', () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText('שם התרופה'), { target: { value: 'קומדין' } });
+    fireEvent.click(screen.getByLabelText('בוקר'));
+    fireEvent.click(screen.getByLabelText(DAILY_LABEL));
+    fireEvent.click(screen.getByLabelText('חמישי'));
+    fireEvent.click(screen.getByLabelText('ראשון'));
+    fireEvent.click(screen.getByRole('button', { name: 'הוספה' }));
+
+    const stored = readMvpMedications();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.daily).toBe(false);
+    expect(stored[0]!.daysOfWeek).toEqual(['sunday', 'thursday']);
+
+    const row = screen.getByText('קומדין').closest('li');
+    expect(row).toHaveTextContent('לא כל יום');
+    expect(row).toHaveTextContent('ראשון');
+    expect(row).toHaveTextContent('חמישי');
+  });
+
+  it('saves a non-daily medication with no days as an empty list, not as a guess', () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText('שם התרופה'), { target: { value: 'אלטרוקסין' } });
+    fireEvent.click(screen.getByLabelText('בוקר'));
+    fireEvent.click(screen.getByLabelText(DAILY_LABEL));
+    fireEvent.click(screen.getByRole('button', { name: 'הוספה' }));
+
+    const stored = readMvpMedications();
+    expect(stored[0]!.daily).toBe(false);
+    expect(stored[0]!.daysOfWeek).toEqual([]);
+  });
+
+  it('opens a record saved before the day field existed without inventing days', () => {
+    // Exactly what is on disk for an entry written by the previous version:
+    // no `daysOfWeek` key at all.
+    const legacy = {
+      id: 'legacy-1',
+      name: 'ותיקה',
+      dosage: '',
+      timesOfDay: ['morning'],
+      daily: false,
+      prescribingDoctor: '',
+      notes: '',
+      updatedAt: '2026-08-01T09:00:00.000Z',
+    } as MvpMedication;
+    expect('daysOfWeek' in legacy).toBe(false);
+    saveMvpMedications([legacy]);
+
+    renderPage();
+    expect(screen.getByText('ותיקה')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'עריכה' }));
+    // Nothing is pre-ticked, and the screen states the consequence rather than
+    // letting the entry sit silently unreminded as it did before.
+    for (const day of ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']) {
+      expect(screen.getByLabelText(day)).not.toBeChecked();
+    }
+    expect(screen.getByText(NO_DAYS_NOTICE)).toBeInTheDocument();
+
+    // Saving without touching the days leaves the meaning unchanged.
+    fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+    const stored = readMvpMedications();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.daily).toBe(false);
+    expect(stored[0]!.daysOfWeek).toEqual([]);
   });
 
   it('edits an existing entry in place instead of adding a duplicate', () => {

@@ -457,7 +457,7 @@ a {
   inset-block: 0;
   inset-inline-start: 0;
   width: 260px;
-  background: #fff;
+  background: var(--cd-surface);
   border-inline-end: 1px solid #e5e9ef;
   padding: 26px 18px;
   display: flex;
@@ -500,7 +500,7 @@ a {
   display: grid;
   place-items: center;
   background: #151f32;
-  color: #fff;
+  color: var(--cd-surface);
   font-size: 22px;
   font-weight: 800;
 }
@@ -636,7 +636,7 @@ a {
   border: 1px solid #b7c8df;
   border-radius: 14px;
   padding: 3px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .top-actions .font-size-controls button {
   width: 48px;
@@ -679,10 +679,10 @@ a {
   height: 24px;
   display: grid;
   place-items: center;
-  border: 2px solid #fff;
+  border: 2px solid var(--cd-surface);
   border-radius: 999px;
   padding-inline: 5px;
-  color: #fff;
+  color: var(--cd-on-accent);
   background: #c53b32;
   font-size: 0.75rem;
   line-height: 1;
@@ -696,7 +696,7 @@ a {
   overflow: hidden;
   border: 1px solid #c9d5e5;
   border-radius: 20px;
-  background: #fff;
+  background: var(--cd-surface);
   box-shadow: 0 18px 50px rgba(16, 39, 73, 0.22);
 }
 .notification-panel-header {
@@ -860,7 +860,7 @@ a {
   background: #e3a729;
 }
 .status-card {
-  background: var(--cd-surface, #fff);
+  background: var(--cd-surface);
   border: 1px solid #e2e8e5;
   border-radius: 22px;
   padding: 24px;
@@ -871,7 +871,7 @@ a {
   box-shadow: 0 7px 24px rgba(32, 52, 73, 0.045);
 }
 .status-card.good {
-  background: linear-gradient(115deg, #f6fbf8, #fff);
+  background: linear-gradient(115deg, #f6fbf8, var(--cd-surface));
 }
 .status-icon {
   width: 56px;
@@ -914,7 +914,7 @@ a {
 .wizard-card,
 .list-card,
 .settings-list {
-  background: var(--cd-surface, #fff);
+  background: var(--cd-surface);
   border: 1px solid #e4e8ed;
   border-radius: 22px;
   padding: 24px;
@@ -1008,7 +1008,7 @@ a {
   padding: 24px;
   border: 1px solid #ccdaeb;
   border-radius: 24px;
-  background: #fff;
+  background: var(--cd-surface);
   box-shadow: 0 14px 34px rgb(25 57 92 / 9%);
 }
 .client-card-heading {
@@ -1087,7 +1087,7 @@ a {
   padding: 8px 14px;
   border: 1px solid #cbd6e3;
   border-radius: 10px;
-  background: #fff;
+  background: var(--cd-surface);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1219,14 +1219,14 @@ a {
 .primary-button {
   border: 1px solid #1c2b45;
   background: #1c2b45;
-  color: #fff;
+  color: var(--cd-surface);
 }
 .primary-button:hover {
   background: #263d62;
 }
 .secondary-button {
   border: 1px solid #d5dce5;
-  background: #fff;
+  background: var(--cd-surface);
   color: #30415d;
 }
 .secondary-button:hover {
@@ -1280,7 +1280,7 @@ a {
   gap: 18px;
 }
 .task-card {
-  background: #fff;
+  background: var(--cd-surface);
   border: 1px solid #e3e8ee;
   border-radius: 19px;
   padding: 20px;
@@ -1329,7 +1329,7 @@ a {
 .date-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  background: #fff;
+  background: var(--cd-surface);
   border: 1px solid #e4e8ed;
   border-radius: 20px;
   overflow: hidden;
@@ -1361,14 +1361,14 @@ a {
 .filter-row button {
   min-height: 44px;
   border: 1px solid #dce2e9;
-  background: #fff;
+  background: var(--cd-surface);
   border-radius: 999px;
   padding: 8px 16px;
   cursor: pointer;
 }
 .filter-row button.active {
   background: #1c2b45;
-  color: #fff;
+  color: var(--cd-surface);
 }
 .list-card {
   padding: 0;
@@ -1413,13 +1413,17 @@ a {
   height: 44px;
   border-radius: 11px;
   border: 2px solid #cbd3dd;
-  background: #fff;
-  color: #fff;
+  background: var(--cd-surface);
+  color: var(--cd-surface);
   cursor: pointer;
 }
 .completed .check {
   background: #2d8a59;
   border-color: #2d8a59;
+  /* The ✓ glyph only exists in the completed state, and only here does the
+     button carry an accent fill. The base .check keeps color: var(--cd-surface)
+     because there it genuinely is surface-on-surface: same value, no glyph. */
+  color: var(--cd-on-accent);
 }
 .more {
   min-width: 44px;
@@ -1429,7 +1433,7 @@ a {
   font-weight: 800;
 }
 .profile-card {
-  background: linear-gradient(130deg, #fff, #f4f8ff);
+  background: linear-gradient(130deg, var(--cd-surface), #f4f8ff);
   border: 1px solid #e0e6ef;
   border-radius: 23px;
   padding: 25px;
@@ -1507,7 +1511,7 @@ a {
   min-height: 165px;
   border-radius: 22px;
   padding: 20px;
-  color: #fff;
+  color: var(--cd-on-accent);
   display: flex;
   flex-direction: column;
   box-shadow: 0 14px 30px rgba(31, 57, 93, 0.12);
@@ -1537,7 +1541,7 @@ a {
   gap: 15px;
 }
 .document-card {
-  background: #fff;
+  background: var(--cd-surface);
   border: 1px solid #e4e8ed;
   border-radius: 18px;
   padding: 18px;
@@ -1557,7 +1561,7 @@ a {
   border-radius: 12px;
   padding: 0 16px;
   color: #a52828;
-  background: #fff;
+  background: var(--cd-surface);
   font-weight: 800;
 }
 .document-editor {
@@ -1815,7 +1819,7 @@ a {
 }
 .timeline {
   position: relative;
-  background: var(--cd-surface, #fff);
+  background: var(--cd-surface);
   border: 1px solid #e4e8ed;
   border-radius: 22px;
   padding: 20px 25px;
@@ -1847,7 +1851,7 @@ a {
   margin-top: 22px;
   z-index: 1;
   background: #7f8997;
-  border: 4px solid #fff;
+  border: 4px solid var(--cd-surface);
   box-shadow: 0 0 0 2px #dce2e8;
 }
 .timeline-dot.amber {
@@ -1925,7 +1929,7 @@ a {
   border: 1px solid #ced6e0;
   border-radius: 12px;
   padding: 0 13px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .form-grid {
   display: grid;
@@ -2696,7 +2700,7 @@ body {
   min-height: 44px;
   padding: 8px 16px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--cd-surface);
   border: 1px solid #dce3eb;
   font-weight: 800;
 }
@@ -2822,7 +2826,7 @@ body {
   border: 2px solid #cbd4df;
   border-radius: 14px;
   padding: 0 16px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .readable-form input:focus,
 .readable-form select:focus {
@@ -2874,7 +2878,7 @@ body {
   flex: 0 0 42px;
   border-radius: 50%;
   background: #24764b;
-  color: #fff;
+  color: var(--cd-on-accent);
   font-size: 24px;
   font-weight: 900;
 }
@@ -2889,7 +2893,7 @@ body {
   gap: 3px;
   padding: 12px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .licensed-bureau-summary dt {
   color: #687587;
@@ -3019,7 +3023,7 @@ body {
   --cd-success-soft: #e1f6ea;
   --cd-warning: #c96908;
   --cd-warning-soft: #fff0dc;
-  --cd-surface: #ffffff;
+  --cd-surface: #fff;
   --cd-canvas: #eef3f9;
   --cd-border: #d3dde9;
   --cd-focus: #0b4f9c;
@@ -3050,6 +3054,23 @@ body {
   --cd-accent-on-soft: #124f9f;
   --cd-success-on-soft: #17653a;
   --cd-warning-on-soft: #6f5212;
+
+  /* Foreground for text sitting *on* a saturated accent fill — a filled
+     primary button, a badge, a gradient card. Distinct from --cd-surface,
+     which is the page/card background colour.
+
+     Read this before "fixing" it: this token is #fff in BOTH themes, and that
+     is deliberate, not an oversight. The backgrounds it pairs with (#175fc7,
+     #1f64c7, #24764b, #27845b, #2d8a59, #c53b32, the wallet and pilot
+     gradients) are hardcoded literals that do not change between themes —
+     they are already dark and saturated in light mode. A foreground only has
+     to flip when its background flips, and these do not. Giving this token a
+     dark value under [data-theme='dark'] would put near-black text on a
+     saturated fill and drop those pairings below 4.5:1.
+
+     If a future change makes one of those fills theme-aware, that fill needs
+     its own on-* token; do not repurpose this one. */
+  --cd-on-accent: #fff;
 
   /* Danger is the one genuinely missing role: 13 red variants in use and no
      token at all, even though .danger-button already gets a dark override. */
@@ -3194,7 +3215,7 @@ select:focus-visible {
   padding: 14px 16px;
   border: 2px solid var(--cd-border);
   border-radius: 16px;
-  background: #fff;
+  background: var(--cd-surface);
   line-height: 1.35;
   cursor: pointer;
 }
@@ -3334,7 +3355,7 @@ textarea,
   min-height: var(--cd-control-height);
   border: var(--cd-control-border) solid #b7c5d6;
   border-radius: var(--cd-control-radius);
-  background: #fff;
+  background: var(--cd-surface);
   color: var(--cd-ink);
   font: inherit;
 }
@@ -3573,10 +3594,10 @@ input[type='number'] {
 .public-login-link {
   border: 2px solid #c5d4e7;
   color: #174f9e;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .public-primary-action {
-  color: #fff;
+  color: var(--cd-on-accent);
   background: #175fc7;
   box-shadow: 0 12px 26px rgb(23 95 199 / 22%);
 }
@@ -3587,7 +3608,7 @@ input[type='number'] {
 .public-secondary-action {
   border: 2px solid #bfd0e4;
   color: #174f9e;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .public-hero {
   position: relative;
@@ -3714,7 +3735,7 @@ input[type='number'] {
   flex: 0 0 47px;
   place-items: center;
   border-radius: 16px;
-  color: #fff;
+  color: var(--cd-on-accent);
   background: #27845b;
   font-size: 24px;
   font-weight: 900;
@@ -3774,7 +3795,7 @@ input[type='number'] {
   padding: 28px;
   border: 1px solid #d9e3ef;
   border-radius: 26px;
-  background: #fff;
+  background: var(--cd-surface);
   box-shadow: 0 14px 40px rgb(28 58 92 / 7%);
 }
 .public-feature-grid article > span {
@@ -3848,7 +3869,7 @@ input[type='number'] {
   overflow: hidden;
   border: 1px solid #d3dfec;
   border-radius: 20px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .public-faq summary {
   min-height: 70px;
@@ -3883,7 +3904,7 @@ input[type='number'] {
   padding: clamp(32px, 5vw, 58px);
   border-radius: 32px;
   background: linear-gradient(130deg, #112742, #1c3c64);
-  color: #fff;
+  color: var(--cd-on-accent);
 }
 .public-pilot > div {
   max-width: 770px;
@@ -3929,7 +3950,7 @@ input[type='number'] {
   padding: clamp(22px, 3vw, 30px);
   border: 1px solid #d5e1ef;
   border-radius: 24px;
-  background: #fff;
+  background: var(--cd-surface);
   box-shadow: 0 12px 34px rgb(28 58 92 / 7%);
 }
 .contact-option-card h2 {
@@ -3972,10 +3993,10 @@ input[type='number'] {
 }
 .contact-option-action-primary {
   background: #1f64c7;
-  color: #fff;
+  color: var(--cd-on-accent);
 }
 .contact-option-action-secondary {
-  background: #fff;
+  background: var(--cd-surface);
   color: #174f9e;
 }
 .contact-option-action:hover {
@@ -3991,7 +4012,7 @@ input[type='number'] {
   padding: 22px 26px;
   border: 1px solid #d5e1ef;
   border-radius: 20px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .contact-direct-card strong {
   color: #17385e;
@@ -4039,7 +4060,7 @@ input[type='number'] {
   padding: clamp(24px, 4vw, 38px);
   border: 1px solid #d5e1ef;
   border-radius: 24px;
-  background: #fff;
+  background: var(--cd-surface);
   box-shadow: 0 12px 34px rgb(28 58 92 / 7%);
 }
 .contact-about h2 {
@@ -4086,7 +4107,7 @@ input[type='number'] {
   overflow-y: auto;
   padding: clamp(22px, 4vw, 34px);
   border-radius: 26px;
-  background: #fff;
+  background: var(--cd-surface);
   box-shadow: 0 28px 80px rgb(5 23 44 / 35%);
 }
 .contact-dialog-heading {
@@ -4136,7 +4157,7 @@ input[type='number'] {
   padding: 14px 16px;
   border: 2px solid #b9cce2;
   border-radius: 16px;
-  background: #fff;
+  background: var(--cd-surface);
   color: #102a4c;
   font: inherit;
 }
@@ -4242,7 +4263,7 @@ input[type='number'] {
   padding: clamp(24px, 4vw, 38px);
   border: 1px solid #d8e3ef;
   border-radius: 26px;
-  background: #fff;
+  background: var(--cd-surface);
 }
 .public-guide > article h2 {
   font-size: clamp(25px, 3vw, 34px);
@@ -4931,7 +4952,7 @@ input[type='number'] {
     padding: 14px 16px;
     border: 2px solid var(--cd-border);
     border-radius: 16px;
-    background: #fff;
+    background: var(--cd-surface);
   }
 
   .onboarding-choice-group input[type='radio'] {
@@ -5569,7 +5590,7 @@ input[type='number'] {
   padding: 1.25rem;
   border: 1px solid #b8d5cf;
   border-radius: 1rem;
-  background: linear-gradient(135deg, #f4fbf9, #fff);
+  background: linear-gradient(135deg, #f4fbf9, var(--cd-surface));
 }
 .automation-panel h2,
 .automation-panel h3 {
@@ -5693,7 +5714,7 @@ input[type='number'] {
   margin: 0;
   padding: 6px;
   list-style: none;
-  background: #fff;
+  background: var(--cd-surface);
   border: 2px solid #cbd4df;
   border-radius: 14px;
   box-shadow: 0 12px 28px rgb(16 42 67 / 16%);
@@ -5812,7 +5833,7 @@ input[type='number'] {
   cursor: pointer;
 }
 .dash-tab.active {
-  background: #fff;
+  background: var(--cd-surface);
   color: #172033;
   box-shadow: 0 3px 10px rgba(24, 52, 89, 0.12);
 }
@@ -5830,7 +5851,7 @@ input[type='number'] {
   padding: 22px 20px;
   border: 1px solid var(--cd-border);
   border-radius: 20px;
-  background: var(--cd-surface, #fff);
+  background: var(--cd-surface);
   box-shadow: var(--cd-shadow);
   color: inherit;
   text-decoration: none;
@@ -5906,6 +5927,13 @@ input[type='number'] {
   --cd-danger: #f4645c;
   --cd-danger-soft: rgba(244, 100, 92, 0.18);
   --cd-danger-on-soft: #f4a19b;
+
+  /* Restated identically to the light value on purpose — see the long note on
+     --cd-on-accent in :root. The fills it sits on are theme-invariant
+     literals, so the foreground is theme-invariant too. It is repeated here
+     rather than left to inherit so that anyone reading only the dark block
+     sees the value and the intent instead of assuming it was forgotten. */
+  --cd-on-accent: #fff;
 }
 
 /* "Gold on Night" icon gradient — brighter approved stops on dark tiles only.

@@ -42,6 +42,12 @@ export interface BillingPlanResponse {
   effectivePriceAgorot: number;
   chargingStartsAt: string | null;
   nextChargeOn: string | null;
+  /**
+   * ISO date from which the current grace window is measured — set when the
+   * subscription is cancelled and the stored card removed. Null while the
+   * window (if any) runs from chargingStartsAt.
+   */
+  accessGraceStartsAt: string | null;
   billingName: string | null;
   billingEmail: string | null;
   paymentMethod: {
@@ -55,6 +61,12 @@ export interface BillingPlanResponse {
   accessState: BillingAccessState;
   /** Whole days left in the grace window; null unless accessState is 'grace'. */
   graceDaysRemaining: number | null;
+  /**
+   * Length of the configured grace window in days. The UI needs it *before*
+   * the window opens — the cancellation dialog has to say how long access
+   * lasts after the card is removed.
+   */
+  graceDays: number;
 }
 
 export interface BillingCheckoutResponse {

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  MEDICATION_DAYS,
   MEDICATION_TIMES,
   readMvpMedications,
   saveMvpMedications,
   type MvpMedication,
+  type MvpMedicationDay,
   type MvpMedicationTime,
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
@@ -23,7 +25,15 @@ import { ReminderRecipientsSection } from '../components/ReminderRecipientsSecti
  * It records what the family already knows. It does not advise.
  */
 function emptyDraft(): Omit<MvpMedication, 'id' | 'updatedAt'> {
-  return { name: '', dosage: '', timesOfDay: [], daily: true, prescribingDoctor: '', notes: '' };
+  return {
+    name: '',
+    dosage: '',
+    timesOfDay: [],
+    daily: true,
+    daysOfWeek: [],
+    prescribingDoctor: '',
+    notes: '',
+  };
 }
 
 export function MedicationsPage() {
@@ -47,6 +57,20 @@ export function MedicationsPage() {
         ? current.timesOfDay.filter((item) => item !== time)
         : [...current.timesOfDay, time],
     }));
+  }
+
+  function toggleDay(day: MvpMedicationDay): void {
+    setDraft((current) => {
+      const days = current.daysOfWeek ?? [];
+      return {
+        ...current,
+        daysOfWeek: days.includes(day)
+          ? days.filter((item) => item !== day)
+          : // Stored in the canonical Sunday-first order rather than in tick
+            // order, so the record reads the way the week is spoken.
+            MEDICATION_DAYS.filter((item) => item === day || days.includes(item)),
+      };
+    });
   }
 
   function submit(event: React.FormEvent): void {
@@ -73,6 +97,10 @@ export function MedicationsPage() {
       dosage: medication.dosage,
       timesOfDay: medication.timesOfDay,
       daily: medication.daily,
+      // A record saved before the day picker existed has no list at all. It
+      // opens with nothing ticked and the form says plainly that no reminder
+      // goes out until days are chosen - which is what it was already doing.
+      daysOfWeek: medication.daysOfWeek ?? [],
       prescribingDoctor: medication.prescribingDoctor,
       notes: medication.notes,
     });
@@ -112,6 +140,11 @@ export function MedicationsPage() {
                   <small>
                     {medication.dosage ? `${medication.dosage} · ` : ''}
                     {medication.daily ? t('medications.daily') : t('medications.notDaily')}
+                    {!medication.daily && (medication.daysOfWeek?.length ?? 0) > 0
+                      ? ` (${MEDICATION_DAYS.filter((day) => medication.daysOfWeek?.includes(day))
+                          .map((day) => t(`medications.day.${day}`))
+                          .join(', ')})`
+                      : ''}
                     {medication.timesOfDay.length > 0
                       ? ` · ${medication.timesOfDay.map((time) => t(`medications.time.${time}`)).join(', ')}`
                       : ` · ${t('medications.asNeeded')}`}
@@ -202,6 +235,38 @@ export function MedicationsPage() {
           />
           {t('medications.dailyLabel')}
         </label>
+
+        {/* Only asked when it matters. A medication taken every day has no day
+            list to fill in, and showing seven empty checkboxes under "taken
+            every day" invites someone to tick three of them and quietly halve
+            their own reminders. */}
+        {draft.daily ? null : (
+          <fieldset className="medications-times">
+            <legend>{t('medications.daysLegend')}</legend>
+            {MEDICATION_DAYS.map((day) => (
+              <label key={day}>
+                <input
+                  type="checkbox"
+                  checked={(draft.daysOfWeek ?? []).includes(day)}
+                  onChange={() => toggleDay(day)}
+                />
+                {t(`medications.day.${day}`)}
+              </label>
+            ))}
+            <small>{t('medications.daysHint')}</small>
+          </fieldset>
+        )}
+
+        {/* Said on the screen, not only in the scheduler's log. The failure this
+            product exists to prevent is the reminder nobody knew was missing,
+            so the one state that sends nothing has to announce itself.
+            Deliberately not role="note": the medical disclaimer above owns that
+            role on this page, and a second one would make it unfindable. */}
+        {!draft.daily && (draft.daysOfWeek ?? []).length === 0 ? (
+          <p className="action-notice error medications-days-missing">
+            {t('medications.daysMissing')}
+          </p>
+        ) : null}
 
         <label>
           {t('medications.notes')}

@@ -126,8 +126,14 @@ export function BillingPage() {
     }
   }
 
+  /**
+   * Cancelling removes the stored card, and losing the card is what eventually
+   * freezes the account. The dialog therefore has to name that consequence and
+   * the deadline — the old wording only mentioned stopping future charges, so
+   * the lockout arrived as a surprise.
+   */
   async function cancelSubscription() {
-    if (!window.confirm(t('billing.cancelConfirm'))) return;
+    if (!window.confirm(t('billing.cancelConfirm', { days: plan?.graceDays ?? 0 }))) return;
     setBusy(true);
     setError(false);
     try {
