@@ -47,6 +47,7 @@ Both authentication variables are required in Preview and Production. A hosted b
   - `SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>`
   - `SUPABASE_STORAGE_BUCKET=caredesk-private-documents`
   - `WORKSPACE_ENCRYPTION_KEY=<base64-encoded 32-byte key>`
+  - `WORKSPACE_ENCRYPTION_PREVIOUS_KEYS=<comma-separated retired keys>` — only during a rotation
   - `FAMILY_INVITE_REDIRECT_URL=https://care-platform-web.vercel.app/app`
   - `SUPPORT_DESTINATION_EMAIL=<server-only destination address>`
   - `SUPPORT_FROM_EMAIL=<verified sender address>`
@@ -60,6 +61,16 @@ under. Production refuses to start without it once a database is configured.
 Losing it loses the customer data and its entire version history, in every copy,
 permanently: see `docs/governance/ENCRYPTION-KEY-CUSTODY.md` for the escrow this
 requires before it is set.
+
+Rotating it is a process, not an event. Every envelope records a `keyId` derived
+from the key that sealed it, so a deployment can hold several keys and still know
+which one each row needs. To rotate: put the new key in `WORKSPACE_ENCRYPTION_KEY`
+and move the outgoing one to `WORKSPACE_ENCRYPTION_PREVIOUS_KEYS`, deploy, let the
+data be rewritten, then drop the retired key. Rows written before `keyId` existed
+carry none, and are opened by trying each configured key in turn - GCM
+authenticates, so a wrong key throws rather than returning plausible nonsense.
+Put the new key into escrow **before** it reaches any deployment: a key that
+exists only in a write-only environment variable cannot be copied afterwards.
 
 `CRON_SECRET` authenticates both scheduled endpoints declared in
 `apps/api/vercel.json`: the recurring billing collection and the nightly

@@ -22,11 +22,11 @@ interface WorkspaceRow {
   updated_at: Date;
 }
 
-function toRecord(row: WorkspaceRow, encodedKey?: string): WorkspaceRecord {
+function toRecord(row: WorkspaceRow, keys?: string | readonly string[]): WorkspaceRecord {
   return {
     tenantId: row.tenant_id,
     schemaVersion: row.schema_version,
-    payload: decryptPayload(row.payload, row.tenant_id, encodedKey),
+    payload: decryptPayload(row.payload, row.tenant_id, keys),
     version: row.version,
     updatedAt: row.updated_at.toISOString(),
   };
@@ -35,7 +35,7 @@ function toRecord(row: WorkspaceRow, encodedKey?: string): WorkspaceRecord {
 export class PgWorkspaceRepository implements WorkspaceRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly encryptionKey?: string,
+    private readonly encryptionKeys?: string | readonly string[],
   ) {}
 
   async find(tenantId: string): Promise<WorkspaceRecord | null> {
@@ -47,8 +47,8 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
         [tenantId],
       );
       const row = result.rows[0];
-      if (row && this.encryptionKey && !isEncryptedEnvelope(row.payload)) {
-        const encrypted = encryptPayload(row.payload, row.tenant_id, this.encryptionKey);
+      if (row && this.encryptionKeys && !isEncryptedEnvelope(row.payload)) {
+        const encrypted = encryptPayload(row.payload, row.tenant_id, this.encryptionKeys);
         await client.query(
           `update tenant_workspace
               set payload = $2::jsonb
@@ -56,7 +56,7 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
           [row.tenant_id, JSON.stringify(encrypted), JSON.stringify(row.payload)],
         );
       }
-      return row ? toRecord(row, this.encryptionKey) : null;
+      return row ? toRecord(row, this.encryptionKeys) : null;
     });
   }
 
@@ -78,7 +78,7 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
         );
         const current = existing.rows[0];
         if (current) {
-          const stored = decryptPayload(current.payload, current.tenant_id, this.encryptionKey);
+          const stored = decryptPayload(current.payload, current.tenant_id, this.encryptionKeys);
           if (isDestructiveShrink(stored, input.payload)) {
             throw new WorkspaceShrinkRejectedError(
               populatedEntryCount(stored),
@@ -99,7 +99,7 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
               [
                 input.tenantId,
                 input.schemaVersion,
-                JSON.stringify(encryptPayload(input.payload, input.tenantId, this.encryptionKey)),
+                JSON.stringify(encryptPayload(input.payload, input.tenantId, this.encryptionKeys)),
                 input.updatedBy,
                 input.updatedAt,
               ],
@@ -116,14 +116,14 @@ export class PgWorkspaceRepository implements WorkspaceRepository {
               [
                 input.tenantId,
                 input.schemaVersion,
-                JSON.stringify(encryptPayload(input.payload, input.tenantId, this.encryptionKey)),
+                JSON.stringify(encryptPayload(input.payload, input.tenantId, this.encryptionKeys)),
                 input.expectedVersion,
                 input.updatedBy,
                 input.updatedAt,
               ],
             );
       const row = result.rows[0];
-      return row ? toRecord(row, this.encryptionKey) : null;
+      return row ? toRecord(row, this.encryptionKeys) : null;
     });
   }
 }

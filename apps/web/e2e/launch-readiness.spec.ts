@@ -449,9 +449,21 @@ test.describe('launch readiness interactions', () => {
   test('unfinished internal API routes cannot expose a broken screen', async ({ page }) => {
     await seedCompletedProfile(page);
 
-    await page.goto('/cases/new');
-    await expect(page).toHaveURL('/');
     await page.goto('/cases/not-a-public-route');
     await expect(page).toHaveURL('/');
+  });
+
+  test('case creation is reachable from the product, not only by pasting a UUID', async ({
+    page,
+  }) => {
+    // WEB-11: /cases/new used to redirect to the marketing page, so nothing in
+    // the product could create an EmploymentCase and every canonical screen was
+    // a dead end. This asserts the route exists and is private, which is the
+    // whole of that finding.
+    const { clientHome } = await seedCompletedProfile(page);
+
+    await page.goto(`${clientHome}/cases/new`);
+    await expect(page).not.toHaveURL('/');
+    await expect(page.getByRole('heading', { name: 'פתיחת תיק העסקה' })).toBeVisible();
   });
 });

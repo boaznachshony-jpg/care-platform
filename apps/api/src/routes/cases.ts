@@ -14,6 +14,7 @@ function toResponse(graph: EmploymentCaseGraph): EmploymentCaseResponse {
     status: graph.employmentCase.status,
     startDate: graph.employmentCase.startDate,
     endDate: graph.employmentCase.endDate,
+    legacyClientId: graph.employmentCase.legacyClientId,
     careRecipient: {
       id: graph.careRecipient.id,
       fullName: graph.careRecipient.fullName,

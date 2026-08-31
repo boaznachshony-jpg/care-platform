@@ -6,6 +6,7 @@ import {
   caregiverLanguages,
   languageAfterCountryChange,
 } from '../caregiver-options.js';
+import { ensureCanonicalCase, LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
 import { AutocompleteField } from '../components/AutocompleteField.js';
 import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import { israeliLocalities } from '../data/israeli-localities.js';
@@ -287,6 +288,25 @@ export function OnboardingPage() {
     setProfile(completed);
     clearMvpOnboardingDraft();
     window.localStorage.removeItem(stepStorageKey(clientId));
+
+    // This is the step code review WEB-11 found missing. Finishing setup is the
+    // moment the household becomes a real employment relationship, so it is the
+    // moment the canonical `EmploymentCase` is opened — from the details the
+    // user just gave, linked to this client
+    // (`employment_case.legacy_client_id`, migration 0042). Without it nothing
+    // in the product ever created a case and every canonical screen was a dead
+    // end.
+    //
+    // Deliberately not awaited. Setup must finish offline, the call is
+    // idempotent per client, and the retry points are OpenCasePage and the
+    // emergency binder — so a failure here costs the user nothing and blocking
+    // the last click of a six-step wizard on a network request would.
+    void ensureCanonicalCase(
+      clientId || LEGACY_UNSCOPED_CLIENT_ID,
+      t('case.defaultRelationship'),
+      completed,
+    );
+
     navigate(isFirstRun ? '/billing?from=onboarding' : path('/'));
   }
 

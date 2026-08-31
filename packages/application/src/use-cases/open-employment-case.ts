@@ -25,6 +25,12 @@ export interface OpenEmploymentCaseInput {
     primaryLanguage?: string;
   };
   startDate: string;
+  /**
+   * The legacy browser client this case is being opened for (ADR-006
+   * provenance). Present when case creation is driven from the end of
+   * onboarding; absent when a case is opened directly in the canonical product.
+   */
+  legacyClientId?: string;
 }
 
 export interface OpenEmploymentCaseDeps {
@@ -50,6 +56,24 @@ export class OpenEmploymentCase {
       action: 'create',
       sensitivity: 'employment_sensitive',
     });
+
+    // Idempotence before creation. Onboarding is completed more than once in
+    // practice - a retry after a failed request, a second tab, a customer who
+    // walks back through the wizard - and each of those used to be a second
+    // canonical case for one household. Returning the existing case makes the
+    // call safe to repeat, which is what lets the web client retry it freely
+    // instead of recording "did I already do this?" in the legacy snapshot.
+    //
+    // This returns early on purpose: no second audit or timeline entry, because
+    // nothing happened. The unique index in migration 0042 is the second line
+    // for the case where two requests pass this check concurrently.
+    if (input.legacyClientId) {
+      const existing = await this.deps.repository.findCaseGraphByLegacyClientId(
+        actor.tenantId,
+        input.legacyClientId,
+      );
+      if (existing) return existing.employmentCase;
+    }
 
     const now = this.deps.clock.now().toISOString();
     const graph: EmploymentCaseGraph = {
@@ -85,6 +109,7 @@ export class OpenEmploymentCase {
         startDate: input.startDate,
         endDate: null,
         status: 'draft',
+        legacyClientId: input.legacyClientId ?? null,
       },
     };
     graph.employmentCase.careRecipientId = graph.careRecipient.id;

@@ -90,6 +90,77 @@ describe('OpenEmploymentCase', () => {
     expect(timeline.events[0]?.eventTypeKey).toBe('timeline.case.opened');
   });
 
+  // --- ADR-006 / WEB-11: the legacy client link -------------------------
+
+  it('records the legacy client link, or null when none was given', async () => {
+    const { authorization, openCase } = buildHarness();
+    authorization.seedMembership({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'owner',
+      status: 'active',
+    });
+
+    const unlinked = await openCase.execute(OWNER, INPUT);
+    expect(unlinked.legacyClientId).toBeNull();
+
+    const linked = await openCase.execute(OWNER, {
+      ...INPUT,
+      legacyClientId: 'client-synthetic-a',
+    });
+    expect(linked.legacyClientId).toBe('client-synthetic-a');
+  });
+
+  it('returns the existing case instead of opening a second one for the same client', async () => {
+    const { authorization, openCase, audit, timeline } = buildHarness();
+    authorization.seedMembership({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'owner',
+      status: 'active',
+    });
+    const input = { ...INPUT, legacyClientId: 'client-synthetic-a' };
+
+    const first = await openCase.execute(OWNER, input);
+    const second = await openCase.execute(OWNER, input);
+
+    expect(second.id).toBe(first.id);
+    // Nothing happened the second time, so nothing is recorded as having
+    // happened: a duplicate "case opened" entry in the audit trail or the
+    // customer's timeline would be a lie about their own history.
+    expect(audit.events).toHaveLength(1);
+    expect(timeline.events).toHaveLength(1);
+  });
+
+  it('scopes the link per tenant, so two tenants may use the same client id', async () => {
+    const { authorization, openCase } = buildHarness();
+    for (const [userId, tenantId] of [
+      ['user-1', 'tenant-1'],
+      ['user-2', 'tenant-2'],
+    ]) {
+      authorization.seedMembership({
+        userId: userId!,
+        tenantId: tenantId!,
+        role: 'owner',
+        status: 'active',
+      });
+    }
+    const input = { ...INPUT, legacyClientId: 'client-synthetic-a' };
+
+    const first = await openCase.execute(OWNER, input);
+    const second = await openCase.execute(
+      { userId: 'user-2', tenantId: 'tenant-2', correlationId: 'corr-2' },
+      input,
+    );
+
+    // The unique index in 0042 is (tenant_id, legacy_client_id). A browser
+    // client id is generated locally and carries no tenant, so two tenants
+    // colliding on one must not make the second tenant adopt the first
+    // tenant's case.
+    expect(second.id).not.toBe(first.id);
+    expect(second.tenantId).toBe('tenant-2');
+  });
+
   it("never returns another tenant's case, even to an authorized user", async () => {
     const { authorization, openCase, getCase } = buildHarness();
     authorization.seedMembership({

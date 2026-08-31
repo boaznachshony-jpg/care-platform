@@ -17,12 +17,38 @@ export class InMemoryCaseFoundationRepository implements CaseFoundationRepositor
 
     const tenantGraphs =
       this.graphsByTenant.get(tenantId) ?? new Map<string, EmploymentCaseGraph>();
+
+    // Mirrors employment_case_legacy_client_unique (migration 0042). DB-15 in
+    // the code review is exactly this class of gap: a mock that enforces none
+    // of the database's protective constraints turns a production-only failure
+    // into a green test. A second case for one legacy client is the duplicate
+    // this whole link exists to prevent, so the mock refuses it too.
+    const legacyClientId = graph.employmentCase.legacyClientId;
+    if (
+      legacyClientId !== null &&
+      [...tenantGraphs.values()].some(
+        (existing) => existing.employmentCase.legacyClientId === legacyClientId,
+      )
+    ) {
+      throw new Error('Duplicate legacy client link rejected.');
+    }
+
     tenantGraphs.set(graph.employmentCase.id, graph);
     this.graphsByTenant.set(tenantId, tenantGraphs);
   }
 
   async findCaseGraph(tenantId: string, caseId: string): Promise<EmploymentCaseGraph | null> {
     return this.graphsByTenant.get(tenantId)?.get(caseId) ?? null;
+  }
+
+  async findCaseGraphByLegacyClientId(
+    tenantId: string,
+    legacyClientId: string,
+  ): Promise<EmploymentCaseGraph | null> {
+    for (const graph of this.graphsByTenant.get(tenantId)?.values() ?? []) {
+      if (graph.employmentCase.legacyClientId === legacyClientId) return graph;
+    }
+    return null;
   }
 
   async listCaseGraphs(tenantId: string): Promise<EmploymentCaseGraph[]> {

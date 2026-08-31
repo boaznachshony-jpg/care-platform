@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
+import type { EmploymentCaseResponse } from '@caredesk/schemas';
 
 // Canonical API mocks — the new EmergencyBinderPage reads from authenticated
 // case APIs, not mvp-storage. Constitution §16: synthetic data only.
@@ -9,17 +11,37 @@ const mocks = vi.hoisted(() => ({
   createBinderExport: vi.fn(),
 }));
 
+const DEMO_CASE: EmploymentCaseResponse = {
+  id: 'case-demo-001',
+  careRecipient: {
+    id: 'recipient-demo-001',
+    fullName: 'רות כהן (הדגמה)',
+    careLevel: null,
+    city: null,
+  },
+  caregiver: {
+    id: 'caregiver-demo-001',
+    legalName: 'Ana Reyes',
+    preferredName: 'Ana',
+    nationality: 'הפיליפינים',
+    primaryLanguage: null,
+  },
+  employer: {
+    id: 'employer-demo-001',
+    fullName: 'דנה כהן (הדגמה)',
+    relationshipToRecipient: 'בת',
+    city: null,
+  },
+  startDate: '2025-01-14',
+  endDate: null,
+  status: 'active',
+  // Predates migration 0042: no link to a legacy client. Kept null on purpose
+  // so the existing behaviour - the user picks - is what these tests cover.
+  legacyClientId: null,
+};
+
 vi.mock('../api/client.js', () => ({
-  listEmploymentCases: vi.fn().mockResolvedValue([
-    {
-      id: 'case-demo-001',
-      careRecipient: { fullName: 'רות כהן (הדגמה)' },
-      caregiver: { legalName: 'Ana Reyes', preferredName: 'Ana' },
-      employer: { fullName: 'דנה כהן (הדגמה)' },
-      startDate: '2025-01-14',
-      status: 'active',
-    },
-  ]),
+  listEmploymentCases: vi.fn(),
   listCaseDocuments: vi.fn().mockResolvedValue([
     {
       id: 'doc-demo-001',
@@ -50,6 +72,7 @@ vi.mock('../api/client.js', () => ({
   createBinderExport: mocks.createBinderExport,
 }));
 
+import { listEmploymentCases } from '../api/client.js';
 import { EmergencyBinderPage } from './EmergencyBinderPage.js';
 
 const DEMO_RECEIPT = {
@@ -65,10 +88,20 @@ const DEMO_RECEIPT = {
   createdAt: '2026-08-19T10:00:00.000Z',
 };
 
-function renderPage() {
+/**
+ * The binder resolves "which case is this client's?" from the path, so it needs
+ * a router. `/binder` is the unscoped legacy entry point; pass a
+ * `/clients/:clientId/binder` path to exercise the scoped one.
+ */
+function renderPage(path = '/binder') {
   return render(
     <I18nextProvider i18n={initI18n()}>
-      <EmergencyBinderPage />
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/binder" element={<EmergencyBinderPage />} />
+          <Route path="/clients/:clientId/binder" element={<EmergencyBinderPage />} />
+        </Routes>
+      </MemoryRouter>
     </I18nextProvider>,
   );
 }
@@ -85,10 +118,56 @@ describe('EmergencyBinderPage', () => {
   const printMock = vi.fn();
 
   beforeEach(() => {
+    vi.mocked(listEmploymentCases).mockReset();
+    vi.mocked(listEmploymentCases).mockResolvedValue([DEMO_CASE]);
     mocks.createBinderExport.mockReset();
     mocks.createBinderExport.mockResolvedValue({ receipt: DEMO_RECEIPT, replayed: false });
     printMock.mockReset();
     window.print = printMock;
+  });
+
+  // --- WEB-11: the binder is no longer a dead end -----------------------
+  //
+  // Before migration 0042 and the canonical-case link, this screen was in the
+  // mobile nav, called listEmploymentCases(), and showed every real user
+  // "לא נמצא תיק העסקה פעיל." forever, because nothing in the product created a
+  // case. These two tests fail without the link and without the empty-state
+  // call to action.
+
+  it('opens on the case linked to this client instead of an empty picker', async () => {
+    vi.mocked(listEmploymentCases).mockResolvedValue([
+      { ...DEMO_CASE, id: 'case-other-001', legacyClientId: 'client-other' },
+      { ...DEMO_CASE, legacyClientId: 'client-a' },
+    ]);
+
+    renderPage('/clients/client-a/binder');
+
+    // Selected without the user touching the picker, and it is the linked case
+    // - not merely the first one returned.
+    await waitFor(() => expect(screen.getByText('2026-07')).toBeInTheDocument());
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('case-demo-001');
+    // And the canonical case screen is now linked, not reachable only by
+    // pasting a UUID into the address bar.
+    expect(screen.getByRole('link', { name: /תיק ההעסקה המלא/ })).toHaveAttribute(
+      'href',
+      '/cases/case-demo-001',
+    );
+  });
+
+  it('leaves the picker alone when no case is linked to this client', async () => {
+    renderPage('/clients/client-a/binder');
+    await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
+    // DEMO_CASE predates 0042 (legacyClientId null): the user still chooses.
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('');
+  });
+
+  it('offers case creation instead of a dead end when the tenant has no case', async () => {
+    vi.mocked(listEmploymentCases).mockResolvedValue([]);
+
+    renderPage('/clients/client-a/binder');
+
+    const link = await screen.findByRole('link', { name: /פתיחת תיק העסקה/ });
+    expect(link).toHaveAttribute('href', '/clients/client-a/cases/new');
   });
 
   it('loads and displays employment cases for selection', async () => {

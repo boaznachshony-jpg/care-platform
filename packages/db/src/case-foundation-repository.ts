@@ -8,6 +8,7 @@ interface CaseRow {
   start_date: string;
   end_date: string | null;
   status: string;
+  legacy_client_id: string | null;
   recipient_id: string;
   recipient_name: string;
   recipient_care_level: string | null;
@@ -26,7 +27,7 @@ interface CaseRow {
 
 const SELECT_GRAPH = `
   select
-    c.id as case_id, c.start_date, c.end_date, c.status,
+    c.id as case_id, c.start_date, c.end_date, c.status, c.legacy_client_id,
     r.id as recipient_id, r.full_name as recipient_name,
     r.care_level as recipient_care_level, r.city as recipient_city,
     e.id as employer_id, e.full_name as employer_name,
@@ -51,6 +52,7 @@ function toGraph(row: CaseRow, tenantId: string): EmploymentCaseGraph {
       startDate: row.start_date,
       endDate: row.end_date,
       status: row.status as EmploymentCaseGraph['employmentCase']['status'],
+      legacyClientId: row.legacy_client_id,
     },
     careRecipient: {
       id: brandId(row.recipient_id),
@@ -126,8 +128,9 @@ export class PgCaseFoundationRepository implements CaseFoundationRepository {
       );
       await client.query(
         `insert into employment_case
-           (id, tenant_id, care_recipient_id, employer_id, caregiver_id, start_date, end_date, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           (id, tenant_id, care_recipient_id, employer_id, caregiver_id, start_date, end_date, status,
+            legacy_client_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           graph.employmentCase.id,
           tenantId,
@@ -137,6 +140,7 @@ export class PgCaseFoundationRepository implements CaseFoundationRepository {
           graph.employmentCase.startDate,
           graph.employmentCase.endDate,
           graph.employmentCase.status,
+          graph.employmentCase.legacyClientId,
         ],
       );
     });
@@ -145,6 +149,23 @@ export class PgCaseFoundationRepository implements CaseFoundationRepository {
   async findCaseGraph(tenantId: string, caseId: string): Promise<EmploymentCaseGraph | null> {
     return withTenant(this.pool, tenantId, async (client) => {
       const result = await client.query<CaseRow>(`${SELECT_GRAPH} where c.id = $1`, [caseId]);
+      const row = result.rows[0];
+      return row ? toGraph(row, tenantId) : null;
+    });
+  }
+
+  /**
+   * Backed by the partial unique index in migration 0042, so this is at most
+   * one row and the read is an index lookup rather than a scan.
+   */
+  async findCaseGraphByLegacyClientId(
+    tenantId: string,
+    legacyClientId: string,
+  ): Promise<EmploymentCaseGraph | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<CaseRow>(`${SELECT_GRAPH} where c.legacy_client_id = $1`, [
+        legacyClientId,
+      ]);
       const row = result.rows[0];
       return row ? toGraph(row, tenantId) : null;
     });

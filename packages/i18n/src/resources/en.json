@@ -201,6 +201,7 @@
     "recipientCity": "City",
     "employerFullName": "Employer name",
     "employerRelationship": "Relationship to recipient",
+    "defaultRelationship": "Employer",
     "employerCity": "City",
     "caregiverLegalName": "Caregiver legal name (as in passport)",
     "caregiverPreferredName": "Preferred name",

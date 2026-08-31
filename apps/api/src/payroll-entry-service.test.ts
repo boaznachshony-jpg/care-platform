@@ -10,6 +10,22 @@ const MIGRATION = readFileSync(
   ),
   'utf8',
 );
+const RECONCILE_MIGRATION = readFileSync(
+  fileURLToPath(
+    new URL('../../../database/migrations/0041_payroll_total_reconciles.sql', import.meta.url),
+  ),
+  'utf8',
+);
+
+/**
+ * The migration with its `--` comments stripped.
+ *
+ * A guard that forbids a phrase has to read the statements, not the prose: 0041
+ * explains at length why its trigger is deliberately *not* security definer, so
+ * scanning the raw file finds the very phrase the guard exists to forbid and
+ * fails on the explanation instead of on the code.
+ */
+const RECONCILE_MIGRATION_SQL = RECONCILE_MIGRATION.replace(/--[^\n]*/g, '');
 
 const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const CASE_ID = '00000000-0000-4000-8000-000000000011';
@@ -38,7 +54,10 @@ const ENTRY: PayrollEntryInput = {
   deductions: 0,
   advances: 0,
   agreedDeductions: 0,
-  total: 7350,
+  // Root 4 (DOM-02): 6000 + (4 x 300 + 250 + 500 + 200) - 100. The fixture used
+  // to say 7350, a number no combination of these components produces, and
+  // every assertion below passed anyway - which is precisely the finding.
+  total: 8050,
   status: 'draft',
 };
 
@@ -63,7 +82,7 @@ interface StoredEntry {
  * more clearly. The stub answers the service's own statements and fails loudly
  * on any statement it does not recognise.
  */
-function stubPool(knownCaseIds: string[]) {
+function stubPool(knownCaseIds: string[], closedMonths: string[] = []) {
   const queries: RecordedQuery[] = [];
   const receipts = new Map<string, { hash: string; response: unknown }>();
   const entries = new Map<string, StoredEntry>();
@@ -114,6 +133,11 @@ function stubPool(knownCaseIds: string[]) {
       }
       if (sql.includes('select 1 from employment_case')) {
         return { rows: [], rowCount: knownCaseIds.includes(String(values?.[0])) ? 1 : 0 };
+      }
+      // Root 4 (DOM-01): the closed-month lookup the write path did not have.
+      if (sql.includes('select 1 from payroll_month_close')) {
+        const closed = closedMonths.includes(String(values?.[1]));
+        return { rows: [], rowCount: closed ? 1 : 0 };
       }
       if (sql.startsWith('select request_hash,response from idempotency_record')) {
         const receipt = receipts.get(String(values?.[0]));
@@ -229,7 +253,11 @@ describe('PayrollEntryService.save', () => {
 
     await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0003', ENTRY);
     await expect(
-      service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0003', { ...ENTRY, total: 9999 }),
+      service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0003', {
+        ...ENTRY,
+        advances: 200,
+        total: 7850,
+      }),
     ).rejects.toThrow('idempotency_conflict');
     expect(payrollInserts(queries)).toHaveLength(1);
   });
@@ -269,7 +297,8 @@ describe('PayrollEntryService.save', () => {
     await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0008', ENTRY);
     await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0009', {
       ...ENTRY,
-      total: 7000,
+      advances: 200,
+      total: 7850,
       version: 1,
     });
 
@@ -292,17 +321,117 @@ describe('PayrollEntryService.save', () => {
   });
 });
 
+describe('PayrollEntryService.save — root 4, the server does not trust the browser', () => {
+  it('rejects a total the submitted components do not produce (DOM-02)', async () => {
+    const { pool, queries } = stubPool([CASE_ID]);
+    const service = new PayrollEntryService(pool);
+
+    // The finding verbatim: baseSalary 6000, advances 5000, total 6000. Before
+    // this change the row, the audit event and the evidence binder all said
+    // 6,000 was owed while the components said 1,000, and nothing objected.
+    await expect(
+      service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0100', {
+        ...ENTRY,
+        paidRestDays: 0,
+        restDayRate: 0,
+        holidayPay: 0,
+        employerContributions: 0,
+        additionalPayments: [],
+        pocketMoney: 0,
+        advances: 5000,
+        total: 6000,
+      }),
+    ).rejects.toThrow('total_mismatch');
+
+    expect(payrollInserts(queries)).toHaveLength(0);
+    expect(queries.map((query) => query.text.toLowerCase()).at(-1)).toBe('rollback');
+    // Nothing is written at all — not the audit event, not the receipt. A
+    // rejected payload must not leave a durable idempotency record behind, or a
+    // corrected retry with the same key would replay the rejection.
+    expect(queries.some((query) => query.text.includes('insert into audit_event'))).toBe(false);
+    expect(queries.some((query) => query.text.includes('insert into idempotency_record'))).toBe(
+      false,
+    );
+  });
+
+  it('persists its own computed total, not the number it was handed', async () => {
+    const { pool, queries } = stubPool([CASE_ID]);
+    const service = new PayrollEntryService(pool);
+
+    // 4.5 rest days at 372.15 = 1674.675, which numeric(12,2) stores as
+    // 1674.68. The client is allowed to assert the rounded figure; what lands
+    // in the column is what the server derived.
+    const result = await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0101', {
+      ...ENTRY,
+      paidRestDays: 4.5,
+      restDayRate: 372.15,
+      holidayPay: 0,
+      employerContributions: 0,
+      additionalPayments: [],
+      pocketMoney: 0,
+      total: 7674.68,
+    });
+
+    expect(result.entry.total).toBe(7674.68);
+    const insert = payrollInserts(queries)[0];
+    expect(insert?.values?.[21]).toBe(7674.68);
+  });
+
+  it('rejects a write against a closed month (DOM-01)', async () => {
+    const { pool, queries } = stubPool([CASE_ID], ['2026-07']);
+    const service = new PayrollEntryService(pool);
+
+    await expect(
+      service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0102', ENTRY),
+    ).rejects.toThrow('payroll_month_closed');
+    expect(payrollInserts(queries)).toHaveLength(0);
+
+    // A month without a close receipt is still fully writable.
+    const open = await service.save(ACTOR, CASE_ID, '2026-06', 'payroll-key-0103', ENTRY);
+    expect(open.entry.month).toBe('2026-06');
+  });
+
+  it('rejects an update that omits version instead of silently overwriting (API-03)', async () => {
+    const { pool, queries } = stubPool([CASE_ID]);
+    const service = new PayrollEntryService(pool);
+
+    // Manager A saves March.
+    await service.save(ACTOR, CASE_ID, '2026-03', 'payroll-key-0104', ENTRY);
+    // Manager B's client omits `version`. This used to win, silently.
+    await expect(
+      service.save(ACTOR, CASE_ID, '2026-03', 'payroll-key-0105', {
+        ...ENTRY,
+        advances: 200,
+        total: 7850,
+      }),
+    ).rejects.toThrow('version_required');
+    expect(payrollInserts(queries)).toHaveLength(1);
+  });
+
+  it('still accepts a create without a version — there is nothing to be stale against', async () => {
+    const { pool } = stubPool([CASE_ID]);
+    const service = new PayrollEntryService(pool);
+
+    const created = await service.save(ACTOR, CASE_ID, '2026-05', 'payroll-key-0106', ENTRY);
+    expect(created.entry).toMatchObject({ version: 1, total: 8050 });
+  });
+});
+
 describe('PayrollEntryService reads', () => {
   it('lists saved entries newest month first and fetches a single month', async () => {
     const { pool } = stubPool([CASE_ID]);
     const service = new PayrollEntryService(pool);
 
     await service.save(ACTOR, CASE_ID, '2026-06', 'payroll-key-0011', ENTRY);
-    await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0012', { ...ENTRY, total: 7100 });
+    await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0012', {
+      ...ENTRY,
+      advances: 200,
+      total: 7850,
+    });
 
     const listed = await service.list(ACTOR, CASE_ID);
     expect(listed.map((entry) => entry.month)).toEqual(['2026-07', '2026-06']);
-    expect(listed[0]).toMatchObject({ total: 7100, baseSalary: 6000, version: 1 });
+    expect(listed[0]).toMatchObject({ total: 7850, baseSalary: 6000, version: 1 });
 
     expect(await service.get(ACTOR, CASE_ID, '2026-06')).toMatchObject({ month: '2026-06' });
     expect(await service.get(ACTOR, CASE_ID, '2026-01')).toBeNull();
@@ -342,5 +471,69 @@ describe('0028_canonical_payroll_entry.sql', () => {
     expect(MIGRATION).toContain(
       "insert into schema_migrations (version) values ('0028_canonical_payroll_entry')",
     );
+  });
+});
+
+describe('0041_payroll_total_reconciles.sql', () => {
+  /**
+   * The database half of root 4. These assertions are on the migration text
+   * because no Postgres is reachable from the test environment; they are not a
+   * substitute for applying it, and the migration has NOT been run anywhere.
+   */
+  it('reconciles the stored total against its own components (DOM-02/DB-06)', () => {
+    expect(RECONCILE_MIGRATION).toContain('add constraint payroll_entry_total_reconciles');
+    expect(RECONCILE_MIGRATION).toContain('check (total = caredesk_payroll_expected_total(');
+  });
+
+  it('adds both constraints NOT VALID so no existing row is touched', () => {
+    const constraints = RECONCILE_MIGRATION.split('alter table payroll_entry').slice(1);
+    expect(constraints).toHaveLength(2);
+    for (const clause of constraints) expect(clause).toContain('not valid');
+  });
+
+  it('is additive — no drop of a column, no delete, no update of stored data', () => {
+    const sql = RECONCILE_MIGRATION.toLowerCase();
+    expect(sql).not.toContain('drop column');
+    expect(sql).not.toContain('drop table');
+    expect(sql).not.toMatch(/\bdelete from\b/);
+    expect(sql).not.toMatch(/^\s*update\s+\w/m);
+    // The single `drop constraint` is the DOM-24 widening, and it is guarded.
+    expect(sql.match(/drop constraint/g)).toHaveLength(1);
+    expect(sql).toContain('drop constraint if exists payroll_month_close_total_amount_check');
+  });
+
+  it('freezes a closed month with a trigger, not only with application code (DOM-01)', () => {
+    expect(RECONCILE_MIGRATION).toContain('create trigger payroll_entry_month_not_closed');
+    expect(RECONCILE_MIGRATION).toContain('before insert or update on payroll_entry');
+    expect(RECONCILE_MIGRATION).toContain("raise exception 'payroll_month_closed'");
+    // A definer-rights trigger would decide the write under BYPASSRLS.
+    expect(RECONCILE_MIGRATION_SQL.toLowerCase()).not.toContain('security definer');
+  });
+
+  it('lets a zero or negative month be closed (DOM-24)', () => {
+    expect(RECONCILE_MIGRATION).toContain(
+      'check (total_amount is null or total_amount between -10000000 and 10000000)',
+    );
+  });
+
+  it('revokes PUBLIC execute on every function it creates', () => {
+    // Postgres grants EXECUTE to PUBLIC by default. This repository has been
+    // bitten by that three times; the guard is an assertion, not a habit.
+    const created = [...RECONCILE_MIGRATION.matchAll(/^create function (\w+)\(/gm)].map(
+      (match) => match[1]!,
+    );
+    expect(created.length).toBeGreaterThan(0);
+    for (const name of created) {
+      expect(RECONCILE_MIGRATION).toContain(`revoke all privileges on function ${name}(`);
+      expect(RECONCILE_MIGRATION).toContain(`grant execute on function ${name}(`);
+    }
+  });
+
+  it('registers itself in schema_migrations', () => {
+    expect(
+      RECONCILE_MIGRATION.trimEnd().endsWith(
+        "insert into schema_migrations (version) values ('0041_payroll_total_reconciles');",
+      ),
+    ).toBe(true);
   });
 });

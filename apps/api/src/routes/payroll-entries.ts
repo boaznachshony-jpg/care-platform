@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import { withTenant } from '@caredesk/db';
+import { PayrollComponentError } from '@caredesk/domain';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { PayrollEntryService } from '../payroll-entry-service.js';
@@ -37,8 +38,14 @@ const body = z
     deductions: amount,
     advances: amount,
     agreedDeductions: amount,
+    // DOM-02: still accepted, but only as an assertion the server checks
+    // against its own recomputation. A mismatch is a 422; the value stored is
+    // always the derived one. Negative is legitimate (DOM-07 carry-forward).
     total: z.number().finite().min(-10_000_000).max(10_000_000),
     status: z.enum(['draft', 'final']),
+    // API-03: optional HERE because this route upserts and only the service,
+    // holding the row lock, can tell a create from an update. The service
+    // requires it whenever a row exists; see `version_required` below.
     version: z.number().int().positive().optional(),
   })
   .strict();
@@ -153,8 +160,25 @@ export function registerPayrollEntryRoutes(
         const result = await service.save(req.actor, p.data.caseId, p.data.month!, key, b.data);
         return reply.status(result.replayed ? 200 : 201).send(result);
       } catch (e) {
+        // Root 4: a component the domain refuses (DOM-07) is a bad request, not
+        // a 500. It is unreachable through this route's schema and is mapped
+        // anyway, because the service is not the route's private property.
+        if (e instanceof PayrollComponentError)
+          return sendError(req, reply, 400, 'VALIDATION_ERROR', {
+            [e.component]: [e.problem],
+          });
         const m = e instanceof Error ? e.message : '';
         if (m === 'case_not_found') return sendError(req, reply, 404, 'NOT_FOUND');
+        // DOM-02/DB-06: the submitted total does not equal what its own
+        // components produce. 422 rather than 400 — the payload is well formed,
+        // its arithmetic is not.
+        if (m === 'total_mismatch') return sendError(req, reply, 422, 'TOTAL_MISMATCH');
+        // DOM-01: the month has a close receipt. Correcting it requires a
+        // governed reopen path, which does not exist yet (see the report).
+        if (m === 'payroll_month_closed') return sendError(req, reply, 409, 'PAYROLL_MONTH_CLOSED');
+        // API-03: 428 Precondition Required is the exact semantic — the write
+        // is refused until the client states which version it is replacing.
+        if (m === 'version_required') return sendError(req, reply, 428, 'VERSION_REQUIRED');
         if (m === 'idempotency_conflict' || m === 'version_conflict')
           return sendError(
             req,

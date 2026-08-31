@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
+import { formatDateOnly } from '../format-timestamp.js';
 import { clientPath } from '../hooks/use-client-path.js';
 import {
   createMvpClient,
@@ -141,7 +142,10 @@ export function ClientsPage() {
                 </div>
                 <div>
                   <dt>{t('clients.updated')}</dt>
-                  <dd>{new Date(client.updatedAt).toLocaleDateString('he-IL')}</dd>
+                  {/* Through the shared formatter, not toLocaleDateString: this
+                      is the one place a card showed a date in the reader's own
+                      time zone while every other stamp showed Israel time. */}
+                  <dd>{formatDateOnly(client.updatedAt) ?? '—'}</dd>
                 </div>
               </dl>
               <div className="client-card-actions">

@@ -538,10 +538,16 @@ export function createScenarioExpense(
     body: JSON.stringify(input),
   });
 }
+/**
+ * Root 4 (API-03): `version` is required on an update. It used to be optional
+ * on the client type too, which is how a browser could omit it and silently
+ * overwrite whatever another manager had just saved. The server refuses a
+ * versionless update with 428; the type stops it being written that way.
+ */
 export function updateScenarioExpense(
   caseId: string,
   expenseId: string,
-  input: SaveScenarioExpenseRequest,
+  input: SaveScenarioExpenseRequest & { version: number },
   idempotencyKey: string,
 ): Promise<{ expense: ScenarioExpenseResponse; replayed: boolean }> {
   return apiRequest(

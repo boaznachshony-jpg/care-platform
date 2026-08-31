@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import type {
   CaseContactResponse,
   DocumentResponse,
@@ -18,6 +19,8 @@ import {
   type BinderExportReceiptResponse,
   type CanonicalPayrollClose,
 } from '../api/client.js';
+import { useClientPath } from '../hooks/use-client-path.js';
+import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { readMvpMedications, type MvpMedication } from '../storage/mvp-storage.js';
 
@@ -63,6 +66,8 @@ function newIdempotencyKey(): string {
 
 export function EmergencyBinderPage() {
   const { t } = useTranslation();
+  const openCasePath = useClientPath()('/cases/new');
+  const legacyClientId = useLegacyClientId();
   const [cases, setCases] = useState<EmploymentCaseResponse[]>([]);
   const [caseId, setCaseId] = useState('');
   const [data, setData] = useState<BinderData>();
@@ -96,13 +101,24 @@ export function EmergencyBinderPage() {
       .then((rows) => {
         if (!active) return;
         setCases(rows);
+        // Preselect the case belonging to the client whose binder this is
+        // (`employment_case.legacy_client_id`, migration 0042). The binder is in
+        // the mobile nav ("תיק חירום"), so a customer who has just finished
+        // setup lands on their own case instead of an empty picker.
+        //
+        // Only an explicit link preselects. A case that predates 0042 carries
+        // `legacyClientId: null` and is left for the user to choose, exactly as
+        // before - guessing on their behalf is how the wrong household ends up
+        // in an emergency binder.
+        const linked = rows.find((row) => row.legacyClientId === legacyClientId);
+        if (linked) setCaseId(linked.id);
         setState('select');
       })
       .catch(() => active && setState('error'));
     return () => {
       active = false;
     };
-  }, []);
+  }, [legacyClientId]);
 
   useEffect(() => {
     setReceipt(undefined);
@@ -195,9 +211,24 @@ export function EmergencyBinderPage() {
             ))}
           </select>
         </label>
+        {caseId ? (
+          // The canonical case screen used to be reachable only by pasting a
+          // UUID into the address bar (WEB-11). This is the link.
+          <p>
+            <Link to={`/cases/${encodeURIComponent(caseId)}`}>מעבר לתיק ההעסקה המלא</Link>
+          </p>
+        ) : null}
         {state === 'loading' || state === 'loading-case' ? <p role="status">טוען מידע…</p> : null}
         {state === 'error' ? <p role="alert">לא ניתן לטעון את התיק. נסו שוב.</p> : null}
-        {state === 'select' && cases.length === 0 ? <p>לא נמצא תיק העסקה פעיל.</p> : null}
+        {state === 'select' && cases.length === 0 ? (
+          // Was a bare "לא נמצא תיק העסקה פעיל." shown to every real user,
+          // because nothing in the product created a case (WEB-11). Now that
+          // case creation is reachable, the empty state says what to do about
+          // it instead of being a dead end on a headline feature.
+          <p>
+            לא נמצא תיק העסקה פעיל. <Link to={openCasePath}>פתיחת תיק העסקה</Link>
+          </p>
+        ) : null}
         <label>
           סוג תיק
           <select

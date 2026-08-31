@@ -109,7 +109,7 @@ import {
   InMemoryVisaRenewalRepository,
 } from '@caredesk/infrastructure';
 import type { Pool } from 'pg';
-import type { Env } from './env.js';
+import { workspaceEncryptionKeys, type Env } from './env.js';
 import { SupabaseAuthService } from './auth/supabase-auth-service.js';
 import { SupabaseInvitationService } from './auth/supabase-invitation-service.js';
 import { resolveInvitationRedirect } from './auth/invitation-redirect.js';
@@ -368,13 +368,14 @@ export function buildContainer(env: Env): Container {
     // Constitution §19: audit must survive a process restart, so it goes to
     // Postgres whenever a database is configured.
     audit = new PgAuditService(pool);
-    workspaceRepository = new PgWorkspaceRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
-    workspaceHistoryRepository = new PgWorkspaceHistoryRepository(
-      pool,
-      env.WORKSPACE_ENCRYPTION_KEY,
-    );
+    // One list, built once: the three readers of the workspace envelope must
+    // agree on which keys exist, or a rotation half-lands and the census starts
+    // reporting unreadable rows that the repository can open perfectly well.
+    const encryptionKeys = workspaceEncryptionKeys(env);
+    workspaceRepository = new PgWorkspaceRepository(pool, encryptionKeys);
+    workspaceHistoryRepository = new PgWorkspaceHistoryRepository(pool, encryptionKeys);
     workspaceFileRepository = new PgWorkspaceFileRepository(pool);
-    censusRepository = new PgTenantCensusRepository(pool, env.WORKSPACE_ENCRYPTION_KEY);
+    censusRepository = new PgTenantCensusRepository(pool, encryptionKeys);
     familyMembershipRepository = new PgFamilyMembershipRepository(pool);
     billingRepository = new PgBillingRepository(pool);
   } else {

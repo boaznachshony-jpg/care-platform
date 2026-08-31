@@ -1,7 +1,8 @@
 /* eslint-disable no-restricted-syntax -- Hebrew-first pilot surface; i18n extraction follows canonical cutover */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectFutureCost } from '@caredesk/application';
+import { calculateMonthlyPayroll } from '@caredesk/domain';
 import {
   ApiRequestError,
   createScenarioExpense,
@@ -122,21 +123,26 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   const legacyExpenses = readMvpEmploymentExpenses().filter(
     (expense) => expense.amountEntered !== false,
   );
-  const calculatedTotal = useMemo(
-    () =>
-      draft.baseSalary +
-      draft.restDayRate * draft.paidRestDays +
-      draft.holidayPay +
-      draft.vacationPay +
-      draft.sickPay +
-      draft.employerContributions +
-      draft.additionalPayments.reduce((s, p) => s + p.amount, 0) +
-      draft.pocketMoney -
-      draft.deductions -
-      draft.advances -
-      draft.agreedDeductions,
-    [draft],
-  );
+  /**
+   * Root 4 (DOM-02): the same function the server recomputes with.
+   *
+   * This used to be an inline sum, and it disagreed with the other client-side
+   * implementation in `apps/web/src/payroll-calculation.ts` about the sign of
+   * `pocketMoney` — money already handed to the caregiver during the month was
+   * ADDED here and SUBTRACTED there. Neither was checked by anything. Now there
+   * is one formula, in `@caredesk/domain`, and a total this screen produces is
+   * a total the server will accept.
+   */
+  const calculatedTotal = useMemo(() => {
+    try {
+      return calculateMonthlyPayroll(draft).total;
+    } catch {
+      // A component the domain refuses (DOM-07: non-finite or negative) cannot
+      // produce a total. Saving is blocked below rather than sending a number
+      // the server would reject with 422.
+      return null;
+    }
+  }, [draft]);
   const refresh = useCallback(async () => {
     setState('loading');
     setError('');
@@ -156,8 +162,33 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     }
   }, [caseId]);
   useEffect(() => void refresh(), [refresh]);
+
+  const savedEntry = entries?.find((entry) => entry.month === month);
+  /**
+   * WEB-04 (BLOCKER): the draft reset keys on the *identity* of the saved entry
+   * for the selected month, never on the `entries` array reference.
+   *
+   * `refresh()` hands back a brand-new array every time, and `addExpense`,
+   * `removeExpense` and `migrateLegacyExpenses` all call it. Depending on
+   * `entries` therefore re-ran this effect after any of those; with no saved
+   * server entry for the month `found` was `undefined`, the effect called
+   * `blank()`, and sixteen numeric fields the user had just typed into the
+   * payroll worksheet silently reset to 0 because they had scrolled down and
+   * added a planning expense.
+   *
+   * id + version is the right key: it changes exactly when the saved entry the
+   * draft was seeded from actually changes (a save, or a concurrent edit), and
+   * not when an unrelated sibling mutation refetches the same data. The
+   * `none:` form keeps a month with no saved entry distinct per month, so
+   * switching months still resets.
+   */
+  const savedEntryIdentity = savedEntry
+    ? `entry:${savedEntry.id}:${savedEntry.version}`
+    : `none:${month}`;
+  const savedEntryRef = useRef(savedEntry);
+  savedEntryRef.current = savedEntry;
   useEffect(() => {
-    const found = entries?.find((entry) => entry.month === month);
+    const found = savedEntryRef.current;
     setDraft(found ? { ...found, version: found.version } : blank());
     setState('idle');
     setError('');
@@ -165,7 +196,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setMigrationConfirmed(false);
     setMigrationSaved(false);
     setLegacyPurged(false);
-  }, [entries, month]);
+  }, [savedEntryIdentity]);
   /**
    * All projection inputs are canonical: closed months (actuals), the payroll
    * worksheet (forecast base + entered months) and scenario_expense rows (the
@@ -195,6 +226,10 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     })),
   });
   async function save() {
+    if (calculatedTotal === null) {
+      setError('אחד מרכיבי השכר אינו מספר תקין. תקנו אותו לפני השמירה.');
+      return;
+    }
     setState('saving');
     setError('');
     // Capture before the async gap — legacy and migrationConfirmed may change after re-render.
@@ -420,13 +455,18 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
         </div>
       </div>
       <p className="payroll-live-total">
-        סה״כ מחושב: <strong>{money.format(calculatedTotal)}</strong>
+        סה״כ מחושב:{' '}
+        <strong>{calculatedTotal === null ? '—' : money.format(calculatedTotal)}</strong>
       </p>
       <p className="legal-note">{t('liability.calculation')}</p>
       <button
         className="primary-button"
         type="button"
-        disabled={state === 'saving' || draft.additionalPayments.some((p) => !p.description.trim())}
+        disabled={
+          state === 'saving' ||
+          calculatedTotal === null ||
+          draft.additionalPayments.some((p) => !p.description.trim())
+        }
         onClick={() => void save()}
       >
         {state === 'saving' ? 'שומר…' : draft.version ? 'עדכון רשומה' : 'יצירת רשומה'}

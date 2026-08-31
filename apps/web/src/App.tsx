@@ -39,6 +39,7 @@ import { CasePage } from './pages/CasePage.js';
 import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
 import { EmergencyBinderPage } from './pages/EmergencyBinderPage.js';
 import { OpenIssuesPage } from './pages/OpenIssuesPage.js';
+import { OpenCasePage } from './pages/OpenCasePage.js';
 import { DemoOverviewPage } from './pages/DemoOverviewPage.js';
 import { AccountFrozenGate } from './components/AccountFrozenGate.js';
 
@@ -118,6 +119,8 @@ function AuthenticatedApp() {
           <Route path="/app" element={<ClientsPage />} />
           <Route path="/family" element={<FamilyAccessPage />} />
           <Route path="/billing" element={<BillingPage />} />
+          {/* Declared before /cases/:caseId so "new" is a route, not a case id. */}
+          <Route path="/cases/new" element={<OpenCasePage />} />
           <Route path="/cases/:caseId" element={<CasePage />} />
           <Route
             path="/clients/:clientId"
@@ -132,6 +135,18 @@ function AuthenticatedApp() {
             element={
               <ClientApp>
                 <OpenIssuesPage />
+              </ClientApp>
+            }
+          />
+          {/* The client-scoped entry point to case creation. OpenCasePage reads
+              the active client from the path, so the case it opens is linked to
+              this client rather than to whichever workspace happened to be
+              loaded. */}
+          <Route
+            path="/clients/:clientId/cases/new"
+            element={
+              <ClientApp>
+                <OpenCasePage />
               </ClientApp>
             }
           />
@@ -349,7 +364,13 @@ export function App() {
         <Route path="/contact-us" element={<PublicContactPage />} />
         <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
         <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
-        <Route path="/cases/new" element={<Navigate to="/" replace />} />
+        {/* /cases/new is NOT listed here. It used to be, redirecting to the
+            marketing page, and that redirect was the whole of code review
+            WEB-11: OpenCasePage was the only component that could create an
+            EmploymentCase and no route reached it, so the canonical module was
+            unreachable and every canonical screen was a dead end. It is now an
+            authenticated route below, and falls through to ApplicationEntry,
+            which already treats any /cases/ path as private. */}
         <Route path="/cases/not-a-public-route" element={<Navigate to="/" replace />} />
         <Route path="/demo/overview" element={<DemoOverviewPage />} />
         <Route path="*" element={<ApplicationEntry />} />

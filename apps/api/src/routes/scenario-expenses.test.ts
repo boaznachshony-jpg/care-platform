@@ -287,7 +287,10 @@ describe('scenario expense routes', () => {
         method: 'PUT' as const,
         url: `${base}/${expenseId}`,
         headers: KEYED,
-        payload: EXPENSE_BODY,
+        // `version` is mandatory on update (API-03), and body validation runs
+        // before the authorization check. Without it this case returned 400 for
+        // its own malformed payload and never reached the mapping it asserts.
+        payload: { ...EXPENSE_BODY, version: 1 },
       },
       {
         method: 'DELETE' as const,
@@ -438,6 +441,62 @@ describe('scenario expense routes', () => {
     });
     expect(stale.statusCode).toBe(409);
     expect(stale.json().code).toBe('VERSION_CONFLICT');
+  });
+
+  /**
+   * Root 4 (API-03). Both of these used to succeed: `version` was
+   * `.optional()` in the schema and the service guard read
+   * `input.version !== undefined && …`, so omitting the field disabled the
+   * check entirely and the last writer won with a 200.
+   */
+  it('refuses an update that omits version', async () => {
+    const { app, caseId } = await buildApp();
+    const base = `/cases/${caseId}/scenario-expenses`;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: KEYED,
+      payload: EXPENSE_BODY,
+    });
+    const expenseId = created.json().expense.id as string;
+    const versionless = await app.inject({
+      method: 'PUT',
+      url: `${base}/${expenseId}`,
+      headers: { ...AUTH, 'idempotency-key': 'scenario-route-key-0005' },
+      payload: { ...EXPENSE_BODY, amount: 300 },
+    });
+    expect(versionless.statusCode).toBe(400);
+    expect(versionless.json().code).toBe('VALIDATION_ERROR');
+    expect(versionless.json().fieldErrors).toHaveProperty('version');
+
+    // And the row is untouched.
+    const listed = await app.inject({ method: 'GET', url: base, headers: AUTH });
+    expect(listed.json()[0]).toMatchObject({ amount: 250, version: 1 });
+  });
+
+  it('refuses a delete that omits version', async () => {
+    const { app, caseId } = await buildApp();
+    const base = `/cases/${caseId}/scenario-expenses`;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: KEYED,
+      payload: EXPENSE_BODY,
+    });
+    const expenseId = created.json().expense.id as string;
+    const versionless = await app.inject({
+      method: 'DELETE',
+      url: `${base}/${expenseId}`,
+      headers: { ...AUTH, 'idempotency-key': 'scenario-route-key-0006' },
+      payload: {},
+    });
+    expect(versionless.statusCode).toBe(400);
+    expect(versionless.json().code).toBe('VALIDATION_ERROR');
+
+    const listed = await app.inject({ method: 'GET', url: base, headers: AUTH });
+    expect(listed.json()).toHaveLength(1);
   });
 
   it('returns 404 for mutations against an unknown expense id', async () => {
