@@ -1,4 +1,10 @@
-import type { DocumentComplianceStatus, DocumentType, SensitivityClass } from '@caredesk/domain';
+import {
+  israelDateOf,
+  israelEndOfDayExclusive,
+  type DocumentComplianceStatus,
+  type DocumentType,
+  type SensitivityClass,
+} from '@caredesk/domain';
 import type { AuditService } from '../ports/audit-service.js';
 import type { AuthorizationService } from '../ports/authorization-service.js';
 import type { Clock } from '../ports/clock.js';
@@ -82,15 +88,36 @@ export function decodeBase64(value: string): Uint8Array {
   return bytes.subarray(0, offset);
 }
 
+/**
+ * DOM-17. `expiresOn: '2026-09-01'` is stored as `2026-09-01T00:00:00.000Z` and
+ * used to be compared with `expiry <= now`. Israel is UTC+2/+3, so that instant
+ * is 02:00 or 03:00 on 1 September local time — and a permit whose תוקף עד is
+ * that very day read as EXPIRED for essentially the whole of its final valid
+ * day. In this product that means an unnecessary escalation, an unnecessary
+ * bureau call, and erosion of trust in the alerts that do matter.
+ *
+ * The semantics are now settled and written down: **a stored date is the last
+ * valid day**, not the first invalid one. So the document expires at the start
+ * of the FOLLOWING day in Asia/Jerusalem — `israelEndOfDayExclusive`.
+ *
+ * Existing rows need no migration and are not reinterpreted beyond this: the
+ * stored instant is still read as the calendar day it names, which is what
+ * `israelDateOf` recovers from it. UTC midnight is safely inside that day in
+ * Israel (02:00/03:00), so every row written before this change resolves to the
+ * same calendar day it was entered as. The only thing that changes is that the
+ * day is now honoured to its end instead of expiring at 03:00.
+ */
 export function deriveComplianceStatus(
   expiresAt: string | null,
   now: Date,
 ): DocumentComplianceStatus {
   if (!expiresAt) return 'valid';
-  const expiry = new Date(expiresAt).getTime();
-  if (expiry <= now.getTime()) return 'expired';
+  const parsed = new Date(expiresAt);
+  if (Number.isNaN(parsed.getTime())) return 'valid';
+  const expiresAfter = israelEndOfDayExclusive(israelDateOf(parsed)).getTime();
+  if (now.getTime() >= expiresAfter) return 'expired';
   const windowMs = EXPIRING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return expiry - now.getTime() <= windowMs ? 'expiring' : 'valid';
+  return expiresAfter - now.getTime() <= windowMs ? 'expiring' : 'valid';
 }
 
 export class UploadCaseDocument {

@@ -383,6 +383,31 @@ describe('scenario expense routes', () => {
     expect(queries.some((query) => query.text.toLowerCase().startsWith('delete'))).toBe(false);
   });
 
+  /**
+   * Root 8 (DOM-04). `amount` lands in a `numeric(12,2)` column. Before the
+   * money type, a request carrying 8.165 was quantised by Postgres at an
+   * undocumented step, with a different rounding rule from the one the forecast
+   * applied on the way back out, so the number the client sent and the number
+   * the product later showed could differ by an agora. The route now normalises
+   * to whole agorot at the edge, half away from zero, before anything is
+   * written.
+   */
+  it('normalises a sub-agora amount to whole agorot before it reaches the column', async () => {
+    const { app, caseId, queries } = await buildApp();
+    const created = await app.inject({
+      method: 'POST',
+      url: `/cases/${caseId}/scenario-expenses`,
+      headers: KEYED,
+      payload: { ...EXPENSE_BODY, amount: 8.165 },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().expense.amount).toBe(8.17);
+    const insert = queries.find((query) =>
+      query.text.toLowerCase().startsWith('insert into scenario_expense'),
+    );
+    expect(insert?.values?.[4]).toBe(8.17);
+  });
+
   it('replays the same durable receipt for a repeated idempotency key', async () => {
     const { app, caseId, queries } = await buildApp();
     const base = `/cases/${caseId}/scenario-expenses`;

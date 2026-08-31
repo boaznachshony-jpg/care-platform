@@ -12,6 +12,8 @@ import {
 } from './storage/mvp-storage.js';
 import { RELEASE_LABEL } from './release.js';
 import { useAuth } from './auth/auth-context.js';
+import { SectionErrorBoundary } from './components/ErrorBoundary.js';
+import { apiBaseUrlIsMisconfigured } from './api/client.js';
 import {
   getWorkspaceSyncState,
   retryWorkspaceSync,
@@ -161,6 +163,15 @@ export function AppShell({ children }: AppShellProps) {
             <span>{currentHebrewDate()}</span>
           </div>
           <div className="top-actions">
+            {/* WEB-20: with VITE_API_BASE_URL unset in a deployed environment
+                every request goes to <this host>:4000, which never answers.
+                The old behaviour was a permanent "cloud save failed" banner
+                with a retry that can never succeed. Name the real cause. */}
+            {apiBaseUrlIsMisconfigured() ? (
+              <span className="sync-status sync-status-error" role="alert">
+                {t('errors.apiUnreachable')}
+              </span>
+            ) : null}
             {auth.enabled && syncState === 'error' ? (
               <span className="sync-status sync-status-error" role="alert">
                 השמירה בענן נכשלה
@@ -250,7 +261,11 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </header>
         <main id="main-content" className="main-content">
-          {children}
+          {/* WEB-06: a page that throws must not take the shell with it. The
+              nav, the sync banner and the sign-out button stay usable, and
+              `resetKey` clears the failure when the user navigates away, so a
+              single broken screen is not a dead end. */}
+          <SectionErrorBoundary resetKey={location.pathname}>{children}</SectionErrorBoundary>
         </main>
         <nav className="mobile-nav" aria-label="ניווט תחתון">
           {mobileNav.map(([to, icon, label]) => (

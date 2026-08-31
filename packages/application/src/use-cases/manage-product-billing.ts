@@ -1,4 +1,10 @@
-import { PRODUCT_BILLING_TERMS_VERSION, type ProductSubscriptionStatus } from '@caredesk/domain';
+import {
+  agorot,
+  effectivePriceAgorot,
+  PRODUCT_BILLING_TERMS_VERSION,
+  splitVatInclusive,
+  type ProductSubscriptionStatus,
+} from '@caredesk/domain';
 import type { AuditService } from '../ports/audit-service.js';
 import type { BillingDefaults, BillingRepository } from '../ports/billing-repository.js';
 import type { AuthorizationService } from '../ports/authorization-service.js';
@@ -61,18 +67,25 @@ function toPlan(
   canManage: boolean,
   providerConfigured: boolean,
 ): ProductSubscriptionPlan {
-  const netAgorot = Math.round(record.priceAgorot / (1 + record.vatRateBps / 10_000));
+  const price = agorot(record.priceAgorot);
+  const { net: netAgorot, vat: vatAgorot } = splitVatInclusive(price, record.vatRateBps);
   return {
     status: record.status,
     currency: 'ILS',
     interval: 'month',
     priceAgorot: record.priceAgorot,
     netAgorot,
-    vatAgorot: record.priceAgorot - netAgorot,
+    vatAgorot,
     vatRatePercent: record.vatRateBps / 100,
     includesVat: true,
     launchDiscountPercent: record.launchDiscountPercent,
-    effectivePriceAgorot: Math.round(record.priceAgorot * (1 - record.launchDiscountPercent / 100)),
+    // DOM-09. This used to be `Math.round(price * (1 - percent / 100))`, a
+    // second rule for the same number written in a different language from the
+    // SQL that actually claims the charge — which billed the UNDISCOUNTED price
+    // and only for rows at 0%. `effectivePriceAgorot` is now the one shared
+    // definition, and it performs exactly the integer arithmetic migration 0045
+    // performs, so the price shown here and the amount charged cannot diverge.
+    effectivePriceAgorot: effectivePriceAgorot(price, record.launchDiscountPercent),
     chargingStartsAt: record.chargingStartsAt,
     nextChargeOn: record.nextChargeOn,
     accessGraceStartsAt: record.accessGraceStartsAt,

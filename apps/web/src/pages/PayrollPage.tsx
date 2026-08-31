@@ -1,7 +1,8 @@
 /* eslint-disable no-restricted-syntax */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { PayrollComponentError } from '@caredesk/domain';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
@@ -18,6 +19,12 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
+import {
+  clearFormDraft,
+  readFormDraft,
+  saveFormDraft,
+  DraftStorageError,
+} from '../storage/form-draft-store.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -372,6 +379,63 @@ function withNationalInsuranceTracking(
     : [trackedExpense, ...expenses];
 }
 
+/**
+ * WEB-02 — the payroll wizard's draft.
+ *
+ * The five steps hold roughly twenty typed fields plus a repeatable
+ * additional-payments list, and nothing was persisted until the final
+ * "אישור ושמירה". Tapping "משימות" in the fixed mobile bottom nav unmounted
+ * the page and every value was gone, silently. For the 50-60-year-old target
+ * user on a phone that is a routine mis-tap, not an edge case.
+ *
+ * The draft lives in the `caredesk.draft.*` namespace (see
+ * storage/form-draft-store.ts) and not in `caredesk.mvp.*`: ADR-006 clause 5
+ * freezes the workspace payload, and a value stored there would in any case be
+ * destroyed by the next server hydration.
+ */
+export const PAYROLL_WIZARD_DRAFT = 'payroll-wizard';
+
+type PayrollWizardValues = ReturnType<typeof payrollValues>;
+
+export interface PayrollWizardDraft {
+  step: number;
+  values: PayrollWizardValues;
+  additionalPayments: AdditionalPaymentDraft[];
+}
+
+/**
+ * The comparable form of everything the wizard holds. Used to decide whether
+ * there is unsaved work: a draft identical to the stored record is not
+ * unsaved work, and warning about it would train the user to dismiss the
+ * warning that matters.
+ */
+export function payrollWizardSnapshot(
+  values: PayrollWizardValues,
+  additionalPayments: AdditionalPaymentDraft[],
+): string {
+  return JSON.stringify({
+    values,
+    additionalPayments: additionalPayments
+      .map((payment) => ({
+        description: payment.description.trim(),
+        amount: payment.amount.trim(),
+      }))
+      .filter((payment) => payment.description !== '' || payment.amount !== ''),
+  });
+}
+
+function isUsableDraft(draft: unknown): draft is PayrollWizardDraft {
+  const candidate = draft as Partial<PayrollWizardDraft> | null;
+  return (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    typeof candidate.values === 'object' &&
+    candidate.values !== null &&
+    typeof (candidate.values as PayrollWizardValues).month === 'string' &&
+    Array.isArray(candidate.additionalPayments)
+  );
+}
+
 export function PayrollPage() {
   const { t } = useTranslation();
   const { clientId } = useParams<{ clientId: string }>();
@@ -379,14 +443,37 @@ export function PayrollPage() {
   const [profile, setProfile] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
-  const [step, setStep] = useState(profile.baseSalary === null ? 0 : 1);
-  const initialRecord = records.find((record) => record.month === currentMonth);
-  const [values, setValues] = useState(() =>
-    payrollValues(initialRecord, profile.baseSalary, profile.saturdayRate),
+  /**
+   * WEB-02: read once, synchronously, before the first paint. Restoring in an
+   * effect would flash the empty wizard and race the user's first keystroke.
+   */
+  const [restoredDraft] = useState(() => {
+    const stored = readFormDraft<PayrollWizardDraft>(PAYROLL_WIZARD_DRAFT);
+    return stored && isUsableDraft(stored.value)
+      ? { savedAt: stored.savedAt, value: stored.value }
+      : null;
+  });
+  const [step, setStep] = useState(() => {
+    if (profile.baseSalary === null) return 0;
+    const restoredStep = restoredDraft?.value.step;
+    return typeof restoredStep === 'number' && restoredStep >= 1 && restoredStep <= 5
+      ? restoredStep
+      : 1;
+  });
+  const initialRecord = records.find(
+    (record) => record.month === (restoredDraft?.value.values.month ?? currentMonth),
   );
-  const [additionalPayments, setAdditionalPayments] = useState<AdditionalPaymentDraft[]>(() =>
-    additionalPaymentDrafts(initialRecord),
+  const [values, setValues] = useState(
+    () =>
+      restoredDraft?.value.values ??
+      payrollValues(initialRecord, profile.baseSalary, profile.saturdayRate),
   );
+  const [additionalPayments, setAdditionalPayments] = useState<AdditionalPaymentDraft[]>(
+    () => restoredDraft?.value.additionalPayments ?? additionalPaymentDrafts(initialRecord),
+  );
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [draftSavedAt, setDraftSavedAt] = useState(restoredDraft?.savedAt ?? '');
+  const [draftRestoredNotice, setDraftRestoredNotice] = useState(Boolean(restoredDraft));
   const [expenseDraft, setExpenseDraft] = useState({
     category: NATIONAL_INSURANCE_CATEGORY,
     frequency: 'quarterly' as EmploymentExpenseFrequency,
@@ -414,6 +501,91 @@ export function PayrollPage() {
   });
   const [sequence, setSequence] = useState<PayrollSequenceState | null>(null);
   const [sequenceSummary, setSequenceSummary] = useState<PayrollSequenceState | null>(null);
+
+  /**
+   * WEB-02 — what "unsaved" means here.
+   *
+   * The stored record for the month currently on screen, rendered in exactly
+   * the shape the wizard holds. Anything else on screen is work the user has
+   * done and the product has not committed.
+   */
+  const committedSnapshot = useMemo(() => {
+    const record = records.find((item) => item.month === values.month);
+    return payrollWizardSnapshot(
+      { ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month: values.month },
+      additionalPaymentDrafts(record),
+    );
+  }, [records, values.month, profile.baseSalary, profile.saturdayRate]);
+  const currentSnapshot = useMemo(
+    () => payrollWizardSnapshot(values, additionalPayments),
+    [values, additionalPayments],
+  );
+  const hasUnsavedWork = currentSnapshot !== committedSnapshot;
+  /** Read inside the beforeunload listener, which must not be re-bound per keystroke. */
+  const hasUnsavedWorkRef = useRef(hasUnsavedWork);
+  hasUnsavedWorkRef.current = hasUnsavedWork;
+
+  /**
+   * Autosave. Debounced so typing a five-digit salary is one write, not five,
+   * and cleared the moment the work is committed — a stale draft that
+   * outlives its record is the WEB-15 failure in a different screen.
+   */
+  useEffect(() => {
+    if (!hasUnsavedWork) {
+      clearFormDraft(PAYROLL_WIZARD_DRAFT);
+      setDraftStatus('idle');
+      setDraftSavedAt('');
+      return undefined;
+    }
+    setDraftStatus('saving');
+    const timer = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      try {
+        saveFormDraft<PayrollWizardDraft>(
+          PAYROLL_WIZARD_DRAFT,
+          { step, values, additionalPayments },
+          savedAt,
+        );
+        setDraftStatus('saved');
+        setDraftSavedAt(savedAt);
+      } catch (error) {
+        // WEB-06: a full or read-only store must surface as a message next to
+        // the form, never as an uncaught throw that blanks the application.
+        if (!(error instanceof DraftStorageError)) throw error;
+        setDraftStatus('error');
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [hasUnsavedWork, step, values, additionalPayments]);
+
+  /**
+   * A reload or a tab close is the one navigation the draft alone cannot make
+   * invisible, because the debounce may not have fired yet. React Router is
+   * mounted here as a `BrowserRouter`, not a data router, so `useBlocker` is
+   * unavailable; in-app navigation is covered by the draft surviving it.
+   */
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedWorkRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, []);
+
+  function discardDraft() {
+    if (!window.confirm(t('payments.draftDiscardConfirm'))) return;
+    const record = records.find((item) => item.month === values.month);
+    setValues({
+      ...payrollValues(record, profile.baseSalary, profile.saturdayRate),
+      month: values.month,
+    });
+    setAdditionalPayments(additionalPaymentDrafts(record));
+    setDraftRestoredNotice(false);
+    setValidationErrors([]);
+    clearFormDraft(PAYROLL_WIZARD_DRAFT);
+  }
 
   const validationTerms: Partial<Record<keyof typeof values, string[]>> = {
     month: ['חודש שכר'],
@@ -481,21 +653,41 @@ export function PayrollPage() {
   );
 
   const calculation = useMemo(() => {
-    return calculateMonthlyPayroll({
-      baseSalary: proratedBaseSalary.amount,
-      paidSaturdays: numeric(values.paidSaturdays),
-      saturdayRate: numeric(values.saturdayRate),
-      holidayPay: numeric(values.holidayPay),
-      vacationPay: numeric(values.vacationPay),
-      sickPay: numeric(values.sickPay),
-      pocketMoney: numeric(values.pocketMoney),
-      employerContributions: numeric(values.employerContributions),
-      otherAddition: numeric(values.otherAddition) + additionalPaymentsTotal,
-      medicalInsuranceDeduction: numeric(values.medicalInsuranceDeduction),
-      housingDeduction: numeric(values.housingDeduction),
-      advances: numeric(values.advances),
-      agreedDeduction: numeric(values.agreedDeduction),
-    });
+    try {
+      return calculateMonthlyPayroll({
+        baseSalary: proratedBaseSalary.amount,
+        paidSaturdays: numeric(values.paidSaturdays),
+        saturdayRate: numeric(values.saturdayRate),
+        holidayPay: numeric(values.holidayPay),
+        vacationPay: numeric(values.vacationPay),
+        sickPay: numeric(values.sickPay),
+        pocketMoney: numeric(values.pocketMoney),
+        employerContributions: numeric(values.employerContributions),
+        otherAddition: numeric(values.otherAddition) + additionalPaymentsTotal,
+        medicalInsuranceDeduction: numeric(values.medicalInsuranceDeduction),
+        housingDeduction: numeric(values.housingDeduction),
+        advances: numeric(values.advances),
+        agreedDeduction: numeric(values.agreedDeduction),
+      });
+    } catch (error) {
+      // Root 8: the domain refuses a component outside 0 … MAX_PAYROLL_AMOUNT,
+      // and every field on this wizard is a text input the user is still
+      // typing into. "10000001" is a value in transit, not a crash: without
+      // this catch the throw escapes render and React 18 unmounts the whole
+      // page, so the one screen that could name the offending field is the
+      // screen that disappears.
+      //
+      // Zeroes rather than the last good total, because a stale number
+      // presented as the current one is the failure this preview exists to
+      // prevent. Nothing here can be saved while it is wrong: validateStep()
+      // reports the same fields by name and blocks both the step and the save.
+      // Same shape as CanonicalPayrollIntelligence's null total (DOM-07),
+      // which cannot be used here because 14 render sites read this value.
+      if (error instanceof PayrollComponentError) {
+        return { saturdayPay: 0, additions: 0, deductions: 0, total: 0 };
+      }
+      throw error;
+    }
   }, [additionalPaymentsTotal, proratedBaseSalary.amount, values]);
   const otherAdditions = Math.max(0, calculation.additions - calculation.saturdayPay);
   const standardOtherAdditions = Math.max(0, otherAdditions - additionalPaymentsTotal);
@@ -721,8 +913,13 @@ export function PayrollPage() {
     }, 0);
   }
 
-  function loadMonth(month: string) {
+  function loadMonth(month: string, confirmDiscard = true) {
+    // WEB-02(b)(c): changing the month input, or "עריכת החודש" in the annual
+    // history, used to overwrite every typed value with no warning at all.
+    if (confirmDiscard && hasUnsavedWork && !window.confirm(t('payments.draftSwitchMonthConfirm')))
+      return;
     const record = records.find((item) => item.month === month);
+    setDraftRestoredNotice(false);
     setValues({ ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month });
     setAdditionalPayments(additionalPaymentDrafts(record));
     setValidationErrors([]);
@@ -827,6 +1024,12 @@ export function PayrollPage() {
       advances: numeric(values.advances),
       agreedDeduction: numeric(values.agreedDeduction),
       total: calculation.total,
+      // WEB-23: `canonicalVersion` is documented as the server optimistic-lock
+      // version and was declared but never read or written, so every re-save
+      // through this wizard dropped it. A record that silently loses its
+      // version either gets rejected by the canonical write path or overwrites
+      // server state unconditionally. Carry it forward.
+      canonicalVersion: existing?.canonicalVersion,
       savedAt: new Date().toISOString(),
     };
     const next = records.some((record) => record.month === saved.month)
@@ -838,6 +1041,12 @@ export function PayrollPage() {
     setRecords(next);
     setExpenses(nextExpenses);
     setReportYear(saved.month.slice(0, 4));
+    // WEB-02: the work is committed, so the draft is no longer recoverable
+    // work — it is a stale copy that could later be offered over newer data.
+    clearFormDraft(PAYROLL_WIZARD_DRAFT);
+    setDraftRestoredNotice(false);
+    setDraftStatus('idle');
+    setDraftSavedAt('');
     setMessage('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
     setPayrollSaved(true);
     if (sequence && continueSequence) {
@@ -1104,6 +1313,28 @@ export function PayrollPage() {
         </div>
         <div className="wizard-content">
           <h2>{headings[step - 1]}</h2>
+          {/* WEB-02 / WEB-06: the wizard now says out loud whether the work on
+              screen is recoverable. A failed draft write is shown as itself
+              instead of being swallowed or crashing the page. */}
+          {draftRestoredNotice && draftSavedAt ? (
+            <p className="draft-status draft-status-restored" role="status">
+              {t('payments.draftRestored', { savedAt: formatDateTime(draftSavedAt) })}
+            </p>
+          ) : null}
+          {draftStatus === 'error' ? (
+            <p className="draft-status draft-status-error" role="alert">
+              {t('payments.draftSaveFailed')}
+            </p>
+          ) : draftStatus !== 'idle' ? (
+            <p className="draft-status" role="status">
+              {draftStatus === 'saving'
+                ? t('payments.draftSaving')
+                : t('payments.draftSaved', { savedAt: formatDateTime(draftSavedAt) })}
+              <button className="link-button" type="button" onClick={discardDraft}>
+                {t('payments.draftDiscard')}
+              </button>
+            </p>
+          ) : null}
           {step === 1 ? (
             <label>
               חודש שכר

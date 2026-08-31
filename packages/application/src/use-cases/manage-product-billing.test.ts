@@ -7,7 +7,10 @@ import type {
   DueBillingCharge,
   ProductBillingGateway,
 } from '../index.js';
-import { CollectDueProductSubscriptions } from './manage-product-billing.js';
+import {
+  CollectDueProductSubscriptions,
+  GetProductSubscription,
+} from './manage-product-billing.js';
 
 const SEALED_TOKEN = 'sealed.synthetic.token';
 const LAST4 = '4242';
@@ -180,5 +183,68 @@ describe('CollectDueProductSubscriptions', () => {
     const { deps, calls } = makeDeps([dueCharge()], gateway);
     await new CollectDueProductSubscriptions(deps).execute();
     expect(calls.failed).toEqual([{ chargeId: 'charge-1', failureCode: 'TypeError' }]);
+  });
+});
+
+/**
+ * DOM-09. The billing page advertised a discounted price while the SQL that
+ * claims due charges selected only `launch_discount_percent = 0` and billed the
+ * undiscounted price. A 40%-discounted tenant was shown a 60% price and a next
+ * charge date, was treated as needing payment, and was charged ₪0 indefinitely.
+ *
+ * The displayed price and the charged amount are now the same function. The
+ * "charged" side is reproduced here exactly as migration 0045 computes it, so
+ * this test fails the moment the two rules drift apart again.
+ */
+describe('effective subscription price', () => {
+  /** `round(price_agorot * (100 - launch_discount_percent) / 100.0)` in SQL. */
+  const claimedAmountAgorot = (priceAgorot: number, discountPercent: number): number => {
+    const product = priceAgorot * (100 - discountPercent);
+    return Math.trunc(product / 100) + (product % 100 >= 50 ? 1 : 0);
+  };
+
+  async function planFor(priceAgorot: number, launchDiscountPercent: number) {
+    const record = {
+      tenantId: 'tenant-1',
+      status: 'active' as const,
+      priceAgorot,
+      vatRateBps: 1800,
+      launchDiscountPercent,
+      chargingStartsAt: '2026-01-31',
+      nextChargeOn: '2026-02-28',
+      billingName: 'Pilot Customer',
+      billingEmail: 'pilot@example.test',
+      termsVersion: 'v1',
+      termsAcceptedAt: '2026-01-31T00:00:00.000Z',
+      accessGraceStartsAt: null,
+      pendingSetupStartedAt: null,
+      paymentMethod: null,
+    };
+    const { deps } = makeDeps([], approvingGateway());
+    return new GetProductSubscription({
+      ...deps,
+      billing: { ...deps.billing, getOrCreate: async () => record },
+    }).execute({
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      correlationId: 'corr-1',
+      mfaSatisfied: true,
+    });
+  }
+
+  it.each([
+    [12_900, 0],
+    [12_900, 40],
+    [12_900, 100],
+    [333, 33],
+    [5, 90],
+  ])('shows for %i agorot at %i%% exactly what the claim query charges', async (price, percent) => {
+    const plan = await planFor(price, percent);
+    expect(plan.effectivePriceAgorot).toBe(claimedAmountAgorot(price, percent));
+  });
+
+  it('splits VAT so the parts sum to the whole', async () => {
+    const plan = await planFor(12_900, 0);
+    expect(plan.netAgorot + plan.vatAgorot).toBe(plan.priceAgorot);
   });
 });

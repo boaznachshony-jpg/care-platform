@@ -65,6 +65,8 @@ export const REQUIRED_MIGRATIONS: readonly string[] = [
   '0041_payroll_total_reconciles',
   '0042_employment_case_legacy_client_link',
   '0043_terms_acceptance',
+  '0044_app_role_reads_migration_ledger',
+  '0045_money_is_a_model',
 ];
 
 /**

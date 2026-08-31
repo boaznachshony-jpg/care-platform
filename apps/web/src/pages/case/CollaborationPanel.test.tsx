@@ -1,5 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initI18n } from '@caredesk/i18n';
 import { CollaborationPanel } from './CollaborationPanel.js';
 
 // Constitution §16: synthetic data only.
@@ -19,8 +21,26 @@ const LOADED_COLLABORATION = {
   requests: [],
 };
 
+const WITH_REQUEST = {
+  ...LOADED_COLLABORATION,
+  requests: [
+    {
+      id: 'req-001',
+      request_type: 'leave',
+      message: 'בקשה לשלושה ימי חופשה',
+      status: 'open',
+      assigned_membership_id: null,
+      created_at: '2026-08-01T09:00:00.000Z',
+    },
+  ],
+};
+
 function renderPanel(caseId = DEMO_CASE_ID) {
-  return render(<CollaborationPanel caseId={caseId} />);
+  return render(
+    <I18nextProvider i18n={initI18n()}>
+      <CollaborationPanel caseId={caseId} />
+    </I18nextProvider>,
+  );
 }
 
 describe('CollaborationPanel', () => {
@@ -39,9 +59,9 @@ describe('CollaborationPanel', () => {
       );
     });
 
-    it('shows loading indicator while fetching', () => {
+    it('shows a Hebrew loading indicator while fetching', () => {
       renderPanel();
-      expect(screen.getByText(/Loading collaboration/)).toBeInTheDocument();
+      expect(screen.getByText(/טוען את חלוקת האחריות/)).toBeInTheDocument();
     });
   });
 
@@ -50,10 +70,18 @@ describe('CollaborationPanel', () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
     });
 
-    it('shows error message on fetch failure', async () => {
+    it('shows a Hebrew error message on fetch failure', async () => {
       renderPanel();
       await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
-      expect(screen.getByText(/could not be loaded/)).toBeInTheDocument();
+      expect(screen.getByText(/לא הצלחנו לטעון את חלוקת האחריות/)).toBeInTheDocument();
+    });
+
+    // WEB-13/WEB-16: a load failure must offer a way forward, not a dead end.
+    it('offers a retry', async () => {
+      renderPanel();
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'ניסיון נוסף' })).toBeInTheDocument(),
+      );
     });
   });
 
@@ -68,30 +96,99 @@ describe('CollaborationPanel', () => {
       );
     });
 
-    it('shows the Family collaboration heading', async () => {
+    it('shows the Hebrew panel heading', async () => {
       renderPanel();
       await waitFor(() =>
-        expect(screen.getByRole('heading', { name: /Family collaboration/ })).toBeInTheDocument(),
+        expect(screen.getByRole('heading', { name: 'שיתוף פעולה משפחתי' })).toBeInTheDocument(),
       );
     });
 
-    it('renders responsibility selectors for all responsibility kinds', async () => {
+    /**
+     * WEB-13: the responsibility labels were `kind.replaceAll('_', ' ')`, so a
+     * Hebrew-speaking family employer read "documents compliance" and "visa
+     * authorization". This is the assertion that fails without the fix.
+     */
+    it('renders responsibility names in Hebrew, not raw enum keys', async () => {
+      renderPanel();
+      await waitFor(() => expect(screen.getByText('שכר ותשלומים')).toBeInTheDocument());
+      expect(screen.getByText('מסמכים ועמידה בדרישות')).toBeInTheDocument();
+      expect(screen.getByText('אשרה והיתר העסקה')).toBeInTheDocument();
+      expect(screen.queryByText('documents compliance')).not.toBeInTheDocument();
+      expect(screen.queryByText('visa authorization')).not.toBeInTheDocument();
+    });
+
+    it('labels each responsibility selector in Hebrew', async () => {
       renderPanel();
       await waitFor(() =>
-        expect(screen.getByRole('combobox', { name: /payroll assignee/ })).toBeInTheDocument(),
+        expect(
+          screen.getByRole('combobox', { name: 'אחראי/ת על שכר ותשלומים' }),
+        ).toBeInTheDocument(),
       );
     });
 
-    it('renders task assignment selector', async () => {
+    it('renders the task assignment selector with a Hebrew label', async () => {
       renderPanel();
       await waitFor(() =>
-        expect(screen.getByRole('combobox', { name: /חידוש אשרה assignee/ })).toBeInTheDocument(),
+        expect(screen.getByRole('combobox', { name: 'אחראי/ת על חידוש אשרה' })).toBeInTheDocument(),
       );
     });
 
-    it('shows no open requests message when requests list is empty', async () => {
+    it('shows the empty-requests message in Hebrew', async () => {
       renderPanel();
-      await waitFor(() => expect(screen.getByText('No open requests.')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('אין פניות פתוחות.')).toBeInTheDocument());
+    });
+
+    it('offers "לא שויך" rather than "Unassigned"', async () => {
+      renderPanel();
+      await waitFor(() => expect(screen.getAllByText('לא שויך').length).toBeGreaterThan(0));
+      expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('worker requests', () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(WITH_REQUEST),
+        }),
+      );
+    });
+
+    it('translates the request type and status enums', async () => {
+      renderPanel();
+      await waitFor(() => expect(screen.getByText('בקשת חופשה')).toBeInTheDocument());
+      expect(screen.getByRole('option', { name: 'בבדיקה' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'אושרה' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'In review' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('failed write', () => {
+    /**
+     * WEB-07/WEB-13: a rejected PUT made the <select> snap back with no
+     * message, which reads as "the app ignored my click". Without the catch
+     * added in this change this test also produces an unhandled rejection.
+     */
+    it('surfaces a failed assignment instead of failing silently', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(LOADED_COLLABORATION) })
+        .mockRejectedValue(new Error('network error'));
+      vi.stubGlobal('fetch', fetchMock);
+      renderPanel();
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: 'אחראי/ת על שכר ותשלומים' }),
+        ).toBeInTheDocument(),
+      );
+      fireEvent.change(screen.getByRole('combobox', { name: 'אחראי/ת על שכר ותשלומים' }), {
+        target: { value: '' },
+      });
+      await waitFor(() =>
+        expect(screen.getByText('העדכון לא נשמר. אפשר לנסות שוב.')).toBeInTheDocument(),
+      );
     });
   });
 
@@ -109,7 +206,7 @@ describe('CollaborationPanel', () => {
     it('renders with empty members and responsibilities', async () => {
       renderPanel();
       await waitFor(() =>
-        expect(screen.getByRole('heading', { name: /Family collaboration/ })).toBeInTheDocument(),
+        expect(screen.getByRole('heading', { name: 'שיתוף פעולה משפחתי' })).toBeInTheDocument(),
       );
     });
   });

@@ -1,3 +1,18 @@
+// Root 8 (DOM-04). Every amount in this module is carried as integer agorot
+// between the point it arrives and the point it is returned. The shekel
+// `number`s in the input and output types are the HTTP contract, not a second
+// money model.
+import {
+  addAgorot,
+  agorotFromShekels,
+  scaleAgorot,
+  shekelsOf,
+  subtractAgorot,
+  toIsraelDate,
+  ZERO_AGOROT,
+  type Agorot,
+} from '@caredesk/domain';
+
 export type TimelineGroup = 'overdue' | 'today' | 'this_week' | 'later_this_month' | 'upcoming';
 export type AttentionSeverity = 'critical' | 'high' | 'medium' | 'info';
 
@@ -21,9 +36,18 @@ export interface ComplianceTimelineItem extends AttentionFact {
 }
 
 const DAY = 86_400_000;
-function utcDay(value: string | Date): number {
-  const date = typeof value === 'string' ? new Date(`${value.slice(0, 10)}T00:00:00Z`) : value;
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / DAY;
+/**
+ * DOM-17. A due date is a CALENDAR day, and which calendar day an instant falls
+ * on is a question only a time zone can answer. This used to read UTC fields
+ * off whatever it was given, so a task due today was already 'overdue' from
+ * 03:00 Israel time that morning whenever the caller handed over an instant.
+ * Everything is now reduced to an Asia/Jerusalem calendar day first, and the
+ * subtraction happens between two day numbers rather than between two instants.
+ */
+function businessDay(value: string | Date): number {
+  const date = toIsraelDate(value);
+  const [year, month, day] = date.split('-').map(Number);
+  return Date.UTC(year!, month! - 1, day!) / DAY;
 }
 
 /** A deterministic projection: callers must pass the tenant, case and clock explicitly. */
@@ -33,17 +57,17 @@ export function projectComplianceTimeline(input: {
   today: string;
   facts: readonly AttentionFact[];
 }): ComplianceTimelineItem[] {
-  const today = utcDay(input.today);
+  const today = businessDay(input.today);
   const endOfMonth = new Date(`${input.today.slice(0, 10)}T00:00:00Z`);
   endOfMonth.setUTCMonth(endOfMonth.getUTCMonth() + 1, 0);
-  const monthEndDay = utcDay(endOfMonth);
+  const monthEndDay = businessDay(endOfMonth);
   const seen = new Set<string>();
   return input.facts
     .filter((fact) => fact.tenantId === input.tenantId && fact.caseId === input.caseId)
     .filter((fact) => fact.status === 'open')
     .filter((fact) => !seen.has(fact.id) && Boolean(seen.add(fact.id)))
     .map((fact) => {
-      const daysUntilDue = utcDay(fact.dueDate) - today;
+      const daysUntilDue = businessDay(fact.dueDate) - today;
       const group: TimelineGroup =
         daysUntilDue < 0
           ? 'overdue'
@@ -51,7 +75,7 @@ export function projectComplianceTimeline(input: {
             ? 'today'
             : daysUntilDue <= 7
               ? 'this_week'
-              : utcDay(fact.dueDate) <= monthEndDay
+              : businessDay(fact.dueDate) <= monthEndDay
                 ? 'later_this_month'
                 : 'upcoming';
       const severity: AttentionSeverity =
@@ -104,20 +128,41 @@ export interface PayrollFact {
   closed: boolean;
 }
 
+/**
+ * DOM-04. `cumulative` used to be raw float addition across twelve months and
+ * `average` was an unrounded division, so a year's running total drifted by
+ * fractions of an agora that nothing ever reconciled. Both now accumulate in
+ * whole agorot and convert back once, at the return.
+ */
 export function projectPayrollAnalytics(records: readonly PayrollFact[], year: string) {
   const months = records
     .filter((record) => record.month.startsWith(`${year}-`))
     .sort((a, b) => a.month.localeCompare(b.month));
-  let cumulative = 0;
-  const trend = months.map((record) => ({ ...record, cumulative: (cumulative += record.total) }));
-  const total = trend.at(-1)?.cumulative ?? 0;
+  let cumulative = ZERO_AGOROT;
+  const trend = months.map((record) => {
+    cumulative = addAgorot(cumulative, agorotFromShekels(record.total));
+    return { ...record, cumulative: shekelsOf(cumulative) };
+  });
+  const totalAgorot = months.reduce(
+    (sum: Agorot, record) => addAgorot(sum, agorotFromShekels(record.total)),
+    ZERO_AGOROT,
+  );
+  const total = shekelsOf(totalAgorot);
   return {
     trend,
     total,
-    average: months.length ? total / months.length : 0,
+    average: months.length ? shekelsOf(scaleAgorot(totalAgorot, 1 / months.length)) : 0,
     highest: months.length ? months.reduce((a, b) => (a.total >= b.total ? a : b)) : null,
     lowest: months.length ? months.reduce((a, b) => (a.total <= b.total ? a : b)) : null,
-    previousMonthChange: months.length > 1 ? months.at(-1)!.total - months.at(-2)!.total : null,
+    previousMonthChange:
+      months.length > 1
+        ? shekelsOf(
+            subtractAgorot(
+              agorotFromShekels(months.at(-1)!.total),
+              agorotFromShekels(months.at(-2)!.total),
+            ),
+          )
+        : null,
     hasOpenMonth: months.some((record) => !record.closed),
   };
 }
@@ -168,7 +213,13 @@ export function projectFutureCost(input: {
   ].filter((amount): amount is number => amount !== undefined);
   if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0))
     throw new Error('Forecast amounts must be finite and non-negative');
-  const roundMoney = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
+  // DOM-04. `roundMoney = (a) => Math.round((a + Number.EPSILON) * 100) / 100`
+  // used to live here. EPSILON is ~2.2e-16 while the representation gap at
+  // shekel magnitudes is ~1e-13, so it corrected nothing where it mattered and
+  // rounded 1.015 up but 8.165 down. Every amount below is converted to whole
+  // agorot once, on entry, and back to shekels once, at the return; there is no
+  // rounding in between because integer addition does not need any.
+  const money = (amount: number): Agorot => agorotFromShekels(amount);
   const start = new Date(`${input.startMonth}-01T00:00:00Z`);
   const safeBase = input.baseSalary ?? 0;
   const months = Array.from({ length: 12 }, (_, offset) => {
@@ -179,12 +230,20 @@ export function projectFutureCost(input: {
     const inWindow = (e: ForecastExpense) =>
       (e.startMonth === undefined || month >= e.startMonth) &&
       (e.endMonth === undefined || month <= e.endMonth);
-    const knownExpenses = input.expenses
-      .filter((e) => e.dueDate?.startsWith(month))
-      .reduce((sum, e) => sum + e.amount, 0);
-    const recurring = input.expenses
-      .filter((e) => e.frequency === 'monthly' && inWindow(e))
-      .reduce((sum, e) => sum + e.amount, 0);
+    // DOM-05. There used to be two overlapping sums here: `knownExpenses`
+    // (everything with a dueDate in this month) and `recurring` (everything
+    // monthly and in window). An expense that is BOTH monthly and dated landed
+    // in both, so the headline total counted a ₪50 premium twice while the
+    // itemised breakdown — which used `||` — listed it once. The total and the
+    // explanation of the total disagreed, on the one surface this product
+    // exists to provide. One deduped set now feeds both.
+    const monthExpenses = input.expenses.filter(
+      (e) => (e.frequency === 'monthly' && inWindow(e)) || e.dueDate?.startsWith(month),
+    );
+    const expenseTotal = monthExpenses.reduce(
+      (sum: Agorot, e) => addAgorot(sum, money(e.amount)),
+      ZERO_AGOROT,
+    );
     const scenarioSalary =
       input.scenario?.salaryChange && month >= input.scenario.salaryChange.effectiveMonth
         ? input.scenario.salaryChange.amount
@@ -209,103 +268,112 @@ export function projectFutureCost(input: {
           ]
         : []),
     ];
-    const scenarioTotal = scenarioItems.reduce((sum, item) => sum + item.amount, 0);
-    const components = actual
-      ? [
-          {
-            id: actual.sourceId,
-            label: 'Closed payroll',
-            amount: actual.amount,
-            source: 'closed_payroll',
-            explanation: 'Canonical closed payroll record',
-            status: 'ACTUAL' as const,
-          },
-        ]
+    const scenarioTotal = scenarioItems.reduce(
+      (sum: Agorot, item) => addAgorot(sum, money(item.amount)),
+      ZERO_AGOROT,
+    );
+    // DOM-06. The salary line is what an actual or entered payroll REPLACES —
+    // not the month. Before this, a month with a closed payroll had its total
+    // set to the payroll amount alone while `known` on the same row still
+    // reported the month's ₪500 insurance renewal: the row contradicted itself,
+    // and the expense vanished from the annual total and from the reserve
+    // recommendation. Salary, expenses and scenario items are now three
+    // independent terms, and the total is their sum in every branch.
+    const salaryComponent = actual
+      ? {
+          id: actual.sourceId,
+          label: 'Closed payroll',
+          amount: actual.amount,
+          source: 'closed_payroll',
+          explanation: 'Canonical closed payroll record',
+          status: 'ACTUAL' as const,
+        }
       : entered
-        ? [
-            {
-              id: entered.sourceId,
-              label: 'Entered payroll',
-              amount: entered.amount,
-              source: 'payroll_entry',
-              explanation: 'Canonical payroll entry for an open month',
-              status: 'ACTUAL' as const,
-            },
-          ]
-        : [
-            ...(input.baseSalary === undefined
-              ? [
-                  {
-                    id: 'salary_unknown',
-                    label: 'Salary',
-                    amount: null,
-                    source: 'salary_configuration',
-                    explanation: 'No current salary is stored',
-                    status: 'UNKNOWN' as const,
-                  },
-                ]
-              : [
-                  {
-                    id: 'base_salary',
-                    label: 'Salary',
-                    amount: scenarioSalary,
-                    source:
-                      input.scenario?.salaryChange &&
-                      month >= input.scenario.salaryChange.effectiveMonth
-                        ? 'planning_scenario'
-                        : 'salary_configuration',
-                    explanation:
-                      'Current configured salary; repeated without statutory assumptions',
-                    status: 'FORECAST' as const,
-                  },
-                ]),
-            ...input.expenses
-              .filter(
-                (e) => (e.frequency === 'monthly' && inWindow(e)) || e.dueDate?.startsWith(month),
-              )
-              .map((e) => ({
-                id: e.id,
-                label: e.label,
-                amount: e.amount,
-                source: e.source ?? 'employment_expense',
-                explanation:
-                  e.source === 'planning_scenario'
-                    ? 'Planning-only value; canonical records are unchanged'
-                    : e.frequency === 'monthly'
-                      ? 'Stored recurring employment cost'
-                      : 'Stored dated employment cost',
-                status: 'FORECAST' as const,
-              })),
-            ...scenarioItems.map((item) => ({
-              ...item,
-              source: 'planning_scenario',
-              explanation: 'Planning-only value; canonical records are unchanged',
+        ? {
+            id: entered.sourceId,
+            label: 'Entered payroll',
+            amount: entered.amount,
+            source: 'payroll_entry',
+            explanation: 'Canonical payroll entry for an open month',
+            status: 'ACTUAL' as const,
+          }
+        : input.baseSalary === undefined
+          ? {
+              id: 'salary_unknown',
+              label: 'Salary',
+              amount: null,
+              source: 'salary_configuration',
+              explanation: 'No current salary is stored',
+              status: 'UNKNOWN' as const,
+            }
+          : {
+              id: 'base_salary',
+              label: 'Salary',
+              amount: scenarioSalary,
+              source:
+                input.scenario?.salaryChange && month >= input.scenario.salaryChange.effectiveMonth
+                  ? 'planning_scenario'
+                  : 'salary_configuration',
+              explanation: 'Current configured salary; repeated without statutory assumptions',
               status: 'FORECAST' as const,
-            })),
-          ];
-    const projected = roundMoney(scenarioSalary + recurring);
-    const forecastTotal = roundMoney(projected + knownExpenses + scenarioTotal);
+            };
+    const components = [
+      salaryComponent,
+      ...monthExpenses.map((e) => ({
+        id: e.id,
+        label: e.label,
+        amount: e.amount,
+        source: e.source ?? 'employment_expense',
+        explanation:
+          e.source === 'planning_scenario'
+            ? 'Planning-only value; canonical records are unchanged'
+            : e.frequency === 'monthly'
+              ? 'Stored recurring employment cost'
+              : 'Stored dated employment cost',
+        status: 'FORECAST' as const,
+      })),
+      ...scenarioItems.map((item) => ({
+        ...item,
+        source: 'planning_scenario',
+        explanation: 'Planning-only value; canonical records are unchanged',
+        status: 'FORECAST' as const,
+      })),
+    ];
+    const payrollAgorot = actual
+      ? money(actual.amount)
+      : entered
+        ? money(entered.amount)
+        : ZERO_AGOROT;
+    const projectedSalary = actual || entered ? ZERO_AGOROT : money(scenarioSalary);
+    // `known` carries every non-salary cost the month is expected to incur —
+    // recurring and dated alike, deduped — so that `total = actual + projected
+    // + known` holds identically and the components list sums to the headline.
+    const known = addAgorot(expenseTotal, scenarioTotal);
     return {
       month,
-      actual: actual ? roundMoney(actual.amount) : entered ? roundMoney(entered.amount) : 0,
-      known: roundMoney(knownExpenses + scenarioTotal),
-      projected: actual || entered ? 0 : projected,
-      total: actual
-        ? roundMoney(actual.amount)
-        : entered
-          ? roundMoney(entered.amount)
-          : forecastTotal,
+      actual: shekelsOf(payrollAgorot),
+      known: shekelsOf(known),
+      projected: shekelsOf(projectedSalary),
+      total: shekelsOf(addAgorot(payrollAgorot, projectedSalary, known)),
       status: actual || entered ? ('ACTUAL' as const) : ('FORECAST' as const),
       components,
     };
   });
-  const total = roundMoney(months.reduce((sum, month) => sum + month.total, 0));
+  const totalAgorot = months.reduce(
+    (sum: Agorot, month) => addAgorot(sum, money(month.total)),
+    ZERO_AGOROT,
+  );
+  const total = shekelsOf(totalAgorot);
   return {
     months,
     total,
-    next3MonthsTotal: roundMoney(months.slice(0, 3).reduce((sum, month) => sum + month.total, 0)),
-    average: roundMoney(total / 12),
-    reserveRecommendation: roundMoney(total / 12),
+    next3MonthsTotal: shekelsOf(
+      months
+        .slice(0, 3)
+        .reduce((sum: Agorot, month) => addAgorot(sum, money(month.total)), ZERO_AGOROT),
+    ),
+    average: shekelsOf(scaleAgorot(totalAgorot, 1 / 12)),
+    reserveRecommendation: shekelsOf(scaleAgorot(totalAgorot, 1 / 12)),
     guidance: 'planning_guidance_not_financial_advice' as const,
     unknowns: input.baseSalary === undefined ? ['base_salary'] : [],
     assumptions: [

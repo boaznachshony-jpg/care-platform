@@ -197,6 +197,11 @@ export function ClientsPage() {
             <span>מומלץ להוריד גיבוי לפני ניקוי נתוני הדפדפן או מעבר למכשיר אחר.</span>
           </>
         )}
+        {/* WEB-17: "גיבוי" writes every decrypted business key to a plain JSON
+            download — Israeli ID numbers, passport numbers, medications and
+            payroll history in clear text. The user was given no indication of
+            that before choosing where to put the file. */}
+        <span className="local-data-warning">{t('clients.backupPlaintextWarning')}</span>
       </aside>
     </main>
   );

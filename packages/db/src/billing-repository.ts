@@ -105,10 +105,16 @@ export class PgBillingRepository implements BillingRepository {
   ): Promise<ProductSubscriptionRecord> {
     return withTenant(this.pool, tenantId, async (client) => {
       const result = await client.query<SubscriptionRow>(
+        // DOM-16: the intended day of the month is recorded at creation, so
+        // `caredesk_next_charge_on` can anchor on it instead of chaining from
+        // a next_charge_on that Postgres has already clamped through a short
+        // February. Derived from the same date the schedule starts on, which
+        // is by definition the day the customer signed up for.
         `insert into product_subscription
            (tenant_id, status, price_agorot, vat_rate_bps, launch_discount_percent,
-            charging_starts_at, next_charge_on)
-         values ($1, 'sponsored', $2, $3, $4, $5::date, $5::date)
+            charging_starts_at, next_charge_on, billing_anchor_day)
+         values ($1, 'sponsored', $2, $3, $4, $5::date, $5::date,
+                 extract(day from $5::date)::smallint)
          on conflict (tenant_id) do nothing
          returning ${SUBSCRIPTION_COLUMNS}`,
         [

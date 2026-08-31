@@ -108,6 +108,10 @@ function AuthenticatedApp() {
       storageUnavailable={<StorageUnavailablePage />}
       passwordRecovery={<PasswordRecoveryPage />}
       loading={<AuthLoadingPage />}
+      /* WEB-05: a token refresh or a resumed mobile tab briefly reports an
+         empty session. The app stays mounted behind this notice instead of
+         being torn down and rebuilt from scratch. */
+      sessionRecovering={<span>{t('errors.sessionRecovering')}</span>}
     >
       <AccountFrozenGate>
         <Routes>

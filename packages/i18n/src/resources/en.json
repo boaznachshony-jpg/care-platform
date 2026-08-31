@@ -439,6 +439,7 @@
     "legalConsentNote": "The acceptance is recorded with the document name, its version and the moment of approval. Entering the caregiver's details requires a lawful basis, as explained in the privacy policy."
   },
   "clients": {
+    "backupPlaintextWarning": "The backup file is not encrypted and contains ID numbers, passport numbers and payroll data. Keep it somewhere protected and do not send it by email or message.",
     "eyebrow": "Employment case management",
     "title": "My employment cases",
     "introCloud": "Each case is stored separately in the secure account and syncs between authorized devices.",
@@ -573,6 +574,14 @@
     "demoCaregiver": "Caregiver"
   },
   "payments": {
+    "draftRestored": "An automatically saved draft from {{savedAt}} was restored. You can carry on where you left off.",
+    "draftSaving": "Saving draft...",
+    "draftSaved": "Draft saved automatically at {{savedAt}}",
+    "draftSaveFailed": "The draft could not be stored on this device (it may be out of space). What you entered is still on screen - finish and save now.",
+    "draftDiscard": "Discard the draft",
+    "draftDiscardConfirm": "Discard the saved draft and return to the stored record?",
+    "draftLeaveWarning": "There is payroll data that has not been saved.",
+    "draftSwitchMonthConfirm": "There is unsaved data for the current month. Switching months will remove it from the screen. Continue?",
     "upcomingTitle": "Upcoming payments",
     "upcomingSummary": "The recurring obligations of a household employer, computed automatically from today's date.",
     "salaryTitle": "Next salary payment",
@@ -1218,7 +1227,61 @@
   "collaboration": {
     "fromCaregiver": "From the caregiver",
     "receivedAt": "Received",
-    "handledAt": "Handled"
+    "handledAt": "Handled",
+    "title": "Family collaboration",
+    "loading": "Loading the responsibility split...",
+    "loadFailed": "The responsibility split could not be loaded. No data was affected.",
+    "retry": "Try again",
+    "saveFailed": "The update was not saved. You can try again.",
+    "responsibilities": "Responsibilities",
+    "taskAssignments": "Task assignments",
+    "workerRequests": "Caregiver requests",
+    "noRequests": "No open requests.",
+    "unassigned": "Unassigned",
+    "assigneeLabel": "Responsible for {{subject}}",
+    "handleRequestLabel": "Handle request: {{subject}}",
+    "statusLabel": "Status",
+    "responsibility": {
+      "case_management": "Case management",
+      "payroll": "Payroll and payments",
+      "documents_compliance": "Documents and compliance",
+      "visa_authorization": "Visa and employment permit",
+      "insurance": "Insurance",
+      "general_administration": "General administration"
+    },
+    "requestType": {
+      "leave": "Leave request",
+      "advance": "Advance request",
+      "payment": "Payment query",
+      "document": "Document request",
+      "other": "Other request"
+    },
+    "status": {
+      "open": "Open",
+      "pending": "Pending",
+      "in_review": "In review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "resolved": "Resolved"
+    }
+  },
+  "errors": {
+    "app": {
+      "title": "Something went wrong on this screen",
+      "body": "A display error occurred. This is a display fault only.",
+      "dataSafe": "What you entered is stored on this device and nothing was sent anywhere because of this fault.",
+      "retry": "Try again",
+      "reload": "Reload the page",
+      "home": "Back to the employer list",
+      "support": "If this keeps happening, contact us from the help screen."
+    },
+    "section": {
+      "title": "This part did not load",
+      "body": "An error occurred in this part of the screen. The rest of the page is intact and available.",
+      "retry": "Reload this part"
+    },
+    "sessionRecovering": "Reconnecting to your account... what you entered is saved.",
+    "apiUnreachable": "No server address is configured for this environment, so cloud saving is not working. Data is stored on this device only. Please contact support."
   },
   "medications": {
     "eyebrow": "Handover information",

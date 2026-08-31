@@ -92,12 +92,27 @@ export async function deleteDocumentFile(id: string): Promise<void> {
   }
 }
 
+/**
+ * WEB-17: `onblocked` used to resolve as if the delete had succeeded. When a
+ * second tab holds the database open — the ordinary case on a phone with the
+ * app open twice — the account-switch and sign-out paths therefore reported
+ * success while the previous account's passport and ID scans stayed on disk
+ * under the next account's session. A blocked delete is a failed delete, and
+ * the caller has to be able to tell the difference.
+ */
+export class DocumentCacheClearError extends Error {
+  constructor(readonly reason: 'blocked' | 'error') {
+    super(`Local document cache could not be cleared (${reason}).`);
+    this.name = 'DocumentCacheClearError';
+  }
+}
+
 export async function clearLocalDocumentFileCache(): Promise<void> {
   if (typeof indexedDB === 'undefined') return;
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
     const request = indexedDB.deleteDatabase(DATABASE_NAME);
     request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    request.onblocked = () => resolve();
+    request.onerror = () => reject(new DocumentCacheClearError('error'));
+    request.onblocked = () => reject(new DocumentCacheClearError('blocked'));
   });
 }

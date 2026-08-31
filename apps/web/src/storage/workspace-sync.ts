@@ -8,6 +8,7 @@ import {
   type MvpWorkspaceSnapshot,
 } from './mvp-storage.js';
 import { clearLocalDocumentFileCache } from './document-file-store.js';
+import { clearAllFormDrafts } from './form-draft-store.js';
 import { clearBusinessStorageKey } from './business-storage-crypto.js';
 
 export type WorkspaceSyncState = 'disabled' | 'loading' | 'saved' | 'saving' | 'error';
@@ -348,6 +349,13 @@ export async function startWorkspaceSync(userId: string): Promise<void> {
     dirty = meta.dirty;
   } else {
     clearMvpWorkspace();
+    // WEB-02: a draft belongs to the account that typed it.
+    clearAllFormDrafts();
+    // WEB-17: this is the account-SWITCH path — the previous account's
+    // passport and ID scans must be gone before account B is signed in. A
+    // rejection here is allowed to propagate: the caller treats it as a
+    // storage failure, which is the correct outcome for "we could not remove
+    // the other account's identity documents".
     await clearLocalDocumentFileCache();
     clearBusinessStorageKey();
     window.localStorage.removeItem(WORKSPACE_OWNER_KEY);
@@ -402,7 +410,15 @@ export function stopWorkspaceSync(): void {
   dirty = false;
   clearMvpWorkspace();
   clearBusinessStorageKey();
-  void clearLocalDocumentFileCache();
+  // WEB-02: drafts hold salary figures for the account being signed out.
+  clearAllFormDrafts();
+  // WEB-17: a blocked delete now rejects instead of silently reporting
+  // success. Sign-out cannot be made to wait on another tab releasing the
+  // database, so this is logged rather than thrown — but it is no longer
+  // invisible, which is what made the leak undetectable.
+  void clearLocalDocumentFileCache().catch((error: unknown) => {
+    console.warn('[caredesk] Local document cache was not cleared on sign-out.', error);
+  });
   window.localStorage.removeItem(WORKSPACE_OWNER_KEY);
   if (previousUserId) window.localStorage.removeItem(metaKey(previousUserId));
   setState('disabled');

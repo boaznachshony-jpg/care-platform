@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AutocompleteField } from '../components/AutocompleteField.js';
@@ -30,20 +30,56 @@ export function SettingsPage() {
   // stored profile synchronously (no flash of empty fields), with the
   // same-person details already mirrored across the employer/recipient pair.
   const [draft, setDraftState] = useState(() => withSamePersonFallbacks(profile));
-  const [edited, setEdited] = useState(false);
   const [saved, setSaved] = useState(false);
+  /**
+   * WEB-03 — edits are tracked per FIELD, not per form.
+   *
+   * The old flag (`edited`) disabled re-sync permanently after the first
+   * keystroke, and submit wrote the whole draft object. On a phone with a
+   * stale device cache the sequence was: user types one character, background
+   * hydration replaces the store with the fuller server profile, the draft
+   * keeps the stale copy of all ~30 untouched fields, and "שמירה" writes them
+   * back over the hydrated values — destroying another device's edits.
+   *
+   * A ref, not state: touching a field must not itself trigger a render, and
+   * the set has to be readable inside the hydration effect without becoming
+   * one of its dependencies.
+   */
+  const touchedFields = useRef(new Set<keyof MvpProfile>());
 
   function setDraft(next: MvpProfile) {
-    setEdited(true);
+    for (const field of Object.keys(next) as (keyof MvpProfile)[]) {
+      if (next[field] !== draft[field]) touchedFields.current.add(field);
+    }
     setDraftState(next);
   }
 
-  // Cloud workspace hydration lands after the first render. Until the user has
-  // touched a field the form follows the stored profile, so an untouched form
-  // never keeps showing the empty pre-hydration values.
+  // Cloud workspace hydration lands after the first render. Fields the user
+  // has not touched follow the newly-arrived profile; fields they are editing
+  // keep what they typed.
   useEffect(() => {
-    if (!edited) setDraftState(withSamePersonFallbacks(profile));
-  }, [edited, profile]);
+    setDraftState((current) => {
+      const hydrated = withSamePersonFallbacks(profile) as unknown as Record<string, unknown>;
+      for (const field of touchedFields.current) {
+        hydrated[field as string] = (current as unknown as Record<string, unknown>)[
+          field as string
+        ];
+      }
+      // Keep the existing object when hydration produced the same values. Every
+      // MvpProfile field is a scalar, so this comparison is exact.
+      //
+      // Identity matters beyond saving a render: `saved` is cleared by an
+      // effect keyed on `draft`, because a user edit should retract the "saved"
+      // confirmation. Saving calls setProfile, which re-runs this effect, and
+      // returning a fresh object made the successful save look like an edit —
+      // it cleared its own confirmation in the same tick it was shown. The old
+      // per-form `edited` flag hid that by skipping hydration entirely once
+      // anything had been typed.
+      const asRecord = current as unknown as Record<string, unknown>;
+      const unchanged = Object.keys(hydrated).every((key) => hydrated[key] === asRecord[key]);
+      return unchanged ? current : (hydrated as unknown as MvpProfile);
+    });
+  }, [profile]);
 
   const [notificationResult, setNotificationResult] = useState('');
   const employerIdIsValid = isValidIsraeliId(draft.employerIdNumber);
@@ -117,7 +153,18 @@ export function SettingsPage() {
         onSubmit={(event) => {
           event.preventDefault();
           if (!profileIsValid) return;
-          setProfile(draft);
+          // WEB-03: send the fields this user actually changed, applied to the
+          // profile as it stands NOW, rather than a whole snapshot captured
+          // before hydration. An untouched field can no longer be overwritten
+          // by a value the form happened to be holding.
+          const changes: Record<string, unknown> = {};
+          for (const field of touchedFields.current) {
+            changes[field as string] = (draft as unknown as Record<string, unknown>)[
+              field as string
+            ];
+          }
+          setProfile({ ...profile, ...(changes as Partial<MvpProfile>) });
+          touchedFields.current.clear();
           setSaved(true);
         }}
       >
@@ -564,8 +611,19 @@ export function SettingsPage() {
         </div>
       </form>
       {/* Reviewed regulation content lifecycle (capability #11) — server-backed,
-          manager-only mutations; deliberately outside the local profile form. */}
-      <RegulationRulesAdmin />
+          manager-only mutations; deliberately outside the local profile form.
+
+          WEB-22: this is a draft -> in_review -> approved -> active -> retired
+          editor for regulatory content, and it rendered unconditionally at the
+          bottom of every family employer's Settings page. Where the server
+          denies the read they got a permanent load-error alert on their own
+          settings screen; where it allows it they could attempt transitions
+          they have no business making.
+
+          Gated on an explicit build flag, off by default, so the consumer
+          screen is clean. This is a stopgap: the correct gate is a reviewer
+          role returned by the API and its own route. Reported as such. */}
+      {import.meta.env.VITE_REGULATION_CONSOLE === '1' ? <RegulationRulesAdmin /> : null}
     </div>
   );
 }

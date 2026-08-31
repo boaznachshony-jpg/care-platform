@@ -111,10 +111,16 @@ describe('product intelligence projections', () => {
       ],
     });
     expect(result.months).toHaveLength(12);
+    // DOM-05/DOM-06 changed what the two portions MEAN, so that they can be
+    // added without overlapping: `projected` is the salary forecast alone and
+    // `known` is every non-salary cost the month incurs, recurring and dated
+    // alike, deduped. `projected + known === total` now holds identically —
+    // before, `projected` folded the recurring expense in and `known` folded it
+    // in again for any month it also carried a due date.
     expect(result.months[2]).toMatchObject({
       month: '2028-02',
-      known: 25,
-      projected: 110,
+      known: 35,
+      projected: 100,
       total: 135,
     });
     expect(Number.isFinite(result.total)).toBe(true);
@@ -209,7 +215,14 @@ describe('product intelligence projections', () => {
     expect(result.months.filter((m) => m.known > 0)).toHaveLength(1);
   });
 
-  it('lets canonical actuals replace forecast plus scenario layers for their month', () => {
+  /**
+   * DOM-06. This test previously asserted the bug: an actual payroll replaced
+   * the WHOLE month, so the recurring ₪40 expense disappeared from the month's
+   * total, from the annual total and from the reserve recommendation — while
+   * `known` on the same row still reported it. An actual replaces the SALARY
+   * forecast, and nothing else.
+   */
+  it('lets a canonical actual replace the salary forecast, not the whole month', () => {
     const result = projectFutureCost({
       startMonth: '2028-01',
       baseSalary: 100,
@@ -225,13 +238,84 @@ describe('product intelligence projections', () => {
       actuals: [{ month: '2028-01', amount: 95, sourceId: 'closed-1' }],
       enteredPayroll: [{ month: '2028-02', amount: 105, sourceId: 'entry-1' }],
     });
-    // Closed month: only the canonical closed record counts.
-    expect(result.months[0]).toMatchObject({ total: 95, status: 'ACTUAL' });
-    expect(result.months[0]!.components).toHaveLength(1);
-    // Open entered month: only the canonical payroll entry counts.
-    expect(result.months[1]).toMatchObject({ total: 105, status: 'ACTUAL' });
+    // Closed month: the canonical closed record replaces the salary line, and
+    // the month's own recurring expense is still counted and still explained.
+    expect(result.months[0]).toMatchObject({
+      actual: 95,
+      known: 40,
+      projected: 0,
+      total: 135,
+      status: 'ACTUAL',
+    });
+    expect(result.months[0]!.components).toHaveLength(2);
+    expect(result.months[0]!.components[0]?.source).toBe('closed_payroll');
+    // Open entered month: same rule for a payroll entry.
+    expect(result.months[1]).toMatchObject({ total: 145, status: 'ACTUAL' });
     expect(result.months[1]!.components[0]?.source).toBe('payroll_entry');
     // Pure forecast month: salary forecast base plus the scenario layer.
     expect(result.months[2]).toMatchObject({ total: 140, status: 'FORECAST' });
+  });
+
+  /**
+   * DOM-05. An expense that is BOTH monthly and dated used to land in the
+   * `knownExpenses` sum and in the `recurring` sum, so the headline total
+   * counted it twice while the components list — which deduped with `||` —
+   * listed it once. The number and its own explanation disagreed.
+   */
+  it('counts a monthly expense that also carries a due date exactly once', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [
+        {
+          id: 'ins',
+          label: 'Insurance',
+          amount: 50,
+          frequency: 'monthly',
+          dueDate: '2028-03-15',
+        },
+      ],
+    });
+    const march = result.months[2]!;
+    expect(march.month).toBe('2028-03');
+    expect(march.total).toBe(150);
+    expect(march.components).toHaveLength(2);
+  });
+
+  it('always sums its components to its headline total', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 100,
+      expenses: [
+        { id: 'ins', label: 'Insurance', amount: 50, frequency: 'monthly', dueDate: '2028-03-15' },
+        { id: 'fee', label: 'Fee', amount: 500, frequency: 'one_time', dueDate: '2028-01-10' },
+      ],
+      actuals: [{ month: '2028-01', amount: 95, sourceId: 'closed-1' }],
+      scenario: { oneTimeExpense: { month: '2028-02', amount: 25, label: 'One off' } },
+    });
+    for (const month of result.months) {
+      const componentSum = month.components.reduce(
+        (sum, component) => sum + (component.amount ?? 0),
+        0,
+      );
+      expect(componentSum).toBe(month.total);
+    }
+    // DOM-06 in the annual figure: the ₪500 fee is inside the year's total.
+    expect(result.months[0]!.total).toBe(645);
+  });
+
+  /**
+   * DOM-04. `roundMoney(amount) = Math.round((amount + Number.EPSILON) * 100) / 100`
+   * rounded 8.165 DOWN to 8.16 while Postgres, given the same text, stores
+   * 8.17. Twelve of them accumulated by float addition drifted further.
+   */
+  it('rounds every amount by the one documented rule and does not drift over a year', () => {
+    const result = projectFutureCost({
+      startMonth: '2028-01',
+      baseSalary: 8.165,
+      expenses: [],
+    });
+    expect(result.months[0]!.total).toBe(8.17);
+    expect(result.total).toBe(98.04);
   });
 });
