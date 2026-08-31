@@ -249,6 +249,15 @@ button {
   font-size: 0.88rem;
   color: #536174;
 }
+/* Terms/privacy acknowledgement beside the button that completes setup. */
+.onboarding-legal-consent {
+  display: grid;
+  gap: 4px;
+  margin-block: 4px 12px;
+}
+.onboarding-legal-consent p {
+  margin: 0;
+}
 @media (max-width: 520px) {
   .worker-portal {
     padding: 14px;
@@ -5424,6 +5433,19 @@ input[type='number'] {
   background: #fff8e5;
   color: #6f5212;
   font-weight: 800;
+}
+/* The version + "pending review by a lawyer" line. Reads as a standing note,
+   never as a warning (docs/governance/LIABILITY-FRAMING.md, placement rule 3). */
+.public-legal-page header .legal-note {
+  margin-block: 0 12px;
+  color: #55637a;
+  font-weight: 700;
+}
+.public-legal-related {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 6px;
 }
 
 @media (max-width: 820px) {

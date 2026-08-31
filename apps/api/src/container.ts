@@ -127,6 +127,11 @@ import {
   PgRegulationRuleService,
   type RegulationRuleService,
 } from './regulation-rule-service.js';
+import {
+  InMemoryTermsAcceptanceStore,
+  PgTermsAcceptanceStore,
+  type TermsAcceptanceStore,
+} from './legal/terms-acceptance-store.js';
 import type { BinderExportService } from './binder-export-service.js';
 import type { EvidenceExportService } from './evidence-export-service.js';
 
@@ -235,6 +240,12 @@ export interface Container {
    * rule context — active + effective-dated content only.
    */
   regulationRules: RegulationRuleService;
+  /**
+   * Append-only record that a user accepted the terms of service and the
+   * privacy policy (migration 0043). Replaces the billing screen's `useState`
+   * consent checkbox, which recorded nothing.
+   */
+  termsAcceptances: TermsAcceptanceStore;
   openCase: OpenEmploymentCase;
   getCase: GetEmploymentCase;
   listCases: ListEmploymentCases;
@@ -601,6 +612,7 @@ export function buildContainer(env: Env): Container {
       ? new PgAutomationReceiptStore(pool)
       : new InMemoryAutomationReceiptStore(),
     regulationRules,
+    termsAcceptances: pool ? new PgTermsAcceptanceStore(pool) : new InMemoryTermsAcceptanceStore(),
     pool,
     openCase: new OpenEmploymentCase(caseDeps),
     // Read use cases take audit + clock too: a refused read is an audited
@@ -742,8 +754,27 @@ export function buildContainer(env: Env): Container {
               checks.database = 'migration-required';
             }
           }
-        } catch {
-          reasons.push('Database is unreachable');
+        } catch (error) {
+          // Name the failure. This catch used to swallow everything and report
+          // the same four words for a wrong password, a blocked port, a
+          // missing grant and a genuine outage. On 2026-08-31 that cost most of
+          // a working day: production was down, `/ready` said only
+          // "unreachable", and the cause (the pooler rejecting a role on one
+          // port and accepting it on another) had to be found by writing a
+          // throwaway probe and running it by hand on a laptop.
+          //
+          // The code is what distinguishes them - 28P01 is a password, 42501 a
+          // grant, ECONNREFUSED/ETIMEDOUT the network - so the code is what
+          // this endpoint must say. The message is included because Postgres
+          // phrases the useful half there, and neither field carries the
+          // connection string: node-postgres builds these from the server's
+          // error response, and the driver's own network errors carry a host
+          // and port, never the password.
+          const detail =
+            error instanceof Error
+              ? `${(error as { code?: string }).code ?? error.name}: ${error.message}`
+              : String(error);
+          reasons.push(`Database is unreachable (${detail})`);
           checks.database = 'unreachable';
         }
       }

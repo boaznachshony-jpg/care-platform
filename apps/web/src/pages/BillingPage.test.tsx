@@ -2,13 +2,14 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { initI18n } from '@caredesk/i18n';
+import { initI18n, PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
 import type { BillingPlanResponse } from '@caredesk/schemas';
 
 const mocks = vi.hoisted(() => ({
   getBillingSubscription: vi.fn(),
   startBillingPaymentMethodSetup: vi.fn(),
   cancelBillingSubscription: vi.fn(),
+  recordLegalAcceptance: vi.fn(),
 }));
 
 vi.mock('../api/client.js', async () => {
@@ -90,6 +91,7 @@ describe('BillingPage', () => {
     mocks.getBillingSubscription.mockReset().mockResolvedValue(sponsoredPlan);
     mocks.startBillingPaymentMethodSetup.mockReset();
     mocks.cancelBillingSubscription.mockReset();
+    mocks.recordLegalAcceptance.mockReset().mockResolvedValue({ acceptances: [] });
   });
 
   it('shows the VAT-inclusive 39 ILS price and the current 100% sponsored charge', async () => {
@@ -287,6 +289,120 @@ describe('BillingPage', () => {
     );
     expect(assignMock).toHaveBeenCalledWith('https://secure.cardcom.solutions/hosted/setup');
     vi.unstubAllGlobals();
+  });
+
+  // ── Recorded acceptance ───────────────────────────────────────────────────
+  //
+  // The defect: `accepted` was a `useState` boolean and nothing else. The box
+  // was ticked, the subscription was created, and no trace of the acceptance
+  // survived the page. These four tests fail without the change.
+
+  async function submitSetupForm() {
+    fireEvent.change(await screen.findByLabelText(/invoice name/i), {
+      target: { value: 'Test Customer' },
+    });
+    fireEvent.click(screen.getByLabelText(/subscription and recurring billing terms/i));
+    await act(async () => {
+      fireEvent.submit(
+        screen.getByRole('button', { name: /securely connect a card/i }).closest('form')!,
+      );
+    });
+  }
+
+  it('records acceptance of the terms and the privacy policy at the displayed versions', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({ ...sponsoredPlan, providerConfigured: true });
+    mocks.startBillingPaymentMethodSetup.mockResolvedValue({ checkoutUrl: 'https://x.test/setup' });
+    vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+    await renderPage();
+
+    await submitSetupForm();
+
+    expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith({
+      context: 'billing',
+      documents: [
+        { document: 'terms', version: TERMS_DOCUMENT_VERSION },
+        { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
+      ],
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('records the acceptance before the subscription is created, not after', async () => {
+    // Ordering, not merely occurrence. The user is redirected to the hosted
+    // payment page on the next line and never returns to this component, so an
+    // acceptance written "afterwards" has nowhere to run.
+    const order: string[] = [];
+    mocks.getBillingSubscription.mockResolvedValue({ ...sponsoredPlan, providerConfigured: true });
+    mocks.recordLegalAcceptance.mockImplementation(async () => {
+      order.push('acceptance');
+      return { acceptances: [] };
+    });
+    mocks.startBillingPaymentMethodSetup.mockImplementation(async () => {
+      order.push('subscription');
+      return { checkoutUrl: 'https://x.test/setup' };
+    });
+    vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+    await renderPage();
+
+    await submitSetupForm();
+
+    expect(order).toEqual(['acceptance', 'subscription']);
+    vi.unstubAllGlobals();
+  });
+
+  it('does not create a subscription when the acceptance cannot be recorded', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({ ...sponsoredPlan, providerConfigured: true });
+    mocks.recordLegalAcceptance.mockRejectedValue(new Error('network error'));
+    const assignMock = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign: assignMock });
+    await renderPage();
+
+    await submitSetupForm();
+
+    // A live paid subscription with no record that its terms were accepted is
+    // precisely the state this change exists to make impossible.
+    expect(mocks.startBillingPaymentMethodSetup).not.toHaveBeenCalled();
+    expect(assignMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/could not record your acceptance/i)).toBeInTheDocument();
+    // The button must come back, not stay stuck in its busy state.
+    expect(screen.getByRole('button', { name: /securely connect a card/i })).toBeEnabled();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not record an acceptance from the past-due reconnect flow', async () => {
+    // That screen shows no consent checkbox and no document. Writing a row from
+    // it would record an acceptance the customer never gave.
+    mocks.getBillingSubscription.mockResolvedValue(pastDuePlan);
+    mocks.startBillingPaymentMethodSetup.mockResolvedValue({
+      checkoutUrl: 'https://x.test/reconnect',
+    });
+    vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+    await renderPage();
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: /update payment method/i }));
+    });
+
+    expect(mocks.startBillingPaymentMethodSetup).toHaveBeenCalled();
+    expect(mocks.recordLegalAcceptance).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('links the consent sentence to all three documents', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({ ...sponsoredPlan, providerConfigured: true });
+    await renderPage();
+
+    expect(await screen.findByRole('link', { name: /^the terms of service$/i })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
+    expect(screen.getByRole('link', { name: /^the privacy policy$/i })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+    expect(
+      screen.getByRole('link', { name: /subscription and recurring billing terms/i }),
+    ).toHaveAttribute('href', '/terms/subscription');
   });
 
   // ── Non-owner view ────────────────────────────────────────────────────────

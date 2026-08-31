@@ -2,7 +2,24 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { initI18n } from '@caredesk/i18n';
+import { initI18n, PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
+
+const mocks = vi.hoisted(() => ({
+  recordLegalAcceptance: vi.fn(),
+  ensureCanonicalCase: vi.fn(),
+}));
+
+vi.mock('../api/client.js', async () => {
+  const actual = await vi.importActual<typeof import('../api/client.js')>('../api/client.js');
+  return { ...actual, recordLegalAcceptance: mocks.recordLegalAcceptance };
+});
+
+vi.mock('../canonical-case.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../canonical-case.js')>('../canonical-case.js');
+  return { ...actual, ensureCanonicalCase: mocks.ensureCanonicalCase };
+});
+
 import {
   emptyMvpProfile,
   readMvpOnboardingDraft,
@@ -240,5 +257,76 @@ describe('first-run employment checklist', () => {
         medicalInsuranceExpiryDate: '2026-02-30',
       }),
     ).toBe(0);
+  });
+});
+
+/**
+ * Finishing setup is the moment the caregiver's identity documents, visa data
+ * and payroll details start being held - and that happens whether or not the
+ * user ever reaches the billing screen. Recording consent only at payment would
+ * leave the account that matters most for privacy purposes, the one holding a
+ * third party's data with no subscription, with no record of anything.
+ *
+ * Both tests fail against the code before this change: `/terms` and `/privacy`
+ * were never shown here and nothing was recorded.
+ */
+describe('onboarding legal acceptance', () => {
+  const completedChecklist = {
+    ...emptyMvpProfile,
+    recipientName: 'אילנה כהן',
+    employmentAgreementConfirmed: true,
+    medicalInsuranceConfirmed: true,
+    medicalInsuranceExpiryDate: '2027-06-30',
+    baseSalary: 6_500,
+    saturdayRate: 440,
+    licenseRenewalDate: '2027-07-12',
+    visaRenewalDate: '2026-08-15',
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    mocks.recordLegalAcceptance.mockReset().mockResolvedValue({ acceptances: [] });
+    mocks.ensureCanonicalCase.mockReset().mockResolvedValue(undefined);
+    saveMvpProfile(completedChecklist);
+    // Restore straight onto the final step rather than typing through six of
+    // them; the step index is persisted exactly this way by the wizard itself.
+    localStorage.setItem('caredesk.onboarding.step.default', '5');
+  });
+
+  it('shows the terms and privacy links beside the button that completes setup', () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: 'תקנון השימוש' })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: 'מדיניות הפרטיות' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+  });
+
+  it('records acceptance of both documents when setup is completed', async () => {
+    renderPage();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ }));
+    });
+
+    expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith({
+      context: 'onboarding',
+      documents: [
+        { document: 'terms', version: TERMS_DOCUMENT_VERSION },
+        { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
+      ],
+    });
+  });
+
+  it('still completes setup when the acceptance cannot be sent', async () => {
+    // Setup must finish offline. The recording is idempotent per
+    // (user, document, version), so the billing flow - where it is awaited and
+    // blocking - re-records it for free if this call was lost.
+    mocks.recordLegalAcceptance.mockRejectedValue(new Error('offline'));
+    renderPage();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ }));
+    });
+
+    expect(readMvpProfile().onboardingCompleted).toBe(true);
   });
 });

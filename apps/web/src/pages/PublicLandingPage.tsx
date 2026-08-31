@@ -1,6 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import {
+  PRIVACY_DOCUMENT_VERSION,
+  PRIVACY_SECTION_COUNT,
+  TERMS_DOCUMENT_VERSION,
+  TERMS_SECTION_COUNT,
+} from '@caredesk/i18n';
 import { ContactOptions } from '../components/ContactOptions.js';
 import { ContactPage } from './ContactPage.js';
 
@@ -100,6 +106,8 @@ function PublicFooter() {
       </div>
       <p>{t('public.common.footerDisclaimer')}</p>
       <div className="public-footer-links">
+        <Link to="/terms">{t('public.common.terms')}</Link>
+        <Link to="/privacy">{t('public.common.privacy')}</Link>
         <Link to="/terms/subscription">{t('public.common.subscriptionTerms')}</Link>
         <Link to="/contact-us">{t('public.common.contact')}</Link>
       </div>
@@ -327,6 +335,139 @@ export function PublicLandingPage() {
   );
 }
 
+/**
+ * The two binding legal documents render through one component, from one
+ * shape: a numbered section list, a related-documents block and a closing
+ * note.
+ *
+ * `version` is not decoration. It is interpolated into the `updated` line at
+ * the top of the page from the same constant the client submits to
+ * POST /legal/acceptances (packages/i18n/src/legal-documents.ts), so the
+ * version stored in `terms_acceptance` is by construction the version that was
+ * on the screen. See that file for why a second source of the string would
+ * quietly destroy the evidentiary value of the record.
+ */
+function LegalDocumentPage({
+  group,
+  path,
+  version,
+  sectionCount,
+  related,
+}: {
+  group: 'terms' | 'privacy';
+  path: string;
+  version: string;
+  sectionCount: number;
+  related: Array<{ to: string; labelKey: string }>;
+}) {
+  const { t } = useTranslation();
+  const title = t(`public.${group}.metaTitle`);
+  const description = t(`public.${group}.metaDescription`);
+  const structuredData = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: title,
+      description,
+      inLanguage: 'he',
+      version,
+      url: `${publicSiteUrl().replace(/\/$/, '')}${path}`,
+    }),
+    [description, path, title, version],
+  );
+  usePublicMetadata({ title, description, path, structuredData });
+
+  return (
+    <div className="public-site" dir="rtl">
+      <a className="cd-skip-link" href="#public-main">
+        {t('public.common.skip')}
+      </a>
+      <PublicHeader />
+      <main className="public-legal-page" id="public-main">
+        <header>
+          <span className="public-kicker">{t(`public.${group}.eyebrow`)}</span>
+          <h1>{t(`public.${group}.title`)}</h1>
+          {/* The one place the version is shown, and the same constant the
+              acceptance request carries. */}
+          <p className="legal-note">{t(`public.${group}.updated`, { version })}</p>
+          <p>{t(`public.${group}.intro`)}</p>
+        </header>
+        <article>
+          {Array.from({ length: sectionCount }, (_, index) => index + 1).map((section) => (
+            <section key={section}>
+              <h2>{t(`public.${group}.section${section}Title`)}</h2>
+              <p>{t(`public.${group}.section${section}Body`)}</p>
+            </section>
+          ))}
+          <section>
+            <h2>{t(`public.${group}.relatedTitle`)}</h2>
+            <ul className="public-legal-related">
+              {related.map((item) => (
+                <li key={item.to}>
+                  <Link to={item.to}>{t(item.labelKey)}</Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <aside>{t(`public.${group}.legalNotice`)}</aside>
+        </article>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+/** The תקנון, at /terms. */
+export function PublicTermsPage() {
+  return (
+    <LegalDocumentPage
+      group="terms"
+      path="/terms"
+      version={TERMS_DOCUMENT_VERSION}
+      sectionCount={TERMS_SECTION_COUNT}
+      related={[
+        // /terms/subscription is linked, not folded in. See the note on
+        // PublicSubscriptionTermsPage below for why it has to keep working.
+        { to: '/terms/subscription', labelKey: 'public.terms.relatedSubscription' },
+        { to: '/privacy', labelKey: 'public.terms.relatedPrivacy' },
+      ]}
+    />
+  );
+}
+
+/** The מדיניות פרטיות, at /privacy. */
+export function PublicPrivacyPage() {
+  return (
+    <LegalDocumentPage
+      group="privacy"
+      path="/privacy"
+      version={PRIVACY_DOCUMENT_VERSION}
+      sectionCount={PRIVACY_SECTION_COUNT}
+      related={[
+        { to: '/terms', labelKey: 'public.privacy.relatedTerms' },
+        { to: '/terms/subscription', labelKey: 'public.privacy.relatedSubscription' },
+      ]}
+    />
+  );
+}
+
+/**
+ * The billing terms, still at /terms/subscription, still version 2026-08-04.
+ *
+ * This page was kept at its own URL rather than folded into /terms or
+ * redirected there, and the reason is a row in the database. Every subscription
+ * created so far carries `product_subscription.terms_version = '2026-08-04'`
+ * (migration 0014), and that string is a reference to the document published at
+ * this address. Redirecting the URL would leave those records pointing at a
+ * document with different content and a different version number, which is to
+ * say it would silently rewrite what existing customers are recorded as having
+ * agreed to - the one thing an acceptance record must never allow.
+ *
+ * So the billing terms stay where they are and keep their version. The new
+ * תקנון summarises the commercial terms in its section 8, states that the
+ * subscription terms prevail in any conflict, and links here; this page links
+ * back through the footer.
+ */
 export function PublicSubscriptionTermsPage() {
   const { t } = useTranslation();
   const title = t('public.subscriptionTerms.metaTitle');

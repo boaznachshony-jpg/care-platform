@@ -37,5 +37,6 @@ export * from './case-documents.js';
 export * from './workspace.js';
 export * from './family-access.js';
 export * from './billing.js';
+export * from './legal-acceptance.js';
 export * from './visa-renewal.js';
 export * from './date.js';

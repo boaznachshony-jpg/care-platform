@@ -33,7 +33,11 @@ import {
 } from './pages/PublicLandingPage.js';
 import { FamilyAccessPage } from './pages/FamilyAccessPage.js';
 import { BillingPage } from './pages/BillingPage.js';
-import { PublicSubscriptionTermsPage } from './pages/PublicLandingPage.js';
+import {
+  PublicPrivacyPage,
+  PublicSubscriptionTermsPage,
+  PublicTermsPage,
+} from './pages/PublicLandingPage.js';
 import { ContactPage } from './pages/ContactPage.js';
 import { CasePage } from './pages/CasePage.js';
 import { WorkerPortalPage } from './pages/WorkerPortalPage.js';
@@ -363,6 +367,11 @@ export function App() {
         <Route path="/" element={<PublicLandingPage />} />
         <Route path="/contact-us" element={<PublicContactPage />} />
         <Route path="/guide/direct-caregiver-employment" element={<DirectEmploymentGuidePage />} />
+        <Route path="/terms" element={<PublicTermsPage />} />
+        <Route path="/privacy" element={<PublicPrivacyPage />} />
+        {/* Kept, not redirected: `product_subscription.terms_version` already
+            records '2026-08-04' against this URL for existing subscriptions.
+            See PublicSubscriptionTermsPage for the full reasoning. */}
         <Route path="/terms/subscription" element={<PublicSubscriptionTermsPage />} />
         {/* /cases/new is NOT listed here. It used to be, redirecting to the
             marketing page, and that redirect was the whole of code review
