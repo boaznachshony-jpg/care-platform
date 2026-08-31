@@ -63,6 +63,7 @@ export const REQUIRED_MIGRATIONS: readonly string[] = [
   '0039_workspace_file_tombstone',
   '0040_idempotency_record_lockable',
   '0041_payroll_total_reconciles',
+  '0042_employment_case_legacy_client_link',
 ];
 
 /**

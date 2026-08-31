@@ -33,6 +33,36 @@ const LEGACY_EXPENSE = {
   savedAt: '2026-08-01T10:00:00.000Z',
 };
 
+/**
+ * A saved canonical entry with every field the worksheet renders, so the inputs
+ * stay controlled. WEB-04 is about what happens to a draft on refetch, and a
+ * half-populated fixture would produce React warnings that hide the assertion.
+ */
+const SAVED_ENTRY = {
+  id: 'entry-canonical-001',
+  month: CURRENT_MONTH,
+  baseSalary: 0,
+  workDays: 0,
+  paidRestDays: 0,
+  restDayRate: 0,
+  paidHolidays: 0,
+  holidayPay: 0,
+  vacationDays: 0,
+  vacationPay: 0,
+  sickDays: 0,
+  sickPay: 0,
+  otherAbsenceDays: 0,
+  employerContributions: 0,
+  additionalPayments: [],
+  pocketMoney: 0,
+  deductions: 0,
+  advances: 0,
+  agreedDeductions: 0,
+  total: 0,
+  status: 'draft' as const,
+  version: 1,
+};
+
 const SCENARIO_EXPENSE = {
   id: 'scenario-expense-001',
   label: 'ביטוח רפואי',
@@ -298,6 +328,47 @@ describe('CanonicalPayrollIntelligence — Future Cost canonical inputs', () => 
     ];
     expect(caseId).toBe(DEMO_CASE_ID);
     expect(input).toMatchObject({ label: 'ביטוח רפואי', amount: 250, kind: 'recurring' });
+  });
+
+  // --- WEB-04 (BLOCKER): the worksheet is not wiped by a sibling refetch ---
+
+  it('keeps a typed payroll worksheet when a scenario expense is added below it', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByRole('region', { name: /רישום שכר חודשי/ }));
+
+    // The user fills in the month's worksheet…
+    fireEvent.change(screen.getByLabelText('שכר בסיס'), { target: { value: '5000' } });
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(5000);
+
+    // …then scrolls down and adds a planning expense. addExpense calls
+    // refresh(), which hands setEntries a brand-new array. Keying the draft
+    // reset on that array reference called blank() and reset every number the
+    // user had just typed, silently and with no message.
+    fireEvent.change(screen.getByLabelText('תיאור ההוצאה'), { target: { value: 'ביטוח רפואי' } });
+    fireEvent.change(screen.getByLabelText('סכום חודשי'), { target: { value: '250' } });
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת הוצאת תרחיש' }));
+
+    await waitFor(() => expect(mockCreateScenarioExpense).toHaveBeenCalledOnce());
+    // Two refetches have now completed; the worksheet still holds the entry.
+    await waitFor(() => expect(mockListPayrollEntries).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(5000);
+  });
+
+  it('still reseeds the draft when the saved entry for the month actually changes', async () => {
+    // The reset must not simply be disabled: a save, or a concurrent edit,
+    // changes the entry's version and the draft has to follow the server.
+    const saved = { ...SAVED_ENTRY, baseSalary: 5000, version: 1 };
+    mockListPayrollEntries.mockResolvedValueOnce([saved]);
+    mockListPayrollEntries.mockResolvedValue([{ ...saved, baseSalary: 7000, version: 2 }]);
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByLabelText('שכר בסיס')).toHaveValue(5000));
+
+    fireEvent.change(screen.getByLabelText('תיאור ההוצאה'), { target: { value: 'ביטוח רפואי' } });
+    fireEvent.change(screen.getByLabelText('סכום חודשי'), { target: { value: '250' } });
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת הוצאת תרחיש' }));
+
+    await waitFor(() => expect(screen.getByLabelText('שכר בסיס')).toHaveValue(7000));
   });
 
   it('soft deletes a scenario expense through the canonical API', async () => {

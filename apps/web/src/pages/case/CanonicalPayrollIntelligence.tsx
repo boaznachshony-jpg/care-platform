@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax -- Hebrew-first pilot surface; i18n extraction follows canonical cutover */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectFutureCost } from '@caredesk/application';
 import { calculateMonthlyPayroll } from '@caredesk/domain';
@@ -162,8 +162,33 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     }
   }, [caseId]);
   useEffect(() => void refresh(), [refresh]);
+
+  const savedEntry = entries?.find((entry) => entry.month === month);
+  /**
+   * WEB-04 (BLOCKER): the draft reset keys on the *identity* of the saved entry
+   * for the selected month, never on the `entries` array reference.
+   *
+   * `refresh()` hands back a brand-new array every time, and `addExpense`,
+   * `removeExpense` and `migrateLegacyExpenses` all call it. Depending on
+   * `entries` therefore re-ran this effect after any of those; with no saved
+   * server entry for the month `found` was `undefined`, the effect called
+   * `blank()`, and sixteen numeric fields the user had just typed into the
+   * payroll worksheet silently reset to 0 because they had scrolled down and
+   * added a planning expense.
+   *
+   * id + version is the right key: it changes exactly when the saved entry the
+   * draft was seeded from actually changes (a save, or a concurrent edit), and
+   * not when an unrelated sibling mutation refetches the same data. The
+   * `none:` form keeps a month with no saved entry distinct per month, so
+   * switching months still resets.
+   */
+  const savedEntryIdentity = savedEntry
+    ? `entry:${savedEntry.id}:${savedEntry.version}`
+    : `none:${month}`;
+  const savedEntryRef = useRef(savedEntry);
+  savedEntryRef.current = savedEntry;
   useEffect(() => {
-    const found = entries?.find((entry) => entry.month === month);
+    const found = savedEntryRef.current;
     setDraft(found ? { ...found, version: found.version } : blank());
     setState('idle');
     setError('');
@@ -171,7 +196,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setMigrationConfirmed(false);
     setMigrationSaved(false);
     setLegacyPurged(false);
-  }, [entries, month]);
+  }, [savedEntryIdentity]);
   /**
    * All projection inputs are canonical: closed months (actuals), the payroll
    * worksheet (forecast base + entered months) and scenario_expense rows (the

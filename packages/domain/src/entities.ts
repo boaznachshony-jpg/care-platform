@@ -112,6 +112,20 @@ export interface EmploymentCase {
   startDate: string;
   endDate: string | null;
   status: EmploymentCaseStatus;
+  /**
+   * Provenance marker, not domain data: the identifier of the legacy browser
+   * client (`caredesk.mvp.clients.v1`) this case was opened from, or null for a
+   * case opened directly in the canonical product.
+   *
+   * ADR-006 makes the normalized aggregate canonical and the browser snapshot a
+   * transitional compatibility mechanism. The map between the two therefore
+   * lives on the canonical row - see
+   * database/migrations/0042_employment_case_legacy_client_link.sql - so that
+   * clearing a browser cannot orphan a case, and so the snapshot never becomes
+   * load-bearing for its own migration. Written once, at creation, and never
+   * updated (ADR-006 clause 6: one write authority per field).
+   */
+  legacyClientId: string | null;
 }
 
 export interface Organization {

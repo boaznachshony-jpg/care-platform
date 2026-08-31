@@ -61,6 +61,73 @@ describe('/cases routes', () => {
     expect(listed.json()).toHaveLength(1);
   });
 
+  // --- WEB-11 / ADR-006: the legacy client link -------------------------
+  //
+  // Case creation is now driven from the end of onboarding, which is a step a
+  // user reaches more than once. Without idempotence on legacyClientId every
+  // retry is a second canonical case for one household, and the product then
+  // has to guess which one is real.
+
+  it('records the legacy client link and returns it on every read', async () => {
+    const app = buildServer(loadEnv({}));
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/cases',
+      headers: AUTH,
+      payload: { ...VALID_BODY, legacyClientId: 'client-synthetic-a' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().legacyClientId).toBe('client-synthetic-a');
+
+    const fetched = await app.inject({
+      method: 'GET',
+      url: `/cases/${created.json().id}`,
+      headers: AUTH,
+    });
+    expect(fetched.json().legacyClientId).toBe('client-synthetic-a');
+  });
+
+  it('opens exactly one case per legacy client, however many times it is asked', async () => {
+    const app = buildServer(loadEnv({}));
+    const payload = { ...VALID_BODY, legacyClientId: 'client-synthetic-a' };
+
+    const first = await app.inject({ method: 'POST', url: '/cases', headers: AUTH, payload });
+    const second = await app.inject({ method: 'POST', url: '/cases', headers: AUTH, payload });
+
+    expect(second.statusCode).toBe(201);
+    expect(second.json().id).toBe(first.json().id);
+
+    const listed = await app.inject({ method: 'GET', url: '/cases', headers: AUTH });
+    expect(listed.json()).toHaveLength(1);
+  });
+
+  it('leaves the link null when none is supplied, and never blocks a second such case', async () => {
+    const app = buildServer(loadEnv({}));
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/cases',
+      headers: AUTH,
+      payload: VALID_BODY,
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/cases',
+      headers: AUTH,
+      payload: { ...VALID_BODY, careRecipient: { fullName: 'Synthetic Second Recipient' } },
+    });
+
+    expect(first.json().legacyClientId).toBeNull();
+    expect(second.json().legacyClientId).toBeNull();
+    expect(second.json().id).not.toBe(first.json().id);
+    // Null is excluded from the unique index (0042), exactly so that unlinked
+    // cases - every case that predates the migration - stay unconstrained.
+    expect((await app.inject({ method: 'GET', url: '/cases', headers: AUTH })).json()).toHaveLength(
+      2,
+    );
+  });
+
   it('returns the standard 404 envelope for an unknown case id', async () => {
     const app = buildServer(loadEnv({}));
     const response = await app.inject({

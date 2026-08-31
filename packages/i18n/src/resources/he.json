@@ -201,6 +201,7 @@
     "recipientCity": "עיר מגורים",
     "employerFullName": "שם המעסיק",
     "employerRelationship": "קרבה למטופל",
+    "defaultRelationship": "מעסיק",
     "employerCity": "עיר",
     "caregiverLegalName": "שם המטפל (כמופיע בדרכון)",
     "caregiverPreferredName": "כינוי",
