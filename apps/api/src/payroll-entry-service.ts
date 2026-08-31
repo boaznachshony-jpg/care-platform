@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTenant } from '@caredesk/db';
+import { calculateMonthlyPayroll, payrollTotalMatches } from '@caredesk/domain';
 
 export type PayrollEntryInput = {
   baseSalary: number;
@@ -96,8 +97,40 @@ export class PayrollEntryService {
   }
   save(actor: Actor, caseId: string, month: string, key: string, input: PayrollEntryInput) {
     return this.tx(actor.tenantId, async (c) => {
+      /**
+       * Root 4 (DOM-02 / DB-06): the server has an opinion about the total.
+       *
+       * `input.total` used to be written verbatim at parameter $22, so
+       * `{ baseSalary: 6000, advances: 5000, total: 6000 }` produced a canonical
+       * record, an audit event and an evidence binder all claiming ₪6,000 was
+       * owed while the components said ₪1,000. Nothing caught it. The total is
+       * now derived from the components here, the submitted one is only ever a
+       * client assertion to be checked, and it is the DERIVED value that is
+       * persisted — so even a caller that somehow passes the equality check
+       * cannot store a number this code did not produce.
+       *
+       * Recomputed before the case lookup on purpose: a payload that does not
+       * reconcile must not reach any write, and the rollback is asserted.
+       */
+      const totals = calculateMonthlyPayroll(input);
+      if (!payrollTotalMatches(input.total, totals.total)) throw new Error('total_mismatch');
       const exists = await c.query('select 1 from employment_case where id=$1', [caseId]);
       if (!exists.rowCount) throw new Error('case_not_found');
+      /**
+       * Root 4 (DOM-01): a closed month is frozen.
+       *
+       * `payroll_month_close` is append-only, but the facts it certifies were
+       * not — July could be closed at ₪6,200 on 5 August and edited to ₪5,000
+       * on the 20th, leaving the receipt and the entry permanently disagreeing
+       * with nothing to reconcile them. Migration 0041 carries the same rule as
+       * a trigger; this check exists so the user gets a typed 409 instead of a
+       * database error, not as the enforcement point.
+       */
+      const closed = await c.query(
+        `select 1 from payroll_month_close where employment_case_id=$1 and payroll_month=($2||'-01')::date`,
+        [caseId, month],
+      );
+      if (closed.rowCount) throw new Error('payroll_month_closed');
       const hash = createHash('sha256')
         .update(JSON.stringify({ caseId, month, input }))
         .digest('hex');
@@ -113,12 +146,24 @@ export class PayrollEntryService {
         `select id,version,status from payroll_entry where employment_case_id=$1 and payroll_month=($2||'-01')::date for update`,
         [caseId, month],
       );
-      if (
-        input.version !== undefined &&
-        previous.rows[0] &&
-        input.version !== previous.rows[0].version
-      )
-        throw new Error('version_conflict');
+      /**
+       * Root 4 (API-03): optimistic concurrency is no longer opt-in.
+       *
+       * The guard used to read `input.version !== undefined && …`, so omitting
+       * the field disabled it. Two managers open March; B's form predates A's
+       * save; B's `on conflict do update` overwrote every column, bumped the
+       * version, and returned 200. A's figures were gone with no 409 and no way
+       * to tell from the response that anything was lost.
+       *
+       * A version is required exactly when there is a row to conflict with. A
+       * create has nothing to be stale against, which is the one case
+       * API-03 leaves open, and it is distinguished here by the absence of the
+       * locked row rather than by trusting the client to say which it is doing.
+       */
+      if (previous.rows[0]) {
+        if (input.version === undefined) throw new Error('version_required');
+        if (input.version !== previous.rows[0].version) throw new Error('version_conflict');
+      }
       const id = previous.rows[0]?.id ?? randomUUID();
       const action = previous.rows[0] ? 'payroll.entry_updated' : 'payroll.entry_created';
       const meaningful = !previous.rows[0] || previous.rows[0].status !== input.status;
@@ -140,7 +185,9 @@ export class PayrollEntryService {
         input.deductions,
         input.advances,
         input.agreedDeductions,
-        input.total,
+        // DOM-02: the derived total, not `input.total`. The submitted value was
+        // checked above and is not carried any further.
+        totals.total,
         input.status,
       ];
       const saved = await c.query<Row>(

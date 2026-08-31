@@ -284,6 +284,42 @@ describe('ScenarioExpenseService.save', () => {
     ).rejects.toThrow('version_conflict');
   });
 
+  /**
+   * Root 4 (API-03). The route now requires `version`, but the service is not
+   * the route's private property — this is the backstop, and it is what makes
+   * the guard a rule rather than a schema detail.
+   */
+  it('refuses an update that omits version, rather than overwriting silently', async () => {
+    const { pool, queries } = stubPool([CASE_ID]);
+    const service = new ScenarioExpenseService(pool);
+
+    const created = await service.save(ACTOR, CASE_ID, 'scenario-key-0100', EXPENSE);
+    await expect(
+      service.save(
+        ACTOR,
+        CASE_ID,
+        'scenario-key-0101',
+        { ...EXPENSE, amount: 300 },
+        created.expense.id,
+      ),
+    ).rejects.toThrow('version_required');
+    expect(queries.map((query) => query.text.toLowerCase()).at(-1)).toBe('rollback');
+    expect(
+      queries.filter((query) => query.text.startsWith('update scenario_expense')),
+    ).toHaveLength(0);
+  });
+
+  it('refuses a delete that omits version', async () => {
+    const { pool } = stubPool([CASE_ID]);
+    const service = new ScenarioExpenseService(pool);
+
+    const created = await service.save(ACTOR, CASE_ID, 'scenario-key-0102', EXPENSE);
+    await expect(
+      service.remove(ACTOR, CASE_ID, created.expense.id, 'scenario-del-0100'),
+    ).rejects.toThrow('version_required');
+    expect(await service.list(ACTOR, CASE_ID)).toHaveLength(1);
+  });
+
   it('reports expense_not_found when updating a missing expense', async () => {
     const { pool } = stubPool([CASE_ID]);
     const service = new ScenarioExpenseService(pool);

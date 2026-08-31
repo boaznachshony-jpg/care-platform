@@ -123,8 +123,12 @@ export class ScenarioExpenseService {
           [expenseId, caseId],
         );
         if (!previous.rows[0]) throw new Error('expense_not_found');
-        if (input.version !== undefined && input.version !== previous.rows[0].version)
-          throw new Error('version_conflict');
+        // Root 4 (API-03): the `!== undefined` short-circuit made the check
+        // opt-in — a client that omitted `version` overwrote every column and
+        // bumped the version with no 409 and no trace. The route now requires
+        // the field; this is the backstop for any other caller of the service.
+        if (input.version === undefined) throw new Error('version_required');
+        if (input.version !== previous.rows[0].version) throw new Error('version_conflict');
         action = 'payroll.scenario_expense_updated';
       } else {
         id = randomUUID();
@@ -167,8 +171,10 @@ export class ScenarioExpenseService {
         [expenseId, caseId],
       );
       if (!previous.rows[0]) throw new Error('expense_not_found');
-      if (version !== undefined && version !== previous.rows[0].version)
-        throw new Error('version_conflict');
+      // Root 4 (API-03): a soft delete targets an existing row, so it carries
+      // the same requirement as an update.
+      if (version === undefined) throw new Error('version_required');
+      if (version !== previous.rows[0].version) throw new Error('version_conflict');
       const removed = await c.query<Row>(
         `update scenario_expense set status='deleted',version=version+1,updated_by=$3,updated_at=now() where id=$1 and employment_case_id=$2 returning ${columns}`,
         [expenseId, caseId, actor.userId],

@@ -12,31 +12,48 @@ const params = z.object({
   caseId: z.string().uuid(),
   expenseId: z.string().uuid().optional(),
 });
+const fields = {
+  label: z.string().trim().min(1).max(120),
+  amount: z.number().finite().min(0).max(10_000_000),
+  kind: z.enum(['recurring', 'one_time']),
+  startMonth: z.string().regex(MONTH),
+  endMonth: z.string().regex(MONTH).nullable().optional(),
+};
+const monthWindow = (
+  value: { kind: 'recurring' | 'one_time'; startMonth: string; endMonth?: string | null },
+  ctx: z.RefinementCtx,
+) => {
+  if (value.endMonth && value.endMonth < value.startMonth)
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endMonth'],
+      message: 'endMonth must not precede startMonth',
+    });
+  if (value.kind === 'one_time' && value.endMonth)
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endMonth'],
+      message: 'one_time expenses take no window end',
+    });
+};
+/** Create: there is no existing row, so there is nothing to be stale against. */
 const body = z
-  .object({
-    label: z.string().trim().min(1).max(120),
-    amount: z.number().finite().min(0).max(10_000_000),
-    kind: z.enum(['recurring', 'one_time']),
-    startMonth: z.string().regex(MONTH),
-    endMonth: z.string().regex(MONTH).nullable().optional(),
-    version: z.number().int().positive().optional(),
-  })
+  .object({ ...fields, version: z.number().int().positive().optional() })
   .strict()
-  .superRefine((value, ctx) => {
-    if (value.endMonth && value.endMonth < value.startMonth)
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['endMonth'],
-        message: 'endMonth must not precede startMonth',
-      });
-    if (value.kind === 'one_time' && value.endMonth)
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['endMonth'],
-        message: 'one_time expenses take no window end',
-      });
-  });
-const removeBody = z.object({ version: z.number().int().positive().optional() }).strict();
+  .superRefine(monthWindow);
+/**
+ * Root 4 (API-03): update and delete both address a row that already exists, so
+ * `version` is required — the schema, not the service, is where a client that
+ * omits it is told. `LeaveEntryService.update` has always had this contract
+ * (`version: z.number().int().positive()`, routes/leave-entries.ts); the
+ * scenario-expense and payroll paths were the two that made it optional, which
+ * meant the last writer won silently.
+ */
+const updateBody = z
+  .object({ ...fields, version: z.number().int().positive() })
+  .strict()
+  .superRefine(monthWindow);
+const removeBody = z.object({ version: z.number().int().positive() }).strict();
 
 const MINUTE_MS = 60_000;
 export const SCENARIO_EXPENSE_RATE_LIMITS = {
@@ -107,6 +124,9 @@ export function registerScenarioExpenseRoutes(
     const m = e instanceof Error ? e.message : '';
     if (m === 'case_not_found' || m === 'expense_not_found')
       return sendError(req, reply, 404, 'NOT_FOUND');
+    // API-03: 428 Precondition Required — the write is refused until the client
+    // states which version it is replacing. Matches the payroll-entry route.
+    if (m === 'version_required') return sendError(req, reply, 428, 'VERSION_REQUIRED');
     if (m === 'idempotency_conflict' || m === 'version_conflict')
       return sendError(
         req,
@@ -167,7 +187,8 @@ export function registerScenarioExpenseRoutes(
     },
     async (req, reply) => {
       const p = params.safeParse(req.params),
-        b = body.safeParse(req.body);
+        // API-03: updateBody, not body — `version` is mandatory here.
+        b = updateBody.safeParse(req.body);
       if (!p.success) return sendValidationError(req, reply, p.error);
       if (!b.success) return sendValidationError(req, reply, b.error);
       // The routed path always carries :expenseId; this guard is defensive only.

@@ -90,13 +90,17 @@ describe('monthly payroll calculation', () => {
     });
   });
 
-  it('never returns a negative payment', () => {
+  it('carries a negative net forward instead of clamping it to zero (DOM-07)', () => {
+    // This test previously asserted `.toBe(0)`. The clamp erased what the
+    // employee owes: ₪500 of advances against a ₪100 month is a −₪400 balance,
+    // which `payroll_entry.total between -10000000 and 10000000` has always
+    // permitted. The floor existed only in the browser.
     expect(
       calculateMonthlyPayroll({
         ...emptyInput,
         baseSalary: 100,
         advances: 500,
       }).total,
-    ).toBe(0);
+    ).toBe(-400);
   });
 });

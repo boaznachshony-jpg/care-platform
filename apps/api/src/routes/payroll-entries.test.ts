@@ -34,7 +34,9 @@ const ENTRY_BODY = {
   deductions: 0,
   advances: 0,
   agreedDeductions: 0,
-  total: 7350,
+  // Root 4 (DOM-02): 6000 + (4 x 300 + 250 + 500 + 200) - 100. The fixture used
+  // to say 7350 and every assertion still passed, which is the finding itself.
+  total: 8050,
   status: 'draft',
 };
 
@@ -53,7 +55,7 @@ interface RecordedQuery {
  */
 function stubPool(knownCaseIds: Set<string>) {
   const queries: RecordedQuery[] = [];
-  const state = { manager: true };
+  const state = { manager: true, closedMonths: [] as string[] };
   const receipts = new Map<string, { hash: string; response: unknown }>();
   const entries = new Map<
     string,
@@ -113,6 +115,11 @@ function stubPool(knownCaseIds: Set<string>) {
       }
       if (sql.includes('select 1 from employment_case')) {
         return { rows: [], rowCount: knownCaseIds.has(String(values?.[0])) ? 1 : 0 };
+      }
+      // Root 4 (DOM-01): the closed-month lookup. No month is closed in these
+      // fixtures unless a test says so through state.closedMonths.
+      if (sql.includes('select 1 from payroll_month_close')) {
+        return { rows: [], rowCount: state.closedMonths.includes(String(values?.[1])) ? 1 : 0 };
       }
       if (sql.startsWith('select request_hash,response from idempotency_record')) {
         const receipt = receipts.get(String(values?.[0]));
@@ -300,7 +307,7 @@ describe('payroll entry routes', () => {
     expect(saved.statusCode).toBe(201);
     expect(saved.json()).toMatchObject({
       replayed: false,
-      entry: { month: '2026-07', version: 1, status: 'draft', total: 7350 },
+      entry: { month: '2026-07', version: 1, status: 'draft', total: 8050 },
     });
 
     const listed = await app.inject({ method: 'GET', url: base, headers: AUTH });
@@ -345,7 +352,7 @@ describe('payroll entry routes', () => {
       method: 'PUT',
       url,
       headers: KEYED,
-      payload: { ...ENTRY_BODY, total: 9999 },
+      payload: { ...ENTRY_BODY, advances: 200, total: 7850 },
     });
     expect(conflicting.statusCode).toBe(409);
     expect(conflicting.json().code).toBe('IDEMPOTENCY_CONFLICT');
@@ -364,5 +371,73 @@ describe('payroll entry routes', () => {
     });
     expect(stale.statusCode).toBe(409);
     expect(stale.json().code).toBe('VERSION_CONFLICT');
+  });
+
+  it('refuses a total the components do not produce, with 422 (DOM-02)', async () => {
+    const { app, caseId, queries } = await buildApp();
+    const url = `/cases/${caseId}/payroll-entries/2026-07`;
+
+    const tampered = await app.inject({
+      method: 'PUT',
+      url,
+      headers: KEYED,
+      // The finding verbatim: 6000 base, 5000 advances, 6000 claimed.
+      payload: {
+        ...ENTRY_BODY,
+        paidRestDays: 0,
+        restDayRate: 0,
+        holidayPay: 0,
+        employerContributions: 0,
+        additionalPayments: [],
+        pocketMoney: 0,
+        advances: 5000,
+        total: 6000,
+      },
+    });
+
+    expect(tampered.statusCode).toBe(422);
+    expect(tampered.json().code).toBe('TOTAL_MISMATCH');
+    expect(
+      queries.some((query) => query.text.toLowerCase().startsWith('insert into payroll_entry')),
+    ).toBe(false);
+  });
+
+  it('refuses an update that omits version, with 428 (API-03)', async () => {
+    const { app, caseId } = await buildApp();
+    const url = `/cases/${caseId}/payroll-entries/2026-07`;
+
+    await app.inject({ method: 'PUT', url, headers: KEYED, payload: ENTRY_BODY });
+    const versionless = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { ...AUTH, 'idempotency-key': 'payroll-route-key-0003' },
+      payload: { ...ENTRY_BODY, advances: 200, total: 7850 },
+    });
+
+    expect(versionless.statusCode).toBe(428);
+    expect(versionless.json().code).toBe('VERSION_REQUIRED');
+
+    // Manager A's figures survive.
+    const read = await app.inject({ method: 'GET', url, headers: AUTH });
+    expect(read.json()).toMatchObject({ total: 8050, version: 1 });
+  });
+
+  it('refuses any write against a month that has been closed, with 409 (DOM-01)', async () => {
+    const { app, caseId, state } = await buildApp();
+    state.closedMonths.push('2026-07');
+    const url = `/cases/${caseId}/payroll-entries/2026-07`;
+
+    const closed = await app.inject({ method: 'PUT', url, headers: KEYED, payload: ENTRY_BODY });
+    expect(closed.statusCode).toBe(409);
+    expect(closed.json().code).toBe('PAYROLL_MONTH_CLOSED');
+
+    // An open month is unaffected.
+    const open = await app.inject({
+      method: 'PUT',
+      url: `/cases/${caseId}/payroll-entries/2026-06`,
+      headers: { ...AUTH, 'idempotency-key': 'payroll-route-key-0004' },
+      payload: ENTRY_BODY,
+    });
+    expect(open.statusCode).toBe(201);
   });
 });

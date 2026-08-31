@@ -1,29 +1,80 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { payrollTotalMatches, roundShekels } from '@caredesk/domain';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { CanonicalIntelligenceService } from '../product-intelligence/canonical-intelligence-service.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const paramsSchema = z.object({ caseId: z.string().uuid() });
-const closeSchema = z
+/** Every close amount is rounded to agorot the way `numeric(12,2)` will store it. */
+const closeAmount = z
+  .number()
+  .finite()
+  .min(-10_000_000)
+  .max(10_000_000)
+  .transform((value) => roundShekels(value));
+
+/**
+ * The current month in Israel, stated explicitly rather than inherited from the
+ * host clock's zone (the DOM-03 defect, in the place DOM-24 needs it). Root 8
+ * replaces this with the single timezone-explicit date type; until it lands,
+ * one named helper is better than a second `new Date().toISOString()`.
+ */
+export function currentPayrollMonthInIsrael(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(now);
+}
+
+/** Exported for the DOM-14/DOM-24 regression test; the route is its only caller. */
+export const closeSchema = z
   .object({
     payrollReference: z.string().trim().min(1).max(200),
     month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
     paymentDate: z.string().date(),
     paymentMethod: z.enum(['bank_transfer', 'cash', 'check', 'other']),
-    total: z.number().positive().max(10_000_000),
-    baseSalary: z.number().nonnegative().max(10_000_000),
-    additions: z.number().nonnegative().max(10_000_000),
-    deductions: z.number().nonnegative().max(10_000_000),
+    /**
+     * DOM-24: was `z.number().positive()`, mirroring `check (total_amount > 0)`
+     * in migration 0026. A month where the caregiver was absent unpaid, or
+     * where advances exceeded salary, produces an entry the close endpoint
+     * rejected forever — the month stayed permanently open and `hasOpenMonth`
+     * nagged about it with no way for the user to resolve it. Migration 0041
+     * widens the constraint to the same range `payroll_entry.total` has always
+     * had, and this now matches it.
+     */
+    total: closeAmount,
+    baseSalary: closeAmount.pipe(z.number().nonnegative()),
+    additions: closeAmount.pipe(z.number().nonnegative()),
+    deductions: closeAmount.pipe(z.number().nonnegative()),
   })
+  /**
+   * DOM-14: exact equality on rounded amounts, not a 0.01 tolerance window.
+   *
+   * The window was looser than the DB constraint it feeds, so
+   * `{ baseSalary: 1000.126, additions: 0, deductions: 0, total: 1000.12 }`
+   * passed validation (difference 0.006) and then violated
+   * `payroll_month_close_amount_reconciles` after `numeric(12,2)` rounded the
+   * base to 1000.13 — a bare 500 on the one operation the user cannot retry
+   * their way out of. Rounding in the transform above and comparing exactly
+   * here makes validation and constraint agree by construction.
+   */
   .refine(
-    (value) => Math.abs(value.baseSalary + value.additions - value.deductions - value.total) < 0.01,
+    (value) =>
+      payrollTotalMatches(value.total, value.baseSalary + value.additions - value.deductions),
     {
       message: 'Close amounts do not reconcile',
       path: ['total'],
     },
-  );
+  )
+  // DOM-24, second half: a future month could be closed today. A close is a
+  // statement about a month that has ended.
+  .refine((value) => value.month <= currentPayrollMonthInIsrael(), {
+    message: 'A future payroll month cannot be closed',
+    path: ['month'],
+  });
 
 export function registerCanonicalProductIntelligenceRoutes(
   app: FastifyInstance,

@@ -362,8 +362,12 @@ button {
 .record-timestamp {
   display: block;
   color: #64748b;
-  font-size: 12px;
+  /* 10px by decision: the stamp must be legible but must never compete with the
+     amount it annotates. Tabular figures keep the columns aligned at this size,
+     where proportional digits would start to look ragged. */
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 .record-timestamp time {
   direction: ltr;

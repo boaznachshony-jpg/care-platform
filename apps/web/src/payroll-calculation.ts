@@ -1,3 +1,20 @@
+import { calculateMonthlyPayroll as calculateCanonicalPayroll } from '@caredesk/domain';
+
+/**
+ * Root 4 (DOM-02): this file no longer contains a payroll formula.
+ *
+ * It used to hold the only implementation of the monthly total in the product —
+ * in the browser bundle, versioned with the bundle rather than with the data,
+ * while the API wrote whatever `total` it was handed. The arithmetic now lives
+ * in `@caredesk/domain`, which is also what the API recomputes with and what
+ * migration 0041's CHECK constraint mirrors.
+ *
+ * What stays here is the MVP form's field vocabulary (`paidSaturdays`,
+ * `medicalInsuranceDeduction`, `housingDeduction`, `otherAddition`) and the
+ * proration helper, neither of which exists on the canonical `payroll_entry`
+ * shape. This module is now a translation from that vocabulary to the canonical
+ * components, and nothing more.
+ */
 export interface MonthlyPayrollInput {
   baseSalary: number;
   paidSaturdays: number;
@@ -95,26 +112,37 @@ export function calculateProratedBaseSalary(
   };
 }
 
+/**
+ * Maps the MVP worksheet fields onto the canonical components.
+ *
+ * DOM-07, partially: the `Math.max(0, …)` clamp is gone — a month where
+ * advances exceed salary nets negative, and `payroll_entry.total` has always
+ * permitted that. The NaN→0 coercion is refused by the domain for every caller
+ * that hands it a raw component, but `safeAmount` is deliberately kept on this
+ * path: `PayrollPage`'s own `numeric()` already floors an unparseable field at
+ * zero before it gets here, so removing it would change nothing except turn a
+ * blank MVP text input into a thrown error. The coercion dies with the MVP
+ * worksheet (root 3), not here.
+ */
 export function calculateMonthlyPayroll(input: MonthlyPayrollInput): MonthlyPayrollCalculation {
-  const saturdayPay = safeAmount(input.paidSaturdays) * safeAmount(input.saturdayRate);
-  const additions =
-    saturdayPay +
-    safeAmount(input.holidayPay) +
-    safeAmount(input.vacationPay) +
-    safeAmount(input.sickPay) +
-    safeAmount(input.employerContributions) +
-    safeAmount(input.otherAddition);
-  const deductions =
-    safeAmount(input.pocketMoney) +
-    safeAmount(input.medicalInsuranceDeduction) +
-    safeAmount(input.housingDeduction) +
-    safeAmount(input.advances) +
-    safeAmount(input.agreedDeduction);
-
+  const totals = calculateCanonicalPayroll({
+    baseSalary: safeAmount(input.baseSalary),
+    paidRestDays: safeAmount(input.paidSaturdays),
+    restDayRate: safeAmount(input.saturdayRate),
+    holidayPay: safeAmount(input.holidayPay),
+    vacationPay: safeAmount(input.vacationPay),
+    sickPay: safeAmount(input.sickPay),
+    employerContributions: safeAmount(input.employerContributions),
+    additionalPayments: [{ amount: safeAmount(input.otherAddition) }],
+    pocketMoney: safeAmount(input.pocketMoney),
+    deductions: safeAmount(input.medicalInsuranceDeduction) + safeAmount(input.housingDeduction),
+    advances: safeAmount(input.advances),
+    agreedDeductions: safeAmount(input.agreedDeduction),
+  });
   return {
-    saturdayPay,
-    additions,
-    deductions,
-    total: Math.max(0, safeAmount(input.baseSalary) + additions - deductions),
+    saturdayPay: totals.restDayPay,
+    additions: totals.additions,
+    deductions: totals.deductions,
+    total: totals.total,
   };
 }

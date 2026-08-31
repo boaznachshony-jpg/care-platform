@@ -8,7 +8,17 @@
  * records disagree or when proving what was done and when.
  *
  * Israel-first: he-IL locale, 24-hour clock, day-first order.
+ *
+ * The time zone is pinned to Asia/Jerusalem rather than left to the viewer's
+ * browser. Without it the same stored instant renders as a different wall clock
+ * for every reader: the employer entering payroll from abroad sees local time,
+ * the caregiver in Israel sees Israel time, and the two disagree about when a
+ * month was closed. These stamps exist to settle exactly that kind of dispute,
+ * and an employment record is anchored to Israeli time regardless of where the
+ * person holding the phone happens to be standing.
  */
+
+const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('he-IL', {
   day: '2-digit',
@@ -17,12 +27,14 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('he-IL', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
+  timeZone: ISRAEL_TIME_ZONE,
 });
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('he-IL', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
+  timeZone: ISRAEL_TIME_ZONE,
 });
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -30,13 +42,18 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 function toDate(value: string | number | Date | null | undefined): Date | null {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'string') {
-    // A bare "2026-08-01" is parsed by the spec as UTC midnight, which renders
-    // as the previous day for anyone west of UTC. A payment date has no time
-    // component at all, so interpret it as a local calendar day.
+    // A bare "2026-08-01" carries no time at all, and both obvious readings of
+    // it are wrong somewhere on the map. UTC midnight renders as the previous
+    // day for anyone west of UTC; local midnight renders as the previous day
+    // once the formatter converts it to Israel time from a zone far enough
+    // east. Anchoring it at midday UTC puts it 12 hours from either boundary,
+    // so the calendar day survives the conversion for every viewer.
     const parts = DATE_ONLY.exec(value);
     if (parts) {
-      const local = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
-      return Number.isNaN(local.getTime()) ? null : local;
+      const midday = new Date(
+        Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12),
+      );
+      return Number.isNaN(midday.getTime()) ? null : midday;
     }
   }
   const date = value instanceof Date ? value : new Date(value);

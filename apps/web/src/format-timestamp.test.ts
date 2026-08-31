@@ -14,6 +14,16 @@ describe('formatDateTime', () => {
     expect(formatted).not.toMatch(/AM|PM/i);
   });
 
+  it('renders Israel time regardless of the reader’s own time zone', () => {
+    // 11:32 UTC on 21 August is 14:32 in Israel (IDT, UTC+3). Two people
+    // looking at the same payroll close - one in Tel Aviv, one abroad - must
+    // read the same wall clock, because the stamp exists to settle
+    // disagreements about when the action was taken.
+    expect(formatDateTime('2026-08-21T11:32:00.000Z')).toMatch(/14:32/);
+    // And across the date line, where an unpinned formatter would roll the day.
+    expect(formatDateTime('2026-08-21T22:00:00.000Z')).toMatch(/22\.08|22\/08/);
+  });
+
   it('accepts Date objects and epoch numbers', () => {
     expect(formatDateTime(new Date('2026-01-05T08:00:00Z'))).toMatch(/2026/);
     expect(formatDateTime(Date.parse('2026-01-05T08:00:00Z'))).toMatch(/2026/);
@@ -35,13 +45,15 @@ describe('formatDateOnly', () => {
     expect(formatted).not.toMatch(/\d{2}:\d{2}/);
   });
 
-  it('treats a bare YYYY-MM-DD as a local calendar day, never shifting it back', () => {
-    // The spec parses "2026-08-01" as UTC midnight, which renders as 31.07 for
-    // any runner west of UTC. A payment date has no time component, so the
-    // calendar day the user typed must be the calendar day they see.
-    expect(formatDateOnly('2026-08-01')).toMatch(/01/);
-    expect(formatDateOnly('2026-08-01')).toMatch(/08/);
+  it('keeps a bare YYYY-MM-DD on the day the user typed, in either direction', () => {
+    // Both naive readings shift the day for someone: UTC midnight renders as
+    // 31.07 west of UTC, and local midnight renders as 31.07 once converted to
+    // Israel time from far enough east. Midday UTC clears both boundaries.
+    expect(formatDateOnly('2026-08-01')).toMatch(/01\.08|01\/08/);
     expect(formatDateOnly('2026-01-01')).toMatch(/2026/);
+    // New Year's Day is the strictest case: a shift here changes the year too.
+    expect(formatDateOnly('2026-01-01')).toMatch(/01\.01|01\/01/);
+    expect(formatDateOnly('2026-12-31')).toMatch(/31\.12|31\/12/);
   });
 
   it('returns null for invalid input', () => {
