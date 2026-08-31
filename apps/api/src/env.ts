@@ -3,6 +3,37 @@ import { nodeEnvSchema, parseEnv } from '@caredesk/config';
 import { extractSupabaseProjectRef } from '@caredesk/db';
 import { getDeploymentEnvironment } from './deployment-environment.js';
 
+/**
+ * Split a comma-separated key list, tolerating the whitespace and trailing
+ * commas that survive a copy-paste into a deployment console. An operator
+ * pasting a key with a stray space must not end up with a silently absent
+ * fallback key.
+ */
+function splitKeyList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/**
+ * Every key this deployment can read with, newest first. The head is the write
+ * key; the tail exists only so rows sealed before a rotation still open.
+ */
+export function workspaceEncryptionKeys(env: {
+  WORKSPACE_ENCRYPTION_KEY?: string;
+  WORKSPACE_ENCRYPTION_PREVIOUS_KEYS?: string;
+}): string[] {
+  const keys = env.WORKSPACE_ENCRYPTION_KEY ? [env.WORKSPACE_ENCRYPTION_KEY] : [];
+  for (const previous of splitKeyList(env.WORKSPACE_ENCRYPTION_PREVIOUS_KEYS)) {
+    // A key repeated in both variables would make the reader try it twice and
+    // would let "rotation done" look true while both slots hold one key.
+    if (!keys.includes(previous)) keys.push(previous);
+  }
+  return keys;
+}
+
 const envSchema = z
   .object({
     NODE_ENV: nodeEnvSchema.default('development'),
@@ -41,6 +72,17 @@ const envSchema = z
     // reaches Postgres. This must be a base64 encoded 32-byte random key and
     // must be managed by the deployment secret store.
     WORKSPACE_ENCRYPTION_KEY: z.string().optional(),
+    /**
+     * Keys that may still be needed to READ rows, but are never used to write.
+     * Comma-separated, base64, same format as the primary. Rotation is: put the
+     * new key in WORKSPACE_ENCRYPTION_KEY, move the old one here, deploy, let
+     * the data be rewritten, then remove it.
+     *
+     * Without this the only safe rotation is "make every existing row
+     * unreadable", which is what the custody document had to record as the
+     * standing position until now.
+     */
+    WORKSPACE_ENCRYPTION_PREVIOUS_KEYS: z.string().optional(),
     // Supabase publishable credentials are safe to identify the Auth project;
     // they are not an administrative service key. Both are required together.
     SUPABASE_URL: z.string().url().optional(),
@@ -194,6 +236,30 @@ const envSchema = z
           message: 'WORKSPACE_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
         });
       }
+    }
+    // Validated on the same terms as the primary. A retired key that is subtly
+    // malformed is worse than one that is absent: it looks like a working
+    // fallback right up to the moment an old row needs it.
+    for (const previous of splitKeyList(value.WORKSPACE_ENCRYPTION_PREVIOUS_KEYS)) {
+      try {
+        if (Buffer.from(previous, 'base64').length !== 32) throw new Error('invalid length');
+      } catch {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['WORKSPACE_ENCRYPTION_PREVIOUS_KEYS'],
+          message:
+            'WORKSPACE_ENCRYPTION_PREVIOUS_KEYS must be a comma-separated list of base64-encoded 32-byte keys',
+        });
+        break;
+      }
+    }
+    if (value.WORKSPACE_ENCRYPTION_PREVIOUS_KEYS && !value.WORKSPACE_ENCRYPTION_KEY) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['WORKSPACE_ENCRYPTION_PREVIOUS_KEYS'],
+        message:
+          'WORKSPACE_ENCRYPTION_PREVIOUS_KEYS is set without WORKSPACE_ENCRYPTION_KEY, so there is no key to write with',
+      });
     }
     if (value.NODE_ENV === 'production' && value.DATABASE_URL && !value.WORKSPACE_ENCRYPTION_KEY) {
       context.addIssue({

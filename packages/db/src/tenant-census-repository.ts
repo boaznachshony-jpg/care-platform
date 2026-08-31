@@ -32,7 +32,7 @@ interface StoredCensusRow extends CensusRow {
 export class PgTenantCensusRepository implements TenantCensusRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly encryptionKey?: string,
+    private readonly encryptionKeys?: string | readonly string[],
   ) {}
 
   async collect(): Promise<TenantCensus[]> {
@@ -82,7 +82,7 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
       return result.rows[0]?.payload ?? null;
     });
     if (!payload) return { count: null, readable: true };
-    const count = countPopulatedEntries(payload, tenantId, this.encryptionKey);
+    const count = countPopulatedEntries(payload, tenantId, this.encryptionKeys);
     // A plaintext row without a configured key is legitimate (the repository
     // re-encrypts it on the next read); an envelope that will not open is not.
     const readable = count !== null || !isEncryptedEnvelope(payload);

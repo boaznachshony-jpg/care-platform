@@ -29,7 +29,7 @@ interface HistoryRow {
 export class PgWorkspaceHistoryRepository implements WorkspaceHistoryRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly encryptionKey?: string,
+    private readonly encryptionKeys?: string | readonly string[],
   ) {}
 
   async listVersions(tenantId: string, limit: number): Promise<WorkspaceVersionSummary[]> {
@@ -50,7 +50,7 @@ export class PgWorkspaceHistoryRepository implements WorkspaceHistoryRepository 
         // Null rather than an exception when a version does not decrypt: one
         // unreadable archived version must not make the whole list - and with
         // it every recoverable version - unreachable.
-        populatedEntries: countPopulatedEntries(row.payload, row.tenant_id, this.encryptionKey),
+        populatedEntries: countPopulatedEntries(row.payload, row.tenant_id, this.encryptionKeys),
         payloadBytes: Buffer.byteLength(JSON.stringify(row.payload), 'utf8'),
       }));
     });
@@ -72,7 +72,7 @@ export class PgWorkspaceHistoryRepository implements WorkspaceHistoryRepository 
       return {
         version: row.version,
         schemaVersion: row.schema_version,
-        payload: decryptPayload(row.payload, row.tenant_id, this.encryptionKey),
+        payload: decryptPayload(row.payload, row.tenant_id, this.encryptionKeys),
       };
     });
   }
