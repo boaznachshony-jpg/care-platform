@@ -287,7 +287,10 @@ describe('scenario expense routes', () => {
         method: 'PUT' as const,
         url: `${base}/${expenseId}`,
         headers: KEYED,
-        payload: EXPENSE_BODY,
+        // `version` is mandatory on update (API-03), and body validation runs
+        // before the authorization check. Without it this case returned 400 for
+        // its own malformed payload and never reached the mapping it asserts.
+        payload: { ...EXPENSE_BODY, version: 1 },
       },
       {
         method: 'DELETE' as const,

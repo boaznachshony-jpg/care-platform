@@ -17,6 +17,16 @@ const RECONCILE_MIGRATION = readFileSync(
   'utf8',
 );
 
+/**
+ * The migration with its `--` comments stripped.
+ *
+ * A guard that forbids a phrase has to read the statements, not the prose: 0041
+ * explains at length why its trigger is deliberately *not* security definer, so
+ * scanning the raw file finds the very phrase the guard exists to forbid and
+ * fails on the explanation instead of on the code.
+ */
+const RECONCILE_MIGRATION_SQL = RECONCILE_MIGRATION.replace(/--[^\n]*/g, '');
+
 const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const CASE_ID = '00000000-0000-4000-8000-000000000011';
 const ACTOR = {
@@ -497,7 +507,7 @@ describe('0041_payroll_total_reconciles.sql', () => {
     expect(RECONCILE_MIGRATION).toContain('before insert or update on payroll_entry');
     expect(RECONCILE_MIGRATION).toContain("raise exception 'payroll_month_closed'");
     // A definer-rights trigger would decide the write under BYPASSRLS.
-    expect(RECONCILE_MIGRATION.toLowerCase()).not.toContain('security definer');
+    expect(RECONCILE_MIGRATION_SQL.toLowerCase()).not.toContain('security definer');
   });
 
   it('lets a zero or negative month be closed (DOM-24)', () => {
