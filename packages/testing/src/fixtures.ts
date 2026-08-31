@@ -40,6 +40,11 @@ export function buildSyntheticEmploymentCase(
     startDate: '2026-01-15',
     endDate: null,
     status: 'active',
+    // A synthetic case is opened directly in the canonical product, so it has
+    // no legacy client behind it. Spelled out rather than left to `overrides`:
+    // the field is required and nullable, and omitting it here would let the
+    // optional override be its only source.
+    legacyClientId: null,
     ...overrides,
   };
 }
