@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
+import { recordLegalAcceptance } from '../api/client.js';
 import {
   caregiverCountries,
   caregiverLanguages,
@@ -306,6 +308,30 @@ export function OnboardingPage() {
       t('case.defaultRelationship'),
       completed,
     );
+
+    // Acceptance is recorded here too, and not only at payment.
+    //
+    // Finishing setup is the moment the caregiver's identity documents, visa
+    // data and payroll details start being held - and that happens whether or
+    // not the user ever reaches the billing screen, and whether or not they
+    // ever pay. Recording consent only at the point of payment would mean the
+    // account that matters most for privacy purposes, the one holding a third
+    // party's data with no subscription attached, is the one with no record
+    // that its holder accepted anything.
+    //
+    // Not awaited, for the same reason `ensureCanonicalCase` above is not:
+    // setup must be able to finish offline, and blocking the last click of a
+    // six-step wizard on a network request would cost the user more than the
+    // failure does. The recording is idempotent per (user, document, version),
+    // so the billing flow - where it IS awaited and IS blocking - re-records it
+    // for free if this call was lost.
+    void recordLegalAcceptance({
+      documents: [
+        { document: 'terms', version: TERMS_DOCUMENT_VERSION },
+        { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
+      ],
+      context: 'onboarding',
+    }).catch(() => undefined);
 
     navigate(isFirstRun ? '/billing?from=onboarding' : path('/'));
   }
@@ -819,6 +845,28 @@ export function OnboardingPage() {
             <p id="onboarding-blocked-help" className="onboarding-blocked-help" role="status">
               {t('onboarding.blockedHelp')}
             </p>
+          ) : null}
+
+          {/* Shown on the last step only, next to the button that completes
+              setup, because that click is what the acceptance is recorded
+              against. Placing it here rather than in a footer follows
+              docs/governance/LIABILITY-FRAMING.md placement rule 1: the notice
+              belongs beside the thing it qualifies. */}
+          {step === LAST_STEP ? (
+            <div className="onboarding-legal-consent legal-note">
+              <p>
+                {t('onboarding.legalConsentPrefix')}{' '}
+                <Link to="/terms" target="_blank">
+                  {t('onboarding.legalConsentTerms')}
+                </Link>{' '}
+                {t('onboarding.legalConsentAnd')}{' '}
+                <Link to="/privacy" target="_blank">
+                  {t('onboarding.legalConsentPrivacy')}
+                </Link>
+                .
+              </p>
+              <p>{t('onboarding.legalConsentNote')}</p>
+            </div>
           ) : null}
 
           <div className="wizard-actions">

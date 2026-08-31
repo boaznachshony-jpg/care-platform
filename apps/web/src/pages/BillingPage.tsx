@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BILLING_TERMS_VERSION, type BillingPlanResponse } from '@caredesk/schemas';
+import { PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
 import {
   cancelBillingSubscription,
   getBillingSubscription,
+  recordLegalAcceptance,
   startBillingPaymentMethodSetup,
 } from '../api/client.js';
 import { useAuth } from '../auth/auth-context.js';
@@ -38,6 +40,12 @@ export function BillingPage() {
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  /**
+   * Distinct from `error`: this one means "your acceptance was not recorded, so
+   * nothing was started", which is a different fact from "the payment provider
+   * failed" and needs its own sentence.
+   */
+  const [consentError, setConsentError] = useState(false);
   const [onboardingFlow] = useState(
     () =>
       searchParams.get('from') === 'onboarding' ||
@@ -73,11 +81,45 @@ export function BillingPage() {
     }
   }, [searchParams]);
 
+  /**
+   * The documents this screen's checkbox covers, each at the version the user
+   * was shown. Both constants come from `@caredesk/i18n`, which is also what
+   * renders the version line at the top of /terms and /privacy, so the version
+   * recorded in `terms_acceptance` cannot be a version nobody displayed.
+   *
+   * The billing terms at /terms/subscription are linked from the same sentence
+   * and are recorded separately, as `product_subscription.terms_version`, by
+   * the setup call below. They keep their own version (2026-08-04) because
+   * existing subscriptions already point at it.
+   */
+  const acceptedDocuments = [
+    { document: 'terms', version: TERMS_DOCUMENT_VERSION },
+    { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
+  ] as const;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!accepted || !plan?.canManage || !plan.providerConfigured) return;
     setBusy(true);
     setError(false);
+    setConsentError(false);
+    // The acceptance is recorded BEFORE the subscription is created, and the
+    // failure path is a refusal rather than a warning.
+    //
+    // Recording it afterwards would be the easier change and it is the wrong
+    // one: the user is redirected to Cardcom's hosted page on the next line and
+    // does not come back to this component, so an "afterwards" that fails has
+    // nowhere to run and nothing to retry. The result would be a live paid
+    // subscription with no record that its terms were ever accepted - which is
+    // exactly the state this whole change exists to make impossible. If the
+    // acceptance cannot be stored, no subscription is started.
+    try {
+      await recordLegalAcceptance({ documents: [...acceptedDocuments], context: 'billing' });
+    } catch {
+      setBusy(false);
+      setConsentError(true);
+      return;
+    }
     try {
       const result = await startBillingPaymentMethodSetup({
         billingName: billingName.trim(),
@@ -107,6 +149,12 @@ export function BillingPage() {
    * Past-due recovery: re-enter the existing hosted card-setup (connectCard)
    * flow with the payer details already on file. Completing it stores a fresh
    * verified token, after which the next collection run retries the charge.
+   *
+   * No acceptance is recorded here, deliberately. This screen shows no consent
+   * checkbox and no document: the subscription already exists and its
+   * acceptance was recorded when it was created. Writing a row from here would
+   * record an acceptance the customer did not give on this screen, which is a
+   * worse defect than the missing record this change set out to fix.
    */
   async function reconnectCard() {
     if (!plan?.canManage || !plan.providerConfigured) return;
@@ -329,11 +377,23 @@ export function BillingPage() {
                   />
                   <span>
                     {t('billing.consentPrefix')}{' '}
+                    <Link to="/terms" target="_blank">
+                      {t('billing.consentTermsLink')}
+                    </Link>
+                    {', '}
+                    <Link to="/privacy" target="_blank">
+                      {t('billing.consentPrivacyLink')}
+                    </Link>{' '}
                     <Link to="/terms/subscription" target="_blank">
                       {t('billing.consentLink')}
                     </Link>
                   </span>
                 </label>
+                {consentError ? (
+                  <p className="action-notice error" role="alert">
+                    {t('billing.consentRecordFailed')}
+                  </p>
+                ) : null}
                 {!plan.providerConfigured ? (
                   <p className="billing-provider-notice" role="status">
                     {t('billing.providerPending')}

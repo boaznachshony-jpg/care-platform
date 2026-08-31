@@ -21,6 +21,8 @@ import type {
   BillingCheckoutResponse,
   StartBillingSetupRequest,
   StartVisaRenewalRequest,
+  LegalAcceptanceRequest,
+  LegalAcceptanceResponse,
 } from '@caredesk/schemas';
 import { getBrowserAuthClient } from '../auth/client.js';
 
@@ -334,6 +336,25 @@ export function startBillingPaymentMethodSetup(
 
 export function cancelBillingSubscription(): Promise<void> {
   return apiRequest('/billing/subscription', { method: 'DELETE' });
+}
+
+/**
+ * Records that the signed-in user accepted the terms of service and the privacy
+ * policy, at the versions they were shown (migration 0043, `terms_acceptance`).
+ *
+ * The version comes from `@caredesk/i18n`, which is also what renders the
+ * version line at the top of /terms and /privacy, so the recorded string is by
+ * construction the string the user saw. The call is idempotent: accepting the
+ * same version twice records one row.
+ */
+export function recordLegalAcceptance(
+  input: LegalAcceptanceRequest,
+): Promise<LegalAcceptanceResponse> {
+  return apiRequest('/legal/acceptances', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function listLegalAcceptances(): Promise<LegalAcceptanceResponse> {
+  return apiRequest('/legal/acceptances');
 }
 
 export interface CaseHealthResponse {

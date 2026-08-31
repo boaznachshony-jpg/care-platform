@@ -14,6 +14,7 @@ import { registerWorkspaceVersionRoutes } from './routes/workspace-versions.js';
 import { registerDataIntegrityRoutes } from './routes/data-integrity.js';
 import { registerFamilyAccessRoutes } from './routes/family-access.js';
 import { registerBillingRoutes } from './routes/billing.js';
+import { registerLegalAcceptanceRoutes } from './routes/legal-acceptances.js';
 import { registerSupportRequestRoutes } from './routes/support-requests.js';
 import { registerVisaRenewalRoutes } from './routes/visa-renewals.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
@@ -172,6 +173,12 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerWorkspaceVersionRoutes(app, container, env);
   registerDataIntegrityRoutes(app, container, env, cronRateLimiter);
   registerFamilyAccessRoutes(app, container, env);
+  // Registered before the billing routes because that is the order the product
+  // uses them in: the acceptance is recorded, and only then is the subscription
+  // created. Registration order is not enforcement - apps/web/src/pages/
+  // BillingPage.tsx is where the sequencing actually lives, and its test is
+  // what holds it - but the two should read the same way.
+  registerLegalAcceptanceRoutes(app, container);
   registerBillingRoutes(app, container, env, cronRateLimiter);
   registerVisaRenewalRoutes(app, container);
   registerSupportRequestRoutes(app, env, supportRateLimiter);
