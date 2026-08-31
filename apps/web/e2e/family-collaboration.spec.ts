@@ -110,10 +110,13 @@ test.describe('case collaboration panel', () => {
     await page.goto('/cases/case-1');
 
     await expect(page.getByRole('heading', { name: 'תיק העסקה' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Family collaboration' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'שיתוף פעולה משפחתי' })).toBeVisible();
 
-    // Responsibility assignment to an active family member.
-    const payrollAssignee = page.getByLabel('payroll assignee');
+    // Responsibility assignment to an active family member. The panel's labels
+    // now come from the `collaboration.*` namespace rather than being English
+    // literals interpolated with a raw enum, so a responsibility reads as its
+    // Hebrew name: `assigneeLabel` is "אחראי/ת על {{subject}}".
+    const payrollAssignee = page.getByLabel('אחראי/ת על שכר ותשלומים');
     await payrollAssignee.selectOption('membership-1');
     await expect(payrollAssignee).toHaveValue('membership-1');
     expect(collaboration.responsibilities()).toEqual([
@@ -121,22 +124,26 @@ test.describe('case collaboration panel', () => {
     ]);
 
     // Supported task assignment to a different member.
-    const taskAssignee = page.getByLabel('חידוש ביטוח רפואי assignee');
+    const taskAssignee = page.getByLabel('אחראי/ת על חידוש ביטוח רפואי');
     await taskAssignee.selectOption('membership-2');
     await expect(taskAssignee).toHaveValue('membership-2');
     expect(collaboration.tasks()[0]).toMatchObject({ assignee_membership_id: 'membership-2' });
 
     // Worker request handling: the approve and decline paths are both visible.
     const vacationCard = page.locator('.worker-card').filter({ hasText: 'בקשת חופשה סינתטית' });
+    // Still the raw enum: this fixture's `vacation` and `general` are not among
+    // the request types the `collaboration.requestType.*` map names, and
+    // enumLabel falls back to the value it was given rather than printing a
+    // missing key. The handler label below interpolates that same fallback.
     await expect(vacationCard).toContainText('vacation');
-    const vacationHandler = page.getByLabel('Handle vacation request');
-    await expect(vacationHandler.locator('option', { hasText: 'Accept' })).toHaveCount(1);
-    await expect(vacationHandler.locator('option', { hasText: 'Reject' })).toHaveCount(1);
+    const vacationHandler = page.getByLabel('טיפול בפנייה: vacation');
+    await expect(vacationHandler.locator('option', { hasText: 'אושרה' })).toHaveCount(1);
+    await expect(vacationHandler.locator('option', { hasText: 'נדחתה' })).toHaveCount(1);
     await vacationHandler.selectOption('approved');
-    await expect(page.getByLabel('Handle vacation request')).toHaveValue('approved');
+    await expect(page.getByLabel('טיפול בפנייה: vacation')).toHaveValue('approved');
 
-    await page.getByLabel('Handle general request').selectOption('rejected');
-    await expect(page.getByLabel('Handle general request')).toHaveValue('rejected');
+    await page.getByLabel('טיפול בפנייה: general').selectOption('rejected');
+    await expect(page.getByLabel('טיפול בפנייה: general')).toHaveValue('rejected');
 
     expect(collaboration.requests()).toEqual([
       expect.objectContaining({ id: 'request-vacation-1', status: 'approved' }),
@@ -151,8 +158,8 @@ test.describe('case collaboration panel', () => {
 
     // The handled state is server-owned and survives a reload.
     await page.reload();
-    await expect(page.getByLabel('payroll assignee')).toHaveValue('membership-1');
-    await expect(page.getByLabel('Handle vacation request')).toHaveValue('approved');
+    await expect(page.getByLabel('אחראי/ת על שכר ותשלומים')).toHaveValue('membership-1');
+    await expect(page.getByLabel('טיפול בפנייה: vacation')).toHaveValue('approved');
   });
 
   test('a collaboration authorization denial shows the failure state, never foreign data', async ({
@@ -162,9 +169,9 @@ test.describe('case collaboration panel', () => {
     collaboration.state.forbidden = true;
     await page.goto('/cases/case-1');
 
-    await expect(page.getByRole('heading', { name: 'Family collaboration' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'שיתוף פעולה משפחתי' })).toBeVisible();
     await expect(
-      page.getByRole('alert').filter({ hasText: 'Collaboration could not be loaded.' }),
+      page.getByRole('alert').filter({ hasText: 'לא הצלחנו לטעון את חלוקת האחריות' }),
     ).toBeVisible();
     await expect(page.getByText('אח מנהל לבדיקה')).toHaveCount(0);
     await expect(page.getByText('בקשת חופשה סינתטית לבדיקה')).toHaveCount(0);
