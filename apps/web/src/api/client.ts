@@ -25,6 +25,7 @@ import type {
   LegalAcceptanceResponse,
 } from '@caredesk/schemas';
 import { getBrowserAuthClient } from '../auth/client.js';
+import { getDeploymentEnvironment } from '../environment.js';
 
 const API_PORT = 4000;
 
@@ -47,6 +48,23 @@ function resolveApiBaseUrl(): string {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+
+/**
+ * WEB-20: the `:4000`-on-the-page's-own-host fallback is correct for a phone
+ * pointed at a dev machine and catastrophic anywhere else — a deploy that
+ * forgets VITE_API_BASE_URL sends every authenticated request to
+ * `https://<the site>:4000`, which never answers. The user then saw a generic
+ * "cloud save failed" banner with a retry that could never succeed.
+ *
+ * This is a configuration fault, not a transient one, so it is reported as
+ * itself. Exported as a function (not a constant) so a test can vary the
+ * hostname; the env var is read once at module load, as Vite inlines it.
+ */
+export function apiBaseUrlIsMisconfigured(
+  environment = typeof window === 'undefined' ? 'local' : getDeploymentEnvironment(),
+): boolean {
+  return !import.meta.env.VITE_API_BASE_URL && environment !== 'local';
+}
 
 const API_PREWARM_TTL_MS = 60_000;
 let apiWarmUntil = 0;

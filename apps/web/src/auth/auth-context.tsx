@@ -65,6 +65,7 @@ export function AuthProvider({
   storageUnavailable,
   passwordRecovery,
   loading,
+  sessionRecovering,
 }: {
   children?: ReactNode;
   login: ReactNode;
@@ -72,6 +73,12 @@ export function AuthProvider({
   storageUnavailable: ReactNode;
   passwordRecovery: ReactNode;
   loading: ReactNode;
+  /**
+   * Shown over the still-mounted app while a transient session is verified
+   * (WEB-05). Passed in rather than translated here so this module keeps no
+   * dependency on the i18n provider.
+   */
+  sessionRecovering?: ReactNode;
 }) {
   const [client] = useState(getBrowserAuthClient);
   const initialState = resolveAuthGateState(Boolean(client));
@@ -85,6 +92,15 @@ export function AuthProvider({
    * must survive re-renders without triggering one.
    */
   const hydratedUserRef = useRef<string | null>(null);
+  /**
+   * WEB-05: whether `children` have ever been on screen. A transient auth blip
+   * after that point must overlay them, not unmount them.
+   */
+  const hasMountedChildrenRef = useRef(false);
+
+  useEffect(() => {
+    if (state === 'ready' && user) hasMountedChildrenRef.current = true;
+  }, [state, user]);
 
   useEffect(() => {
     if (!client) return undefined;
@@ -315,14 +331,47 @@ export function AuthProvider({
 
   if (state === 'configuration-required') return configurationRequired;
   if (state === 'storage-error') return storageUnavailable;
-  if (state === 'loading') return loading;
+  /**
+   * WEB-05: returning `loading` INSTEAD of `children` unmounted the whole
+   * React subtree, and `recoverTransientSession()` sets state to 'loading'
+   * on every momentary null session — which Supabase emits on token refresh
+   * and when a mobile browser resumes a suspended tab. A user mid-way through
+   * the payroll wizard lost everything typed, twice a day, for a blip that
+   * recovers in 1.5 s.
+   *
+   * Once the app has been shown, a re-entry into 'loading' is therefore an
+   * overlay, not a teardown. The cold start (nothing mounted yet) still
+   * renders the loading screen, because there is nothing to preserve.
+   */
+  if (state === 'loading' && !hasMountedChildrenRef.current) return loading;
   if (state === 'ready' && user && recoveringPassword) {
     return <AuthContext.Provider value={value}>{passwordRecovery}</AuthContext.Provider>;
   }
   if (state === 'ready' && !user) {
     return <AuthContext.Provider value={value}>{login}</AuthContext.Provider>;
   }
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  /**
+   * One shape for both states, deliberately. Rendering the overlay from a
+   * separate branch put `children` at a different depth in the two trees — bare
+   * under the provider when ready, one <div> deeper while recovering — so React
+   * reconciled them as different elements and unmounted the subtree on the way
+   * in and again on the way out. That is the very teardown the overlay exists
+   * to prevent, reintroduced by the markup that implements it. The host element
+   * is therefore always present and only the notice is conditional, which keeps
+   * every child's position in the tree, and so its state, unchanged.
+   */
+  return (
+    <AuthContext.Provider value={value}>
+      <div className="auth-recovery-overlay-host">
+        {children}
+        {state === 'loading' ? (
+          <div className="auth-recovery-overlay" role="status" aria-live="polite">
+            {sessionRecovering ?? loading}
+          </div>
+        ) : null}
+      </div>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

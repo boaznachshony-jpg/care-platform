@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { agorot } from './money.js';
 import {
+  BLANK_PAYROLL_COMPONENTS_AGOROT,
   PayrollComponentError,
   calculateMonthlyPayroll,
+  calculateMonthlyPayrollAgorot,
   payrollTotalMatches,
   roundShekels,
   type PayrollComponents,
@@ -149,5 +152,59 @@ describe('payrollTotalMatches', () => {
 
   it('rejects a non-finite submitted total', () => {
     expect(payrollTotalMatches(Number.NaN, 0)).toBe(false);
+  });
+});
+
+/**
+ * Root 8 (DOM-04). The calculation is integer agorot end to end; the shekel
+ * functions above are edge adapters over it.
+ */
+describe('calculateMonthlyPayrollAgorot', () => {
+  it('produces whole agorot for every aggregate', () => {
+    const totals = calculateMonthlyPayrollAgorot({
+      ...BLANK_PAYROLL_COMPONENTS_AGOROT,
+      baseSalary: agorot(600_000),
+      paidRestDays: 4.5,
+      restDayRate: agorot(37_215),
+      advances: agorot(50_000),
+    });
+    expect(Number.isInteger(totals.restDayPay)).toBe(true);
+    expect(totals.restDayPay).toBe(167_468); // 4.5 x 372.15 = 1,674.675 -> 1,674.68
+    expect(totals.total).toBe(600_000 + 167_468 - 50_000);
+  });
+
+  it('agrees with the shekel adapter digit for digit', () => {
+    const shekels = calculateMonthlyPayroll({
+      ...BLANK,
+      baseSalary: 6000,
+      paidRestDays: 4.5,
+      restDayRate: 372.15,
+      advances: 500,
+    });
+    expect(shekels.total).toBe(7174.68);
+  });
+
+  it('does not drift when many small additions are summed', () => {
+    // Twelve ₪0.10 additions are 1.2000000000000002 in float shekels.
+    const totals = calculateMonthlyPayroll({
+      ...BLANK,
+      additionalPayments: Array.from({ length: 12 }, () => ({ amount: 0.1 })),
+    });
+    expect(totals.additions).toBe(1.2);
+    expect(totals.total).toBe(1.2);
+  });
+});
+
+describe('payrollTotalMatches after root 8', () => {
+  it('compares whole agorot exactly, with no tolerance window', () => {
+    // One agora apart is a mismatch. DOM-14's 0.01 window accepted this and
+    // then hit the database constraint on the one operation a user cannot
+    // retry their way out of.
+    expect(payrollTotalMatches(1000.01, 1000.0)).toBe(false);
+    expect(payrollTotalMatches(1000.0, 1000.0)).toBe(true);
+  });
+
+  it('refuses an amount larger than any money column can hold', () => {
+    expect(payrollTotalMatches(1e12, 1e12)).toBe(false);
   });
 });

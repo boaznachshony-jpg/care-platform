@@ -1,30 +1,46 @@
 /**
- * Root 4 — the one implementation of the monthly payroll total.
+ * The one implementation of the monthly payroll total.
  *
- * Before this file the calculation existed only in the browser bundle
- * (`apps/web/src/payroll-calculation.ts`), and a second, quietly different copy
- * lived inline in `CanonicalPayrollIntelligence.tsx`. The API accepted `total`
- * as an independent number and wrote it verbatim (DOM-02), and the table had no
- * reconciliation constraint (DB-06). So the canonical record of what a family
- * paid a caregiver was whatever the browser said, versioned with the browser
- * bundle rather than with the data.
+ * Root 4 brought this calculation out of the browser bundle: before it, the API
+ * accepted `total` as an independent number and wrote it verbatim (DOM-02) and
+ * the table had no reconciliation constraint (DB-06), so the canonical record
+ * of what a family paid a caregiver was whatever the browser said.
  *
- * Everything that computes a payroll total — the API before it persists, the
- * web form as it types, and the CHECK constraint in migration 0041 — now
- * derives from the formula written here once.
+ * MONEY REPRESENTATION (root 8 — landed)
+ * --------------------------------------
+ * DOM-04. Root 4 left a note here saying the amounts below were still `number`
+ * shekels and that root 8 would replace them. This is root 8.
  *
- * MONEY REPRESENTATION (root 8, not yet done)
- * -------------------------------------------
- * Root 8 replaces every amount below with a single integer-agorot money type.
- * That work has not landed, so this module deliberately does NOT invent a
- * competing one: amounts stay `number` shekels, matching `numeric(12,2)` in
- * Postgres and the existing API contract. What it does fix is the part that
- * cannot wait — rounding now happens exactly once per aggregate, in one
- * documented function, with the same rule Postgres uses, instead of being left
- * to whichever layer happened to round first. When root 8 lands, `roundShekels`
- * and the `number` amounts here are what it replaces; the formula itself, and
- * every caller of it, should not have to change.
+ * The calculation now runs entirely in integer agorot (`./money.js`). Nothing
+ * in the arithmetic can hold a fraction of an agora, so:
+ *
+ *   - `roundShekels`-per-aggregate is gone from the core. Sums of integers are
+ *     exact; only the two places where a non-integer legitimately enters — a
+ *     fractional rest-day count times a daily rate, and the conversion of an
+ *     incoming decimal — round, and each rounds exactly once.
+ *   - `payrollTotalMatches` compares two integers with `===`. The tolerance
+ *     window DOM-14 describes and the EPSILON correction DOM-04 describes both
+ *     existed only because two layers computed the same amount in floating
+ *     point and disagreed. There is nothing left for them to do.
+ *
+ * The shekel-typed functions below are retained as EDGE ADAPTERS, not as a
+ * second money model: `payroll_entry` is `numeric(12,2)` and the HTTP contract
+ * carries decimal shekels, so something has to convert. That something is here,
+ * at the boundary, once, and it is the only code in the payroll path that ever
+ * sees a fractional number.
  */
+
+import {
+  addAgorot,
+  agorotFromShekels,
+  MoneyError,
+  scaleAgorot,
+  shekelsOf,
+  subtractAgorot,
+  sumAgorot,
+  ZERO_AGOROT,
+  type Agorot,
+} from './money.js';
 
 /** A free-form addition recorded as a row in `payroll_entry.additional_payments`. */
 export interface PayrollAdditionalPayment {
@@ -32,9 +48,13 @@ export interface PayrollAdditionalPayment {
 }
 
 /**
- * The component inputs a payroll total is derived from. These are exactly the
- * `payroll_entry` money columns; `workDays`, `vacationDays`, `sickDays` and the
- * absence counters are recorded facts that do not enter the arithmetic.
+ * The component inputs a payroll total is derived from, in decimal shekels as
+ * they arrive over HTTP and as `numeric(12,2)` stores them. These are exactly
+ * the `payroll_entry` money columns; `workDays`, `vacationDays`, `sickDays` and
+ * the absence counters are recorded facts that do not enter the arithmetic.
+ *
+ * `paidRestDays` is a COUNT, not money — it is legitimately fractional (half a
+ * rest day) and is the one term that is multiplied rather than added.
  */
 export interface PayrollComponents {
   baseSalary: number;
@@ -52,6 +72,23 @@ export interface PayrollComponents {
   agreedDeductions: number;
 }
 
+/** The same components with every money term already in whole agorot. */
+export interface PayrollComponentsAgorot {
+  baseSalary: Agorot;
+  /** A day count, not money. */
+  paidRestDays: number;
+  restDayRate: Agorot;
+  holidayPay: Agorot;
+  vacationPay: Agorot;
+  sickPay: Agorot;
+  employerContributions: Agorot;
+  additionalPayments: readonly Agorot[];
+  pocketMoney: Agorot;
+  deductions: Agorot;
+  advances: Agorot;
+  agreedDeductions: Agorot;
+}
+
 export interface PayrollTotals {
   restDayPay: number;
   additions: number;
@@ -65,8 +102,15 @@ export interface PayrollTotals {
   total: number;
 }
 
+export interface PayrollTotalsAgorot {
+  restDayPay: Agorot;
+  additions: Agorot;
+  deductions: Agorot;
+  total: Agorot;
+}
+
 /** Why a component was refused, for a caller that maps it onto a field error. */
-export type PayrollComponentProblem = 'not_finite' | 'negative';
+export type PayrollComponentProblem = 'not_finite' | 'negative' | 'out_of_range';
 
 /**
  * DOM-07: a component that cannot be trusted stops the calculation instead of
@@ -85,96 +129,164 @@ export class PayrollComponentError extends Error {
 }
 
 /**
- * Round to agorot the way `numeric(12,2)` does: half away from zero, on the
- * decimal the value is written as.
+ * Round a decimal shekel amount to whole agorot, half away from zero.
  *
- * `Math.round(x * 100) / 100` is not that rule. `8.165 * 100` is
- * `816.4999999999999` in binary float, so it rounds DOWN to 8.16 — while
- * node-postgres serialises the same JS number as the text `8.165`, which
- * Postgres stores as an exact decimal and rounds UP to 8.17. Rounding on
- * `String(amount)` — the very text that reaches the database — is what makes
- * the JS result and the stored column agree, which is the whole point of
- * recomputing server-side. `Number.EPSILON` corrections (DOM-04's `roundMoney`)
- * do not help: EPSILON is ~2.2e-16 while the representation gap at shekel
- * magnitudes is ~1e-13.
+ * Retained as an edge helper for the HTTP layer, but it is no longer a money
+ * model of its own: it is `agorotFromShekels` followed by `shekelsOf`, so it
+ * cannot disagree with the rest of root 8 the way the old hand-rolled version
+ * could disagree with `roundMoney` (DOM-04).
  */
 export function roundShekels(amount: number): number {
-  if (!Number.isFinite(amount)) throw new PayrollComponentError('amount', 'not_finite');
-  const text = String(amount);
-  if (text.includes('e') || text.includes('E')) {
-    // Exponent form only appears far below one agora (|x| < 1e-6) or far above
-    // any amount this product accepts; both round to themselves under this rule.
-    return Math.abs(amount) < 0.005 ? 0 : amount;
+  try {
+    return shekelsOf(agorotFromShekels(amount));
+  } catch (error) {
+    if (error instanceof MoneyError) {
+      throw new PayrollComponentError(
+        'amount',
+        error.problem === 'out_of_range' ? 'out_of_range' : 'not_finite',
+      );
+    }
+    throw error;
   }
-  const negative = text.startsWith('-');
-  const [whole = '0', fraction = ''] = (negative ? text.slice(1) : text).split('.');
-  if (fraction.length <= 2) return amount;
-  // Half away from zero: the discarded tail is >= half an agora exactly when
-  // its first digit is 5 or more.
-  const roundUp = fraction.charCodeAt(2) >= 53;
-  const agorot = Math.round(Number(`${whole}.${fraction.slice(0, 2)}`) * 100) + (roundUp ? 1 : 0);
-  return negative ? -(agorot / 100) : agorot / 100;
 }
 
-function component(name: string, value: number): number {
-  if (!Number.isFinite(value)) throw new PayrollComponentError(name, 'not_finite');
+/** Convert one incoming decimal component to agorot, naming it if it is refused. */
+function toComponentAgorot(name: string, value: number): Agorot {
+  let amount: Agorot;
+  try {
+    amount = agorotFromShekels(value);
+  } catch (error) {
+    if (error instanceof MoneyError) {
+      throw new PayrollComponentError(
+        name,
+        error.problem === 'out_of_range' ? 'out_of_range' : 'not_finite',
+      );
+    }
+    throw error;
+  }
   // Every component column is `check (… between 0 and 10000000)`. A negative
   // component is a parse failure or a tampered payload, not a credit; the
   // credit case is expressed by a negative *total*, which is allowed.
+  if (amount < 0) throw new PayrollComponentError(name, 'negative');
+  return amount;
+}
+
+function count(name: string, value: number): number {
+  if (!Number.isFinite(value)) throw new PayrollComponentError(name, 'not_finite');
   if (value < 0) throw new PayrollComponentError(name, 'negative');
   return value;
 }
 
 /**
- * The monthly payroll total, derived from its components. Pure: no clock, no
- * IO, no locale.
+ * The monthly payroll total, in agorot, derived from its components. Pure: no
+ * clock, no IO, no locale, no floating-point money.
  *
- * Rounding is applied once per aggregate rather than per term, so the stored
- * `additions`, `deductions` and `total` are each consistent with the columns
- * they are read back from.
+ * This is the canonical formula. `calculateMonthlyPayroll` and the CHECK
+ * constraint `payroll_entry_total_reconciles_agorot` in migration 0045 are both
+ * expressions of it; nothing else may re-derive a payroll total.
  */
-export function calculateMonthlyPayroll(components: PayrollComponents): PayrollTotals {
-  const baseSalary = roundShekels(component('baseSalary', components.baseSalary));
-  const restDayPay = roundShekels(
-    component('paidRestDays', components.paidRestDays) *
-      component('restDayRate', components.restDayRate),
+export function calculateMonthlyPayrollAgorot(
+  components: PayrollComponentsAgorot,
+): PayrollTotalsAgorot {
+  // The single rounding step in the whole calculation: a fractional day count
+  // times an integer daily rate. Everything downstream is integer addition.
+  const restDayPay = scaleAgorot(
+    components.restDayRate,
+    count('paidRestDays', components.paidRestDays),
   );
-  const additionalPayments = components.additionalPayments.reduce(
-    (sum, payment, index) => sum + component(`additionalPayments.${index}.amount`, payment.amount),
-    0,
+  const additions = addAgorot(
+    restDayPay,
+    components.holidayPay,
+    components.vacationPay,
+    components.sickPay,
+    components.employerContributions,
+    sumAgorot(components.additionalPayments),
   );
-  const additions = roundShekels(
-    restDayPay +
-      component('holidayPay', components.holidayPay) +
-      component('vacationPay', components.vacationPay) +
-      component('sickPay', components.sickPay) +
-      component('employerContributions', components.employerContributions) +
-      additionalPayments,
-  );
-  const deductions = roundShekels(
-    component('pocketMoney', components.pocketMoney) +
-      component('deductions', components.deductions) +
-      component('advances', components.advances) +
-      component('agreedDeductions', components.agreedDeductions),
+  const deductions = addAgorot(
+    components.pocketMoney,
+    components.deductions,
+    components.advances,
+    components.agreedDeductions,
   );
   return {
     restDayPay,
     additions,
     deductions,
-    total: roundShekels(baseSalary + additions - deductions),
+    total: subtractAgorot(addAgorot(components.baseSalary, additions), deductions),
+  };
+}
+
+/** Edge adapter: decimal shekels in, agorot core, decimal shekels out. */
+export function toPayrollComponentsAgorot(components: PayrollComponents): PayrollComponentsAgorot {
+  return {
+    baseSalary: toComponentAgorot('baseSalary', components.baseSalary),
+    paidRestDays: count('paidRestDays', components.paidRestDays),
+    restDayRate: toComponentAgorot('restDayRate', components.restDayRate),
+    holidayPay: toComponentAgorot('holidayPay', components.holidayPay),
+    vacationPay: toComponentAgorot('vacationPay', components.vacationPay),
+    sickPay: toComponentAgorot('sickPay', components.sickPay),
+    employerContributions: toComponentAgorot(
+      'employerContributions',
+      components.employerContributions,
+    ),
+    additionalPayments: components.additionalPayments.map((payment, index) =>
+      toComponentAgorot(`additionalPayments.${index}.amount`, payment.amount),
+    ),
+    pocketMoney: toComponentAgorot('pocketMoney', components.pocketMoney),
+    deductions: toComponentAgorot('deductions', components.deductions),
+    advances: toComponentAgorot('advances', components.advances),
+    agreedDeductions: toComponentAgorot('agreedDeductions', components.agreedDeductions),
+  };
+}
+
+/**
+ * The monthly payroll total in decimal shekels, for the HTTP contract and the
+ * `numeric(12,2)` columns. A thin conversion around
+ * `calculateMonthlyPayrollAgorot` — it holds no arithmetic of its own.
+ */
+export function calculateMonthlyPayroll(components: PayrollComponents): PayrollTotals {
+  const totals = calculateMonthlyPayrollAgorot(toPayrollComponentsAgorot(components));
+  return {
+    restDayPay: shekelsOf(totals.restDayPay),
+    additions: shekelsOf(totals.additions),
+    deductions: shekelsOf(totals.deductions),
+    total: shekelsOf(totals.total),
   };
 }
 
 /**
  * Whether a submitted total may be persisted as-is.
  *
- * Exact equality after rounding both sides — no tolerance window. DOM-14 is the
- * bug a tolerance produces: the monthly-close route accepted anything within
- * 0.01 while the DB constraint required exact equality on `numeric(12,2)`, so a
- * payload inside the window and outside the constraint passed validation and
- * then raised an unhandled 500 on the one operation the user cannot retry their
- * way out of. Validation and constraint have to agree by construction.
+ * Integer equality in agorot. There is no tolerance window and no EPSILON
+ * correction, because there is no floating-point money left to correct: both
+ * sides are whole agorot by the time they meet. DOM-14 is the bug a tolerance
+ * produces — the monthly-close route accepted anything within 0.01 while the DB
+ * constraint required exact equality, so a payload inside the window and
+ * outside the constraint passed validation and then raised an unhandled 500 on
+ * the one operation the user cannot retry their way out of.
  */
 export function payrollTotalMatches(submitted: number, computed: number): boolean {
-  return Number.isFinite(submitted) && roundShekels(submitted) === roundShekels(computed);
+  if (!Number.isFinite(submitted) || !Number.isFinite(computed)) return false;
+  try {
+    return agorotFromShekels(submitted) === agorotFromShekels(computed);
+  } catch (error) {
+    if (error instanceof MoneyError) return false;
+    throw error;
+  }
 }
+
+/** The zero-agorot component set, useful to callers building a blank month. */
+export const BLANK_PAYROLL_COMPONENTS_AGOROT: PayrollComponentsAgorot = {
+  baseSalary: ZERO_AGOROT,
+  paidRestDays: 0,
+  restDayRate: ZERO_AGOROT,
+  holidayPay: ZERO_AGOROT,
+  vacationPay: ZERO_AGOROT,
+  sickPay: ZERO_AGOROT,
+  employerContributions: ZERO_AGOROT,
+  additionalPayments: [],
+  pocketMoney: ZERO_AGOROT,
+  deductions: ZERO_AGOROT,
+  advances: ZERO_AGOROT,
+  agreedDeductions: ZERO_AGOROT,
+};

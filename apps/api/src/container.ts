@@ -739,8 +739,17 @@ export function buildContainer(env: Env): Container {
             // db-path-exception: schema_migrations is the migration ledger. It
             // has no tenant_id and belongs to the deployment, not to a customer;
             // /ready compares it against REQUIRED_MIGRATIONS. (Root 6)
+            // Schema-qualified, and it has to be. Supabase ships its own
+            // `schema_migrations` in the `auth` and `realtime` schemas, so an
+            // unqualified name resolves by search_path and can land on one of
+            // theirs. It did: after the SELECT grant was added, `/ready`
+            // reported "44 of 44 migrations are not recorded" against a ledger
+            // that holds every one of them. Reading an empty table that happens
+            // to share a name is worse than being denied - a denial is at least
+            // an error, while this looked like a database forty-four migrations
+            // behind the code.
             const ledger = await pool.query<{ version: string }>(
-              'select version from schema_migrations',
+              'select version from public.schema_migrations',
             );
             const missing = missingMigrations(ledger.rows.map((entry) => entry.version));
             if (missing.length > 0) {

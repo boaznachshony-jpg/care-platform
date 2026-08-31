@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
+import { agorotFromShekels, shekelsOf } from '@caredesk/domain';
 import { withTenant } from '@caredesk/db';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
@@ -14,7 +15,20 @@ const params = z.object({
 });
 const fields = {
   label: z.string().trim().min(1).max(120),
-  amount: z.number().finite().min(0).max(10_000_000),
+  /**
+   * Root 8 (DOM-04). The column is `numeric(12,2)`, so a request carrying
+   * 8.165 used to be quantised by Postgres at an undocumented step with a
+   * different rule from the one the forecast applied on the way back out. The
+   * amount is now normalised to whole agorot HERE, at the edge, by the one
+   * money type — so what the client sent, what is stored and what the forecast
+   * later reads are the same number by construction.
+   */
+  amount: z
+    .number()
+    .finite()
+    .min(0)
+    .max(10_000_000)
+    .transform((value) => shekelsOf(agorotFromShekels(value))),
   kind: z.enum(['recurring', 'one_time']),
   startMonth: z.string().regex(MONTH),
   endMonth: z.string().regex(MONTH).nullable().optional(),
