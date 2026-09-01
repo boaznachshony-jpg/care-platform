@@ -132,6 +132,9 @@ import {
   PgTermsAcceptanceStore,
   type TermsAcceptanceStore,
 } from './legal/terms-acceptance-store.js';
+import { probeSupabaseAuth, probeSupabasePrivateStorage } from './readiness/upstream-probes.js';
+import { EmailDataLossAlertSink } from './monitoring/email-data-loss-alert-sink.js';
+import { ResendEmailProvider } from './engagement/resend-email-provider.js';
 import type { BinderExportService } from './binder-export-service.js';
 import type { EvidenceExportService } from './evidence-export-service.js';
 
@@ -535,9 +538,24 @@ export function buildContainer(env: Env): Container {
     ids,
   };
   const workspaceDeps = { authorization, workspaces: workspaceRepository, audit, clock };
-  // The only destination that exists. See DataLossAlertSink for what is still
-  // missing and what it should become.
-  const dataLossAlerts = new LoggingDataLossAlertSink();
+  // The destination the port was written for. `DataLossAlertSink` names email
+  // to the named production operator as step (1) of closing this gap: the pilot
+  // has one customer and one operator, so a mailbox is a sufficient pager.
+  //
+  // The email sink writes the same structured log line first and always, so the
+  // durable record does not depend on Resend being up. Without a configured
+  // destination the behaviour is exactly what it was — a log line and nothing
+  // else — and `/ready` says so rather than pretending the detector is wired.
+  const dataLossAlerts: DataLossAlertSink =
+    env.DATA_LOSS_ALERT_EMAIL && env.RESEND_API_KEY && env.SUPPORT_FROM_EMAIL
+      ? new EmailDataLossAlertSink(
+          new ResendEmailProvider({
+            apiKey: env.RESEND_API_KEY,
+            fromEmail: env.SUPPORT_FROM_EMAIL,
+          }),
+          env.DATA_LOSS_ALERT_EMAIL,
+        )
+      : new LoggingDataLossAlertSink();
   const workspaceRestoreDeps = {
     ...workspaceDeps,
     history: workspaceHistoryRepository,
@@ -688,6 +706,53 @@ export function buildContainer(env: Env): Container {
       if (!pool) reasons.push('DATABASE_URL is not configured');
       if (!hasSupabaseAuth) reasons.push('Supabase authentication is not configured');
       if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
+      // The daily scan can detect a loss; without a destination it can only
+      // write a line nobody is subscribed to. In production that is a gap in
+      // the control, not a preference, so `/ready` names it. It is a reason
+      // rather than a check because the endpoint reports dependencies, and the
+      // missing piece here is configuration, not an unreachable service.
+      if (!env.DATA_LOSS_ALERT_EMAIL)
+        reasons.push(
+          'DATA_LOSS_ALERT_EMAIL is not configured; a suspected data loss would be logged and nobody told',
+        );
+
+      // R0-08. Until now these two checks ended here, at "the variable is set".
+      // That is why `authentication` reported `ok` for the whole of the
+      // 2026-08-31 outage. Both dependencies are now asked whether they answer
+      // and whether they accept the credential — the same standard `database`
+      // has always been held to. See readiness/upstream-probes.ts for why these
+      // endpoints and why the probe does not fail open.
+      //
+      // The two run concurrently: they are independent, and `/ready` should
+      // cost one timeout, not two.
+      const [authProbe, storageProbe] = await Promise.all([
+        hasSupabaseAuth
+          ? probeSupabaseAuth({
+              supabaseUrl: env.SUPABASE_URL!,
+              publishableKey: env.SUPABASE_PUBLISHABLE_KEY!,
+            })
+          : Promise.resolve(null),
+        hasPrivateStorage
+          ? probeSupabasePrivateStorage({
+              supabaseUrl: env.SUPABASE_URL!,
+              serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY!,
+              bucket: env.SUPABASE_STORAGE_BUCKET!,
+            })
+          : Promise.resolve(null),
+      ]);
+      if (authProbe && !authProbe.reachable) {
+        reasons.push(`Supabase authentication is unreachable (${authProbe.detail})`);
+        checks.authentication = 'unreachable';
+      }
+      if (storageProbe && !storageProbe.reachable) {
+        // Named by bucket, because the operator's next action differs: a 404 is
+        // a bucket to recreate or rename, a 401/403 is a key to rotate.
+        reasons.push(
+          `Private document storage is unreachable ` +
+            `(bucket ${env.SUPABASE_STORAGE_BUCKET}: ${storageProbe.detail})`,
+        );
+        checks.privateStorage = 'unreachable';
+      }
       if (pool) {
         try {
           // Two questions, deliberately kept separate. The object probes below
