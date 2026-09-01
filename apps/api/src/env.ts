@@ -98,6 +98,12 @@ const envSchema = z
     SUPPORT_DESTINATION_EMAIL: z.string().email().optional(),
     SUPPORT_FROM_EMAIL: z.string().email().optional(),
     RESEND_API_KEY: z.string().min(10).optional(),
+    // Where a suspected data loss is sent. Server-only, like the support
+    // destination: a VITE_ variable would put an operator mailbox in the
+    // browser bundle. Optional so the pilot still boots without it — but see
+    // the production check below, which refuses to call itself ready when the
+    // detector has nowhere to shout.
+    DATA_LOSS_ALERT_EMAIL: z.string().email().optional(),
     BILLING_PROVIDER: z.enum(['disabled', 'cardcom', 'mock']).default('disabled'),
     BILLING_PRICE_AGOROT: z.coerce.number().int().positive().default(3900),
     BILLING_VAT_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(1800),
@@ -181,6 +187,16 @@ const envSchema = z
         path: ['SUPPORT_DESTINATION_EMAIL'],
         message:
           'SUPPORT_DESTINATION_EMAIL, SUPPORT_FROM_EMAIL and RESEND_API_KEY must be configured together',
+      });
+    }
+    // A destination with no transport is a destination that silently does
+    // nothing — the exact shape of the bug this variable exists to close.
+    if (value.DATA_LOSS_ALERT_EMAIL && !(value.RESEND_API_KEY && value.SUPPORT_FROM_EMAIL)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DATA_LOSS_ALERT_EMAIL'],
+        message:
+          'DATA_LOSS_ALERT_EMAIL requires RESEND_API_KEY and SUPPORT_FROM_EMAIL to deliver through',
       });
     }
     if (value.BILLING_PROVIDER === 'cardcom') {
