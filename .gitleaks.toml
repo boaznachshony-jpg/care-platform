@@ -2,8 +2,23 @@
 useDefault = true
 
 [allowlist]
-description = "CareDesk localStorage namespaces are public browser keys, not credentials"
+description = """
+Findings that are not credentials.
+
+  3fcc094, 34791af — CareDesk localStorage namespaces are public browser keys.
+
+  cff8573 — a synthetic three-segment token in upstream-probes.test.ts. The
+  test it serves proves that /ready redacts anything JWT-shaped out of an
+  upstream error message, so it has to feed the code something JWT-shaped;
+  gitleaks cannot tell a synthetic token from a live one, and was right to
+  stop it. The literal was removed in 053e27e and the value is now assembled
+  at runtime from inert segments, so nothing key-shaped remains in the tree.
+  The entry is here because the scan runs over history with fetch-depth: 0,
+  and a commit already pushed cannot be un-scanned without rewriting the
+  branch. It allowlists that one commit, not the file and not the rule.
+"""
 commits = [
   "3fcc094afef059a4cffef7e799fd495a8c5ff2a4",
   "34791af7ddc5b2926feed250bc5602d3c35323c5",
+  "cff857335de51e3cafc4a9353ff1ca3466da4441",
 ]
