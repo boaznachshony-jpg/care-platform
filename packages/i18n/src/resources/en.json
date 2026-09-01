@@ -6,6 +6,46 @@
     "score": "The score is not a substitute for independent checking or professional advice, and it does not guarantee that no obligations or deadlines remain open.",
     "reminder": "Dates and alerts are calculated from the dates that were entered. Delivery of any alert is not guaranteed, and tracking and meeting the deadlines remains the user's responsibility."
   },
+  "valueOrigin": {
+    "input": {
+      "label": "Entered",
+      "meaning": "A value entered by the user. The system does not verify it and asserts nothing about it."
+    },
+    "calculated": {
+      "label": "Calculated",
+      "meaning": "A value the system derived by a formula from entered values. It is not legal truth and it is not a payslip."
+    },
+    "paid": {
+      "label": "Paid",
+      "meaning": "A value recorded as a payment that was actually made, according to what was reported to the system."
+    },
+    "forecast": {
+      "label": "Forecast",
+      "meaning": "A projection about the future. It is not a fact and it is not a payment that was made."
+    },
+    "legendTitle": "How to read the numbers here",
+    "legendIntro": "Every amount carries a label saying what it is: entered values are the user's responsibility, calculated values are derived from entered data, paid values are recorded as payments that were made, and a forecast is an estimate only.",
+    "provenance": {
+      "source": "Source: {{source}}",
+      "who": "Who: {{who}}",
+      "when": "When: {{when}}"
+    },
+    "source": {
+      "userEntry": "User entry",
+      "payrollRecord": "Saved payroll record",
+      "monthlyClose": "Month close on the server",
+      "canonicalPayroll": "Canonical payroll record on the server",
+      "scenarioLayer": "Planning layer (scenario expenses)",
+      "nationalInsuranceCalculator": "National insurance calculator",
+      "task": "Task",
+      "document": "Document",
+      "authorization": "Authorization",
+      "insurance": "Insurance",
+      "workflow": "Managed workflow",
+      "monthly_close": "Month close",
+      "profile": "Case profile"
+    }
+  },
   "app": {
     "name": "CareDesk"
   },

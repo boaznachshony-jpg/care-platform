@@ -249,6 +249,80 @@ button {
   font-size: 0.88rem;
   color: #536174;
 }
+/* R5-01..R5-04 — provenance badge for the four kinds of number.
+   The distinction is carried by the WORD and the GLYPH inside the badge, which
+   this block never hides; colour and border are added on top so the badge is
+   scannable, never so it is the only difference. Everything here therefore
+   survives greyscale, a monochrome print of the payroll summary, and forced
+   colours. */
+.value-origin {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--cd-border, #d3dde9);
+  background: var(--cd-pill, #eef2f7);
+  color: var(--cd-text-secondary, #52627a);
+  white-space: normal;
+}
+.value-origin-glyph {
+  font-weight: 700;
+}
+.value-origin-provenance {
+  font-weight: 400;
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+.value-origin-input {
+  border-style: dashed;
+}
+.value-origin-calculated {
+  background: var(--cd-accent-soft, #e3efff);
+  color: var(--cd-accent-on-soft, #124f9f);
+  border-color: var(--cd-accent-soft, #e3efff);
+}
+.value-origin-paid {
+  background: var(--cd-success-soft, #e1f6ea);
+  color: var(--cd-success-on-soft, #17653a);
+  border-color: var(--cd-success-soft, #e1f6ea);
+}
+.value-origin-forecast {
+  background: var(--cd-warning-soft, #fff0dc);
+  color: var(--cd-warning-on-soft, #6f5212);
+  border-color: var(--cd-warning-on-soft, #6f5212);
+  border-style: dotted;
+}
+.value-origin-legend {
+  border: 1px solid var(--cd-border, #d3dde9);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-block: 12px;
+  background: var(--cd-surface-raised, #f5f8fc);
+}
+.value-origin-legend p {
+  margin: 4px 0 8px;
+  font-size: 0.88rem;
+  color: var(--cd-text-secondary, #52627a);
+}
+.value-origin-legend ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.value-origin-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
 /* Terms/privacy acknowledgement beside the button that completes setup. */
 .onboarding-legal-consent {
   display: grid;

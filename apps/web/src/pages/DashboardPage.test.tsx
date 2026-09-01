@@ -227,4 +227,56 @@ describe('DashboardPage', () => {
       expect(screen.getByRole('link', { name: 'נושאים לטיפול 1' })).toBeInTheDocument(),
     );
   });
+
+  /**
+   * R5-05. This line used to read "insurance: medicalInsuranceExpiryDate" — a
+   * machine token in a place the customer is asked to act. The source is now
+   * named in the interface language; the id stays, because it is the evidence a
+   * support call needs.
+   */
+  it('names the source of an attention item in Hebrew instead of printing its token', async () => {
+    mockGetCaseHealth.mockResolvedValue({
+      score: 70,
+      actionsRemaining: 1,
+      factors: [
+        {
+          id: 'factor-1',
+          title: 'ביטוח רפואי לחידוש',
+          explanation: 'יש לחדש את הביטוח',
+          status: 'attention',
+          provenance: { sourceType: 'insurance', sourceIds: ['medicalInsuranceExpiryDate'] },
+        },
+      ],
+    });
+    renderPage();
+
+    const line = await screen.findByText(/מקור: ביטוח/);
+    expect(line.textContent).toContain('medicalInsuranceExpiryDate');
+    expect(line.textContent).not.toContain('insurance:');
+  });
+
+  /**
+   * The health payload comes from the server, so a source type the interface
+   * does not know must degrade to the raw token — never to a leaked
+   * translation key on a screen the customer reads.
+   */
+  it('falls back to the raw source token rather than printing a translation key', async () => {
+    mockGetCaseHealth.mockResolvedValue({
+      score: 70,
+      actionsRemaining: 1,
+      factors: [
+        {
+          id: 'factor-1',
+          title: 'משהו חדש',
+          explanation: 'מקור שהממשק אינו מכיר',
+          status: 'attention',
+          provenance: { sourceType: 'something_new', sourceIds: ['id-1'] },
+        },
+      ],
+    });
+    renderPage();
+
+    const line = await screen.findByText(/מקור: something_new/);
+    expect(line.textContent).not.toContain('valueOrigin.source');
+  });
 });

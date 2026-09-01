@@ -9,6 +9,7 @@ import {
 } from '../storage/mvp-storage.js';
 import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { ValueOrigin, ValueOriginLegend } from './ValueOrigin.js';
 
 const money = new Intl.NumberFormat('he-IL', {
   style: 'currency',
@@ -102,6 +103,10 @@ export function PayrollIntelligence({
         {/* Above the metric grid: the aggregate figures are the first thing read,
             so the qualification has to precede them. */}
         <p className="legal-note">{t('liability.calculation')}</p>
+        {/* R5-02/R5-03/R5-04. This one component puts three different claims on
+            one screen: derived analytics, a twelve-month projection, and a list
+            of months recorded as paid. The key is stated once, at the top. */}
+        <ValueOriginLegend kinds={['calculated', 'paid', 'forecast']} />
         {analytics.trend.length === 0 ? (
           <p>עדיין אין נתוני שכר שמורים להצגה.</p>
         ) : (
@@ -109,14 +114,18 @@ export function PayrollIntelligence({
             <div className="metric-grid">
               <div>
                 <span>מצטבר מתחילת השנה</span>
+                {/* R5-02. Aggregates of saved records — derived, never typed. */}
+                <ValueOrigin kind="calculated" />
                 <strong>{money.format(analytics.total)}</strong>
               </div>
               <div>
                 <span>ממוצע חודשי</span>
+                <ValueOrigin kind="calculated" />
                 <strong>{money.format(analytics.average)}</strong>
               </div>
               <div>
                 <span>שינוי מהחודש הקודם</span>
+                <ValueOrigin kind="calculated" />
                 <strong>
                   {analytics.previousMonthChange === null
                     ? 'אין השוואה'
@@ -126,16 +135,35 @@ export function PayrollIntelligence({
             </div>
             <div className="bar-chart" role="img" aria-label="מגמת עלות חודשית">
               <h3>מגמת עלות חודשית</h3>
-              {analytics.trend.map((record) => (
-                <div className="bar-row" key={record.month}>
-                  <span aria-label={record.month}>{record.month.replace('-', ' / ')}</span>
-                  <div>
-                    <i style={{ width: `${Math.max(3, (record.total / max) * 100)}%` }} />
+              {analytics.trend.map((record) => {
+                /* R5-03/R5-05. A closed month has a canonical close record, and
+                   that record already carries the payment date and the moment
+                   it was closed — so this is one of the few places where "when"
+                   can be shown without inventing a field. An open month is a
+                   derived total and nothing more. */
+                const close = closes.find((c) => c.month === record.month);
+                return (
+                  <div className="bar-row" key={record.month}>
+                    <span aria-label={record.month}>{record.month.replace('-', ' / ')}</span>
+                    <div>
+                      <i style={{ width: `${Math.max(3, (record.total / max) * 100)}%` }} />
+                    </div>
+                    <strong>{money.format(record.total)}</strong>
+                    <small>{record.closed ? 'סגור ✓' : 'פתוח !'}</small>
+                    {close ? (
+                      <ValueOrigin
+                        kind="paid"
+                        provenance={{
+                          source: t('valueOrigin.source.monthlyClose'),
+                          when: formatDateOnly(close.paymentDate) ?? close.paymentDate,
+                        }}
+                      />
+                    ) : (
+                      <ValueOrigin kind="calculated" />
+                    )}
                   </div>
-                  <strong>{money.format(record.total)}</strong>
-                  <small>{record.closed ? 'סגור ✓' : 'פתוח !'}</small>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <details>
               <summary>הרכב עלות ומצטבר — חלופה טקסטואלית לתרשים</summary>
@@ -178,21 +206,29 @@ export function PayrollIntelligence({
             </p>
           </div>
         </div>
+        {/* R5-04. "Forecast אינו Actual". Every figure in this grid is about
+            months that have not happened; the eyebrow above says so once, but
+            the eyebrow is not attached to the numbers and does not survive a
+            reader who scans straight to the amounts. */}
         <div className="metric-grid">
           <div>
             <span>סה״כ מוערך</span>
+            <ValueOrigin kind="forecast" />
             <strong>{money.format(forecast.total)}</strong>
           </div>
           <div>
             <span>ממוצע צפוי</span>
+            <ValueOrigin kind="forecast" />
             <strong>{money.format(forecast.average)}</strong>
           </div>
           <div>
             <span>שלושת החודשים הקרובים</span>
+            <ValueOrigin kind="forecast" />
             <strong>{money.format(forecast.next3MonthsTotal)}</strong>
           </div>
           <div>
             <span>מומלץ לשמור בצד בכל חודש</span>
+            <ValueOrigin kind="forecast" />
             <strong>{money.format(forecast.reserveRecommendation)}</strong>
             <small>הכוונת תכנון בלבד — לא ייעוץ פיננסי</small>
           </div>
@@ -216,7 +252,22 @@ export function PayrollIntelligence({
             <details key={m.month}>
               <summary>
                 <small>{m.month}</small> <strong>{money.format(m.total)}</strong>{' '}
-                <span>{m.status === 'ACTUAL' ? 'בפועל' : 'תחזית'}</span>
+                {/* R5-02/R5-03/R5-04. The strip used to say "בפועל" for every
+                    ACTUAL month, and `ACTUAL` means only "a payroll record
+                    exists for this month" — a closed month and an open saved
+                    month both report it. "בפועל" on a month nobody has paid yet
+                    is exactly the false claim R5-03 exists to remove, so the
+                    three cases are now told apart by the one thing that decides
+                    them: whether a canonical close record exists. */}
+                <ValueOrigin
+                  kind={
+                    closes.some((c) => c.month === m.month)
+                      ? 'paid'
+                      : m.status === 'ACTUAL'
+                        ? 'calculated'
+                        : 'forecast'
+                  }
+                />
               </summary>
               <ul>
                 {m.components.map((component) => (
@@ -271,7 +322,16 @@ export function PayrollIntelligence({
               </label>
             </div>
             <p>
-              סכום ששמור לתשלום: <strong>{money.format(open.total)}</strong>
+              סכום ששמור לתשלום: <strong>{money.format(open.total)}</strong>{' '}
+              {/* R5-02/R5-03. Saved, not paid — the payment date is the field
+                  directly above, still empty until the user closes the month. */}
+              <ValueOrigin
+                kind="calculated"
+                provenance={{
+                  source: t('valueOrigin.source.payrollRecord'),
+                  when: formatDateTime(open.savedAt) ?? undefined,
+                }}
+              />
             </p>
             <p className="legal-note">{t('liability.calculation')}</p>
             <button
@@ -294,6 +354,17 @@ export function PayrollIntelligence({
               .sort((a, b) => b.month.localeCompare(a.month))
               .map((c) => (
                 <li key={c.id}>
+                  {/* R5-03/R5-05. This is the only surface in the product where
+                      all three provenance parts nearly exist: the close record
+                      carries a payment date and the moment it was recorded. It
+                      carries no actor, so "מי" is omitted rather than guessed. */}
+                  <ValueOrigin
+                    kind="paid"
+                    provenance={{
+                      source: t('valueOrigin.source.monthlyClose'),
+                      when: formatDateOnly(c.paymentDate) ?? c.paymentDate,
+                    }}
+                  />{' '}
                   {c.month} — הושלם · שולם {formatDateOnly(c.paymentDate) ?? c.paymentDate}
                   {toIsoAttribute(c.closedAt) ? (
                     <>

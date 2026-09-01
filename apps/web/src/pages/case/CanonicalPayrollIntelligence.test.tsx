@@ -313,6 +313,47 @@ describe('CanonicalPayrollIntelligence — Future Cost canonical inputs', () => 
     );
   });
 
+  /**
+   * R5-03 / R5-04. The future-cost list already ordered its sources — a close
+   * beats an entry beats a projection — but said so in three phrases that
+   * differed from one another by a word. The three claims are now marked with
+   * the three kinds they actually are, so a month nobody has paid can never be
+   * read as one that was.
+   */
+  it('tells a paid month, a saved month and a projected month apart in the future-cost list', async () => {
+    const entry = {
+      id: 'entry-1',
+      month: '2026-08',
+      baseSalary: 6000,
+      total: 7350,
+      version: 1,
+      status: 'draft',
+      additionalPayments: [],
+    };
+    const close = { id: 'close-1', month: '2026-07', total: 7100, paymentDate: '2026-08-09' };
+    mockListPayrollEntries.mockResolvedValue([entry]);
+    mockListCanonicalPayrollCloses.mockResolvedValue([close]);
+    mockListScenarioExpenses.mockResolvedValue([]);
+    mockProjectFutureCost.mockReturnValue({
+      months: [
+        { month: '2026-07', total: 7100 },
+        { month: '2026-08', total: 7350 },
+        { month: '2026-09', total: 7000 },
+      ],
+    });
+
+    renderPanel();
+    const list = await screen.findByRole('list', { name: 'תחזית קנונית' });
+
+    const kinds = Array.from(list.querySelectorAll('.value-origin')).map((badge) =>
+      badge.getAttribute('data-value-origin'),
+    );
+    expect(kinds).toEqual(['paid', 'calculated', 'forecast']);
+    // R5-05: the close record carries a payment date, so the paid row can say
+    // when. The other two carry no date and claim none.
+    expect(list.querySelectorAll('.value-origin-provenance')).toHaveLength(2);
+  });
+
   it('creates a canonical scenario expense from the planning form', async () => {
     renderPanel();
     await waitFor(() => screen.getByRole('region', { name: /רישום שכר חודשי/ }));

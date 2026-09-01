@@ -356,9 +356,12 @@ test.describe('launch readiness interactions', () => {
     await expect(closeHistory).toContainText('שולם 09.08.2026');
     await expect(closeHistory).toContainText('נסגר');
     await expect(closeHistory).toContainText(/\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/);
+    // R5-03. The strip used to say "בפועל" for any month that had a payroll
+    // record, closed or not. 2026-07 has a canonical CLOSE with a payment date,
+    // so the strip must now make the stronger and narrower claim.
     await expect(
       page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
-    ).toContainText('בפועל');
+    ).toContainText('שולם');
     expect(canonical.closeMutationCount()).toBe(1);
 
     const replayRequest = canonical.lastCloseRequest();
@@ -382,9 +385,11 @@ test.describe('launch readiness interactions', () => {
     await expect(persistedCloseHistory).toContainText('שולם 09.08.2026');
     // The close timestamp has to survive a reload too - it is evidence.
     await expect(persistedCloseHistory).toContainText(/נסגר \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/);
+    // R5-03. The paid claim, like the close timestamp above, has to survive a
+    // reload — it is the difference between a record and a payment.
     await expect(
       page.locator('.forecast-strip details').filter({ hasText: '2026-07' }),
-    ).toContainText('בפועל');
+    ).toContainText('שולם');
 
     const nationalInsuranceTracking = page
       .locator('.employment-expenses > div')
