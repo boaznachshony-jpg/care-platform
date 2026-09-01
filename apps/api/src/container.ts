@@ -132,6 +132,7 @@ import {
   PgTermsAcceptanceStore,
   type TermsAcceptanceStore,
 } from './legal/terms-acceptance-store.js';
+import { probeSupabaseAuth, probeSupabasePrivateStorage } from './readiness/upstream-probes.js';
 import type { BinderExportService } from './binder-export-service.js';
 import type { EvidenceExportService } from './evidence-export-service.js';
 
@@ -688,6 +689,44 @@ export function buildContainer(env: Env): Container {
       if (!pool) reasons.push('DATABASE_URL is not configured');
       if (!hasSupabaseAuth) reasons.push('Supabase authentication is not configured');
       if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
+
+      // R0-08. Until now these two checks ended here, at "the variable is set".
+      // That is why `authentication` reported `ok` for the whole of the
+      // 2026-08-31 outage. Both dependencies are now asked whether they answer
+      // and whether they accept the credential — the same standard `database`
+      // has always been held to. See readiness/upstream-probes.ts for why these
+      // endpoints and why the probe does not fail open.
+      //
+      // The two run concurrently: they are independent, and `/ready` should
+      // cost one timeout, not two.
+      const [authProbe, storageProbe] = await Promise.all([
+        hasSupabaseAuth
+          ? probeSupabaseAuth({
+              supabaseUrl: env.SUPABASE_URL!,
+              publishableKey: env.SUPABASE_PUBLISHABLE_KEY!,
+            })
+          : Promise.resolve(null),
+        hasPrivateStorage
+          ? probeSupabasePrivateStorage({
+              supabaseUrl: env.SUPABASE_URL!,
+              serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY!,
+              bucket: env.SUPABASE_STORAGE_BUCKET!,
+            })
+          : Promise.resolve(null),
+      ]);
+      if (authProbe && !authProbe.reachable) {
+        reasons.push(`Supabase authentication is unreachable (${authProbe.detail})`);
+        checks.authentication = 'unreachable';
+      }
+      if (storageProbe && !storageProbe.reachable) {
+        // Named by bucket, because the operator's next action differs: a 404 is
+        // a bucket to recreate or rename, a 401/403 is a key to rotate.
+        reasons.push(
+          `Private document storage is unreachable ` +
+            `(bucket ${env.SUPABASE_STORAGE_BUCKET}: ${storageProbe.detail})`,
+        );
+        checks.privateStorage = 'unreachable';
+      }
       if (pool) {
         try {
           // Two questions, deliberately kept separate. The object probes below
