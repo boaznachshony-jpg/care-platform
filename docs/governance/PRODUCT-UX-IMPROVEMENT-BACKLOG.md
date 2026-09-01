@@ -1,0 +1,302 @@
+# CareDesk — Product & UX Improvement Backlog
+## מסמך חי לעבודה עם Claude
+**גרסה:** 1.1  
+**תאריך יצירה:** 31.08.2026  
+**עדכון אחרון:** 01.09.2026 — Reconciliation ראשון מול הקוד  
+**בעלות:** Product / Engineering  
+**עדכון:** Claude רשאי ומצופה לעדכן מסמך זה כחלק מכל Release.
+
+> מטרת המסמך היא לנהל שיפורי מוצר ו-UX מעל תוכנית ה-Remediation הקיימת, מבלי ליצור כפילויות ומבלי להמציא מחדש יכולות שכבר קיימות.
+
+---
+
+## 1. הוראות עדכון לקלוד
+
+לפני תחילת עבודה:
+1. קרא את כל `docs/governance/` העדכני.
+2. אמת את המצב בקוד ובבדיקות.
+3. עבור כל פריט קבע Status אמיתי.
+4. פריט שכבר תוכנן במקום אחר יקבל `ALREADY_PLANNED` + Reference.
+5. פריט שכבר יושם יקבל `COMPLETE` רק עם Evidence.
+6. כל שינוי סטטוס יכלול תאריך ו-Notes.
+7. כל Release יתווסף ל-Release Log בתחתית המסמך.
+8. אין למחוק פריטים היסטוריים; יש לעדכן סטטוס.
+
+---
+
+## 2. Status Model
+
+`NEW` | `ALREADY_PLANNED` | `PARTIAL` | `BLOCKED` | `READY_FOR_WORK` | `IN_PROGRESS` | `IN_REVIEW` | `READY_FOR_PRODUCTION` | `DEPLOYED` | `PRODUCTION_VERIFIED` | `COMPLETE` | `REJECTED` | `LATER`
+
+---
+
+## 3. עקרונות Product
+
+- לא לבנות מחדש את CareDesk.
+- לא ליצור Source of Truth נוסף.
+- להעדיף פישוט על פני הוספת Feature.
+- AI מציע; המשתמש מאשר.
+- Forecast אינו Actual.
+- Score אינו Legal Compliance.
+- תרופה ללא אישור נטילה אינה בהכרח "לא נלקחה".
+- אין להציג חישוב כאמת משפטית.
+- Mobile-first במסלולים נפוצים.
+- כל פעולה משמעותית צריכה להסביר: מה, למה, מתי, מי, ומה הצעד הבא.
+
+---
+
+## 4. Release Plan
+
+### Release 0 — Baseline & Production Safety
+**מטרה:** לוודא בסיס בטוח לפני UX.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R0-01 | Environment Separation | PARTIAL | P0 | שורש 1 · `docs/governance/ENVIRONMENT-SEPARATION.md` · CI job `rls-test` (`.github/workflows` → `pnpm --filter @caredesk/db rls-test:ci`) | 01.09.2026 — המגן נחת: `db:rls-test` מסרב לרוץ מול ה-ref של הייצור. **פרויקט `caredesk-staging` עדיין לא נוצר** — המסמך עצמו עדיין מונה את יצירתו כשלב פתוח (§167). לא ניתן לאמת מכאן משתני סביבה ב-Vercel. |
+| R0-02 | Migration Reliability | PARTIAL | P0 | שורש 2 · `scripts/check-migration-ledger.mjs` · CI job `guardrails` → "Apply every migration twice and require the second run to be empty" (`migrate-idempotency:ci`) · `apps/api/src/container.ts:750-765` (השוואת `public.schema_migrations` מול `REQUIRED_MIGRATIONS`) · מיגרציה `0044_app_role_reads_migration_ledger.sql` | 01.09.2026 — הרישום, הנעילה, ה-dry-run וההשוואה מול ה-ledger קיימים בקוד. **לא הורצו מכאן**: vitest אינו יכול לרוץ בסביבה הזו (`@rollup/rollup-linux-x64-gnu` חסר). ריצה ירוקה לא נצפתה. |
+| R0-03 | Restore Drill | BLOCKED | P0 | `docs/governance/RESTORE-DRILL.md:4` — "נוהל השחזור מעולם לא הורץ" · צד הקוד נחת ב-`0116b43` (PR #108) | 01.09.2026 — **התרגיל מעולם לא בוצע.** ה-API לשחזור דייר בודד ולזיהוי אובדן שקט קיים; RTO של 4 שעות הוא עדיין ניחוש ולא מדידה. סעיף "רישום התוצאה" (שורות 287-306) ריק. חוסם את שער R0→R1. |
+| R0-04 | Canonical Source of Truth | PARTIAL | P0 | שורש 3 · ADR-006 · מיגרציה `0042_employment_case_legacy_client_link.sql` · `a335357` (PR #110, "make the employment case reachable") | 01.09.2026 — התיק הקנוני הפך נגיש והקישור legacy→canonical נשמר על השורה הקנונית. **שני המודלים עדיין חיים**: `apps/web/src/storage/mvp-storage.ts` (32KB) הוא עדיין נתיב כתיבה פעיל דרך `apps/web/src/hooks/use-mvp-profile.ts:23` (`saveMvpProfile`). ה-blob לא הורד לתפקיד מטמון בלבד. |
+| R0-05 | **שער R0→R1 פתוח — ועבודת R1/R5 כבר נחתה** | BLOCKED | P0 | R0-03 (תרגיל שחזור לא בוצע) · R0-01 (אין `caredesk-staging`) · R0-04 (dual storage חלקי) · מנגד: `c8b4175`, `e10c699` נחתו ב-31.08 | 01.09.2026 — **רישום כן.** סעיף 6 של מסמך זה אוסר מעבר ל-R1 כל עוד restore אינו מוכח, הפרדת סביבות אינה מאומתת ו-dual truth קיים. שלושת התנאים פתוחים. בפועל נחתה עבודת R1 (auto-save, error boundary) ו-R5/שורש 8 (טיפוס כסף) לפני סגירת השער. אין כאן טענה שהשער נסגר — יש כאן תיעוד שהוא נעקף. החלטה נדרשת: או לסגור את R0-01/03/04 לפני המשך R1+, או להחליט במפורש להמשיך תוך נשיאת הסיכון ולתעד זאת. |
+| R0-06 | סטייה מנוהל: PR #112 היה Big Bang | NEW | P1 | `c8b4175` — 54 קבצים, 4,828 הוספות, שני שורשים (8 + 9) בענף אחד · `PRODUCTION-RELEASE-PROCEDURE.md` §1 ("אין לבצע Big Bang Release") ו-§3 ("Release אחד = מספר PRs קטנים לפי bounded concern") | 01.09.2026 — **סטייה מתועדת, לא מוסתרת.** PR #112 איחד את מודל הכסף (שורש 8) ואת מודל הכשל בממשק (שורש 9) ב-PR אחד. הסיבה שנרשמה: השניים נגעו באותם מסכי שכר, ופיצול היה דורש מיזוג פעמיים באותם קבצים. זו סיבה, לא היתר. גם #110 (57 קבצים) ו-#108 (113 קבצים) חורגים. פעולה: ב-Release הבא לפצל לפי bounded concern, או להוסיף ל-`PRODUCTION-RELEASE-PROCEDURE.md` חריג מפורש עם תנאים. |
+| R0-07 | `/ready` מנמק את כשל המסד בשמו | READY_FOR_PRODUCTION | P0 | `apps/api/src/container.ts:765-788` — ה-catch מדווח `code: message` (28P01 סיסמה, 42501 הרשאה, ECONNREFUSED/ETIMEDOUT רשת) · `e10c699` (PR #111) · קריאת ה-ledger עברה להיות schema-qualified ב-`c8b4175` | 01.09.2026 — **מה שקרה ב-31.08:** הייצור היה למטה רוב היום מאחורי `/ready` שהחזיר את אותן ארבע מילים ("Database is unreachable") לחמש סיבות שונות; הסיבה בפועל הייתה ה-pooler שדוחה תפקיד בפורט אחד ומקבל אותו באחר, ואותרה רק בעזרת probe ידני. **מה שהשתנה:** קוד השגיאה והודעתה נכללים בתשובה; הקריאה ל-`schema_migrations` הוסבה ל-`public.` אחרי ש-`/ready` דיווח "44 מתוך 44 מיגרציות אינן רשומות" מול ה-`schema_migrations` של `auth`/`realtime` של Supabase; המיגרציה החסרה הראשונה מדווחת בשמה ולא כמספר. אינו `COMPLETE` — §11 של נוהל השחרור דורש אימות בייצור, שלא בוצע. |
+| R0-08 | `/ready` בודק ש-SUPABASE_URL **מוגדר**, לא שהוא **נכון** | NEW | P0 | `apps/api/src/container.ts:322` — `hasSupabaseAuth = Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY)` · `container.ts:683` — `authentication: hasSupabaseAuth ? 'ok' : 'unconfigured'` | 01.09.2026 — **הפער שנותר מהתקלה של 31.08.** בעוד `database` מקבל probe אמיתי מול המסד, `authentication` ו-`privateStorage` נבדקים בבוליאן על נוכחות משתנה סביבה בלבד. משמעות: URL שגוי, פרויקט Supabase שהוחלף, מפתח שפג — כולם ידווחו `ok`. במהלך ההשבתה של 31.08 `authentication` דיווח `ok` לכל אורכה. הפריט הזה הוא מה שנדרש כדי ש-R0-07 יהפוך לשלם: probe חי (למשל בקשת JWKS/`/auth/v1/health`) ו-probe של הדלי הפרטי, עם timeout ובלי לחשוף סוד. |
+
+**Gate:** אין מעבר ל-R1 אם קיימת סכנת dual truth, migration לא אמינה או restore לא מוכח.
+**מצב השער נכון ל-01.09.2026: פתוח.** ראה R0-05.
+
+---
+
+### Release 1 — Trust & Reliability UX
+**מטרה:** המשתמש יודע אם הפעולה נשמרה.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R1-01 | Unified Saving / Saved / Error | PARTIAL | P0 | **שורש 5** · `apps/web/src/pages/PayrollPage.tsx:474` · `apps/web/src/pages/case/AutomationPanel.tsx:152` · `apps/web/src/pages/case/CanonicalPayrollIntelligence.tsx` · `apps/web/src/storage/workspace-sync.ts` | 01.09.2026 — מצב `saving/saved/error` קיים ב-**ארבעה** מסכים בלבד, כל אחד עם `useState` משלו. שורש 5 דורש "חוזה כתיבה אחד לכל האפליקציה, מיושם פעם אחת ומוחל בכל מקום" — הקומפוננטה/hook המשותפים אינם קיימים (`apps/web/src/hooks/` מכיל שלושה hooks, אף אחד מהם אינו hook כתיבה). |
+| R1-02 | Double-submit protection | PARTIAL | P0 | **שורש 5** · `apps/web/src/pages/BillingPage.tsx:41,272,320,405` · `apps/web/src/pages/case/ProductCompletionPanel.tsx:40,135,241` · `apps/web/src/components/RegulationRulesAdmin.tsx:54,245` | 01.09.2026 — דגלי `busy` לכל מסך בנפרד, כולל בזרימת החיוב. אין מנגנון חוצה-אפליקציה, ולא אומת שהעלאת מסמך מוגנת (WEB-08 "הקשה כפולה יוצרת שני מסמכים" — לא הצלחתי לאתר הגנה במסלול ההעלאה). |
+| R1-03 | Idempotency לפעולות רגישות | PARTIAL | P0 | **שורש 5** · `apps/web/src/api/client.ts` — כותרת `idempotency-key` ב-~14 מוטציות · `packages/db` `PgIdempotencyRepository` · מיגרציה `0040_idempotency_record_lockable.sql` | 01.09.2026 — 0040 תיקן את הכשל שבו כל מוטציה אידמפוטנטית ניסתה `SELECT … FOR UPDATE` על טבלה שתפקיד האפליקציה לא רשאי לנעול. **הכיסוי אינו מלא**: חלק מהקריאות ב-`client.ts` מייצרות `crypto.randomUUID()` בכל קריאה (שורות 214, 473, 484, 500, 693, 706) — מפתח חדש בכל ניסיון אינו מגן מפני שליחה כפולה, רק מפני retry של אותה בקשה. Monthly close לא אומת. |
+| R1-04 | Auto-save באשפים ארוכים | READY_FOR_PRODUCTION | P0 | **שורש 9** (WEB-02) · `apps/web/src/storage/form-draft-store.ts` (namespace נפרד `caredesk.draft.*`, מוצפן, TTL 30 יום, `DraftStorageError`) · `apps/web/src/pages/PayrollPage.tsx:450-560` (שחזור טיוטה, `draftStatus`, ניקוי בעת commit) · בדיקות: `form-draft-store.test.ts`, `PayrollPage.draft.test.tsx` · `c8b4175` | 01.09.2026 — אשף השכר נשמר אוטומטית ומשחזר, כולל הודעה למשתמש וכשל אחסון מטופל. **אינו `COMPLETE`**: §11 של נוהל השחרור דורש אימות בייצור, שלא בוצע; והבדיקות **לא הורצו מכאן** (vitest אינו יכול לרוץ בסביבה). מכוסה רק אשף השכר — ראה R1-06. |
+| R1-05 | Failure / retry model | PARTIAL | P0 | **= שורש 5 (כתיבה שקטה) + שורש 9 (אין error boundary)** · `apps/web/src/components/ErrorBoundary.tsx` · `apps/web/src/main.tsx:23` (`AppErrorBoundary`) · `apps/web/src/AppShell.tsx:268` (`SectionErrorBoundary resetKey={location.pathname}`) · `apps/web/src/components/ErrorBoundary.test.tsx` · `c8b4175` | 01.09.2026 — **זהו הפריט שהוא בפועל שורש 5 של תוכנית ה-Remediation, ואסור לנהל אותו כרשימה נפרדת.** ה-boundary נחת בשתי רמות (אפליקציה + מקטע, עם איפוס בניווט) — זה חצי שורש 9. חצי שורש 5 — "אין silent failure" ו-**retry** — לא נחת: לא אותר נתיב retry בשום מקום ב-`apps/web/src`. |
+| R1-06 | Preservation of user input | PARTIAL | P1 | **שורש 9** · `apps/web/src/storage/form-draft-store.ts` · `DraftStorageError` (WEB-06 — כתיבת localStorage לא מוגנת הפילה את העץ) | 01.09.2026 — עלה מ-`NEW`: התשתית קיימת וגנרית (`saveFormDraft<T>`). מחוברת **רק** ל-`PayrollPage`. טפסים ארוכים אחרים (onboarding, ויזה, מסמכים) לא אומתו כמחוברים. |
+
+---
+
+### Release 2 — Action Experience
+**מטרה:** Home עונה על "מה צריך לעשות עכשיו?".
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R2-01 | Unified Action Model | NEW | P1 | — | 01.09.2026 — אומת בקוד: אין מודל action משותף. `apps/web/src/product-intelligence.ts` בונה facts לכל משטח בנפרד, ו-`DashboardPage.tsx`, `OpenIssuesPage.tsx` ו-`components/OpenIssuesGlance.tsx` צורכים אותם עצמאית. תלוי ב-R0-04: מודל action אחיד מעל שני מודלי אחסון ייצור את הכפילות שהוא בא למנוע. |
+| R2-02 | Home — דורש טיפול | PARTIAL | P1 | `apps/web/src/pages/DashboardPage.tsx:318-353` (`section.intelligence-attention`) · `apps/web/src/pages/OpenIssuesPage.tsx` · `apps/web/src/product-intelligence.ts` · `packages/i18n/src/resources/he.json:465` "דורש טיפול" · `DashboardPage.test.tsx:214-221` | 01.09.2026 — קיים בפועל, נגזר מ-facts קנוניים ולא מ-store חדש, ומציג `liability.reminder`. חסר: סדר עדיפות מוכח (אין assertion על סדר), ולא נבדק ברוחבי מובייל (מטריצת הרוחבים כן מכסה את הדשבורד — ראה R4-01). |
+| R2-03 | Home — בקרוב | PARTIAL | P1 | `apps/web/src/components/UpcomingPaymentsCard.tsx` + `UpcomingPaymentsCard.test.tsx` · `packages/i18n/src/resources/he.json:585-586` ("תשלומים קרובים") · מפתחות `soon` בשורות 528/534/542 | 01.09.2026 — "בקרוב" קיים לתשלומים ולנושאים פתוחים. לא אוחד למקטע אחד ב-Home ואינו נגזר מ-Timeline. |
+| R2-04 | Home — מאז הפעם האחרונה | NEW | P1 | — (אומת: אין) | 01.09.2026 — אומת בקוד: אין קומפוננטה ואין מפתח i18n ל-"מאז הביקור האחרון" ב-`he.json`. דורש מצב "נראה לאחרונה" לכל משתמש, שאינו קיים. זהה ל-R3-04 — לממש פעם אחת. |
+| R2-05 | Home — הכול מסודר | PARTIAL | P1 | `apps/web/src/pages/DashboardPage.tsx:351` (`success-box`) · `he.json:466` `intelligence.empty`, `:484-485` `dashboard.okTitle`/`okBody`, `:481` `statusOk` | 01.09.2026 — עלה מ-`NEW`: מצב ריק חיובי קיים ומנוסח אנושית ("נעדכן כאן ברגע שמשהו ידרוש טיפול"). לא אומת שהוא מוצג עקבית בכל משטחי ה-Home. |
+| R2-06 | CareDesk Score — framing אנושי | PARTIAL | P1 | `apps/web/src/pages/DashboardPage.tsx:354-384` · `he.json:472` `healthDisclaimer` — "מדד שלמות המבוסס על המידע בתיק; **אינו אישור לעמידה בדין**" · `DashboardPage.tsx:369` `liability.score` | 01.09.2026 — עלה מ-`NEW`: ההפרדה בין Score ל-Legal Compliance קיימת בטקסט ובכתב-ויתור, כנדרש בשער R2→R3. **הסדר עדיין Score → הסבר**, לא `Text → Explanation → Score` כפי שהפריט מגדיר. |
+| R2-07 | CTA אחד ברור לכל Action | PARTIAL | P1 | `he.json:467` `intelligence.handle` = "לטיפול עכשיו" · `DashboardPage.tsx` (מקטע `attention`) · `he.json:493` `dashboard.nextAction` | 01.09.2026 — עלה מ-`NEW`: קיים CTA יחיד ומנוסח בפריטי "דורש טיפול". לא אומת שהכלל נשמר בכל action ובכל מסך. |
+
+---
+
+### Release 3 — Family Operating System
+**מטרה:** ברור מי מטפל במה.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R3-01 | Owner visible on action | NEW | P1 | — | 01.09.2026 — לא אומת. פריטי "דורש טיפול" ב-`DashboardPage.tsx:318-353` מציגים provenance (מקור) אך לא אחראי. ADR-004 ו-`family-access` מספקים את הנתון; התצוגה אינה קיימת. |
+| R3-02 | Assign / reassign לפי הרשאות | PARTIAL | P1 | `apps/web/src/pages/case/CollaborationPanel.tsx` + `CollaborationPanel.test.tsx` · `apps/api/src/routes` — `registerFamilyAccessRoutes` (`create-server.ts:175`) · ADR-004 | 01.09.2026 — הקצאה קיימת בפאנל שיתוף הפעולה. אכיפת הרשאות בשרת קיימת (`PgMembershipAuthorizationService`, `container.ts:334`); לא אומת שכל מסלול הקצאה עובר דרכה. |
+| R3-03 | "טרם הוגדר אחראי" | NEW | P1 | — | 01.09.2026 — תלוי ב-R3-01. |
+| R3-04 | Since last visit activity | NEW | P1 | — (אומת: אין) | 01.09.2026 — זהה ל-R2-04. אין מצב "נראה לאחרונה" ואין מפתח i18n. |
+| R3-05 | Family wording simplification | NEW | P2 | — | 01.09.2026 — לא נבדק בסבב הזה. |
+| R3-06 | Two-user browser journey | PARTIAL | P1 | `apps/web/e2e/family-collaboration.spec.ts` · `apps/web/e2e/worker-portal-mobile.spec.ts` · CI job `e2e` (Playwright, `pnpm --filter @caredesk/web test:e2e`) | 01.09.2026 — המסע קיים ורץ ב-CI. **ריצה ירוקה לא נצפתה מהסביבה הזו** ולא ידוע אם הוא מכסה שני משתמשים בו-זמנית או שני משתמשים ברצף. עדיין Gate ל-Production. |
+
+---
+
+### Release 4 — Mobile & Navigation
+**מטרה:** להרגיש Mobile-first.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R4-01 | Home mobile | PARTIAL | P1 | `apps/web/e2e/responsive-width-matrix.spec.ts:142-149` — "דשבורד תיק העסקה" נמדד בכל שבעת הרוחבים · `c9d33d6` (מטרות מגע 48px, טאבים בדשבורד מפסיקים להתכווץ) · `ded53cc` (ניווט מובייל שוחזר) | 01.09.2026 — הדשבורד **כן** נמצא במטריצה. ריצה ירוקה לא נצפתה מהסביבה הזו. |
+| R4-02 | Actions mobile | PARTIAL | P1 | `responsive-width-matrix.spec.ts:153` — "מסך משימות" נמדד בכל שבעת הרוחבים | 01.09.2026 — עלה מ-`NEW`: מסך המשימות מכוסה במטריצה. תלוי ב-R2-01 לגבי מסך actions מאוחד. |
+| R4-03 | Document upload mobile | PARTIAL | P1 | — (אומת: **לא** מכוסה במטריצה) | 01.09.2026 — המטריצה מודדת שישה מסכים בלבד: דף נחיתה, מדריך, יצירת קשר, `/app` ריק, `/app` מאוכלס, דשבורד, מסך משימות. **העלאת מסמכים אינה ביניהם.** |
+| R4-04 | Payroll mobile | PARTIAL | P1 | — (אומת: **לא** מכוסה במטריצה) · `apps/web/e2e/payroll-print-visual.spec.ts` בודק הדפסה, לא רוחבים | 01.09.2026 — אשף השכר, המסך הארוך והרגיש ביותר במוצר, אינו נמדד באף אחד משבעת הרוחבים. |
+| R4-05 | Visa mobile | PARTIAL | P1 | — (אומת: **לא** מכוסה במטריצה) · `apps/web/e2e/visa-renewal.spec.ts` הוא מסע פונקציונלי | 01.09.2026 — לא מכוסה במטריצת הרוחבים. |
+| R4-06 | Family mobile | PARTIAL | P1 | — (אומת: **לא** מכוסה במטריצה) · `apps/web/e2e/family-collaboration.spec.ts` פונקציונלי | 01.09.2026 — לא מכוסה במטריצת הרוחבים. |
+| R4-07 | Medication reminders mobile | PARTIAL | P2 | — (אומת: **לא** מכוסה במטריצה) | 01.09.2026 — לא מכוסה. |
+| R4-08 | Settings mobile | PARTIAL | P2 | — (אומת: **לא** מכוסה במטריצה) | 01.09.2026 — לא מכוסה. |
+| R4-09 | Width matrix regression | PARTIAL | P1 | `apps/web/e2e/responsive-width-matrix.spec.ts` · `apps/web/e2e/fixtures/layout-matrix.ts:97` — `MATRIX_WIDTHS = [360, 390, 430, 768, 1024, 1440, 2560]` (בדיוק שבעת הרוחבים שהפריט דורש) · `layout-matrix.ts:99` `MIN_TOUCH_TARGET_PX = 44` · CI job `e2e` · `RELEASE-GATE.md` §2 | 01.09.2026 — **זהו הפריט שהמסמכים מכנים "עבודת מטריצת הרוחבים"; אין לנהל אותו פעמיים.** חמשת כללי הכשל ממומשים ויש `test` שמוודא שהמטריצה מסוגלת להיכשל (`spec.ts:162`, "חוקי המטריצה מזהים כל אחד מחמשת הכשלים"). **הפער האמיתי אינו הרוחבים אלא המסכים**: שישה מסכים בלבד. R4-03..R4-08 הם הרשימה המדויקת של מה שנשאר. ריצה ירוקה לא נצפתה מהסביבה הזו. |
+| R4-10 | Primary navigation simplification | NEW | P1 | — | 01.09.2026 — לא נבדק בסבב הזה. שים לב ש-`ded53cc` שיחזר את ניווט המובייל אחרי רגרסיה; שינוי ניווט דורש את המטריצה ירוקה קודם. |
+
+---
+
+### Release 5 — Financial Clarity
+**מטרה:** להבדיל בין Input, Calculated, Paid ו-Forecast.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R5-01 | User Input labeling | READY_FOR_WORK | P1 | **שורש 8** (הטיפוס נחת) · `packages/domain/src/money.ts` + `money.test.ts` · מיגרציה `0045_money_is_a_model.sql` · `c8b4175` — **ואילו ה-labelling לא נחת**: חיפוש ב-`packages/i18n/src/resources/he.json` לא מצא ולו מפתח אחד ל-"הוזן/מחושב/שולם/תחזית" | 01.09.2026 — **ההבחנה החשובה ביותר בסבב הזה: טיפוס הכסף נחת, סימון הכסף בממשק לא.** שורש 8 החליף שקלים בנקודה צפה באגורות שלמות והוסיף `caredesk_agorot()` ב-SQL — זו תשתית, לא UX. R5-01..04 הם שכבת התצוגה מעליה, והם **לא** מכוסים בשורש 8. עלה מ-`NEW` ל-`READY_FOR_WORK` כי החסם שלהם (טיפוס כסף אחיד) הוסר. |
+| R5-02 | Calculated labeling | READY_FOR_WORK | P1 | **שורש 8** · כנ"ל · `packages/domain/src/payroll.ts`, `proration.ts`, `billing-schedule.ts` עברו לאגורות | 01.09.2026 — הסכום המחושב אמין כעת (מיגרציה `0041` מוסיפה אילוץ התאמה ב-`payroll_entry`, שורש 4). התצוגה עדיין אינה מבחינה בין מחושב למוזן. |
+| R5-03 | Paid state clarity | READY_FOR_WORK | P1 | **שורש 8** · `packages/db/src/billing-repository.ts`, `packages/db/src/money-model-migration.test.ts` · `0045` (DOM-09 — מנוי בהנחה שלא חויב כלל; DOM-16 — סחיפת תאריך חיוב) | 01.09.2026 — נתוני התשלום הקנוניים תוקנו. מצב "שולם" אינו מסומן ככזה בממשק. |
+| R5-04 | Forecast state clarity | READY_FOR_WORK | P1 | **שורש 8** · `apps/api/src/routes/scenario-expenses.ts` · אין מפתח i18n ל-"תחזית" ב-`he.json` | 01.09.2026 — עיקרון "Forecast אינו Actual" (סעיף 3) אינו מיוצג בממשק. |
+| R5-05 | Provenance display | PARTIAL | P1 | `apps/web/src/pages/DashboardPage.tsx:339` — `{item.provenance.sourceType}: {item.provenance.sourceIds.join(', ')}` · `apps/web/src/product-intelligence.ts:40-115` | 01.09.2026 — provenance **מוצג**, אך כמחרוזת טכנית (`documents: doc-1`), לא כ-source / who / when קריא לאדם. הפריט דורש שלושה שדות; קיים אחד וחצי, ובלי "מי" ובלי "מתי". |
+| R5-06 | Monthly Close human summary | NEW | P1 | `apps/web/src/components/PayrollIntelligence.tsx` · `packages/application/src/product-intelligence.ts` | 01.09.2026 — לא אומת סיכום אנושי. WEB-01 של שורש 5 ("סגירת חודש שכר לא עושה כלום") לא אומת כנסגר בסבב הזה — לא הצלחתי לאמת מהקוד שסגירת חודש כותבת בפועל. |
+| R5-07 | Future Cost placement | NEW | P2 | — | 01.09.2026 — לא נבדק בסבב הזה. |
+
+---
+
+### Release 6A — Design Core
+**מטרה:** Consistency ללא Redesign.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R6A-01 | Core design tokens | PARTIAL | P1 | `docs/governance/DESIGN-PALETTE-AUDIT.md` · `fa64b85` ("finish the palette pass", PR #105) | 01.09.2026 — מעבר הפלטה הושלם לפי הודעת ה-commit; לא אומת מכאן שכל צבע עובר דרך token. נשאר אחרי ה-gates. |
+| R6A-02 | Surface / text / border primitives | NEW | P1 | | |
+| R6A-03 | Success / warning / danger semantics | NEW | P1 | | |
+| R6A-04 | Focus state consistency | NEW | P1 | | |
+| R6A-05 | Home + Actions consolidation | NEW | P1 | | |
+
+### Release 6B — Design Completion
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R6B-01 | Payroll visual consolidation | NEW | P2 | | |
+| R6B-02 | Documents visual consolidation | NEW | P2 | | |
+| R6B-03 | Family visual consolidation | NEW | P2 | | |
+| R6B-04 | Secondary routes consolidation | NEW | P2 | | |
+
+---
+
+### Release 7+ — Low-Cost Differentiation
+כל Capability יכול לעלות ל-Production בנפרד.
+
+| ID | נושא | Status | Priority | Evidence / Reference | Notes |
+|---|---|---|---|---|---|
+| R7-01 | Monthly Digest | NEW | P2 | | נגזר מנתונים קנוניים |
+| R7-02 | Global Quick Add | NEW | P2 | | לא ליצור data model חדש |
+| R7-03 | Smart Search / Command Search | NEW | P3 | | לא Chatbot |
+| R7-04 | Smart Document Extraction | PARTIAL | P2 | Smart Document AI · ADR-003 | AI proposes, user confirms. 01.09.2026 — לא נבדק בסבב הזה. |
+| R7-05 | Contextual AI Actions | NEW | P2 | case-aware AI | context-first |
+| R7-06 | WhatsApp delivery | PARTIAL | P2 | notification foundation | תלוי provider |
+| R7-07 | Emergency Binder packaging | PARTIAL | P2 | existing binder | שם משתמשי / export |
+| R7-08 | Human escalation packaging | PARTIAL | P2 | existing foundation | לא Marketplace |
+
+---
+
+## 4א. מיפוי Backlog ↔ תשעת שורשי הביקורת
+
+> **למה הסעיף הזה קיים.** ה-Backlog הזה ו-`REVIEW-REMEDIATION-PLAN.md` מתארים חלק מאותה עבודה בשמות שונים. בלי המיפוי הזה הפרויקט מנהל שתי רשימות מעל אותה עבודה, ומשלם עליה פעמיים. הכלל: **כשפריט Backlog ממופה לשורש, השורש הוא בעל הבית.** ה-Backlog מתאר את שכבת המוצר/UX מעליו, לא מחליף אותו.
+
+| שורש | נושא השורש | פריטי Backlog הממופים | היחס |
+|---|---|---|---|
+| 1 | סביבה אחת לכל דבר | R0-01 | זהה |
+| 2 | מערכת המיגרציות אינה אמינה | R0-02 | זהה |
+| 3 | שני מודלי אחסון חיים במקביל | R0-04, ובעקיפין R2-01 | זהה. R2-01 (מודל action אחיד) חסום עד להכרעה |
+| 4 | השרת סומך על הדפדפן | — (אין פריט Backlog) | תשתית בלבד; מזין את R5-02 |
+| 5 | כתיבה יכולה להיכשל בשקט | **R1-05 (עיקרי)**, R1-01, R1-02, R1-03 | **R1-05 הוא בפועל שורש 5.** "חוזה כתיבה אחד" של השורש = R1-01+02+03 יחד |
+| 6 | בידוד דיירים נאכף לא באופן אחיד | — (אין פריט Backlog) | תשתית בלבד; `scripts/check-tenant-db-path.mjs` |
+| 7 | שחזור תוכנן ומעולם לא תורגל | R0-03 | זהה |
+| 8 | כסף אינו מודל | **R5-01, R5-02, R5-03, R5-04** | **חלקי בלבד.** השורש נותן את *הטיפוס*; ה-Backlog נותן את *הסימון בממשק*. סגירת השורש אינה סוגרת את הפריטים |
+| 9 | לממשק אין מודל כשל | **R1-04, R1-06**, וחצי מ-R1-05 | R1-04 = WEB-02 (טיוטת אשף), R1-06 = WEB-06, R1-05 = error boundary |
+| — | מטריצת רוחבים (`RELEASE-GATE.md` §2, `WORK-PLAN-2026-08-29.md`) | **R4-09** ובנותיו R4-01..R4-08 | R4-09 הוא עבודת מטריצת הרוחבים. אין לפתוח לה פריט נוסף |
+
+**פריטים שאינם ממופים לאף שורש** ולכן הם עבודת מוצר טהורה: R2-02..R2-07, R3-01..R3-06, R4-10, R5-05..R5-07, R6A-*, R6B-*, R7-*.
+
+---
+
+## 5. Explicit Non-Goals
+
+כרגע לא בונים:
+- Native App.
+- Marketplace רחב.
+- Chatbot AI גנרי.
+- מערכת הנהלת חשבונות חדשה.
+- מנוע משפטי אוטומטי רחב.
+- Social features.
+- Gamification.
+- Redesign מלא.
+- מקור אמת נוסף.
+- Event types רבים חדשים לפני סגירת הקיימים.
+
+---
+
+## 6. Release Gates
+
+### Gate R0 → R1
+- Canonical storage מוכח.
+- Migration אמינה.
+- Restore מוכח.
+- Environment separation מאומת.
+
+> **מצב 01.09.2026 — השער פתוח.** שלושה מארבעת התנאים אינם מתקיימים: תרגיל השחזור מעולם לא הורץ (R0-03), פרויקט `caredesk-staging` לא נוצר (R0-01), ושני מודלי האחסון עדיין חיים במקביל (R0-04). למרות זאת נחתה ב-31.08 עבודת R1 (`c8b4175` — auto-save, error boundary) ועבודת R5/שורש 8 (טיפוס כסף). ראה R0-05.
+
+### Gate R1 → R2
+- אין silent save failures במסלולים המרכזיים.
+- Auto-save / retry לפי Scope.
+- idempotency לפעולות רגישות.
+
+### Gate R2 → R3
+- Home מראה Priority action.
+- Action model אחיד.
+- Score framing אינו מציג Legal Compliance.
+
+### Gate R3 → R4
+- אחריות משפחתית גלויה.
+- Two-user browser journey עבר.
+
+### Gate R4 → R5
+- Mobile regression עבר במסלולים העיקריים.
+- RTL ו-navigation תקינים.
+
+### Gate R5 → R6
+- Input / Calculated / Paid / Forecast מובחנים.
+- Money regression עבר.
+
+### Gate R6 → R7+
+- Core UI עקבי.
+- אין צורך ב-Redesign נוסף כדי להוסיף בידול.
+
+---
+
+## 7. Claude Update Protocol
+
+בכל פעם שקלוד עובד על Release:
+
+### לפני העבודה
+- עדכן Status ל-`IN_PROGRESS`.
+- הוסף Release target.
+- הוסף Notes אם Scope השתנה.
+
+### לאחר קוד ובדיקות
+- עדכן ל-`IN_REVIEW`.
+- הוסף PR/Commit.
+- הוסף Tests/Evidence.
+
+### לפני Production
+- עדכן ל-`READY_FOR_PRODUCTION`.
+
+### אחרי Deploy
+- עדכן ל-`DEPLOYED`.
+- הוסף גרסה/Commit שעלה.
+
+### אחרי Smoke / Verification
+- עדכן ל-`PRODUCTION_VERIFIED`.
+
+### רק לאחר כל ה-Gates
+- עדכן ל-`COMPLETE`.
+
+---
+
+## 8. Release Log
+
+> Claude מוסיף שורה חדשה בכל Deploy. אין למחוק היסטוריה.
+
+| Date | Release | Version / Commit | Status | Production Verification | Known Issues | Decision |
+|---|---|---|---|---|---|---|
+| 2026-08-31 | Backlog initialized | N/A | DOCUMENTATION | N/A | None | READY |
+| 2026-09-01 | Reconciliation R0/R1 מול הקוד (ללא שינוי קוד) | `c8b4175` (HEAD) · נסקרו `e10c699` #111, `a335357` #110, `0116b43` #108, `fa64b85` #105, `c9d33d6`/`ded53cc` #104 | DOCUMENTATION | **לא בוצע** — אף פריט לא סומן `PRODUCTION_VERIFIED` או `COMPLETE` | (1) שער R0→R1 פתוח — R0-05. (2) `/ready` מאמת ש-`SUPABASE_URL` **מוגדר**, לא שהוא **נכון**; `authentication` דיווח `ok` לכל אורך ההשבתה של 31.08 — R0-08. (3) PR #112: 54 קבצים, שני שורשים, בניגוד ל-§1/§3 של נוהל השחרור — R0-06. (4) מטריצת הרוחבים מכסה 6 מסכים בלבד; שכר, מסמכים, ויזה, משפחה, תרופות והגדרות מחוצה לה — R4-03..R4-08. (5) **vitest לא ניתן להרצה בסביבה הזו** (`@rollup/rollup-linux-x64-gnu` חסר) — אף סטטוס במסמך זה אינו נשען על ריצת בדיקות שנצפתה. | **HOLD** — לפני R1+ נוסף נדרשת הכרעה על R0-05 |
+
+---
+
+## 9. Change Log
+
+| Date | Changed by | Change |
+|---|---|---|
+| 2026-08-31 | Product | Initial Product & UX Improvement Backlog created |
+| 2026-09-01 | Claude | Reconciliation ראשון מול הקוד לפי סעיף 1. עודכנו Status/Evidence/Notes ב-38 שורות קיימות; לא נמחקה אף שורה. נוספו R0-05 (שער R0→R1 פתוח), R0-06 (סטיית Big Bang ב-PR #112), R0-07 (`/ready` מנמק את כשל המסד) ו-R0-08 (`/ready` לא מאמת נכונות SUPABASE_URL). נוסף סעיף 4א — מיפוי Backlog ↔ תשעת השורשים, ובו נקבע ש-R1-05 הוא שורש 5, ש-R5-01..04 הם רק שכבת התצוגה של שורש 8, וש-R4-09 היא עבודת מטריצת הרוחבים. נוספה הערת מצב לשער R0→R1. לא שונה קוד אפליקציה. |
