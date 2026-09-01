@@ -664,13 +664,29 @@ describe('PayrollPage national insurance monthly report', () => {
     return Array.from(document.querySelectorAll<HTMLElement>('.ni-month-row'));
   }
 
+  /**
+   * R5-01..R5-04: the provenance badge now sits inside the amount cell and
+   * inside the two summary rows, and it carries a visible word plus a
+   * screen-reader sentence. The arithmetic assertions below are about the
+   * arithmetic, so the badge is stripped here and asserted on its own — that
+   * keeps every pre-existing expectation exact instead of loosening it.
+   */
+  function withoutOriginBadges(element: Element | null | undefined): Element | null {
+    if (!element) return null;
+    const clone = element.cloneNode(true) as Element;
+    for (const badge of Array.from(clone.querySelectorAll('.value-origin'))) badge.remove();
+    return clone;
+  }
+
   function lineAmount(index: number): string {
-    return stackedText(reportingLines()[index]?.querySelector('.ni-month-amount'));
+    return stackedText(
+      withoutOriginBadges(reportingLines()[index]?.querySelector('.ni-month-amount')),
+    );
   }
 
   function summaryLines(): string[] {
     return Array.from(calculator().querySelectorAll('.payroll-live-total')).map((element) =>
-      stackedText(element),
+      stackedText(withoutOriginBadges(element)),
     );
   }
 
@@ -880,5 +896,176 @@ describe('PayrollPage national insurance monthly report', () => {
     expect(document.querySelectorAll('.ni-month-row')).toHaveLength(0);
     expect(screen.queryByLabelText(/^שיעור התשלום/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^סכום בש״ח/)).toHaveValue(null);
+  });
+
+  /**
+   * R5-02. The Institute's line is wage x rate. The wage and the rate are two
+   * fields the customer fills; the amount beside them is neither, and before
+   * this it was rendered exactly like them.
+   */
+  it('marks every insurance line amount as calculated, not as something typed', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+
+    const badges = reportingLines().map((line) =>
+      line.querySelector('.ni-month-amount .value-origin'),
+    );
+    expect(badges).toHaveLength(3);
+    for (const badge of badges) {
+      expect(badge).toHaveAttribute('data-value-origin', 'calculated');
+      expect(badge?.textContent).toContain('מחושב');
+    }
+  });
+
+  it('marks both insurance totals as calculated and names the calculator as their source', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+
+    const totals = Array.from(calculator().querySelectorAll('.payroll-live-total .value-origin'));
+    expect(totals).toHaveLength(2);
+    expect(totals.every((badge) => badge.getAttribute('data-value-origin') === 'calculated')).toBe(
+      true,
+    );
+    expect(totals[1]?.textContent).toContain('מחשבון ביטוח לאומי');
+  });
+
+  /**
+   * R5-01 / R5-02. The same field carries either kind, and which one it is
+   * depends on what the customer just did. This is the one place in the product
+   * where a number changes provenance under the user's hands, so it is the one
+   * place where getting the badge wrong would be actively misleading.
+   */
+  it('flips the amount field from calculated to entered when the customer types over it', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+
+    const amountBadge = () =>
+      screen
+        .getByLabelText(/^סכום בש״ח/)
+        .closest('label')
+        ?.querySelector('.value-origin');
+    expect(amountBadge()).toHaveAttribute('data-value-origin', 'calculated');
+    expect(amountBadge()?.textContent).toContain('מחשבון ביטוח לאומי');
+
+    fireEvent.change(screen.getByLabelText(/^סכום בש״ח/), { target: { value: '900' } });
+
+    expect(amountBadge()).toHaveAttribute('data-value-origin', 'input');
+    expect(amountBadge()?.textContent).toContain('הוזן');
+  });
+
+  /**
+   * R5-03. "שולם" is a claim that money left the account. An expense the
+   * customer has recorded but not marked paid must not make it.
+   */
+  it('says שולם only for an expense the customer marked as paid', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת תשלום למעקב' }));
+
+    const row = document.querySelector('.employment-expenses > div');
+    expect(row?.querySelector('.value-origin')).toHaveAttribute('data-value-origin', 'input');
+
+    fireEvent.click(screen.getByRole('button', { name: 'סימון כשולם' }));
+
+    const paidRow = document.querySelector('.employment-expenses > div');
+    expect(paidRow?.querySelector('.value-origin')).toHaveAttribute('data-value-origin', 'paid');
+    expect(paidRow?.querySelector('.value-origin')?.textContent).toContain('שולם');
+  });
+
+  it('states the key to the four kinds above the periodic payments, not below them', () => {
+    renderPage();
+
+    // The section that owns the periodic-payment form is the one holding the
+    // national insurance calculator.
+    const section = calculator().closest('section')!;
+    const legend = section.querySelector('.value-origin-legend')!;
+    const form = section.querySelector('form')!;
+    expect(legend).not.toBeNull();
+    // "Above the list" is the placement rule in LIABILITY-FRAMING.md, and the
+    // legend obeys it too: the reader meets the rule before the numbers.
+    expect(legend.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(legend.textContent).toContain('הוזן');
+    expect(legend.textContent).toContain('מחושב');
+    expect(legend.textContent).toContain('שולם');
+  });
+});
+
+describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    saveMvpProfile({
+      ...emptyMvpProfile,
+      baseSalary: 7_000,
+      salaryEffectiveDate: '2025-01-01',
+    });
+  });
+
+  function renderWizard() {
+    return render(
+      <I18nextProvider i18n={initI18n()}>
+        <PayrollPage />
+      </I18nextProvider>,
+    );
+  }
+
+  /**
+   * The monthly summary is the screen the employer prints and hands over, so it
+   * is the screen where an unmarked number is most likely to be read as a
+   * payslip. Every money line on it must say which kind of claim it is.
+   */
+  it('marks every line of the monthly summary as calculated, and none of them as paid', () => {
+    renderWizard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '400' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const summary = document.querySelector('.pay-summary');
+    expect(summary).not.toBeNull();
+    const kinds = Array.from(summary!.querySelectorAll('.value-origin')).map((badge) =>
+      badge.getAttribute('data-value-origin'),
+    );
+    // Base, Saturdays, other additions, the subtotal, deductions and the total
+    // are all derived; nothing on this screen is `paid`, because the month has
+    // not been closed and no payment date exists yet.
+    expect(kinds).toHaveLength(6);
+    expect(new Set(kinds)).toEqual(new Set(['calculated']));
+    expect(kinds).not.toContain('paid');
+    expect(summary!.textContent).toContain('מחושב');
+  });
+
+  it('shows the key to the badges from step 2 on, and not on the month step', () => {
+    renderWizard();
+
+    expect(document.querySelector('.wizard-content .value-origin-legend')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(document.querySelector('.wizard-content .value-origin-legend')).not.toBeNull();
+  });
+
+  it('marks the running totals inside the wizard as calculated', () => {
+    renderWizard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const totals = Array.from(
+      document.querySelectorAll('.wizard-content .payroll-live-total .value-origin'),
+    );
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((badge) => badge.getAttribute('data-value-origin') === 'calculated')).toBe(
+      true,
+    );
   });
 });

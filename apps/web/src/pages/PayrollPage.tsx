@@ -19,6 +19,7 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
+import { ValueOrigin, ValueOriginLegend } from '../components/ValueOrigin.js';
 import {
   clearFormDraft,
   readFormDraft,
@@ -1313,6 +1314,11 @@ export function PayrollPage() {
         </div>
         <div className="wizard-content">
           <h2>{headings[step - 1]}</h2>
+          {/* R5-01/R5-02. Steps 2-5 mix figures the user typed with figures the
+              wizard derived from them, in the same typeface. The key is stated
+              once, above them, so the reader meets the rule before acting on the
+              numbers. Step 1 chooses a month and carries no amount. */}
+          {step >= 2 ? <ValueOriginLegend kinds={['input', 'calculated']} /> : null}
           {/* WEB-02 / WEB-06: the wizard now says out loud whether the work on
               screen is recoverable. A failed draft write is shown as itself
               instead of being swallowed or crashing the page. */}
@@ -1388,6 +1394,15 @@ export function PayrollPage() {
                       ? `${proratedBaseSalary.paidDays} מתוך ${proratedBaseSalary.daysInMonth} ימי בסיס`
                       : 'חודש מלא'}
                   </small>
+                  {/* R5-02. Not the salary the user typed: the proration formula
+                      stated below produced it. The source is named (R5-05) —
+                      the inputs are user entry — and nothing else is claimed,
+                      because the MVP payroll draft records no actor and no
+                      calculation timestamp. */}
+                  <ValueOrigin
+                    kind="calculated"
+                    provenance={{ source: t('valueOrigin.source.userEntry') }}
+                  />
                 </span>
                 <strong>{money.format(proratedBaseSalary.amount)}</strong>
               </div>
@@ -1475,6 +1490,9 @@ export function PayrollPage() {
                   <small>
                     {numeric(values.paidSaturdays)} × {money.format(numeric(values.saturdayRate))}
                   </small>
+                  {/* R5-02. The count and the rate beside it are typed; their
+                      product is not. */}
+                  <ValueOrigin kind="calculated" />
                 </span>
                 <strong>{money.format(calculation.saturdayPay)}</strong>
               </div>
@@ -1631,7 +1649,12 @@ export function PayrollPage() {
                 )}
               </section>
               <div className="payroll-live-total" aria-live="polite">
-                <span>כל התוספות לחודש, כולל שבתות</span>
+                <span>
+                  כל התוספות לחודש, כולל שבתות
+                  {/* R5-02. A sum of typed amounts is still a derivation: the
+                      user never typed this figure. */}
+                  <ValueOrigin kind="calculated" />
+                </span>
                 <strong>{money.format(calculation.additions)}</strong>
               </div>
             </div>
@@ -1703,17 +1726,33 @@ export function PayrollPage() {
                 {fieldErrorMessage('agreedDeduction')}
               </label>
               <div className="payroll-live-total deduction" aria-live="polite">
-                <span>סה״כ מקדמות וקיזוזים</span>
+                <span>
+                  סה״כ מקדמות וקיזוזים
+                  {/* R5-02. */}
+                  <ValueOrigin kind="calculated" />
+                </span>
                 <strong>−{money.format(calculation.deductions)}</strong>
               </div>
             </div>
           ) : null}
           {step === 5 ? (
             <>
+              {/* R5-01..R5-04. The monthly summary is the screen the owner
+                  prints and hands over, so it is the screen where an unmarked
+                  number is most likely to be read as a payslip. Every line here
+                  is now marked: the amounts the user typed as `input`, the ones
+                  the wizard derived as `calculated`. Nothing on this screen is
+                  `paid` — the month has not been closed yet, and saying "שולם"
+                  before a payment date exists would be the exact confusion
+                  R5-03 is meant to remove. */}
               <div className="pay-summary">
                 <div>
                   <span>
                     שכר בסיס <small>נתוני העסקה</small>
+                    <ValueOrigin
+                      kind="calculated"
+                      provenance={{ source: t('valueOrigin.source.userEntry') }}
+                    />
                   </span>
                   <strong>{money.format(proratedBaseSalary.amount)}</strong>
                 </div>
@@ -1723,12 +1762,14 @@ export function PayrollPage() {
                     <small>
                       {numeric(values.paidSaturdays)} × {money.format(numeric(values.saturdayRate))}
                     </small>
+                    <ValueOrigin kind="calculated" />
                   </span>
                   <strong>{money.format(calculation.saturdayPay)}</strong>
                 </div>
                 <div>
                   <span>
                     תוספות אחרות <small>לא כולל שבתות, המוצגות בשורה נפרדת</small>
+                    <ValueOrigin kind="calculated" />
                   </span>
                   <strong>{money.format(standardOtherAdditions)}</strong>
                 </div>
@@ -1738,12 +1779,18 @@ export function PayrollPage() {
                     <div key={payment.id}>
                       <span>
                         תשלום נוסף <small>{payment.description || 'ללא תיאור'}</small>
+                        {/* R5-01. This one really is just what the user typed,
+                            line by line — CareDesk asserts nothing about it. */}
+                        <ValueOrigin kind="input" />
                       </span>
                       <strong>{money.format(numeric(payment.amount))}</strong>
                     </div>
                   ))}
                 <div className="payroll-subtotal">
-                  <span>סכום לפני קיזוזים</span>
+                  <span>
+                    סכום לפני קיזוזים
+                    <ValueOrigin kind="calculated" />
+                  </span>
                   <strong>{money.format(beforeDeductions)}</strong>
                 </div>
                 <div>
@@ -1754,11 +1801,15 @@ export function PayrollPage() {
                         ? deductionBreakdown.join(' · ')
                         : 'לא הוזנו קיזוזים החודש'}
                     </small>
+                    <ValueOrigin kind="calculated" />
                   </span>
                   <strong>−{money.format(calculation.deductions)}</strong>
                 </div>
                 <div className="total">
-                  <span>סה״כ לתשלום</span>
+                  <span>
+                    סה״כ לתשלום
+                    <ValueOrigin kind="calculated" />
+                  </span>
                   <strong>{money.format(calculation.total)}</strong>
                 </div>
                 <p>
@@ -1998,6 +2049,11 @@ export function PayrollPage() {
             </p>
           </div>
         </div>
+        {/* R5-01..R5-03. This one section holds all three at once: typed
+            amounts, the national insurance calculator's derived amount, and
+            rows the user marked as paid. Before the badges they were three
+            claims in one typeface. */}
+        <ValueOriginLegend kinds={['input', 'calculated', 'paid']} />
         <form className="readable-form" onSubmit={saveExpense}>
           <div className="form-grid">
             <label>
@@ -2141,6 +2197,11 @@ export function PayrollPage() {
                         </label>
                         <p className="ni-month-amount">
                           <span>{t('payments.insuranceTable.amountColumn')}</span>
+                          {/* R5-02. The wage and the rate on the two fields
+                              above are typed; this cell is wage × rate. It is
+                              the figure the customer will pay by, so it must
+                              not read as one more thing they entered. */}
+                          <ValueOrigin kind="calculated" />
                           <strong>{money.format(row.amount)}</strong>
                         </p>
                       </li>
@@ -2153,7 +2214,11 @@ export function PayrollPage() {
                   </p>
                 ))}
                 <div className="payroll-live-total ni-total-wages" aria-live="polite">
-                  <span>{t('payments.insuranceTable.totalWages')}</span>
+                  <span>
+                    {t('payments.insuranceTable.totalWages')}
+                    {/* R5-02. */}
+                    <ValueOrigin kind="calculated" />
+                  </span>
                   <strong>{money.format(insuranceTotals.wages)}</strong>
                 </div>
                 <div className="payroll-live-total" aria-live="polite">
@@ -2166,6 +2231,13 @@ export function PayrollPage() {
                         months: insuranceMonthRows.filter((row) => row.employed).length,
                       })}
                     </small>
+                    {/* R5-02. The sum of the per-month lines above; the rate
+                        differs per line, so it cannot be restated as one
+                        multiplication and must not read as a quoted figure. */}
+                    <ValueOrigin
+                      kind="calculated"
+                      provenance={{ source: t('valueOrigin.source.nationalInsuranceCalculator') }}
+                    />
                   </span>
                   <strong>{money.format(insuranceTotals.amount)}</strong>
                 </div>
@@ -2194,6 +2266,21 @@ export function PayrollPage() {
                     : 'הסכום מולא מהחישוב שלמעלה. אפשר להקליד כאן סכום אחר.'}
                 </small>
               ) : null}
+              {/* R5-01/R5-02. The same field holds either kind depending on
+                  what the user did: typing here overrides the calculator, and
+                  the badge follows the override flag that already exists rather
+                  than a new piece of state. Outside the national insurance
+                  category the field is only ever typed. */}
+              <ValueOrigin
+                kind={
+                  isNationalInsuranceExpense && !expenseAmountOverridden ? 'calculated' : 'input'
+                }
+                provenance={
+                  isNationalInsuranceExpense && !expenseAmountOverridden
+                    ? { source: t('valueOrigin.source.nationalInsuranceCalculator') }
+                    : undefined
+                }
+              />
             </label>
             <label>
               תאריך יעד
@@ -2263,6 +2350,26 @@ export function PayrollPage() {
                     · יעד {expense.dueDate}
                     {expense.note ? ` · ${expense.note}` : ''}
                   </small>
+                  {/* R5-01/R5-03. A row marked paid is a claim that money left
+                      the account; an unpaid row is only what the user typed.
+                      R5-05 note: the MVP expense record carries `savedAt` and
+                      an optional `source`, and NOT a payment date — so "שולם"
+                      here can name when the row was recorded but cannot name
+                      when it was paid. No field was added to make it able to;
+                      that is a data gap, recorded in the backlog, not a display
+                      problem to paper over. */}
+                  {expense.amountEntered === false ? null : (
+                    <ValueOrigin
+                      kind={expense.status === 'paid' ? 'paid' : 'input'}
+                      provenance={{
+                        source:
+                          expense.source === 'payroll-national-insurance'
+                            ? t('valueOrigin.source.nationalInsuranceCalculator')
+                            : t('valueOrigin.source.userEntry'),
+                        when: formatDateTime(expense.savedAt) ?? undefined,
+                      }}
+                    />
+                  )}
                 </span>
                 <strong>
                   {expense.amountEntered === false ? 'סכום טרם הוזן' : money.format(expense.amount)}
@@ -2383,7 +2490,18 @@ export function PayrollPage() {
               <strong>−{money.format(annualReport.deductions)}</strong>
             </div>
             <div className="total">
-              <span>סה״כ לתשלום בשנת {reportYear}</span>
+              <span>
+                סה״כ לתשלום בשנת {reportYear}
+                {/* R5-02/R5-03. The underlying field is called `totalPaid`, but
+                    it is the sum of the payroll records that were SAVED for the
+                    year — a saved month is not a paid month, and closing a month
+                    is a separate act with its own payment date. Marking this
+                    `calculated` rather than `paid` is the point of R5-03. */}
+                <ValueOrigin
+                  kind="calculated"
+                  provenance={{ source: t('valueOrigin.source.payrollRecord') }}
+                />
+              </span>
               <strong>{money.format(annualReport.totalPaid)}</strong>
             </div>
             {/* Footnote, not a banner: the caveat stays available without competing

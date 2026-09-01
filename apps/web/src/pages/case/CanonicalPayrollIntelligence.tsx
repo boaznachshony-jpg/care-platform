@@ -24,6 +24,8 @@ import {
   saveMvpPayroll,
   type MvpEmploymentExpense,
 } from '../../storage/mvp-storage.js';
+import { ValueOrigin, ValueOriginLegend } from '../../components/ValueOrigin.js';
+import { formatDateOnly } from '../../format-timestamp.js';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -364,6 +366,12 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       <p className="eyebrow">שכר קנוני בתיק</p>
       <h2 id="canonical-payroll-title">רישום שכר חודשי ועלות עתידית</h2>
       <p>הנתונים נשמרים בשרת תחת תיק ההעסקה המאומת בלבד. אין שמירת עובדות שכר בדפדפן.</p>
+      {/* R5-01..R5-04. This one card holds a form of typed fields, a total the
+          server recomputes, a planning layer, and a twelve-month projection.
+          Root 8 is what makes the "מחושב" badge honest here: the server
+          recomputes the total and rejects a mismatch, so the label is a
+          statement about the server's arithmetic and not about the browser's. */}
+      <ValueOriginLegend kinds={['input', 'calculated', 'paid', 'forecast']} />
       {error ? <p role="alert">{error}</p> : null}
       <div className="form-grid">
         <label>
@@ -456,7 +464,10 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       </div>
       <p className="payroll-live-total">
         סה״כ מחושב:{' '}
-        <strong>{calculatedTotal === null ? '—' : money.format(calculatedTotal)}</strong>
+        <strong>{calculatedTotal === null ? '—' : money.format(calculatedTotal)}</strong>{' '}
+        {/* R5-02. Every field above is typed; this is the only figure on the
+            form nobody typed. */}
+        <ValueOrigin kind="calculated" provenance={{ source: t('valueOrigin.source.userEntry') }} />
       </p>
       <p className="legal-note">{t('liability.calculation')}</p>
       <button
@@ -524,6 +535,12 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
         <ul aria-labelledby="scenario-expenses-title">
           {scenarioExpenses.map((expense) => (
             <li key={expense.id}>
+              {/* R5-01. A scenario expense amount is typed by the user and only
+                  ever feeds the projection; the amount itself is not derived. */}
+              <ValueOrigin
+                kind="input"
+                provenance={{ source: t('valueOrigin.source.scenarioLayer') }}
+              />{' '}
               <strong>{expense.label}</strong> · {money.format(expense.amount)} ·{' '}
               {expense.kind === 'recurring'
                 ? `חודשי מ-${expense.startMonth}${expense.endMonth ? ` עד ${expense.endMonth}` : ''}`
@@ -639,18 +656,47 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       <h3>עלות עתידית — קדימות מקור סמכות</h3>
       <p className="legal-note">{t('liability.forecast')}</p>
       <ul aria-label="תחזית קנונית">
-        {forecast.months.slice(0, 3).map((item) => (
-          <li key={item.month}>
-            <strong>{item.month}</strong> · {money.format(item.total)} ·{' '}
-            {closes.some((c) => c.month === item.month)
-              ? 'בפועל סגור'
-              : entries?.some((e) => e.month === item.month)
-                ? 'שכר פתוח שהוזן'
-                : scenarioExpenses.length
-                  ? 'תחזית כולל שכבת תרחיש'
-                  : 'תחזית / לא ידוע'}
-          </li>
-        ))}
+        {forecast.months.slice(0, 3).map((item) => {
+          /* R5-03/R5-04. The four-way authority order this list already
+             implements is exactly the four kinds of number: a canonical close
+             is a payment, a saved entry is a calculation, and anything else is
+             a projection. The badge states which one, instead of leaving it to
+             a phrase whose difference from the phrase above it is one word. */
+          const close = closes.find((c) => c.month === item.month);
+          return (
+            <li key={item.month}>
+              <ValueOrigin
+                kind={
+                  close
+                    ? 'paid'
+                    : entries?.some((e) => e.month === item.month)
+                      ? 'calculated'
+                      : 'forecast'
+                }
+                provenance={
+                  close
+                    ? {
+                        source: t('valueOrigin.source.monthlyClose'),
+                        when: formatDateOnly(close.paymentDate) ?? close.paymentDate,
+                      }
+                    : entries?.some((e) => e.month === item.month)
+                      ? { source: t('valueOrigin.source.canonicalPayroll') }
+                      : scenarioExpenses.length
+                        ? { source: t('valueOrigin.source.scenarioLayer') }
+                        : undefined
+                }
+              />{' '}
+              <strong>{item.month}</strong> · {money.format(item.total)} ·{' '}
+              {close
+                ? 'בפועל סגור'
+                : entries?.some((e) => e.month === item.month)
+                  ? 'שכר פתוח שהוזן'
+                  : scenarioExpenses.length
+                    ? 'תחזית כולל שכבת תרחיש'
+                    : 'תחזית / לא ידוע'}
+            </li>
+          );
+        })}
       </ul>
       {state === 'loading' ? <p role="status">טוען…</p> : null}
     </section>

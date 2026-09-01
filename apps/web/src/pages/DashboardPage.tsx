@@ -335,8 +335,25 @@ export function DashboardPage() {
                   <div>
                     <strong>{item.title}</strong>
                     <p>{item.explanation}</p>
+                    {/* R5-05. This line used to read "documents: doc-1" — a
+                        machine token and a row id, in a place a human is asked
+                        to act on. The source is now named in the interface
+                        language; the ids stay because they are the evidence a
+                        support call needs. There is no "who" and no "when" to
+                        show: `HealthFactor.provenance` carries neither, and
+                        R5-05 is a display item, not a licence to add fields. */}
                     <small>
-                      {item.provenance.sourceType}: {item.provenance.sourceIds.join(', ')}
+                      {t('valueOrigin.provenance.source', {
+                        // The health payload comes from the server, so an
+                        // unrecognised source type must degrade to today's
+                        // behaviour — the raw token — and never to a leaked
+                        // translation key on a screen the customer reads.
+                        source: t(`valueOrigin.source.${item.provenance.sourceType}`, {
+                          defaultValue: item.provenance.sourceType,
+                        }),
+                      })}
+                      {' · '}
+                      {item.provenance.sourceIds.join(', ')}
                     </small>
                   </div>
                   {item.actionTarget && item.recommendedAction ? (
