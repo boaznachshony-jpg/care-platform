@@ -522,16 +522,38 @@ button,
 a {
   transition: 0.18s ease;
 }
+/* R4-04. Parking at `inset-inline-start: -9999px` is the LTR off-canvas trick,
+   where the browser treats leftward overflow as unreachable and does not make
+   the page scrollable for it. This document is `direction: rtl`, so
+   inline-start is the RIGHT edge: the link was parked 9999px into the exact
+   direction RTL scrolls, and gave every screen 27px of phantom horizontal
+   scroll with a stray "דלג לתוכן" at the end of it.
+
+   The 1px clip box below is the same shape as `.sr-only` further down, and it
+   is direction-agnostic: nothing is displaced, so nothing overflows either way.
+   `clip`, deprecated as it is, stays alongside `clip-path` because it is what
+   the older WebKit on the iPhones this product's users own still honours. */
 .cd-skip-link {
   position: absolute;
-  inset-inline-start: -9999px;
   top: 8px;
+  inset-inline-start: 8px;
   z-index: 1000;
-  background: white;
-  padding: 10px 16px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .cd-skip-link:focus {
-  inset-inline-start: 8px;
+  width: auto;
+  height: auto;
+  padding: 10px 16px;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  background: white;
 }
 .app-frame {
   min-height: 100vh;
@@ -905,6 +927,13 @@ a {
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
+  /* R4-04. The header's actions are `.secondary-button`s, which no longer
+     shrink below their own labels (see that rule). Without wrapping, a header
+     with two actions pushed the page 188px past the viewport at 768px — the
+     one width between the mobile stacking rule (`max-width: 760px`, which makes
+     these full-width) and a desktop wide enough to hold them side by side.
+     Wrapping is the same answer `.page-header-actions` below already gives. */
+  flex-wrap: wrap;
 }
 .eyebrow,
 .section-heading > div > span,
@@ -1170,7 +1199,16 @@ a {
 }
 .client-more-actions button,
 .danger-text-button {
-  min-height: 44px;
+  /* R4-04. 44px here produced a measured 47.69px — 0.31px under the 48px floor
+     that applies below 761px, so the matrix failed at 360, 390 and 430. The
+     `summary` rule directly above already made this decision and wrote down the
+     reason: atm-onboarding-mobile.spec.ts holds mobile touch targets to 48, and
+     one standard beats two. These buttons sit inside that same `details`, a few
+     pixels shorter than the control that opens them, and were simply missed.
+     Flat rather than inside a media query, for the same reason the summary is:
+     two thresholds for one control is how a 46px button passes one spec and
+     fails the other. */
+  min-height: 48px;
   padding: 8px 14px;
   border: 1px solid #cbd6e3;
   border-radius: 10px;
@@ -1242,6 +1280,13 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 15px;
+  /* R4-04. `space-between` with no wrap crushes the action at the end of the
+     row: "＋ הוספת תשלום" was given a 42.78px interior for 49.8px of text, so
+     the label was cut mid-word rather than the button moving. Wrapping is what
+     `.employment-expenses > div` already does for the same shape — the button
+     drops to its own line when the row runs out of width, and nothing wraps at
+     the widths where it fits. */
+  flex-wrap: wrap;
 }
 .section-heading h2,
 .section-title-row h2 {
@@ -1302,6 +1347,10 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* R4-04. The other half of the wrap: once the rows above may wrap, the button
+     must stop offering itself as the thing to shrink, or it wraps AND stays too
+     narrow for its own label. */
+  flex-shrink: 0;
 }
 .primary-button {
   border: 1px solid #1c2b45;
@@ -1446,7 +1495,12 @@ a {
   gap: 8px;
 }
 .filter-row button {
-  min-height: 44px;
+  /* R4-04. 44 here measured 47.69 — under the 48px floor below 761px. Same
+     0.31px miss as `.client-more-actions button`: a `min-height` of 44 plus
+     padding lands just short of a standard this stylesheet has already adopted
+     twice in writing. These are the task filters ("פתוחות" / "השבוע" /
+     "הושלמו"), tapped constantly on a phone. */
+  min-height: 48px;
   border: 1px solid #dce2e9;
   background: var(--cd-surface);
   border-radius: 999px;
@@ -1562,6 +1616,9 @@ a {
   gap: 20px;
   padding: 12px 0;
   border-bottom: 1px solid #edf0f3;
+  /* R4-04, same shape as `.section-heading`: "עריכת החודש" in the payroll
+     history row was shrunk to a 38.59px interior for 49.38px of text. */
+  flex-wrap: wrap;
 }
 .detail-list > div:last-child {
   border: 0;
@@ -2135,11 +2192,42 @@ a {
 }
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* R4-04. `1fr` is `minmax(auto, 1fr)`, and that `auto` floor is the item's
+     min-content width — for a `type="date"` input, a size Chromium will not go
+     below however much `width: 100%` asks. At 768px the settings form is still
+     two columns (the collapse to one is `max-width: 760px`), so the track grew
+     to fit the date field and pushed the page 27px wider than the viewport:
+     horizontal scroll on the screen where the employer edits their own
+     details. `minmax(0, 1fr)` lets the track shrink and hands the decision back
+     to `width: 100%`. The labels already carry `min-width: 0`; the tracks never
+     did, so that had nothing to act on. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 15px;
 }
 .form-grid .full-width {
   grid-column: 1 / -1;
+}
+/* R4-04. The settings date field overflowed a 768px viewport by 27px, and
+   `width: 100%` was already set on it three times over. The percentage was
+   resolving against the wrong box: these labels are themselves grid containers,
+   their single implicit column is `auto`, and `auto` is at least the item's
+   min-content — which for `type="date"` is a fixed ~265px the control will not
+   go below. So the label's own column grew to 265px, `width: 100%` faithfully
+   filled it, and the 86.5px label overflowed.
+   `minmax(0, 1fr)` gives the track permission to be smaller than its content,
+   which is the only thing that lets the input shrink. Scoped to form-grid
+   labels so multi-column labels elsewhere keep their templates. */
+.form-grid label {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* And the fields themselves: `width: 100%` was only ever written as
+   `.readable-form input`, and not every form grid sits inside a readable-form.
+   Checkboxes and radios are excluded — they are sized as touch targets, not as
+   fields, and stretching one to the column width would be its own defect. */
+.form-grid label > input:not([type='checkbox']):not([type='radio']),
+.form-grid label > select {
+  width: 100%;
+  min-width: 0;
 }
 .employment-expenses > div {
   align-items: center;
@@ -2157,10 +2245,14 @@ a {
   color: #728093;
 }
 .employment-expenses .secondary-button {
-  min-height: 44px;
+  /* R4-04, with the rest of the 44→48 pass below. */
+  min-height: 48px;
 }
 .text-button {
-  min-height: 44px;
+  /* R4-04. 44px is the WCAG floor and this stylesheet's mobile standard is 48
+     (see `.client-more-actions summary`). A flat 48 satisfies both, where two
+     values is how "מחיקה" passed the desktop rule and failed the phone. */
+  min-height: 48px;
   border: 0;
   background: transparent;
   color: #a33a3a;
@@ -3024,6 +3116,11 @@ body {
 .readable-form input,
 .readable-form select {
   width: 100%;
+  /* R4-04. `width: 100%` is only a request: a date input's intrinsic minimum
+     overrides it, and the field then overflows the label that holds it. This is
+     the second half of the `minmax(0, 1fr)` fix on `.form-grid` — the track can
+     now shrink, and this lets the control inside it shrink too. */
+  min-width: 0;
   min-height: 56px;
   border: 2px solid #cbd4df;
   border-radius: 14px;
@@ -3136,12 +3233,52 @@ body {
   justify-content: space-between;
   min-height: 56px;
 }
-.switch-row input {
-  width: 32px;
-  height: 32px;
+/* R4-04. This rule was written to size the settings toggles and never once
+   applied. `.readable-form input` (0,2,1) beats `.switch-row input` (0,1,1) and
+   sets `width: 100%; min-height: 60px` — text-field sizing — so the checkbox
+   was laid out as a full-width field, then flex-shrunk by the space-between row
+   to 21.41px at 768px and 32px wider up. A 21px checkbox is under half the WCAG
+   floor, on the master switch that turns every reminder in the product on and
+   off.
+
+   Raised to `.readable-form .switch-row input` (0,3,1) so it wins where the
+   damage is done, with the bare `.switch-row` selector kept for any future use
+   outside a readable-form. `flex: 0 0 auto` is the half that matters: without
+   it a percentage width returns and the row shrinks the control again. */
+.switch-row input,
+.readable-form .switch-row input {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 .two-columns {
-  grid-template-columns: 1fr 1fr;
+  /* Same `minmax(0, …)` reason as `.form-grid` above: this is the class that
+     was actually on the overflowing settings grid. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* R4-04. Below 1051px the sidebar has already taken 220px out of the page, and
+   the settings screen then divides what is left twice: 548px of content into
+   two 236px cards, each of those into two 87px fields. A `type="date"` control
+   has an internal width it will not go below — around 265px at this font size —
+   so it spilled its box and gave every settings visit 27px of horizontal
+   scroll. The overflow is the symptom; an 87px date field is unusable at any
+   scroll position. Both divisions collapse here and return at 1051px.
+
+   This block sits AFTER the base rules on purpose. The `max-width: 1050px`
+   block higher up (where the sidebar narrows) is the natural home for it, but
+   `.settings-form` and `.two-columns` are declared below that block at equal
+   specificity, so an override placed there is simply overwritten a few hundred
+   lines later — which is exactly what happened on the first attempt at this
+   fix. A media query adds no specificity; only order breaks the tie. */
+@media (max-width: 1050px) {
+  .two-columns {
+    grid-template-columns: 1fr;
+  }
+  .settings-form {
+    grid-template-columns: 1fr;
+  }
 }
 .save-bar {
   position: sticky;
@@ -3654,9 +3791,19 @@ input[type='number'] {
     flex: 0 0 auto;
   }
 
+  /* R4-04. These were 42x42 here, and 42 is below BOTH floors: the 44px the
+     width matrix has always enforced and the 48px this same stylesheet
+     promises 40 lines further down (`button, [role='button'], summary { … }`
+     in the second `max-width: 760px` block). That generic rule could never win
+     — `.top-actions .font-size-controls button` is two classes more specific —
+     so the shrink survived the touch-target pass and shipped. The topbar has
+     the room: theme toggle 48 + this group 108 + bell 48 + gaps is ~220px of
+     the 336px available at 360, and the greeting beside it already has
+     `min-width: 0` and an ellipsis. The one control on the shell that a user
+     with poor eyesight reaches for is not the one to shave. */
   .top-actions .font-size-controls button {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
   }
 
   .main-content {
@@ -4786,8 +4933,13 @@ input[type='number'] {
   cursor: pointer;
 }
 .family-role-option input {
-  width: 22px;
-  height: 22px;
+  /* R4-04. 22×22 is exactly half the WCAG floor, on the radio that decides
+     whether an invited family member can manage the case or only read it. The
+     row is already 86px tall, so the larger control costs no layout: it was
+     small because a bare radio was left at roughly its default size, not
+     because anything needed the space. */
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
 }
 .family-role-option span {
@@ -5617,6 +5769,23 @@ input[type='number'] {
 .forecast-card {
   display: grid;
   gap: 16px;
+}
+/* R4-04. "הנחות התחזית" is a bare <summary> and inherited nothing, so it
+   measured 21px tall — the disclosure that reveals what the twelve-month
+   forecast actually assumes, and the one control on this card a reader has to
+   hit to find out. 48px rather than the 44px the matrix asks for at these
+   widths, matching `.client-more-actions summary` above: this stylesheet
+   already chose 48 as its one touch standard, and a second number would be the
+   start of drift. Height from padding, not a fixed value, so the label still
+   wraps at 360px instead of being clipped. */
+.forecast-card details > summary,
+.payroll-intelligence details > summary,
+.monthly-close details > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding-block: 8px;
+  cursor: pointer;
 }
 .attention-item {
   display: flex;
