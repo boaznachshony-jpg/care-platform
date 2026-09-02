@@ -302,7 +302,11 @@
       "interested": "Interested party — involved, without authority to decide",
       "care": "Care decision-maker — may decide on care matters",
       "management": "Authorised representative — may act for the family"
-    }
+    },
+    "organizationHint": "Only if this contact represents an organisation. For a family member, neighbour or friend, leave blank.",
+    "orgTypeNone": "No organisation — an individual",
+    "organizationNameRequired": "Enter an organisation name, or leave the organisation type blank too.",
+    "organizationTypeRequired": "Choose an organisation type, or leave the organisation name blank too."
   },
   "tasks": {
     "heading": "Tasks",

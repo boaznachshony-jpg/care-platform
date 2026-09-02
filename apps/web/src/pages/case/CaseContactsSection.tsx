@@ -2,12 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 import { ORGANIZATION_TYPES } from '@caredesk/domain';
-import {
-  addContactRequestSchema,
-  type AddContactRequest,
-  type CaseContactResponse,
-} from '@caredesk/schemas';
+import type { AddContactRequest, CaseContactResponse } from '@caredesk/schemas';
 import {
   Alert,
   Button,
@@ -20,6 +17,49 @@ import {
 import { addCaseContact, listCaseContacts } from '../../api/client.js';
 import { contactRoleOptions } from '../../contact-role-types.js';
 
+/**
+ * The form's own shape, flat, and deliberately not `addContactRequestSchema`.
+ *
+ * The wire schema makes `organization` an optional object whose `name` is
+ * required *within* it. A registered input always yields a string, so a contact
+ * with no organisation — a son, a neighbour, the family's own doctor — arrived
+ * as `{ name: '', organizationType: 'nursing_office' }` and failed `min(2)`.
+ * The component rendered errors only for `fullName` and `roleType`, so the
+ * submit button did nothing at all and said nothing at all. Adding a family
+ * member to a case was impossible, silently.
+ *
+ * Flattening the two organisation fields lets "no organisation" be exactly what
+ * it looks like: both blank. The request object is assembled at submit time,
+ * and the organisation is attached only when it was actually filled in.
+ */
+const contactFormSchema = z
+  .object({
+    fullName: z.string().trim().min(2).max(120),
+    roleType: z.string().trim().min(2).max(60),
+    title: z.string().trim().max(80).optional(),
+    organizationName: z.string().trim().max(120).optional(),
+    organizationType: z.enum(ORGANIZATION_TYPES).optional().or(z.literal('')),
+    isPrimary: z.boolean().optional(),
+    isEmergency: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    // Half an organisation is worse than none: a name with no type cannot be
+    // filed, and a type with no name names nothing.
+    const name = value.organizationName?.trim() ?? '';
+    const type = value.organizationType ?? '';
+    if (name && !type) {
+      ctx.addIssue({ code: 'custom', path: ['organizationType'], message: 'organization_type' });
+    }
+    if (!name && type) {
+      ctx.addIssue({ code: 'custom', path: ['organizationName'], message: 'organization_name' });
+    }
+    if (name && name.length < 2) {
+      ctx.addIssue({ code: 'custom', path: ['organizationName'], message: 'organization_name' });
+    }
+  });
+
+type ContactFormValues = z.infer<typeof contactFormSchema>;
+
 export function CaseContactsSection({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
   const [contacts, setContacts] = useState<CaseContactResponse[] | null>(null);
@@ -30,7 +70,10 @@ export function CaseContactsSection({ caseId }: { caseId: string }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<AddContactRequest>({ resolver: zodResolver(addContactRequestSchema) });
+  } = useForm<ContactFormValues>({
+    resolver: zodResolver(contactFormSchema),
+    defaultValues: { organizationName: '', organizationType: '' },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -46,10 +89,28 @@ export function CaseContactsSection({ caseId }: { caseId: string }) {
     };
   }, [caseId]);
 
-  const onSubmit = handleSubmit(async (data) => {
+  const onSubmit = handleSubmit(async (values) => {
     setFailed(false);
+    const organizationName = values.organizationName?.trim();
+    const request: AddContactRequest = {
+      fullName: values.fullName,
+      roleType: values.roleType,
+      ...(values.title?.trim() ? { title: values.title.trim() } : {}),
+      // Attached only when both halves are present. A contact who is simply a
+      // person — a son, a neighbour — is filed as one.
+      ...(organizationName && values.organizationType
+        ? {
+            organization: {
+              name: organizationName,
+              organizationType: values.organizationType,
+            },
+          }
+        : {}),
+      ...(values.isPrimary ? { isPrimary: true } : {}),
+      ...(values.isEmergency ? { isEmergency: true } : {}),
+    };
     try {
-      await addCaseContact(caseId, data);
+      await addCaseContact(caseId, request);
       setContacts(await listCaseContacts(caseId));
       reset();
     } catch {
@@ -106,23 +167,38 @@ export function CaseContactsSection({ caseId }: { caseId: string }) {
           {...register('roleType')}
         />
         <TextField label={t('contacts.title')} {...register('title')} />
-        <TextField label={t('contacts.organizationName')} {...register('organization.name')} />
+        <TextField
+          label={t('contacts.organizationName')}
+          hint={t('contacts.organizationHint')}
+          error={errors.organizationName ? t('contacts.organizationNameRequired') : undefined}
+          {...register('organizationName')}
+        />
 
-        <div className="cd-text-field">
-          <label className="cd-text-field__label" htmlFor="organizationType">
+        <div className="cd-select-field">
+          <label className="cd-select-field__label" htmlFor="organizationType">
             {t('contacts.organizationType')}
           </label>
           <select
             id="organizationType"
-            className="cd-text-field__input"
-            {...register('organization.organizationType')}
+            className="cd-select-field__input"
+            aria-invalid={errors.organizationType ? true : undefined}
+            {...register('organizationType')}
           >
+            {/* Empty and first, so a contact who belongs to no organisation is
+                not filed as a nursing agency by default — which is what the
+                previous list did to every family member added to a case. */}
+            <option value="">{t('contacts.orgTypeNone')}</option>
             {ORGANIZATION_TYPES.map((type) => (
               <option key={type} value={type}>
                 {t(`contacts.orgType.${type}`)}
               </option>
             ))}
           </select>
+          {errors.organizationType ? (
+            <p role="alert" className="cd-select-field__error">
+              {t('contacts.organizationTypeRequired')}
+            </p>
+          ) : null}
         </div>
 
         <label>
