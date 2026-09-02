@@ -294,6 +294,14 @@
       "public_authority": "Public authority",
       "independent_professional": "Independent professional",
       "other": "Other"
+    },
+    "roleTypeHint": "The role describes the person's standing with the family. It appears on the case and in the emergency binder, and grants no access to the system.",
+    "rolePlaceholder": "Choose a role",
+    "roleOptions": {
+      "informed": "Informed — receives updates only",
+      "interested": "Interested party — involved, without authority to decide",
+      "care": "Care decision-maker — may decide on care matters",
+      "management": "Authorised representative — may act for the family"
     }
   },
   "tasks": {

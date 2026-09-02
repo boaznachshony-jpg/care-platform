@@ -8,8 +8,17 @@ import {
   type AddContactRequest,
   type CaseContactResponse,
 } from '@caredesk/schemas';
-import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  SelectField,
+  Skeleton,
+  StatusBadge,
+  TextField,
+} from '@caredesk/ui';
 import { addCaseContact, listCaseContacts } from '../../api/client.js';
+import { contactRoleOptions } from '../../contact-role-types.js';
 
 export function CaseContactsSection({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
@@ -84,9 +93,15 @@ export function CaseContactsSection({ caseId }: { caseId: string }) {
           error={errors.fullName ? t('case.fieldRequired') : undefined}
           {...register('fullName')}
         />
-        <TextField
+        <SelectField
           label={t('contacts.roleType')}
           required
+          placeholder={t('contacts.rolePlaceholder')}
+          // The hint is not decoration: these labels name authority, and the
+          // system enforces none of it. Saying so here is what keeps the list
+          // from reading as a permissions grant.
+          hint={t('contacts.roleTypeHint')}
+          options={contactRoleOptions(t)}
           error={errors.roleType ? t('case.fieldRequired') : undefined}
           {...register('roleType')}
         />
