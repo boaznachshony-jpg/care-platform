@@ -11,6 +11,7 @@ import type { TaskRepository } from '../ports/task-repository.js';
 import type { TimelineService } from '../ports/timeline-service.js';
 import { type Actor } from './actor.js';
 import { authorizeOrThrow } from './authorize.js';
+import { CASE_HEALTH_TASK_FACTORS } from './case-health-factors.js';
 
 // Re-exported so existing imports of Actor/AuthorizationError from this module
 // keep working; both now live in ./actor.js to keep authorize.js cycle-free.
@@ -26,7 +27,9 @@ export { AuthorizationError, type Actor } from './actor.js';
  * only these three, are load-bearing enough to score a case's health on. A
  * task list that seeded a task for every optional field would train families
  * to ignore it; reusing the exact set already proven load-bearing elsewhere
- * keeps the list short and every item on it real.
+ * keeps the list short and every item on it real. The shared list itself now
+ * lives in ./case-health-factors.js so it has exactly one definition, not two
+ * that could silently drift apart.
  *
  * sourceKey is the idempotency key (migration 0047's task.source_key,
  * modelled on task.legacy_local_id from migration 0046): stable, scoped per
@@ -35,18 +38,13 @@ export { AuthorizationError, type Actor } from './actor.js';
  * decision, not user-typed text — it renders through the same
  * translated-titleKey path Milestone-2 workflow tasks already use.
  *
- * Self-resolution — i.e. the task disappearing/completing once the caregiver's
- * passport, visa, or insurance document is actually uploaded and verified —
- * is NOT wired up here. That requires a hook in the document upload/
- * verification path (a different use case, out of this change's narrow
- * scope) and is left as explicit future work; today the family closes the
- * task themselves once the detail is on file, same as any other task.
+ * Self-resolution — the task completing once the caregiver's passport, visa,
+ * or insurance document is actually uploaded and currently valid — is now
+ * wired up in manage-case-documents.ts (UploadCaseDocument / ImportCaseDocument
+ * call TaskRepository.completeTaskBySourceKey with this same sourceKey right
+ * after a document's compliance status is derived as 'valid'). This module
+ * only seeds; it does not need to know that the other side exists.
  */
-const CASE_HEALTH_TASK_FACTORS: ReadonlyArray<{ sourceKey: string; titleKey: string }> = [
-  { sourceKey: 'case_health:passport', titleKey: 'tasks.seeded.passport' },
-  { sourceKey: 'case_health:visa', titleKey: 'tasks.seeded.visa' },
-  { sourceKey: 'case_health:medical_insurance', titleKey: 'tasks.seeded.medicalInsurance' },
-];
 
 export interface OpenEmploymentCaseInput {
   careRecipient: { fullName: string; careLevel?: string; city?: string };

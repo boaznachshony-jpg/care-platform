@@ -157,6 +157,36 @@ export class PgTaskRepository implements TaskRepository {
     });
   }
 
+  /**
+   * See TaskRepository.completeTaskBySourceKey. Scoped by employment_case_id
+   * + source_key rather than by id: the caller (document upload/import) knows
+   * which governed fact just became true, not which task row that is. The
+   * `status <> 'completed'` guard is the same idempotence shape completeTask
+   * already uses, so a document re-upload (or two concurrent uploads of the
+   * same type) completes the task once, not twice, and never rewrites an
+   * already-recorded completion time.
+   */
+  async completeTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+    completedAt: string,
+    completedBy: string | null,
+  ): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TaskRow>(
+        `update task
+            set status = 'completed', completed_at = $3, completed_by = $4,
+                updated_at = now(), updated_by = $4, version = version + 1
+          where employment_case_id = $1 and source_key = $2 and status <> 'completed'
+         returning ${TASK_COLUMNS}`,
+        [employmentCaseId, sourceKey, completedAt, completedBy],
+      );
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+
   async updateTask(
     tenantId: string,
     taskId: string,

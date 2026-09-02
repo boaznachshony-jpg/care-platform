@@ -73,6 +73,28 @@ export interface TaskRepository {
     completedAt: string,
     completedBy: string,
   ): Promise<Task | null>;
+  /**
+   * Completes the open task seeded under this source key (see Task.sourceKey),
+   * or does nothing and returns null when no such task exists or it is already
+   * completed. This is the self-resolution half of the seeding in
+   * OpenEmploymentCase: a document becoming currently valid closes the task
+   * that was asking for it, the same way completeTask does for a human click,
+   * but addressed by the deterministic key instead of a task id the caller
+   * would otherwise have to look up first (and race).
+   *
+   * `completedBy` is null for an automatic completion — no human clicked
+   * anything, so nothing should be attributed to a user id (mirrors
+   * AuditEventInput.actorId's null-for-system-actor convention). Passing a
+   * real user id is intentionally still allowed for symmetry with
+   * completeTask, in case a future caller ever needs it.
+   */
+  completeTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+    completedAt: string,
+    completedBy: string | null,
+  ): Promise<Task | null>;
   /** Returns null when the task does not exist or is already completed/cancelled. */
   updateTask(
     tenantId: string,

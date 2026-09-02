@@ -587,6 +587,10 @@ export function buildContainer(env: Env): Container {
     timeline,
     clock,
     ids,
+    // UploadCaseDocument/ImportCaseDocument auto-complete the seeded
+    // compliance task a newly-valid document satisfies — see
+    // completeMatchingSeededTask in manage-case-documents.ts.
+    tasks: taskRepository,
   };
   const medicationDeps = {
     authorization,

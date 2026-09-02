@@ -14,9 +14,11 @@ import type {
 } from '../ports/document-repository.js';
 import type { DocumentStorage } from '../ports/document-storage.js';
 import type { IdGenerator } from '../ports/id-generator.js';
+import type { TaskRepository } from '../ports/task-repository.js';
 import type { TimelineService } from '../ports/timeline-service.js';
-import type { Actor } from './actor.js';
+import { AuthorizationError, type Actor } from './actor.js';
 import { authorizeOrThrow } from './authorize.js';
+import { findCaseHealthTaskFactor } from './case-health-factors.js';
 
 /**
  * Signed links are short-lived by design (blueprint §4.5). 15 minutes is long
@@ -43,6 +45,11 @@ export interface CaseDocumentDeps {
   timeline: TimelineService;
   clock: Clock;
   ids: IdGenerator;
+  /**
+   * Needed only so a document that lands 'valid' can auto-close the seeded
+   * compliance task it satisfies — see completeMatchingSeededTask below.
+   */
+  tasks: TaskRepository;
 }
 
 /**
@@ -120,6 +127,123 @@ export function deriveComplianceStatus(
   return expiresAfter - now.getTime() <= windowMs ? 'expiring' : 'valid';
 }
 
+/**
+ * Closes the seeded compliance task a document just satisfied, e.g. the
+ * "complete your passport details" task once a passport document is on file
+ * and currently valid — NOT merely present. A document that exists but has
+ * expired, or one that is still 'expiring', leaves the task open on purpose:
+ * the health factor this task mirrors (`/cases/:caseId/health`) checks
+ * `complianceStatus === 'valid'`, and a task that closed on upload alone
+ * would go green while the case health score it is supposed to track stays
+ * red — reintroducing exactly the "list that lies" problem this change
+ * exists to fix.
+ *
+ * WHERE this lives: document upload/import (UploadCaseDocument,
+ * ImportCaseDocument below) is the only place in the codebase that ever
+ * computes or writes a document's complianceStatus — deriveComplianceStatus
+ * runs once, at creation, and nothing today re-derives it later (no cron, no
+ * separate "verify" transition; grep the repo for complianceStatus writes).
+ * So the moment a document's status becomes 'valid' happens exactly once,
+ * exactly here, which makes this the strongest place to react to it: no
+ * polling, no second source of truth to keep in sync, and the completion
+ * happens inside the same request that made the fact true, not on some later
+ * page load or job run.
+ *
+ * WHO completes it: nobody clicked anything — an upload made a fact true and
+ * the system noticed. `completedBy: null` follows the same convention
+ * CollectDueProductSubscriptions uses for the billing cron
+ * (`actorId: null // system cron; no human actor.` in manage-product-billing.ts):
+ * an automatic action is never attributed to the human who merely triggered
+ * the chain of events that led to it, because they did not perform it.
+ *
+ * WHAT ABOUT EXPIRY OR REMOVAL: not wired up, and deliberately so. There is
+ * no code path in this system today that ever transitions a document's
+ * complianceStatus away from 'valid' after creation (no recompute job, no
+ * document-delete endpoint — migration 0047's task.source_key unique index
+ * would in any case forbid inserting a second row under the same key while a
+ * completed one already holds it, so "create a fresh task" was never on the
+ * table without first reopening the old row). Building a reopen path with no
+ * caller that can ever invoke it would be speculative dead code, which the
+ * instructions for this change rank below doing nothing. When a compliance
+ * recompute job is eventually added, it is the natural place to call
+ * TaskRepository's completeTask-shaped counterpart to reopen a task — this
+ * function does not need to anticipate that job's shape today.
+ *
+ * Never allowed to fail the upload/import it runs inside: the document is
+ * already fully persisted, audited and timelined by the time this is called.
+ * Unlike OpenEmploymentCase.seedComplianceTasks (which has no such guard and
+ * can turn an already-written case into a 500), a document upload having
+ * succeeded is the whole point of the request — a bookkeeping side effect on
+ * top of it must not turn a successful upload into a failed one.
+ */
+async function completeMatchingSeededTask(
+  deps: Pick<CaseDocumentDeps, 'tasks' | 'authorization' | 'audit' | 'timeline' | 'clock'>,
+  actor: Actor,
+  caseId: string,
+  documentType: DocumentType,
+  complianceStatus: DocumentComplianceStatus,
+): Promise<void> {
+  if (complianceStatus !== 'valid') return;
+  const factor = findCaseHealthTaskFactor(documentType);
+  if (!factor) return;
+
+  try {
+    // Deny-by-default still applies to this system-triggered write: an actor
+    // who may upload a document but may not touch tasks does not get to close
+    // one just because their upload happened to satisfy it.
+    await authorizeOrThrow(deps, actor, {
+      resourceType: 'task',
+      action: 'update',
+      caseId,
+      sensitivity: 'employment_sensitive',
+    });
+
+    const now = deps.clock.now().toISOString();
+    const completed = await deps.tasks.completeTaskBySourceKey(
+      actor.tenantId,
+      caseId,
+      factor.sourceKey,
+      now,
+      // System completion: no human clicked anything (see function doc above).
+      null,
+    );
+    // null means there was nothing to close — no seeded task exists (a case
+    // opened before this factor existed, or it was already completed/
+    // archived). Nothing to audit or timeline in that case.
+    if (!completed) return;
+
+    await deps.audit.record({
+      tenantId: actor.tenantId,
+      // System-derived, not a human decision — see AuditEventInput.actorId's
+      // own null-for-system-actor convention.
+      actorId: null,
+      action: 'task.auto_completed',
+      resourceType: 'task',
+      resourceId: completed.id,
+      correlationId: actor.correlationId,
+      occurredAt: now,
+      changeSummary: `Task auto-completed: a currently valid ${documentType} document now exists on the case.`,
+      sensitivity: 'employment_sensitive',
+    });
+
+    await deps.timeline.record({
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      eventTypeKey: 'timeline.task.auto_completed',
+      occurredAt: now,
+      summaryKey: 'timeline.task.auto_completed.summary',
+      sensitivity: 'general',
+    });
+  } catch (error) {
+    // A denial here just means the task stays open — deny-by-default is still
+    // honoured, nothing was completed. Any other failure (repository error,
+    // audit/timeline hiccup) is swallowed for the same reason the whole
+    // function is wrapped: the document upload already succeeded and must not
+    // be turned into a 500 by a side effect on top of it.
+    if (error instanceof AuthorizationError) return;
+  }
+}
+
 export class UploadCaseDocument {
   constructor(private readonly deps: CaseDocumentDeps) {}
 
@@ -193,6 +317,17 @@ export class UploadCaseDocument {
       summaryKey: 'timeline.document.uploaded.summary',
       sensitivity: 'general',
     });
+
+    // See completeMatchingSeededTask's doc comment for why this runs here,
+    // who it attributes the completion to, and why expiry/removal are not
+    // handled. Never allowed to fail this already-successful upload.
+    await completeMatchingSeededTask(
+      this.deps,
+      actor,
+      caseId,
+      input.documentType,
+      stored.document.complianceStatus,
+    );
 
     return stored;
   }
@@ -306,6 +441,17 @@ export class ImportCaseDocument {
       summaryKey: 'timeline.document.imported.summary',
       sensitivity: 'general',
     });
+
+    // See completeMatchingSeededTask's doc comment. Only reached on an actual
+    // new import (the legacyLocalId idempotency check above returns early on
+    // a repeat, before any of this), so a replayed import cannot re-trigger it.
+    await completeMatchingSeededTask(
+      this.deps,
+      actor,
+      caseId,
+      input.documentType,
+      stored.document.complianceStatus,
+    );
 
     return stored;
   }

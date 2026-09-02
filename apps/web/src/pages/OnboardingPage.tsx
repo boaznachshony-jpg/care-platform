@@ -135,6 +135,13 @@ export function OnboardingPage() {
   const { clientId = '' } = useParams<{ clientId: string }>();
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
+  /**
+   * The local, per-client signal for "this account has never seen billing".
+   * It is wrong for a paying customer adding a second client — which is why
+   * the billing subscription is asked first below — but it is the only answer
+   * available offline, so it stays as the fallback.
+   */
+  const isFirstRun = !profile.onboardingCompleted;
   // In-progress answers are restored from the auto-saved draft so leaving a
   // step mid-typing never loses input (the committed profile is the fallback).
   // Everything is restored inside useState initializers — synchronously,
@@ -425,17 +432,21 @@ export function OnboardingPage() {
     //
     // This must not block onboarding from completing offline, so the request
     // is awaited only for the navigation decision - profile/case/consent are
-    // already committed above regardless of its outcome. On failure the
-    // answer is genuinely unknown, and between the two ways to be wrong -
-    // skipping the payment prompt for a genuine first-time signup, or sending
-    // an already-paying customer back to demand a payment method - the second
-    // is strictly worse, so an unknown answer defaults to "not first run".
-    let goToBilling = false;
+    // already committed above regardless of its outcome.
+    //
+    // When the request fails the answer is unknown, and falling through to
+    // "not first run" would silently drop the payment prompt for every genuine
+    // signup that happened to be offline at that moment - a customer who never
+    // sees the billing screen never pays. So an unknown answer falls back to
+    // the local signal this screen used before (`isFirstRun`, derived from the
+    // client's own setup record). It is the weaker of the two answers, which is
+    // why it is the fallback and not the primary.
+    let goToBilling = isFirstRun;
     try {
       const plan = await getBillingSubscription();
       goToBilling = plan.paymentMethod === null && plan.status === 'payment_method_pending';
     } catch {
-      goToBilling = false;
+      goToBilling = isFirstRun;
     }
     navigate(goToBilling ? '/billing?from=onboarding' : path('/'));
   }

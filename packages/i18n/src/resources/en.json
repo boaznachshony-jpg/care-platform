@@ -398,7 +398,8 @@
     "sync": {
       "localCopy": "Showing this device's local copy — could not reach the server.",
       "uploadFailed": "{{count}} documents failed to upload.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "uploading": "Uploading documents from this device to the server ({{completed}} of {{total}})…"
     },
     "legacyUploadFailed": "{{count}} existing documents from this device failed to upload."
   },
@@ -1070,6 +1071,9 @@
       },
       "imported": {
         "summary": "A task from this device was added to the case"
+      },
+      "auto_completed": {
+        "summary": "A currently valid document satisfied this task, so it was completed automatically"
       }
     },
     "document": {

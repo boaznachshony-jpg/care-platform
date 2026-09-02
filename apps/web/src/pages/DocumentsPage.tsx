@@ -14,6 +14,7 @@ import {
 } from '../storage/mvp-storage.js';
 import { useAuth } from '../auth/auth-context.js';
 import { importCaseDocument, listCaseDocuments } from '../api/client.js';
+import { LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
 import {
@@ -24,9 +25,8 @@ import {
 import {
   dateLabelToIsoDate,
   documentResponseToLocal,
-  isAllowedDocumentMediaType,
   localCategoryToDocumentType,
-  parseDataUrl,
+  resolveDocumentImportFile,
 } from '../sync/document-mapping.js';
 import {
   classifyExpiry,
@@ -99,8 +99,8 @@ export function DocumentsPage() {
   const [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const legacyClientId = useLegacyClientId();
-  const caseLookup = useCaseForLegacyClient(legacyClientId);
+  const legacyClientIdParam = useLegacyClientId();
+  const caseLookup = useCaseForLegacyClient(legacyClientIdParam);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ phase: 'checking' });
   const [syncAttempt, setSyncAttempt] = useState(0);
 
@@ -112,26 +112,32 @@ export function DocumentsPage() {
       return;
     }
     const caseId = caseLookup.caseId;
+    // clientIdFromPath()-style sentinel handling: DocumentsPage is mounted
+    // both scoped (`/clients/:clientId/documents`) and unscoped (`/documents`)
+    // — useLegacyClientId() returns LEGACY_UNSCOPED_CLIENT_ID on the latter,
+    // which is not a real client and must not be sent to the workspace-file
+    // lookup in resolveDocumentImportFile (it would 404 or, worse, collide).
+    const legacyClientId =
+      legacyClientIdParam === LEGACY_UNSCOPED_CLIENT_ID ? null : legacyClientIdParam;
     let active = true;
 
     async function run() {
-      // Only records with an inline `dataUrl` carry a file at all — see the
-      // long comment on parseDataUrl in sync/document-mapping.ts for why the
-      // separate device file cache (document-file-store.ts) is out of scope
-      // here. Every other local record uploads as metadata only, which the
-      // import endpoint explicitly supports (no version, same as a document
-      // nobody has attached a file to yet).
       const localNow = readMvpDocuments();
+      if (localNow.length === 0) {
+        setSyncStatus({ phase: 'checking' });
+      } else {
+        setSyncStatus({ phase: 'uploading', completed: 0, total: localNow.length });
+      }
       const outcome = await uploadUnsyncedRecords(
         'documents',
         caseId,
         localNow,
-        (localDocument) => {
-          const parsedFile = localDocument.dataUrl ? parseDataUrl(localDocument.dataUrl) : null;
-          const importFile =
-            parsedFile && isAllowedDocumentMediaType(parsedFile.mediaType)
-              ? { mediaType: parsedFile.mediaType, content: parsedFile.content }
-              : undefined;
+        async (localDocument) => {
+          // See document-mapping.ts's resolveDocumentImportFile for the full
+          // order of places a file may live; this never throws for "no file
+          // found" (normal), only for a genuine fetch failure on bytes known
+          // to exist, which is exactly what should make this record retryable.
+          const importFile = await resolveDocumentImportFile(localDocument, legacyClientId);
           return importCaseDocument(caseId, {
             legacyLocalId: localDocument.id,
             documentType: localCategoryToDocumentType(localDocument.category),
@@ -139,6 +145,9 @@ export function DocumentsPage() {
             file: importFile,
             expiresOn: dateLabelToIsoDate(localDocument.dateLabel) || undefined,
           });
+        },
+        (completed, total) => {
+          if (active) setSyncStatus({ phase: 'uploading', completed, total });
         },
       );
       if (!active) return;
@@ -188,7 +197,7 @@ export function DocumentsPage() {
     return () => {
       active = false;
     };
-  }, [caseLookup, syncAttempt]);
+  }, [caseLookup, legacyClientIdParam, syncAttempt]);
 
   function persist(next: MvpDocument[]) {
     saveMvpDocuments(next);
@@ -309,7 +318,14 @@ export function DocumentsPage() {
       ) : null}
 
       {/* Honest data-source labelling — see the matching comment in TasksPage.tsx §2. */}
-      {syncStatus.phase === 'offline' ? (
+      {syncStatus.phase === 'uploading' ? (
+        <p className="info-box" role="status">
+          {t('documents.sync.uploading', {
+            completed: syncStatus.completed,
+            total: syncStatus.total,
+          })}
+        </p>
+      ) : syncStatus.phase === 'offline' ? (
         <p className="info-box" role="status">
           {t('documents.sync.localCopy')}
         </p>

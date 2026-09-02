@@ -3,7 +3,12 @@
    and stored records already contain them), not UI copy — same rationale as
    the disable comment at the top of DocumentsPage.tsx itself. */
 import { DOCUMENT_TYPES, type DocumentType } from '@caredesk/domain';
-import { ALLOWED_DOCUMENT_MEDIA_TYPES, type DocumentResponse } from '@caredesk/schemas';
+import {
+  ALLOWED_DOCUMENT_MEDIA_TYPES,
+  MAX_DOCUMENT_BYTES,
+  type DocumentResponse,
+} from '@caredesk/schemas';
+import { readLocalDocumentFileForImport } from '../storage/document-file-store.js';
 import type { MvpDocument, MvpDocumentStatus } from '../storage/mvp-storage.js';
 
 /**
@@ -74,22 +79,79 @@ export function isAllowedDocumentMediaType(
 }
 
 /**
- * Known mapping problem #2, file bytes: newer local documents keep their
- * file in a separate device cache (document-file-store.ts — IndexedDB, or a
- * server-side "workspace file" once signed in) rather than inline on the
- * record. Reading that cache into the import call would mean an extra async
- * binary fetch (and, for the signed-in case, a round trip to a *different*
- * server endpoint) per document, which is a bigger and separately-testable
- * change than this cutover. `MvpDocument.dataUrl` — the inline field older
- * records may still carry — is the one this import uses; a record with no
- * `dataUrl` uploads as metadata only, exactly like a document nobody has
- * attached a file to yet, which is the explicitly-supported shape
+ * Known mapping problem #2, file bytes — now closed. `MvpDocument.dataUrl` is
+ * the inline field the oldest local records may still carry; newer local
+ * documents keep their file in a separate device cache instead
+ * (document-file-store.ts — IndexedDB, or a server-side "workspace file" once
+ * signed in on a `/clients/:clientId` route). `resolveDocumentImportFile`
+ * below tries both, in that order, so either shape reaches the server. A
+ * record with neither uploads as metadata only, exactly like a document
+ * nobody has attached a file to yet — the explicitly-supported shape
  * `importDocumentRequestSchema.file` being optional exists for.
  */
 export function parseDataUrl(dataUrl: string): { mediaType: string; content: string } | null {
   const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
   if (!match) return null;
   return { mediaType: match[1]!, content: match[2]! };
+}
+
+/**
+ * Base64 is ~4/3 the raw byte size; this mirrors `MAX_BASE64_LENGTH` in
+ * packages/schemas/src/case-documents.ts so an oversized attachment is
+ * rejected client-side, before a network round trip, rather than only by the
+ * server's Zod schema.
+ */
+const MAX_BASE64_CONTENT_LENGTH = Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4;
+
+/**
+ * The one place that decides what file bytes (if any) travel with a local
+ * document's metadata during the legacy-upload cutover. Tries, in order:
+ *
+ *  1. an inline `dataUrl` on the record (oldest local shape);
+ *  2. this browser's file caches — IndexedDB, or server-side workspace
+ *     storage when the browser is signed in and the legacy client is known
+ *     (see `readLocalDocumentFileForImport` in document-file-store.ts for why
+ *     both exist and which documents end up in which one).
+ *
+ * A media type outside `ALLOWED_DOCUMENT_MEDIA_TYPES` or a payload over the
+ * server's size cap degrades to "no file" (`undefined`) rather than blocking
+ * the metadata import — the same "not an error" treatment as a document that
+ * never had a file at all. A genuine fetch failure while retrieving bytes
+ * that ARE known to exist is not swallowed here: it propagates so the
+ * caller's `importOne` throws and the whole record (metadata included) is
+ * marked failed and retryable, rather than silently importing metadata-only
+ * when a real file was sitting right there and simply could not be reached
+ * this time.
+ */
+export async function resolveDocumentImportFile(
+  localDocument: Pick<MvpDocument, 'id' | 'dataUrl'>,
+  legacyClientId: string | null,
+): Promise<
+  { mediaType: (typeof ALLOWED_DOCUMENT_MEDIA_TYPES)[number]; content: string } | undefined
+> {
+  const inline = localDocument.dataUrl ? parseDataUrl(localDocument.dataUrl) : null;
+  if (
+    inline &&
+    isAllowedDocumentMediaType(inline.mediaType) &&
+    inline.content.length <= MAX_BASE64_CONTENT_LENGTH
+  ) {
+    // Rebuilt as a fresh literal, not returned as `inline` directly: the type
+    // guard above narrows the *access* `inline.mediaType`, not the static
+    // type of the `inline` object itself, so returning `inline` verbatim
+    // would still widen `mediaType` back to `string`.
+    return { mediaType: inline.mediaType, content: inline.content };
+  }
+
+  const cached = await readLocalDocumentFileForImport(localDocument.id, legacyClientId);
+  if (
+    cached &&
+    isAllowedDocumentMediaType(cached.mediaType) &&
+    cached.content.length <= MAX_BASE64_CONTENT_LENGTH
+  ) {
+    return { mediaType: cached.mediaType, content: cached.content };
+  }
+
+  return undefined;
 }
 
 /**

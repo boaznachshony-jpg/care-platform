@@ -87,6 +87,33 @@ export class InMemoryTaskRepository implements TaskRepository {
     return updated;
   }
 
+  /** Mirrors PgTaskRepository.completeTaskBySourceKey — see TaskRepository port for why. */
+  async completeTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+    completedAt: string,
+    _completedBy: string | null,
+  ): Promise<Task | null> {
+    const tasks = this.tasksByTenant.get(tenantId) ?? [];
+    const index = tasks.findIndex(
+      (task) =>
+        task.employmentCaseId === employmentCaseId &&
+        task.sourceKey === sourceKey &&
+        task.status !== 'completed',
+    );
+    if (index === -1) {
+      return null;
+    }
+    const existing = tasks[index];
+    if (!existing) {
+      return null;
+    }
+    const updated: Task = { ...existing, status: 'completed', completedAt };
+    tasks[index] = updated;
+    return updated;
+  }
+
   async updateTask(
     tenantId: string,
     taskId: string,

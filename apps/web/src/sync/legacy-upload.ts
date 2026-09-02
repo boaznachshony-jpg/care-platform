@@ -30,8 +30,37 @@ export type LegacyUploadKind = 'tasks' | 'documents' | 'medications';
  * this marker safe to treat as disposable rather than as its own thing that
  * would need the same durability guarantees as the data it tracks.
  */
+/**
+ * A one-time bump for `'documents'` only. This round adds file-bytes lookup
+ * (IndexedDB / server workspace storage — see document-file-store.ts and
+ * document-mapping.ts's `resolveDocumentImportFile`) on top of what an
+ * earlier round already covered (metadata + inline `dataUrl` only). A browser
+ * that already ran that earlier round has every document marked "uploaded"
+ * under the un-suffixed key, and would otherwise never call `importOne`
+ * again for them — so the file would never get a chance to attach, even
+ * though this code can now find it.
+ *
+ * Changing the storage key forces exactly one extra import attempt per
+ * previously-synced document, scoped to this kind alone (tasks and
+ * medications are untouched and keep their original key). That attempt is
+ * safe under the same idempotency the marker's own doc comment already
+ * relies on: the import endpoint is keyed on `legacyLocalId`, so it cannot
+ * create a duplicate — it can only, in the best case, attach a file that was
+ * missing before.
+ *
+ * NOTE: as of this change attaching a file to a document that already exists
+ * on the server *without* one is still a no-op server-side (see the PR
+ * description / final report: `ImportCaseDocument.execute` returns the
+ * existing row unchanged before ever looking at `input.file`). This epoch
+ * bump is what makes the retry happen; a companion server-side fix is what
+ * makes the retry actually attach the file. Once that ships, every browser
+ * that visits this screen again self-heals with no further client change.
+ */
+const DOCUMENTS_MARKER_EPOCH = 'v2';
+
 function markerStorageKey(kind: LegacyUploadKind, caseId: string): string {
-  return `caredesk.sync.uploaded.${kind}.${caseId}`;
+  const epoch = kind === 'documents' ? `.${DOCUMENTS_MARKER_EPOCH}` : '';
+  return `caredesk.sync.uploaded.${kind}${epoch}.${caseId}`;
 }
 
 type UploadMap = Record<string, string>;
@@ -98,12 +127,25 @@ export interface UploadOutcome {
  * showing this device's local copy, full stop); the second means the server
  * was reachable and some records made it but at least one did not (the
  * screen is showing a mix, and the failed ones are individually retryable).
+ *
+ * `'uploading'` exists because documents can now carry several-MB file
+ * bodies (base64-inflated to ~4/3 their size) over what may be a slow mobile
+ * link — a single record's `importOne` can take a meaningful number of
+ * seconds, and `uploadUnsyncedRecords` sends them one at a time (see its own
+ * comment for why). A multi-record batch can therefore run for minutes, and
+ * silently leaving the screen on `'checking'` throughout — indistinguishable
+ * from "nothing is happening" — is exactly the kind of silent freeze the
+ * task that added this phase called out as unacceptable. Reusing the
+ * existing banner (rather than a spinner or toast elsewhere) keeps the one
+ * "here is what this screen knows about syncing" mechanism instead of adding
+ * a second, competing one.
  */
 export type SyncStatus =
   | { phase: 'no-case' }
   | { phase: 'checking' }
   | { phase: 'offline' }
   | { phase: 'synced' }
+  | { phase: 'uploading'; completed: number; total: number }
   | { phase: 'upload-failed'; failedCount: number };
 
 /**
@@ -117,17 +159,34 @@ export type SyncStatus =
  * the import endpoint itself is idempotent on `legacyLocalId`, so even a
  * record this function tries twice (e.g. the marker above was lost) cannot
  * become a duplicate on the server.
+ *
+ * Records are sent one at a time, deliberately not `Promise.all`'d. Tasks
+ * and medications are small JSON bodies where this barely matters, but a
+ * document's `importOne` can carry several MB of base64 file content — with
+ * no cap, a batch of a dozen large documents queued concurrently could try
+ * to push tens of MB at once over a connection this product explicitly has
+ * to support on a phone in the field. One at a time bounds memory and
+ * bandwidth use to a single record regardless of batch size, at the cost of
+ * total wall-clock time, which is exactly why `onProgress` exists below —
+ * the caller can show "3 of 11" instead of a silent multi-minute wait.
+ *
+ * `onProgress`, when given, is called after every attempt (success or
+ * failure) with the number of records attempted so far and the batch total,
+ * so a caller can drive a `SyncStatus.uploading` banner. Optional and
+ * additive so existing callers (tasks, medications) are unaffected.
  */
 export async function uploadUnsyncedRecords<T extends { id: string }>(
   kind: LegacyUploadKind,
   caseId: string,
   records: T[],
   importOne: (record: T) => Promise<{ id: string }>,
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<UploadOutcome> {
   const uploaded = readUploadMap(kind, caseId);
   const pending = records.filter((record) => !(record.id in uploaded));
   const failedIds: string[] = [];
   let succeeded = 0;
+  let completed = 0;
   for (const record of pending) {
     try {
       const result = await importOne(record);
@@ -135,6 +194,9 @@ export async function uploadUnsyncedRecords<T extends { id: string }>(
       succeeded += 1;
     } catch {
       failedIds.push(record.id);
+    } finally {
+      completed += 1;
+      onProgress?.(completed, pending.length);
     }
   }
   return { attempted: pending.length, succeeded, failedIds };

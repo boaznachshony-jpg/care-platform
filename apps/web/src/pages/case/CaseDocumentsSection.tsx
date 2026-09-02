@@ -20,12 +20,15 @@ import {
 } from '../../api/client.js';
 import { LEGACY_UNSCOPED_CLIENT_ID } from '../../canonical-case.js';
 import { readMvpDocumentsForClient } from '../../storage/mvp-storage.js';
-import { uploadUnsyncedRecords, type UploadOutcome } from '../../sync/legacy-upload.js';
+import {
+  uploadUnsyncedRecords,
+  type SyncStatus,
+  type UploadOutcome,
+} from '../../sync/legacy-upload.js';
 import {
   dateLabelToIsoDate,
-  isAllowedDocumentMediaType,
   localCategoryToDocumentType,
-  parseDataUrl,
+  resolveDocumentImportFile,
 } from '../../sync/document-mapping.js';
 
 function complianceTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -89,14 +92,21 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
 
   // One-time upload of documents this browser already holds locally for the
   // legacy client this case is linked to — see the matching effect and its
-  // comment in CaseTasksSection.tsx. Only records with an inline `dataUrl`
-  // carry a file (see sync/document-mapping.ts); everything else uploads as
-  // metadata only, which the import endpoint supports explicitly.
+  // comment in CaseTasksSection.tsx. resolveDocumentImportFile (see
+  // sync/document-mapping.ts) finds the file bytes wherever this browser put
+  // them — inline `dataUrl`, IndexedDB, or server-side workspace storage —
+  // and falls back to metadata-only, which the import endpoint supports
+  // explicitly, when there genuinely is none.
   const [legacyUploadOutcome, setLegacyUploadOutcome] = useState<UploadOutcome | null>(null);
   const [legacyUploadAttempt, setLegacyUploadAttempt] = useState(0);
+  const [legacyUploadProgress, setLegacyUploadProgress] = useState<Extract<
+    SyncStatus,
+    { phase: 'uploading' }
+  > | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLegacyUploadProgress(null);
     getEmploymentCase(caseId)
       .then((employmentCase) => {
         if (cancelled) return;
@@ -106,21 +116,27 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
             : employmentCase.legacyClientId;
         const localDocuments = readMvpDocumentsForClient(legacyClientId);
         if (localDocuments.length === 0) return;
-        return uploadUnsyncedRecords('documents', caseId, localDocuments, (localDocument) => {
-          const parsedFile = localDocument.dataUrl ? parseDataUrl(localDocument.dataUrl) : null;
-          const importFile =
-            parsedFile && isAllowedDocumentMediaType(parsedFile.mediaType)
-              ? { mediaType: parsedFile.mediaType, content: parsedFile.content }
-              : undefined;
-          return importCaseDocument(caseId, {
-            legacyLocalId: localDocument.id,
-            documentType: localCategoryToDocumentType(localDocument.category),
-            sensitivity: 'identity_sensitive',
-            file: importFile,
-            expiresOn: dateLabelToIsoDate(localDocument.dateLabel) || undefined,
-          });
-        }).then((outcome) => {
+        setLegacyUploadProgress({ phase: 'uploading', completed: 0, total: localDocuments.length });
+        return uploadUnsyncedRecords(
+          'documents',
+          caseId,
+          localDocuments,
+          async (localDocument) => {
+            const importFile = await resolveDocumentImportFile(localDocument, legacyClientId);
+            return importCaseDocument(caseId, {
+              legacyLocalId: localDocument.id,
+              documentType: localCategoryToDocumentType(localDocument.category),
+              sensitivity: 'identity_sensitive',
+              file: importFile,
+              expiresOn: dateLabelToIsoDate(localDocument.dateLabel) || undefined,
+            });
+          },
+          (completed, total) => {
+            if (!cancelled) setLegacyUploadProgress({ phase: 'uploading', completed, total });
+          },
+        ).then((outcome) => {
           if (cancelled) return;
+          setLegacyUploadProgress(null);
           setLegacyUploadOutcome(outcome);
           if (outcome.succeeded > 0) {
             void listCaseDocuments(caseId).then((rows) => !cancelled && setDocuments(rows));
@@ -187,6 +203,15 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
     <section>
       <h2>{t('documents.heading')}</h2>
       {downloadFailed ? <Alert variant="error" title={t('documents.downloadFailed')} /> : null}
+      {legacyUploadProgress ? (
+        <Alert
+          variant="info"
+          title={t('documents.sync.uploading', {
+            completed: legacyUploadProgress.completed,
+            total: legacyUploadProgress.total,
+          })}
+        />
+      ) : null}
       {legacyUploadOutcome && legacyUploadOutcome.failedIds.length > 0 ? (
         <Alert
           variant="error"

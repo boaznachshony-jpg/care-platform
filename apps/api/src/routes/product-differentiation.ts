@@ -2,10 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import {
+  CASE_HEALTH_TASK_FACTORS,
   projectCaseHealth,
   validateAssistantResponse,
   type HealthFactor,
 } from '@caredesk/application';
+import type { DocumentType } from '@caredesk/domain';
 import { withTenant } from '@caredesk/db';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
@@ -193,7 +195,7 @@ export function registerProductDifferentiationRoutes(
       const documentFactor = (
         id: string,
         title: string,
-        type: string,
+        type: DocumentType,
         weight: number,
       ): HealthFactor => {
         const matches = documents.filter((document) => document.document.documentType === type);
@@ -216,10 +218,22 @@ export function registerProductDifferentiationRoutes(
         };
       };
       const openTasks = tasks.filter((task) => task.status !== 'completed');
+      // Bug fix while wiring task auto-completion to this same factor set: the
+      // third documentFactor() argument is compared against a real
+      // Document.documentType (packages/domain/src/status.ts DOCUMENT_TYPES),
+      // which has no 'medical_insurance' member — only 'insurance_policy'
+      // does. Passed literally, this factor could never go 'good' for any
+      // document a family could actually upload; it was silently dead.
+      // CASE_HEALTH_TASK_FACTORS (@caredesk/application) is now the single
+      // source for documentType per factor, shared with the task-seeding and
+      // task-auto-completion code this factor set must stay in lockstep with.
+      const medicalInsuranceDocumentType = CASE_HEALTH_TASK_FACTORS.find(
+        (factor) => factor.sourceKey === 'case_health:medical_insurance',
+      )!.documentType;
       const factors: HealthFactor[] = [
         documentFactor('passport', 'Passport', 'passport', 25),
         documentFactor('visa', 'Visa / authorization', 'visa', 25),
-        documentFactor('medical_insurance', 'Medical insurance', 'medical_insurance', 25),
+        documentFactor('medical_insurance', 'Medical insurance', medicalInsuranceDocumentType, 25),
         {
           id: 'governed_tasks',
           title: 'Open governed tasks',

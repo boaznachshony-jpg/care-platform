@@ -13,11 +13,15 @@ import { SequentialIdGenerator } from './id-generator.js';
 import { InMemoryAuditService } from './in-memory-audit-service.js';
 import { InMemoryDocumentRepository } from './in-memory-document-repository.js';
 import { InMemoryDocumentStorage } from './in-memory-document-storage.js';
+import { InMemoryTaskRepository } from './in-memory-task-repository.js';
 import { InMemoryTimelineService } from './in-memory-timeline-service.js';
 import { MembershipAuthorizationService } from './membership-authorization-service.js';
 
 const ROLE_PERMISSIONS = {
-  owner: ['document:create', 'document:read'],
+  owner: ['document:create', 'document:read', 'task:update', 'task:create'],
+  // Can upload documents, but has no task permission at all — proves the
+  // auto-completion is deny-by-default too, not a bypass of task authorization.
+  uploader_no_task_access: ['document:create', 'document:read'],
   family_member: ['document:read'],
   // A role with no document permission at all — proves deny-by-default.
   outsider: [],
@@ -26,6 +30,11 @@ const ROLE_PERMISSIONS = {
 const OWNER: Actor = { userId: 'user-1', tenantId: 'tenant-1', correlationId: 'corr-1' };
 const VIEWER: Actor = { userId: 'user-2', tenantId: 'tenant-1', correlationId: 'corr-2' };
 const OUTSIDER: Actor = { userId: 'user-3', tenantId: 'tenant-1', correlationId: 'corr-3' };
+const UPLOADER_NO_TASK_ACCESS: Actor = {
+  userId: 'user-4',
+  tenantId: 'tenant-1',
+  correlationId: 'corr-4',
+};
 const CASE_ID = 'case-1';
 const NOW = new Date('2026-03-01T09:00:00.000Z');
 
@@ -37,11 +46,18 @@ function buildHarness() {
   authorization.seedMembership({ ...OWNER, role: 'owner', status: 'active' });
   authorization.seedMembership({ ...VIEWER, role: 'family_member', status: 'active' });
   authorization.seedMembership({ ...OUTSIDER, role: 'outsider', status: 'active' });
+  authorization.seedMembership({
+    ...UPLOADER_NO_TASK_ACCESS,
+    role: 'uploader_no_task_access',
+    status: 'active',
+  });
 
   const documents = new InMemoryDocumentRepository();
   const storage = new InMemoryDocumentStorage();
   const audit = new InMemoryAuditService();
   const timeline = new InMemoryTimelineService();
+  const tasks = new InMemoryTaskRepository();
+  const ids = new SequentialIdGenerator();
   const deps = {
     authorization,
     documents,
@@ -49,13 +65,16 @@ function buildHarness() {
     audit,
     timeline,
     clock: new FixedClock(NOW),
-    ids: new SequentialIdGenerator(),
+    ids,
+    tasks,
   };
 
   return {
     audit,
     timeline,
     storage,
+    tasks,
+    ids,
     upload: new UploadCaseDocument(deps),
     import: new ImportCaseDocument(deps),
     list: new ListCaseDocuments(deps),
@@ -231,5 +250,113 @@ describe('importing a browser-only document (UI cutover)', () => {
         legacyLocalId: 'local-doc-4',
       }),
     ).rejects.toThrow(AuthorizationError);
+  });
+});
+
+/**
+ * The gap this change closes: a seeded compliance task (OpenEmploymentCase)
+ * must close itself once the document it was asking for is actually on file
+ * and currently valid — not merely uploaded.
+ */
+describe('a document landing valid auto-completes the matching seeded task', () => {
+  async function seedPassportTask(h: ReturnType<typeof buildHarness>) {
+    return h.tasks.createTask({
+      id: h.ids.next(),
+      tenantId: OWNER.tenantId,
+      employmentCaseId: CASE_ID,
+      titleKey: 'tasks.seeded.passport',
+      description: null,
+      priority: 'high',
+      dueAt: null,
+      createdBy: OWNER.userId,
+      sourceKey: 'case_health:passport',
+      sourceType: 'rule',
+    });
+  }
+
+  it('completes the seeded task when a valid document of the matching type is uploaded', async () => {
+    const h = buildHarness();
+    const seeded = await seedPassportTask(h);
+
+    await h.upload.execute(OWNER, CASE_ID, { ...UPLOAD, documentType: 'passport' });
+
+    const task = await h.tasks.findTask(OWNER.tenantId, seeded.id);
+    expect(task?.status).toBe('completed');
+
+    // Attributed to the system, not the uploading human — nobody clicked
+    // "complete task"; an upload made the underlying fact true.
+    const completion = h.audit.events.find((e) => e.action === 'task.auto_completed');
+    expect(completion?.actorId).toBeNull();
+    expect(completion?.resourceId).toBe(seeded.id);
+    expect(h.timeline.events.map((e) => e.eventTypeKey)).toContain('timeline.task.auto_completed');
+  });
+
+  it('leaves the seeded task open when the uploaded document is already expired', async () => {
+    const h = buildHarness();
+    const seeded = await seedPassportTask(h);
+
+    // 2026-01-01 is well before NOW (2026-03-01) — derives to 'expired', not 'valid'.
+    await h.upload.execute(OWNER, CASE_ID, {
+      ...UPLOAD,
+      documentType: 'passport',
+      expiresOn: '2026-01-01',
+    });
+
+    const task = await h.tasks.findTask(OWNER.tenantId, seeded.id);
+    expect(task?.status).toBe('open');
+    expect(h.audit.events.map((e) => e.action)).not.toContain('task.auto_completed');
+  });
+
+  it('does nothing when no seeded task exists for the document type (case predates seeding, or already closed)', async () => {
+    const h = buildHarness();
+    await h.upload.execute(OWNER, CASE_ID, { ...UPLOAD, documentType: 'passport' });
+    // No task was ever seeded — completeTaskBySourceKey has nothing to find.
+    expect(h.audit.events.map((e) => e.action)).not.toContain('task.auto_completed');
+  });
+
+  it('never completes twice — a second valid upload of the same type is a no-op on the task', async () => {
+    const h = buildHarness();
+    const seeded = await seedPassportTask(h);
+
+    await h.upload.execute(OWNER, CASE_ID, { ...UPLOAD, documentType: 'passport' });
+    await h.upload.execute(OWNER, CASE_ID, { ...UPLOAD, documentType: 'passport' });
+
+    expect(h.audit.events.filter((e) => e.action === 'task.auto_completed')).toHaveLength(1);
+    const task = await h.tasks.findTask(OWNER.tenantId, seeded.id);
+    expect(task?.status).toBe('completed');
+  });
+
+  it('completes the seeded task on an import that carries a scan and derives valid', async () => {
+    const h = buildHarness();
+    const seeded = await seedPassportTask(h);
+
+    await h.import.execute(OWNER, CASE_ID, {
+      documentType: 'passport',
+      sensitivity: 'identity_sensitive',
+      file: { mediaType: 'application/pdf', content: CONTENT },
+      legacyLocalId: 'local-doc-5',
+    });
+
+    const task = await h.tasks.findTask(OWNER.tenantId, seeded.id);
+    expect(task?.status).toBe('completed');
+  });
+
+  it('leaves the task open — and the upload still succeeds — for an actor with no task permission', async () => {
+    const h = buildHarness();
+    const seeded = await seedPassportTask(h);
+
+    // UPLOADER_NO_TASK_ACCESS can create documents but holds no task:* grant
+    // at all: deny-by-default applies to the automatic completion exactly as
+    // it would to a manual one, and the failed side effect must not fail the
+    // (already authorized, already successful) upload itself.
+    const { document } = await h.upload.execute(UPLOADER_NO_TASK_ACCESS, CASE_ID, {
+      ...UPLOAD,
+      documentType: 'passport',
+    });
+
+    expect(document.complianceStatus).toBe('valid');
+    const task = await h.tasks.findTask(OWNER.tenantId, seeded.id);
+    expect(task?.status).toBe('open');
+    expect(h.audit.events.map((e) => e.action)).not.toContain('task.auto_completed');
   });
 });

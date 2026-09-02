@@ -27,6 +27,7 @@ export * from './ports/billing-repository.js';
 export * from './ports/product-billing-gateway.js';
 export * from './use-cases/actor.js';
 export * from './use-cases/authorize.js';
+export * from './use-cases/case-health-factors.js';
 export * from './use-cases/open-employment-case.js';
 export * from './use-cases/get-employment-case.js';
 export * from './use-cases/manage-case-contacts.js';

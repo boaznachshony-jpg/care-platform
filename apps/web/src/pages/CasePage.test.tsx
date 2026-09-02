@@ -46,6 +46,11 @@ vi.mock('../storage/mvp-storage.js', () => ({
   saveMvpPayroll: () => undefined,
   readMvpEmploymentExpenses: () => [],
   saveMvpEmploymentExpenses: () => undefined,
+  // The payroll panel prefills a new month's base salary and rest-day rate
+  // from the setup profile. This page renders that panel, so the mock has to
+  // answer — an absent export throws at render and takes the whole CasePage
+  // suite down with it, which is exactly what it did.
+  readMvpProfile: () => ({ baseSalary: null, saturdayRate: null }),
 }));
 
 vi.mock('@caredesk/application', () => ({

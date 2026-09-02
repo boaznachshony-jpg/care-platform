@@ -88,10 +88,13 @@ describe('getWorkerPreferences', () => {
     await expect(getWorkerPreferences()).resolves.toEqual(
       expect.objectContaining({ whatsapp_consent: 'revoked', sms_consent: 'unknown' }),
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/worker/preferences'),
-      expect.objectContaining({ method: undefined }),
-    );
+    // Reading preferences must never be a write. `objectContaining({ method:
+    // undefined })` cannot express that — the matcher requires the key to be
+    // present, and `apiRequest` omits it entirely for a GET — so assert on the
+    // recorded call instead.
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit | undefined];
+    expect(call[0]).toContain('/worker/preferences');
+    expect(call[1]?.method).toBeUndefined();
   });
 });
 

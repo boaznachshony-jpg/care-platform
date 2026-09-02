@@ -123,6 +123,55 @@ describe('legacy-upload', () => {
     expect(outcome).toEqual({ attempted: 0, succeeded: 0, failedIds: [] });
   });
 
+  it('reports progress after every attempt, success or failure, so a caller can show "N of M"', async () => {
+    const importOne = vi
+      .fn()
+      .mockImplementation((record: { id: string }) =>
+        record.id === 'local-bad'
+          ? Promise.reject(new Error('network error'))
+          : Promise.resolve({ id: `server-${record.id}` }),
+      );
+    const progress: Array<{ completed: number; total: number }> = [];
+
+    await uploadUnsyncedRecords(
+      'documents',
+      CASE_ID,
+      [{ id: 'local-1' }, { id: 'local-bad' }, { id: 'local-2' }],
+      importOne,
+      (completed, total) => progress.push({ completed, total }),
+    );
+
+    expect(progress).toEqual([
+      { completed: 1, total: 3 },
+      { completed: 2, total: 3 },
+      { completed: 3, total: 3 },
+    ]);
+  });
+
+  it('documents track their "uploaded" marker separately from other kinds under a bumped storage key, so a browser that already ran the metadata-only cutover retries once and picks up files', async () => {
+    const importOne = vi.fn().mockResolvedValue({ id: 'server-1' });
+
+    // Simulate an earlier round's marker, written under the un-suffixed key
+    // a pre-file-upload browser would have used.
+    localStorage.setItem(
+      `caredesk.sync.uploaded.documents.${CASE_ID}`,
+      JSON.stringify({ 'local-1': 'server-1' }),
+    );
+
+    const outcome = await uploadUnsyncedRecords(
+      'documents',
+      CASE_ID,
+      [{ id: 'local-1' }],
+      importOne,
+    );
+
+    // The new (versioned) marker knows nothing about 'local-1' yet, so this
+    // browser retries it exactly once — safe because import is idempotent on
+    // legacyLocalId (see manage-case-documents.ts).
+    expect(importOne).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ attempted: 1, succeeded: 1, failedIds: [] });
+  });
+
   it('losing the marker only causes a harmless re-upload, never data loss (documented safety property)', async () => {
     const importOne = vi.fn().mockResolvedValue({ id: 'server-1' });
     await uploadUnsyncedRecords('tasks', CASE_ID, [{ id: 'local-1' }], importOne);
