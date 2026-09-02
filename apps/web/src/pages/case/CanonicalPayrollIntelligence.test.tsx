@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanonicalPayrollIntelligence } from './CanonicalPayrollIntelligence.js';
 import type { MvpProfile } from '../../storage/mvp-storage.js';
@@ -598,7 +598,11 @@ describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', 
     await waitFor(() => screen.getByLabelText(/שכר בסיס/));
 
     const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
-    expect(within(baseSalaryLabel).getByText('הוזן')).toBeInTheDocument();
+    // Asserted on the badge's own data attribute, not its Hebrew wording:
+    // this suite renders the panel without an i18n provider, so ValueOrigin's
+    // label comes back as the raw key. The attribute is what the component
+    // actually promises, and it does not move when the copy changes.
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).not.toBeNull();
   });
 
   it('a saved server entry always wins: no prefill when the month already has one', async () => {
@@ -611,7 +615,7 @@ describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', 
     expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(0);
     expect(screen.getByLabelText(/תעריף יום מנוחה/)).toHaveValue(0);
     const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
-    expect(within(baseSalaryLabel).queryByText('הוזן')).not.toBeInTheDocument();
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).toBeNull();
   });
 
   it('clears the prefilled badge the moment the customer edits the field', async () => {
@@ -623,7 +627,7 @@ describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', 
     fireEvent.change(screen.getByLabelText(/שכר בסיס/), { target: { value: '6500' } });
 
     const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
-    expect(within(baseSalaryLabel).queryByText('הוזן')).not.toBeInTheDocument();
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).toBeNull();
   });
 
   it('does not prefill when the profile has no stored salary', async () => {
@@ -634,7 +638,7 @@ describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', 
 
     expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(0);
     const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
-    expect(within(baseSalaryLabel).queryByText('הוזן')).not.toBeInTheDocument();
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).toBeNull();
   });
 });
 
