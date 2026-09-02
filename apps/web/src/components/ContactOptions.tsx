@@ -18,6 +18,24 @@ export function ContactOptions() {
   const [message, setMessage] = useState('');
   const [website, setWebsite] = useState('');
   const [submission, setSubmission] = useState<SubmissionState>('idle');
+  /**
+   * The reply address is not printed on screen for a signed-in user.
+   *
+   * It used to be rendered, in full, in a wide input at the top of a modal —
+   * so a support request could not be photographed, screen-shared or
+   * shoulder-read without also handing over the account's email address. The
+   * address is already known to the application and needs no confirmation from
+   * the person typing; showing it bought nothing and leaked something.
+   *
+   * It stays available: `revealed` prints it on request, and `useOther` swaps
+   * in an editable field for someone sending from a shared device or wanting
+   * the reply elsewhere. What changed is only the default.
+   */
+  const [revealed, setRevealed] = useState(false);
+  const [useOther, setUseOther] = useState(false);
+  const accountEmail = user?.email ?? '';
+  const hasAccountEmail = accountEmail.length > 0;
+  const showEmailField = useOther || !hasAccountEmail;
   const dialogRef = useRef<HTMLElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
@@ -71,6 +89,10 @@ export function ContactOptions() {
     setMessage('');
     setWebsite('');
     setSubmission('idle');
+    // Reopening the dialog hides the address again. A reveal is a decision
+    // about one moment, not a preference that should outlive it.
+    setRevealed(false);
+    setUseOther(false);
     window.setTimeout(() => (user?.email ? messageRef.current : emailRef.current)?.focus(), 0);
   }
 
@@ -170,20 +192,71 @@ export function ContactOptions() {
               <form className="contact-request-form" onSubmit={handleSubmit}>
                 <p id="contact-dialog-description">{t('contact.formIntro')}</p>
 
-                <label htmlFor={`contact-email-${kind}`}>{t('contact.replyEmail')}</label>
-                <input
-                  ref={emailRef}
-                  id={`contact-email-${kind}`}
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={replyEmail}
-                  onChange={(event) => setReplyEmail(event.target.value)}
-                  required
-                  maxLength={254}
-                  disabled={submission === 'submitting'}
-                />
-                <small>{t('contact.replyEmailHint')}</small>
+                {showEmailField ? (
+                  <>
+                    <label htmlFor={`contact-email-${kind}`}>{t('contact.replyEmail')}</label>
+                    <input
+                      ref={emailRef}
+                      id={`contact-email-${kind}`}
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={replyEmail}
+                      onChange={(event) => setReplyEmail(event.target.value)}
+                      required
+                      maxLength={254}
+                      disabled={submission === 'submitting'}
+                    />
+                    <small>{t('contact.replyEmailHint')}</small>
+                    {hasAccountEmail ? (
+                      <button
+                        className="contact-inline-link"
+                        type="button"
+                        disabled={submission === 'submitting'}
+                        onClick={() => {
+                          setUseOther(false);
+                          setRevealed(false);
+                          setReplyEmail(accountEmail);
+                        }}
+                      >
+                        {t('contact.useAccountEmail')}
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="contact-reply-target">
+                    <p className="contact-reply-target-line">
+                      {t('contact.replyToAccountEmail')}{' '}
+                      {revealed ? <strong dir="ltr">{accountEmail}</strong> : null}
+                    </p>
+                    <div className="contact-reply-target-actions">
+                      <button
+                        className="contact-inline-link"
+                        type="button"
+                        // aria-pressed rather than two labels: a screen-reader
+                        // user is told the state, not asked to infer it.
+                        aria-pressed={revealed}
+                        disabled={submission === 'submitting'}
+                        onClick={() => setRevealed((current) => !current)}
+                      >
+                        {revealed ? t('contact.hideEmail') : t('contact.showEmail')}
+                      </button>
+                      <button
+                        className="contact-inline-link"
+                        type="button"
+                        disabled={submission === 'submitting'}
+                        onClick={() => {
+                          setUseOther(true);
+                          setRevealed(false);
+                          setReplyEmail('');
+                          window.setTimeout(() => emailRef.current?.focus(), 0);
+                        }}
+                      >
+                        {t('contact.useOtherEmail')}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <label htmlFor={`contact-message-${kind}`}>{t('contact.messageLabel')}</label>
                 <textarea

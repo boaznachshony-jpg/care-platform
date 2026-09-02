@@ -198,113 +198,159 @@ export function EmergencyBinderPage() {
         </div>
       </header>
       <section className="card binder-controls no-print" aria-labelledby="binder-review-title">
-        <h2 id="binder-review-title">מה לכלול בתיק?</h2>
-        <label>
-          תיק העסקה
-          <select value={caseId} onChange={(event) => setCaseId(event.target.value)}>
-            <option value="">בחרו תיק</option>
-            {cases.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.careRecipient.fullName} —{' '}
-                {row.caregiver.preferredName ?? row.caregiver.legalName}
-              </option>
-            ))}
-          </select>
-        </label>
-        {caseId ? (
-          // The canonical case screen used to be reachable only by pasting a
-          // UUID into the address bar (WEB-11). This is the link.
-          <p>
-            <Link to={`/cases/${encodeURIComponent(caseId)}`}>מעבר לתיק ההעסקה המלא</Link>
-          </p>
-        ) : null}
-        {state === 'loading' || state === 'loading-case' ? <p role="status">טוען מידע…</p> : null}
+        {/*
+          A form whose every control is inert is a broken screen, not a patient
+          one. Until this change the picker, the preset select, seven checkboxes
+          and the export button were all rendered whether or not there was
+          anything to export - the checkboxes even rendered pre-ticked inside a
+          `disabled` fieldset, which reads as "chosen" and behaves as "cannot be
+          chosen". The owner's report was exact: nothing on the screen could be
+          operated, and nothing on the screen said why.
+
+          So the card now renders one of three things and never a mixture:
+
+            1. no case exists    -> what a binder is, and one primary action
+            2. a case exists,
+               none chosen yet   -> the picker, plus a sentence saying what
+                                    choosing will reveal
+            3. a case is loaded  -> the full form, every control live
+
+          Nothing is greyed out to stand in for an explanation.
+        */}
+        {state === 'loading' ? <p role="status">טוען מידע…</p> : null}
         {state === 'error' ? <p role="alert">לא ניתן לטעון את התיק. נסו שוב.</p> : null}
-        {state === 'select' && cases.length === 0 ? (
-          // Was a bare "לא נמצא תיק העסקה פעיל." shown to every real user,
-          // because nothing in the product created a case (WEB-11). Now that
-          // case creation is reachable, the empty state says what to do about
-          // it instead of being a dead end on a headline feature.
-          <p>
-            לא נמצא תיק העסקה פעיל. <Link to={openCasePath}>פתיחת תיק העסקה</Link>
-          </p>
-        ) : null}
-        <label>
-          סוג תיק
-          <select
-            onChange={(event) =>
-              setSelected([...presets[event.target.value as keyof typeof presets]])
-            }
-            defaultValue="full"
-          >
-            <option value="full">תיק העסקה מלא</option>
-            <option value="review">חבילת בדיקה מקצועית</option>
-            <option value="handoff">העברה משפחתית בחירום</option>
-            <option value="documents">מסמכים בלבד</option>
-          </select>
-        </label>
-        <fieldset disabled={!data}>
-          <legend>סעיפים</legend>
-          {(Object.keys(labels) as Section[]).map((section) => (
-            <label key={section}>
-              <input
-                type="checkbox"
-                checked={selected.includes(section)}
-                onChange={() => toggle(section)}
-              />{' '}
-              {labels[section]}{' '}
-              {section === 'payroll' ? (
-                <strong className="sensitive-label">מידע רגיש</strong>
-              ) : null}
+        {state !== 'loading' && state !== 'error' && cases.length === 0 ? (
+          // Was a bare "לא נמצא תיק העסקה פעיל." under a dead form (WEB-11).
+          // The sentence about existing details matters: a customer who has
+          // finished setup has already typed all of this, and needs to be told
+          // the binder will be built from it rather than re-entered.
+          <div className="binder-empty">
+            <h2 id="binder-review-title">עדיין אין תיק העסקה</h2>
+            <p>
+              תיק החירום נבנה מתוך תיק העסקה פעיל. לאחר פתיחת התיק, המסך הזה יתמלא מעצמו מהפרטים
+              שכבר הזנתם — אין צורך להקליד אותם שוב.
+            </p>
+            <Link className="primary-button" to={openCasePath}>
+              פתיחת תיק העסקה
+            </Link>
+          </div>
+        ) : state !== 'loading' && state !== 'error' ? (
+          <>
+            <h2 id="binder-review-title">מה לכלול בתיק?</h2>
+            <label>
+              תיק העסקה
+              <select value={caseId} onChange={(event) => setCaseId(event.target.value)}>
+                <option value="">בחרו תיק</option>
+                {cases.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.careRecipient.fullName} —{' '}
+                    {row.caregiver.preferredName ?? row.caregiver.legalName}
+                  </option>
+                ))}
+              </select>
             </label>
-          ))}
-        </fieldset>
-        {data && selected.includes('documents') ? (
-          <fieldset>
-            <legend>מסמכים — לא נבחרים אוטומטית</legend>
-            {data.documents.length ? (
-              data.documents.map((document) => (
-                <label key={document.id}>
-                  <input
-                    type="checkbox"
-                    checked={documentIds.includes(document.id)}
-                    onChange={() =>
-                      setDocumentIds((current) =>
-                        current.includes(document.id)
-                          ? current.filter((id) => id !== document.id)
-                          : [...current, document.id],
-                      )
+            {caseId ? (
+              // The canonical case screen used to be reachable only by pasting
+              // a UUID into the address bar (WEB-11). This is the link.
+              <p>
+                <Link to={`/cases/${encodeURIComponent(caseId)}`}>מעבר לתיק ההעסקה המלא</Link>
+              </p>
+            ) : null}
+            {state === 'loading-case' ? <p role="status">טוען מידע…</p> : null}
+            {data ? (
+              <>
+                <label>
+                  סוג תיק
+                  <select
+                    onChange={(event) =>
+                      setSelected([...presets[event.target.value as keyof typeof presets]])
                     }
-                  />{' '}
-                  {document.documentType} ({document.verificationStatus ?? document.status})
+                    defaultValue="full"
+                  >
+                    <option value="full">תיק העסקה מלא</option>
+                    <option value="review">חבילת בדיקה מקצועית</option>
+                    <option value="handoff">העברה משפחתית בחירום</option>
+                    <option value="documents">מסמכים בלבד</option>
+                  </select>
                 </label>
-              ))
-            ) : (
-              <p>לא נשמרו מסמכים.</p>
+                <fieldset>
+                  <legend>סעיפים</legend>
+                  {(Object.keys(labels) as Section[]).map((section) => (
+                    <label key={section}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(section)}
+                        onChange={() => toggle(section)}
+                      />{' '}
+                      {labels[section]}{' '}
+                      {section === 'payroll' ? (
+                        <strong className="sensitive-label">מידע רגיש</strong>
+                      ) : null}
+                    </label>
+                  ))}
+                </fieldset>
+                {selected.includes('documents') ? (
+                  <fieldset>
+                    <legend>מסמכים — לא נבחרים אוטומטית</legend>
+                    {data.documents.length ? (
+                      data.documents.map((document) => (
+                        <label key={document.id}>
+                          <input
+                            type="checkbox"
+                            checked={documentIds.includes(document.id)}
+                            onChange={() =>
+                              setDocumentIds((current) =>
+                                current.includes(document.id)
+                                  ? current.filter((id) => id !== document.id)
+                                  : [...current, document.id],
+                              )
+                            }
+                          />{' '}
+                          {document.documentType} ({document.verificationStatus ?? document.status})
+                        </label>
+                      ))
+                    ) : (
+                      <p>לא נשמרו מסמכים.</p>
+                    )}
+                  </fieldset>
+                ) : null}
+                <button
+                  className="primary-button"
+                  type="button"
+                  // The only remaining disabled state is one the user caused
+                  // and can undo: every section un-ticked, or a save in
+                  // flight. The hint below names it.
+                  disabled={!selected.length || exportState === 'recording'}
+                  onClick={() => void exportBinder()}
+                >
+                  יצירת PDF / הדפסה
+                </button>
+                {!selected.length ? (
+                  <p className="binder-hint">בחרו לפחות סעיף אחד כדי לייצא.</p>
+                ) : null}
+                {exportState === 'recording' ? (
+                  <p role="status">{t('binder.recordingExport')}</p>
+                ) : null}
+                {exportState === 'recorded' && receipt ? (
+                  <p role="status">
+                    {t('binder.receiptLabel')}: <code>{receipt.id}</code> ·{' '}
+                    {t('binder.receiptHash')}: <code>{receipt.contentHash}</code>
+                  </p>
+                ) : null}
+                {exportState === 'unrecorded' ? (
+                  <p role="alert">{t('binder.unrecordedLocalPrint')}</p>
+                ) : null}
+                <p>
+                  <small>
+                    קובץ ההדפסה נוצר במכשיר ואינו קישור ציבורי. בדקו הרשאות שיתוף לפני העברה.
+                  </small>
+                </p>
+              </>
+            ) : state === 'loading-case' ? null : (
+              <p className="binder-hint">בחרו תיק העסקה כדי לראות מה אפשר לכלול בייצוא.</p>
             )}
-          </fieldset>
+          </>
         ) : null}
-        <button
-          className="primary-button"
-          type="button"
-          disabled={!data || !selected.length || exportState === 'recording'}
-          onClick={() => void exportBinder()}
-        >
-          יצירת PDF / הדפסה
-        </button>
-        {exportState === 'recording' ? <p role="status">{t('binder.recordingExport')}</p> : null}
-        {exportState === 'recorded' && receipt ? (
-          <p role="status">
-            {t('binder.receiptLabel')}: <code>{receipt.id}</code> · {t('binder.receiptHash')}:{' '}
-            <code>{receipt.contentHash}</code>
-          </p>
-        ) : null}
-        {exportState === 'unrecorded' ? (
-          <p role="alert">{t('binder.unrecordedLocalPrint')}</p>
-        ) : null}
-        <p>
-          <small>קובץ ההדפסה נוצר במכשיר ואינו קישור ציבורי. בדקו הרשאות שיתוף לפני העברה.</small>
-        </p>
       </section>
       {data ? (
         <article className="card binder-document" dir="rtl">

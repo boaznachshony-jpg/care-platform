@@ -170,17 +170,72 @@ describe('EmergencyBinderPage', () => {
     expect(link).toHaveAttribute('href', '/clients/client-a/cases/new');
   });
 
+  // --- The screen never shows a control it will not honour ---------------
+  //
+  // Reported by the owner against production: every control on the card was
+  // visible and none could be operated, including checkboxes that rendered
+  // ticked inside a disabled fieldset. These three tests pin the rule that
+  // replaced it - each state renders its own controls and no others.
+
+  it('shows no form at all when there is no case to export', async () => {
+    vi.mocked(listEmploymentCases).mockResolvedValue([]);
+
+    renderPage('/clients/client-a/binder');
+    await screen.findByRole('link', { name: /פתיחת תיק העסקה/ });
+
+    // No picker, no preset select, no section checkboxes, no export button.
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /יצירת PDF/ })).not.toBeInTheDocument();
+    // And it explains what the screen is for rather than only what is absent.
+    expect(screen.getByText(/תיק החירום נבנה מתוך תיק העסקה פעיל/)).toBeInTheDocument();
+  });
+
+  it('shows only the picker, plus a reason, before a case is chosen', async () => {
+    renderPage();
+    await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
+
+    // One combobox - the case picker. The preset select arrives with the data.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    // The export button is absent rather than present-and-grey.
+    expect(screen.queryByRole('button', { name: /יצירת PDF/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/בחרו תיק העסקה כדי לראות/)).toBeInTheDocument();
+  });
+
+  it('enables every control once a case is loaded', async () => {
+    renderPage();
+    await selectDemoCase();
+
+    expect(screen.getByRole('button', { name: /יצירת PDF/ })).toBeEnabled();
+    for (const box of screen.getAllByRole('checkbox')) expect(box).toBeEnabled();
+  });
+
+  it('explains the one disabled state the user can undo', async () => {
+    renderPage();
+    await selectDemoCase();
+
+    for (const section of [
+      'סיכום המטופל',
+      'סיכום המטפל',
+      'תרופות',
+      'מסמכים שנבחרו',
+      'היסטוריית תשלומים',
+      'משימות פעילות',
+      'אנשי קשר',
+    ]) {
+      fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(section) }));
+    }
+
+    expect(screen.getByRole('button', { name: /יצירת PDF/ })).toBeDisabled();
+    expect(screen.getByText(/בחרו לפחות סעיף אחד/)).toBeInTheDocument();
+  });
+
   it('loads and displays employment cases for selection', async () => {
     renderPage();
     await waitFor(() =>
       expect(screen.getByRole('option', { name: /רות כהן/ })).toBeInTheDocument(),
     );
-  });
-
-  it('print button is disabled until a case is selected', async () => {
-    renderPage();
-    await waitFor(() => screen.getByRole('option', { name: /רות כהן/ }));
-    expect(screen.getByRole('button', { name: /יצירת PDF/ })).toBeDisabled();
   });
 
   it('loads case data and shows payroll after selecting a case', async () => {
