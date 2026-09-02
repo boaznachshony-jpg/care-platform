@@ -68,10 +68,13 @@ describe('case assistant response carries translation identifiers', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.factsUsed.length).toBeGreaterThan(0);
+    // A case is now born 'active', not 'draft' (see open-employment-case.ts —
+    // "saving IS the file"), so a freshly opened case's status fact reflects
+    // that from creation.
     expect(body.factsUsed[0]).toMatchObject({
       factPath: 'caseSummary.status',
       labelId: 'assistant.fact.caseStatus',
-      labelParams: { status: 'draft' },
+      labelParams: { status: 'active' },
     });
     for (const fact of body.factsUsed) {
       expect(typeof fact.labelId).toBe('string');

@@ -45,7 +45,9 @@ describe('/cases routes', () => {
     });
     expect(created.statusCode).toBe(201);
     const createdBody = created.json();
-    expect(createdBody.status).toBe('draft');
+    // Product decision (2026-09-02): a case is born 'active', not 'draft' —
+    // saving the case is what makes it exist. See open-employment-case.ts.
+    expect(createdBody.status).toBe('active');
     expect(createdBody.careRecipient.fullName).toBe('Synthetic Care Recipient');
 
     const fetched = await app.inject({
@@ -164,7 +166,11 @@ describe('/cases routes', () => {
       method: 'PATCH',
       url: '/cases/does-not-exist/caregiver',
       headers: AUTH,
-      payload: { legalName: 'x' },
+      // A valid body on purpose. The route validates the payload before it
+      // looks the case up, so a one-character name returned 400 and the test
+      // passed for the wrong reason — it never reached the lookup it exists to
+      // check. Schema rejection has its own test.
+      payload: { legalName: 'Ana Reyes' },
     });
     expect(response.statusCode).toBe(404);
   });
