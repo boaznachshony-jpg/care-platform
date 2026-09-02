@@ -50,11 +50,26 @@ const blank = (): SavePayrollEntryRequest => ({
   total: 0,
   status: 'draft',
 });
-const numericFields = [
+/**
+ * Rest days are asked as their own pair, not as two cells in a sixteen-cell
+ * grid.
+ *
+ * Reported against production: `restDayRate` held 440 and `paidRestDays` held
+ * 0, and the four Saturdays worked were typed as a free-text additional payment
+ * of ₪440 — where 4 × 440 = ₪1,760 was owed. The month was short by ₪1,320.
+ *
+ * The formula was never wrong (`calculateMonthlyPayrollAgorot` multiplies the
+ * two). The form was: the count sat in one row, the rate in another, nothing on
+ * screen showed their product, and "תשלומים נוספים" sat below with an inviting
+ * empty box and a total that moved when you typed in it. A screen that makes
+ * the right field harder to find than the wrong one produces wrong pay.
+ */
+const leadingFields = [
   ['baseSalary', 'שכר בסיס'],
   ['workDays', 'ימי עבודה'],
-  ['paidRestDays', 'ימי מנוחה בתשלום'],
-  ['restDayRate', 'תעריף יום מנוחה'],
+] as const;
+
+const numericFields = [
   ['paidHolidays', 'ימי חג'],
   ['holidayPay', 'דמי חג'],
   ['vacationDays', 'ימי חופשה'],
@@ -145,6 +160,24 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       return null;
     }
   }, [draft]);
+  /**
+   * Shown beside the two rest-day fields. Deliberately the plain product and
+   * not a second call into the domain: it must read as "these two numbers,
+   * multiplied", which is the fact the user needs, and the authoritative total
+   * below is still the one the server recomputes and reconciles.
+   */
+  const restDayPay = draft.paidRestDays * draft.restDayRate;
+  /**
+   * The mistake this screen actually produced, caught rather than prevented.
+   *
+   * Blocking the save would be wrong — an additional payment may legitimately
+   * mention a Saturday (a bonus for one, a reimbursement). So this warns, names
+   * the field to use, and leaves the decision with the person, who knows which
+   * of the two it is and the form does not.
+   */
+  const restDaysLookMisfiled =
+    draft.paidRestDays === 0 &&
+    draft.additionalPayments.some((payment) => /שבת|מנוחה/.test(payment.description));
   const refresh = useCallback(async () => {
     setState('loading');
     setError('');
@@ -359,7 +392,15 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setExpensesPurged(true);
   }
 
-  const setNumber = (key: (typeof numericFields)[number][0], value: string) =>
+  // Every numeric component the form writes: the two leading fields, the two
+  // rest-day fields, and the rest of the grid. Typed as the union rather than
+  // one array's element so no caller can pass a key the draft does not hold.
+  type NumericKey =
+    | (typeof leadingFields)[number][0]
+    | (typeof numericFields)[number][0]
+    | 'paidRestDays'
+    | 'restDayRate';
+  const setNumber = (key: NumericKey, value: string) =>
     setDraft((old) => ({ ...old, [key]: Number(value) }));
   return (
     <section className="card canonical-payroll" aria-labelledby="canonical-payroll-title">
@@ -378,6 +419,47 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           חודש
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         </label>
+        {leadingFields.map(([key, label]) => (
+          <label key={key}>
+            {label}
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft[key]}
+              onChange={(e) => setNumber(key, e.target.value)}
+            />
+          </label>
+        ))}
+        <fieldset className="payroll-rest-days">
+          <legend>שבתות וימי מנוחה</legend>
+          <label>
+            ימי מנוחה בתשלום
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={draft.paidRestDays}
+              onChange={(e) => setNumber('paidRestDays', e.target.value)}
+            />
+          </label>
+          <label>
+            תעריף יום מנוחה
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.restDayRate}
+              onChange={(e) => setNumber('restDayRate', e.target.value)}
+            />
+          </label>
+          {/* The product, spelled out. It is the number the two fields exist to
+              produce, and until now it appeared nowhere on the form. */}
+          <p className="payroll-rest-days-total" role="status">
+            {draft.paidRestDays} × {money.format(draft.restDayRate)} ={' '}
+            <strong>{money.format(restDayPay)}</strong>
+          </p>
+        </fieldset>
         {numericFields.map(([key, label]) => (
           <label key={key}>
             {label}
@@ -462,6 +544,13 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           ))}
         </div>
       </div>
+      {restDaysLookMisfiled ? (
+        <p className="payroll-misfiled-warning" role="alert">
+          נראה שרשמתם שבתות או ימי מנוחה כתשלום נוסף, ו<strong>ימי מנוחה בתשלום</strong> עומד על 0.
+          הזנה בשדה הייעודי מכפילה את מספר הימים בתעריף; תשלום נוסף נספר כסכום אחד בלבד. אם התשלום
+          הנוסף אינו עבור ימי מנוחה — אפשר להתעלם מההודעה.
+        </p>
+      ) : null}
       <p className="payroll-live-total">
         סה״כ מחושב:{' '}
         <strong>{calculatedTotal === null ? '—' : money.format(calculatedTotal)}</strong>{' '}

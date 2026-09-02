@@ -497,4 +497,45 @@ describe('CanonicalPayrollIntelligence — legacy expense reconciliation', () =>
       screen.queryByRole('button', { name: /הסרת ההוצאות הישנות מהדפדפן/ }),
     ).not.toBeInTheDocument();
   });
+  // --- Rest days: the pair, and the mistake it used to invite --------------
+  //
+  // Production, September 2026: rate 440, count 0, and four Saturdays typed as
+  // an additional payment of 440 — where 4 × 440 = 1,760 was owed. The formula
+  // was right and the form was wrong, so these tests are about the form.
+
+  it('prints the product of the two rest-day fields', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('ימי מנוחה בתשלום'));
+
+    fireEvent.change(screen.getByLabelText('ימי מנוחה בתשלום'), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText('תעריף יום מנוחה'), { target: { value: '440' } });
+
+    // The number nobody typed, shown beside the two that were.
+    expect(screen.getByText(/1,760/)).toBeInTheDocument();
+  });
+
+  it('warns when Saturdays were typed as an additional payment instead', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('ימי מנוחה בתשלום'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת תשלום' }));
+    const [description] = screen.getAllByLabelText('תיאור');
+    fireEvent.change(description!, { target: { value: '4 שבתות' } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/ימי מנוחה בתשלום/);
+  });
+
+  it('stops warning once the rest days are recorded in their own field', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('ימי מנוחה בתשלום'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת תשלום' }));
+    const [description] = screen.getAllByLabelText('תיאור');
+    fireEvent.change(description!, { target: { value: '4 שבתות' } });
+    fireEvent.change(screen.getByLabelText('ימי מנוחה בתשלום'), { target: { value: '4' } });
+
+    // An additional payment may legitimately mention a Saturday; the warning is
+    // about the count being zero, not about the word.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

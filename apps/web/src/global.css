@@ -6104,6 +6104,40 @@ input[type='number'] {
   margin: 0;
   color: #5b6775;
 }
+/* The two rest-day fields are asked together, and their product is printed
+   under them, because apart they produced a month short by ₪1,320. */
+.payroll-rest-days {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px 18px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #cfe0f4;
+  border-radius: 14px;
+  background: #f4f9ff;
+}
+.payroll-rest-days legend {
+  padding-inline: 6px;
+  font-weight: 800;
+  color: #17385e;
+}
+.payroll-rest-days-total {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 17px;
+  color: #17385e;
+}
+.payroll-misfiled-warning {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid #e6c98a;
+  border-inline-start: 5px solid #c98a1a;
+  border-radius: 12px;
+  background: #fdf7e8;
+  color: #5c451a;
+  line-height: 1.6;
+}
 @media (max-width: 520px) {
   .binder-empty {
     justify-items: stretch;
