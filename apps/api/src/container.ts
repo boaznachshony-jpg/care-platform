@@ -566,7 +566,18 @@ export function buildContainer(env: Env): Container {
         ? new MockProductBillingGateway()
         : new DisabledProductBillingGateway();
 
-  const caseDeps = { authorization, repository, audit, timeline, clock, ids };
+  const caseDeps = {
+    authorization,
+    repository,
+    audit,
+    timeline,
+    clock,
+    ids,
+    // OpenEmploymentCase seeds compliance tasks (missing passport/visa/
+    // medical insurance) right after creating the case — see
+    // packages/application/src/use-cases/open-employment-case.ts.
+    tasks: taskRepository,
+  };
   const taskDeps = { authorization, tasks: taskRepository, audit, timeline, clock, ids };
   const documentDeps = {
     authorization,

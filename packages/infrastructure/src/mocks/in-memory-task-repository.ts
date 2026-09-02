@@ -15,15 +15,16 @@ export class InMemoryTaskRepository implements TaskRepository {
       id: brandId(input.id),
       tenantId: brandId(input.tenantId),
       employmentCaseId: brandId(input.employmentCaseId),
-      title: input.title,
-      titleKey: null,
+      title: input.title ?? null,
+      titleKey: input.titleKey ?? null,
       description: input.description,
       status: 'open',
       priority: input.priority,
       dueAt: input.dueAt,
       completedAt: null,
-      sourceType: 'manual',
+      sourceType: input.sourceType ?? 'manual',
       legacyLocalId: input.legacyLocalId ?? null,
+      sourceKey: input.sourceKey ?? null,
     };
     const tasks = this.tasksByTenant.get(input.tenantId) ?? [];
     tasks.push(task);
@@ -50,6 +51,18 @@ export class InMemoryTaskRepository implements TaskRepository {
       (this.tasksByTenant.get(tenantId) ?? []).find(
         (task) =>
           task.employmentCaseId === employmentCaseId && task.legacyLocalId === legacyLocalId,
+      ) ?? null
+    );
+  }
+
+  async findTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+  ): Promise<Task | null> {
+    return (
+      (this.tasksByTenant.get(tenantId) ?? []).find(
+        (task) => task.employmentCaseId === employmentCaseId && task.sourceKey === sourceKey,
       ) ?? null
     );
   }

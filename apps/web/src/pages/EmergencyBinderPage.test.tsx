@@ -9,6 +9,7 @@ import type { EmploymentCaseResponse } from '@caredesk/schemas';
 // case APIs, not mvp-storage. Constitution §16: synthetic data only.
 const mocks = vi.hoisted(() => ({
   createBinderExport: vi.fn(),
+  listCaseMedications: vi.fn(),
 }));
 
 const DEMO_CASE: EmploymentCaseResponse = {
@@ -69,10 +70,17 @@ vi.mock('../api/client.js', () => ({
       isEmergency: true,
     },
   ]),
+  // Cutover: medications now come from the server, with a local-storage
+  // fallback (see EmergencyBinderPage.tsx). Defaults to an empty canonical
+  // list here; individual tests below override this to cover the
+  // server/local-fallback/none cases explicitly.
+  listCaseMedications: mocks.listCaseMedications,
   createBinderExport: mocks.createBinderExport,
+  newIdempotencyKey: () => 'idem-test-token',
 }));
 
 import { listEmploymentCases } from '../api/client.js';
+import { saveMvpMedications } from '../storage/mvp-storage.js';
 import { EmergencyBinderPage } from './EmergencyBinderPage.js';
 
 const DEMO_RECEIPT = {
@@ -118,10 +126,13 @@ describe('EmergencyBinderPage', () => {
   const printMock = vi.fn();
 
   beforeEach(() => {
+    localStorage.clear();
     vi.mocked(listEmploymentCases).mockReset();
     vi.mocked(listEmploymentCases).mockResolvedValue([DEMO_CASE]);
     mocks.createBinderExport.mockReset();
     mocks.createBinderExport.mockResolvedValue({ receipt: DEMO_RECEIPT, replayed: false });
+    mocks.listCaseMedications.mockReset();
+    mocks.listCaseMedications.mockResolvedValue([]);
     printMock.mockReset();
     window.print = printMock;
   });
@@ -312,5 +323,63 @@ describe('EmergencyBinderPage', () => {
     await waitFor(() => expect(printMock).toHaveBeenCalledOnce());
     expect(screen.getByRole('alert')).toHaveTextContent(/הדפסה מקומית ללא רישום/);
     expect(screen.queryByText(/אסמכתת ייצוא/)).not.toBeInTheDocument();
+  });
+
+  // --- Cutover: medications, server-first with a labelled local fallback --
+
+  it('shows medications from the server without any local-copy label', async () => {
+    mocks.listCaseMedications.mockResolvedValue([
+      {
+        id: 'med-demo-001',
+        name: 'תרופה מהשרת (הדגמה)',
+        dosage: 'כדור אחד',
+        timesOfDay: ['morning'],
+        daily: true,
+        daysOfWeek: null,
+        prescribingDoctor: 'ד"ר הדגמה',
+        notes: '',
+        status: 'active',
+        legacyLocalId: null,
+      },
+    ]);
+
+    renderPage();
+    await selectDemoCase();
+
+    expect(await screen.findByText('תרופה מהשרת (הדגמה)')).toBeInTheDocument();
+    expect(screen.queryByText(/העותק המקומי/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to this device's local medications, clearly labelled, when the server call fails", async () => {
+    mocks.listCaseMedications.mockRejectedValue(new Error('offline'));
+    saveMvpMedications([
+      {
+        id: 'local-med-1',
+        name: 'תרופה מקומית (הדגמה)',
+        dosage: '',
+        timesOfDay: [],
+        daily: true,
+        daysOfWeek: undefined,
+        prescribingDoctor: '',
+        notes: '',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+      },
+    ]);
+
+    renderPage();
+    await selectDemoCase();
+
+    expect(await screen.findByText('תרופה מקומית (הדגמה)')).toBeInTheDocument();
+    expect(screen.getByText(/העותק המקומי/)).toBeInTheDocument();
+  });
+
+  it('shows no medications and no false local-copy label when the server fails and this device has none either', async () => {
+    mocks.listCaseMedications.mockRejectedValue(new Error('offline'));
+
+    renderPage();
+    await selectDemoCase();
+
+    expect(await screen.findByText('לא נרשמו תרופות קבועות.')).toBeInTheDocument();
+    expect(screen.queryByText(/העותק המקומי/)).not.toBeInTheDocument();
   });
 });

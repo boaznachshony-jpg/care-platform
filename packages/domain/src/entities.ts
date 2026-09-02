@@ -188,6 +188,14 @@ export interface Task {
    * what makes replaying an import from a device idempotent.
    */
   legacyLocalId: string | null;
+  /**
+   * Deterministic idempotency key for a task the server generated on its own
+   * (migration 0047), e.g. `case_health:passport` for the case-open
+   * compliance seeding. Null for a manually created or imported task. Same
+   * provenance-marker role as legacyLocalId, but for rows no browser store
+   * ever held.
+   */
+  sourceKey: string | null;
 }
 
 /**

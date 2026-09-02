@@ -9,11 +9,12 @@ import { FixedClock } from './clock.js';
 import { SequentialIdGenerator } from './id-generator.js';
 import { InMemoryAuditService } from './in-memory-audit-service.js';
 import { InMemoryCaseFoundationRepository } from './in-memory-case-foundation-repository.js';
+import { InMemoryTaskRepository } from './in-memory-task-repository.js';
 import { InMemoryTimelineService } from './in-memory-timeline-service.js';
 import { MembershipAuthorizationService } from './membership-authorization-service.js';
 
 const ROLE_PERMISSIONS = {
-  owner: ['employment_case:create', 'caregiver:update'],
+  owner: ['employment_case:create', 'caregiver:update', 'task:create'],
   family_member: [],
 } as const;
 
@@ -31,9 +32,19 @@ function buildHarness() {
   const clock = new FixedClock(new Date('2026-03-01T09:00:00.000Z'));
   const ids = new SequentialIdGenerator();
 
+  const tasks = new InMemoryTaskRepository();
+
   return {
     audit,
-    openCase: new OpenEmploymentCase({ authorization, repository, audit, timeline, clock, ids }),
+    openCase: new OpenEmploymentCase({
+      authorization,
+      repository,
+      audit,
+      timeline,
+      clock,
+      ids,
+      tasks,
+    }),
     updateCaregiver: new UpdateCaregiverProfileUseCase({ authorization, repository, audit, clock }),
   };
 }

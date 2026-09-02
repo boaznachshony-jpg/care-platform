@@ -269,7 +269,11 @@
     "statusDraft": "טיוטה",
     "statusActive": "פעיל",
     "caseNotFound": "התיק לא נמצא",
-    "loadFailed": "טעינת התיק נכשלה"
+    "loadFailed": "טעינת התיק נכשלה",
+    "statusSuspended": "מושהה",
+    "statusEnded": "הסתיים",
+    "statusCancelled": "בוטל",
+    "statusArchived": "בארכיון"
   },
   "contacts": {
     "heading": "אנשי קשר",
@@ -337,6 +341,17 @@
       "normal": "רגילה",
       "high": "גבוהה",
       "urgent": "דחופה"
+    },
+    "sync": {
+      "localCopy": "מוצג העותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת.",
+      "uploadFailed": "{{count}} משימות לא הועלו לשרת.",
+      "retry": "נסו שוב"
+    },
+    "legacyUploadFailed": "{{count}} משימות קיימות מהמכשיר לא הועלו לתיק.",
+    "seeded": {
+      "passport": "השלמת פרטי דרכון",
+      "visa": "השלמת ויזה / אישור העסקה",
+      "medicalInsurance": "השלמת ביטוח רפואי"
     }
   },
   "documents": {
@@ -379,7 +394,13 @@
       "verified": "מאומת",
       "rejected": "נדחה",
       "superseded": "הוחלף"
-    }
+    },
+    "sync": {
+      "localCopy": "מוצג העותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת.",
+      "uploadFailed": "{{count}} מסמכים לא הועלו לשרת.",
+      "retry": "נסו שוב"
+    },
+    "legacyUploadFailed": "{{count}} מסמכים קיימים מהמכשיר לא הועלו לתיק."
   },
   "common": {
     "back": "חזרה",
@@ -1027,6 +1048,9 @@
     "case": {
       "opened": {
         "summary": "תיק ההעסקה נפתח"
+      },
+      "compliance_tasks_seeded": {
+        "summary": "נוצרו משימות עבור פרטים חסרים בתיק"
       }
     },
     "contact": {
@@ -1040,6 +1064,12 @@
       },
       "completed": {
         "summary": "משימה סומנה כהושלמה"
+      },
+      "archived": {
+        "summary": "משימה נסגרה"
+      },
+      "imported": {
+        "summary": "משימה נקלטה מהמכשיר לתיק"
       }
     },
     "document": {
@@ -1048,6 +1078,9 @@
       },
       "intake_reviewed": {
         "summary": "נרשמה סקירת מסמך של ה-AI"
+      },
+      "imported": {
+        "summary": "מסמך נקלט מהמכשיר לתיק"
       }
     },
     "automation": {
@@ -1058,7 +1091,18 @@
         "summary": "בוצעה תוכנית אירוע"
       }
     },
-    "byActor": "בוצע על ידי"
+    "byActor": "בוצע על ידי",
+    "medication": {
+      "created": {
+        "summary": "נוספה תרופה לתיק"
+      },
+      "archived": {
+        "summary": "תרופה הוסרה מהרשימה הפעילה"
+      },
+      "imported": {
+        "summary": "תרופה נקלטה מהמכשיר לתיק"
+      }
+    }
   },
   "visaRenewal": {
     "eyebrow": "תהליך מפוקח",
@@ -1172,7 +1216,10 @@
     "recordingExport": "רושם את הייצוא בשרת…",
     "receiptLabel": "אסמכתת ייצוא",
     "receiptHash": "טביעת אצבע SHA-256",
-    "unrecordedLocalPrint": "הדפסה מקומית ללא רישום — לא היה חיבור לשרת והייצוא לא נרשם. העותק הזה אינו מתועד."
+    "unrecordedLocalPrint": "הדפסה מקומית ללא רישום — לא היה חיבור לשרת והייצוא לא נרשם. העותק הזה אינו מתועד.",
+    "medications": {
+      "localCopyNotice": "הרשימה מוצגת מהעותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת כדי לוודא שזו הרשימה העדכנית ביותר."
+    }
   },
   "completion": {
     "health": "מצב תיק ההעסקה",
@@ -1439,7 +1486,12 @@
     "savedNotice": "הרשימה נשמרה.",
     "updatedAt": "עודכן",
     "footnote": "הרשימה נשמרת בתיק ומופיעה גם בתיק החירום, כדי שתהיה זמינה למי שנכנס לתמונה.",
-    "binderSection": "תרופות קבועות"
+    "binderSection": "תרופות קבועות",
+    "sync": {
+      "localCopy": "מוצג העותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת.",
+      "uploadFailed": "{{count}} תרופות לא הועלו לשרת.",
+      "retry": "נסו שוב"
+    }
   },
   "reminderRecipients": {
     "title": "מי מקבל תזכורות",

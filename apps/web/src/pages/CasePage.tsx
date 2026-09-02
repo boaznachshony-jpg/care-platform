@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import type { EmploymentCaseResponse } from '@caredesk/schemas';
-import { ErrorState, Skeleton, StatusBadge } from '@caredesk/ui';
+import { ErrorState, Skeleton, StatusBadge, type StatusTone } from '@caredesk/ui';
 import { ApiRequestError, getEmploymentCase } from '../api/client.js';
 import { CaseContactsSection } from './case/CaseContactsSection.js';
 import { CaseDocumentsSection } from './case/CaseDocumentsSection.js';
@@ -19,6 +19,23 @@ type CaseState =
   | { kind: 'loaded'; data: EmploymentCaseResponse }
   | { kind: 'not_found' }
   | { kind: 'error' };
+
+/**
+ * Every value the CHECK constraint on employment_case.status allows
+ * (database/migrations/0003_care_employment_core.sql), each with its own
+ * label and tone. Before this, everything that was not 'draft' rendered as
+ * "פעיל" — a suspended or ended case read as active, which is a lie on a
+ * screen a family reads to know whether their employment relationship is
+ * still in force.
+ */
+const CASE_STATUS_PRESENTATION: Record<string, { labelKey: string; tone: StatusTone }> = {
+  draft: { labelKey: 'case.statusDraft', tone: 'neutral' },
+  active: { labelKey: 'case.statusActive', tone: 'success' },
+  suspended: { labelKey: 'case.statusSuspended', tone: 'warning' },
+  ended: { labelKey: 'case.statusEnded', tone: 'neutral' },
+  cancelled: { labelKey: 'case.statusCancelled', tone: 'danger' },
+  archived: { labelKey: 'case.statusArchived', tone: 'neutral' },
+};
 
 export function CasePage() {
   const { t } = useTranslation();
@@ -59,12 +76,19 @@ export function CasePage() {
   }
 
   const { data } = state;
-  const statusLabel = data.status === 'draft' ? t('case.statusDraft') : t('case.statusActive');
+  // Fallback covers a status value this build does not yet know the label
+  // for (e.g. a CHECK constraint value added by a migration this deploy
+  // predates) — 'neutral' + the raw value is honest without guessing.
+  const statusPresentation = CASE_STATUS_PRESENTATION[data.status] ?? {
+    labelKey: null,
+    tone: 'neutral' as StatusTone,
+  };
+  const statusLabel = statusPresentation.labelKey ? t(statusPresentation.labelKey) : data.status;
 
   return (
     <div>
       <h1>{t('case.viewTitle')}</h1>
-      <StatusBadge tone={data.status === 'draft' ? 'neutral' : 'success'} label={statusLabel} />
+      <StatusBadge tone={statusPresentation.tone} label={statusLabel} />
 
       <dl>
         <dt>{t('case.recipientFullName')}</dt>

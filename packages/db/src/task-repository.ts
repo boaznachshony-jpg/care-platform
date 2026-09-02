@@ -23,6 +23,7 @@ interface TaskRow {
   completed_at: Date | null;
   source_type: string;
   legacy_local_id: string | null;
+  source_key: string | null;
 }
 
 function toTask(row: TaskRow): Task {
@@ -39,11 +40,12 @@ function toTask(row: TaskRow): Task {
     completedAt: row.completed_at ? row.completed_at.toISOString() : null,
     sourceType: row.source_type as Task['sourceType'],
     legacyLocalId: row.legacy_local_id,
+    sourceKey: row.source_key,
   };
 }
 
 const TASK_COLUMNS = `id, tenant_id, employment_case_id, title, title_key, description,
-  status, priority, due_at, completed_at, source_type, legacy_local_id`;
+  status, priority, due_at, completed_at, source_type, legacy_local_id, source_key`;
 
 export class PgTaskRepository implements TaskRepository {
   constructor(private readonly pool: Pool) {}
@@ -52,20 +54,23 @@ export class PgTaskRepository implements TaskRepository {
     return withTenant(this.pool, input.tenantId, async (client) => {
       const result = await client.query<TaskRow>(
         `insert into task
-           (id, tenant_id, employment_case_id, title, description, priority, due_at, created_by,
-            legacy_local_id)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           (id, tenant_id, employment_case_id, title, title_key, description, priority, due_at,
+            created_by, legacy_local_id, source_key, source_type)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, coalesce($12, 'manual'))
          returning ${TASK_COLUMNS}`,
         [
           input.id,
           input.tenantId,
           input.employmentCaseId,
-          input.title,
+          input.title ?? null,
+          input.titleKey ?? null,
           input.description,
           input.priority,
           input.dueAt,
           input.createdBy,
           input.legacyLocalId ?? null,
+          input.sourceKey ?? null,
+          input.sourceType ?? null,
         ],
       );
       const row = result.rows[0];
@@ -108,6 +113,22 @@ export class PgTaskRepository implements TaskRepository {
         `select ${TASK_COLUMNS} from task
          where employment_case_id = $1 and legacy_local_id = $2`,
         [employmentCaseId, legacyLocalId],
+      );
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+
+  async findTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+  ): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TaskRow>(
+        `select ${TASK_COLUMNS} from task
+         where employment_case_id = $1 and source_key = $2`,
+        [employmentCaseId, sourceKey],
       );
       const row = result.rows[0];
       return row ? toTask(row) : null;

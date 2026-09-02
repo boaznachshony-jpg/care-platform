@@ -604,10 +604,18 @@ const TASKS_STORAGE_NAME = 'caredesk.mvp.tasks.v1';
 const MEDICATIONS_STORAGE_NAME = 'caredesk.mvp.medications.v1';
 const MONTHLY_CLOSE_STORAGE_NAME = 'caredesk.mvp.monthly-close.v1';
 
-function readList<T>(key: string): T[] {
+/**
+ * `clientId` is optional and, when omitted, falls through to `scopedKey`'s own
+ * default (`clientIdFromPath()`) — the ordinary case for every existing
+ * caller. Passing it explicitly is only for the `*ForClient` read-only
+ * helpers below, which run on screens that have no client id in their route.
+ */
+function readList<T>(key: string, clientId?: string | null): T[] {
   if (!isBrowser()) return [];
   try {
-    const value = JSON.parse(readBusinessItem(scopedKey(key)) ?? '[]') as unknown;
+    const value = JSON.parse(
+      readBusinessItem(clientId === undefined ? scopedKey(key) : scopedKey(key, clientId)) ?? '[]',
+    ) as unknown;
     return Array.isArray(value) ? (value as T[]) : [];
   } catch {
     return [];
@@ -690,6 +698,29 @@ function syncAutomaticTasks(profile: MvpProfile): void {
 
 export function readMvpDocuments(): MvpDocument[] {
   return readList<MvpDocument>(DOCUMENTS_KEY);
+}
+
+/**
+ * Read-only variants that take an explicit client id rather than inferring it
+ * from `window.location`. Needed by the case-scoped screens (`/cases/:caseId`,
+ * e.g. CaseTasksSection/CaseDocumentsSection) which have no `:clientId` route
+ * segment for `clientIdFromPath()` to read — they only know the *canonical*
+ * case id and must resolve `employment_case.legacy_client_id` themselves
+ * (see canonical-case.ts) before they can find this device's matching local
+ * records to offer for one-time upload. Never used to write: the existing
+ * client-scoped read/write pair above remains the only path business data is
+ * saved through.
+ */
+export function readMvpTasksForClient(clientId: string | null): MvpTask[] {
+  return readList<MvpTask>(TASKS_STORAGE_NAME, clientId);
+}
+
+export function readMvpDocumentsForClient(clientId: string | null): MvpDocument[] {
+  return readList<MvpDocument>(DOCUMENTS_KEY, clientId);
+}
+
+export function readMvpMedicationsForClient(clientId: string | null): MvpMedication[] {
+  return readList<MvpMedication>(MEDICATIONS_STORAGE_NAME, clientId);
 }
 
 export function saveMvpDocuments(documents: MvpDocument[]): void {

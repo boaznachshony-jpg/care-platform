@@ -122,6 +122,49 @@ describe('CasePage', () => {
     });
   });
 
+  describe('status badge', () => {
+    it('shows the draft label and neutral tone', async () => {
+      mockGetEmploymentCase.mockResolvedValue({ ...DEMO_CASE, status: 'draft' });
+      const { container } = renderPage();
+      await waitFor(() => expect(screen.getByText('טיוטה')).toBeInTheDocument());
+      expect(container.querySelector('.cd-status-badge--neutral')).not.toBeNull();
+    });
+
+    it('shows the active label and success tone', async () => {
+      mockGetEmploymentCase.mockResolvedValue({ ...DEMO_CASE, status: 'active' });
+      const { container } = renderPage();
+      await waitFor(() => expect(screen.getByText('פעיל')).toBeInTheDocument());
+      expect(container.querySelector('.cd-status-badge--success')).not.toBeNull();
+    });
+
+    // 'suspended'/'ended'/'cancelled'/'archived' all render with a
+    // status-specific tone instead of the old binary draft/active read —
+    // a suspended or ended case used to render as "active", which is a lie
+    // on a screen a family reads. Asserting on the tone class (not the
+    // translated label text) keeps this test stable regardless of when the
+    // i18n resources for these newer keys land.
+    it.each([
+      ['suspended', 'warning'],
+      ['ended', 'neutral'],
+      ['cancelled', 'danger'],
+      ['archived', 'neutral'],
+    ] as const)('gives %s its own tone (%s), not the active tone', async (status, tone) => {
+      mockGetEmploymentCase.mockResolvedValue({ ...DEMO_CASE, status });
+      const { container } = renderPage();
+      await waitFor(() =>
+        expect(container.querySelector(`.cd-status-badge--${tone}`)).not.toBeNull(),
+      );
+      expect(container.querySelector('.cd-status-badge--success')).toBeNull();
+    });
+
+    it('falls back to a neutral tone and the raw value for an unrecognized status', async () => {
+      mockGetEmploymentCase.mockResolvedValue({ ...DEMO_CASE, status: 'something_new' });
+      const { container } = renderPage();
+      await waitFor(() => expect(screen.getByText('something_new')).toBeInTheDocument());
+      expect(container.querySelector('.cd-status-badge--neutral')).not.toBeNull();
+    });
+  });
+
   describe('not found state', () => {
     beforeEach(() => {
       mockGetEmploymentCase.mockRejectedValue(new ApiRequestError(404, 'not_found'));

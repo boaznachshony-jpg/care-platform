@@ -14,6 +14,7 @@ import {
   listCanonicalPayrollCloses,
   listCaseContacts,
   listCaseDocuments,
+  listCaseMedications,
   listCaseTasks,
   listEmploymentCases,
   newIdempotencyKey,
@@ -24,6 +25,7 @@ import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { readMvpMedications, type MvpMedication } from '../storage/mvp-storage.js';
+import { medicationResponseToLocal } from '../sync/medication-mapping.js';
 
 const presets = {
   full: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
@@ -72,9 +74,15 @@ export function EmergencyBinderPage() {
     'idle',
   );
   const [receipt, setReceipt] = useState<BinderExportReceiptResponse>();
-  // Medications live in the client's own local record rather than on the
-  // server, so they are read directly instead of arriving with the case.
-  const [medications] = useState<MvpMedication[]>(() => readMvpMedications());
+  // Medications: the section a family or a stand-in most needs on someone
+  // else's device, in an emergency, right now — which is exactly the case
+  // this whole page exists for (a device that has never seen this browser's
+  // localStorage). The server is therefore tried first; only when it cannot
+  // be reached does this fall back to this device's own local record, and
+  // the fallback is always labelled on screen so nobody reads a possibly
+  // stale local list believing it is the confirmed, shared one.
+  const [medications, setMedications] = useState<MvpMedication[]>([]);
+  const [medicationsSource, setMedicationsSource] = useState<'server' | 'local' | 'none'>('none');
   const generatedAt = useMemo(
     () =>
       new Intl.DateTimeFormat('he-IL', { dateStyle: 'long', timeStyle: 'short' }).format(
@@ -121,6 +129,24 @@ export function EmergencyBinderPage() {
     if (!employmentCase) return;
     setState('loading-case');
     setDocumentIds([]);
+
+    // Fetched independently of the Promise.all below: a medications outage
+    // must never take down the rest of the binder (documents/payroll/tasks/
+    // contacts, which the family may need just as urgently), and a documents
+    // outage must not hide medications this device already has locally.
+    listCaseMedications(caseId)
+      .then((rows) => {
+        if (!active) return;
+        setMedications(rows.map(medicationResponseToLocal));
+        setMedicationsSource('server');
+      })
+      .catch(() => {
+        if (!active) return;
+        const local = readMvpMedications();
+        setMedications(local);
+        setMedicationsSource(local.length ? 'local' : 'none');
+      });
+
     Promise.all([
       listCaseDocuments(caseId),
       listCanonicalPayrollCloses(caseId),
@@ -409,6 +435,18 @@ export function EmergencyBinderPage() {
           {selected.includes('medications') && (
             <section id="binder-medications">
               <h3>{labels.medications}</h3>
+              {/*
+                Which copy this is matters more here than anywhere else in the
+                binder: a paramedic or a stand-in reading this on a device
+                that has never held this family's localStorage needs to know
+                whether the list came from the shared server record or from
+                whichever device happened to print it.
+              */}
+              {medicationsSource === 'local' ? (
+                <p className="action-notice error" role="note">
+                  {t('binder.medications.localCopyNotice')}
+                </p>
+              ) : null}
               {medications.length ? (
                 <>
                   <table>

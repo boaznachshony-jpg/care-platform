@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MEDICATION_DAYS,
@@ -11,6 +11,16 @@ import {
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { ReminderRecipientsSection } from '../components/ReminderRecipientsSection.js';
+import { archiveCaseMedication, importCaseMedication, listCaseMedications } from '../api/client.js';
+import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
+import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
+import {
+  getUploadedServerId,
+  rememberUploadedServerId,
+  uploadUnsyncedRecords,
+  type SyncStatus,
+} from '../sync/legacy-upload.js';
+import { medicationResponseToLocal } from '../sync/medication-mapping.js';
 
 /**
  * Standing medications, kept for handover.
@@ -43,11 +53,85 @@ export function MedicationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Medications are the record an emergency binder is read for on someone
+  // else's device — see EmergencyBinderPage.tsx. Getting them onto the
+  // server is the whole point of this cutover for this screen specifically,
+  // more than for tasks or documents.
+  const legacyClientId = useLegacyClientId();
+  const caseLookup = useCaseForLegacyClient(legacyClientId);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ phase: 'checking' });
+  const [syncAttempt, setSyncAttempt] = useState(0);
+
+  useEffect(() => {
+    if (caseLookup.status !== 'found') {
+      setSyncStatus(
+        caseLookup.status === 'checking' ? { phase: 'checking' } : { phase: 'no-case' },
+      );
+      return;
+    }
+    const caseId = caseLookup.caseId;
+    let active = true;
+
+    async function run() {
+      const localNow = readMvpMedications();
+      const outcome = await uploadUnsyncedRecords('medications', caseId, localNow, (medication) =>
+        importCaseMedication(caseId, {
+          legacyLocalId: medication.id,
+          name: medication.name,
+          dosage: medication.dosage,
+          timesOfDay: medication.timesOfDay,
+          daily: medication.daily,
+          daysOfWeek: medication.daysOfWeek ?? undefined,
+          prescribingDoctor: medication.prescribingDoctor,
+          notes: medication.notes,
+        }),
+      );
+      if (!active) return;
+      if (outcome.failedIds.length > 0) {
+        setSyncStatus({ phase: 'upload-failed', failedCount: outcome.failedIds.length });
+        return;
+      }
+
+      try {
+        const serverMedications = await listCaseMedications(caseId);
+        if (!active) return;
+        const byLocalId = new Map(
+          serverMedications
+            .filter((medication) => medication.legacyLocalId)
+            .map((medication) => [medication.legacyLocalId as string, medication] as const),
+        );
+        const merged = readMvpMedications().map((medication) => {
+          const match = byLocalId.get(medication.id);
+          return match
+            ? { ...medicationResponseToLocal(match), updatedAt: medication.updatedAt }
+            : medication;
+        });
+        for (const serverMedication of serverMedications) {
+          if (serverMedication.legacyLocalId) continue;
+          if (merged.some((medication) => medication.id === serverMedication.id)) continue;
+          rememberUploadedServerId('medications', caseId, serverMedication.id, serverMedication.id);
+          merged.push(medicationResponseToLocal(serverMedication));
+        }
+        saveMvpMedications(merged);
+        setMedications(merged);
+        setSyncStatus({ phase: 'synced' });
+      } catch {
+        setSyncStatus({ phase: 'offline' });
+      }
+    }
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [caseLookup, syncAttempt]);
+
   function persist(next: MvpMedication[]): void {
     setMedications(next);
     saveMvpMedications(next);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2500);
+    if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
 
   function toggleTime(time: MvpMedicationTime): void {
@@ -108,6 +192,14 @@ export function MedicationsPage() {
 
   function remove(id: string): void {
     if (!window.confirm(t('medications.removeConfirm'))) return;
+    // Local delete only, as before. Server side is soft-closed (archived,
+    // never deleted — see database/migrations/0046), so a stand-in reading
+    // an already-printed or previously-synced binder on another device is
+    // never left with a medication that silently vanished.
+    if (caseLookup.status === 'found') {
+      const serverId = getUploadedServerId('medications', caseLookup.caseId, id);
+      if (serverId) void archiveCaseMedication(caseLookup.caseId, serverId).catch(() => undefined);
+    }
     persist(medications.filter((item) => item.id !== id));
     if (editingId === id) {
       setEditingId(null);
@@ -126,6 +218,29 @@ export function MedicationsPage() {
       <p className="action-notice error medications-disclaimer" role="note">
         {t('medications.disclaimer')}
       </p>
+
+      {/*
+        Honest data-source labelling — see the matching comment in
+        TasksPage.tsx §2. Deliberately role="status", not role="note": the
+        disclaimer above is the only element on this page allowed that role
+        (MedicationsPage.test.tsx asserts there is exactly one).
+      */}
+      {syncStatus.phase === 'offline' ? (
+        <p className="info-box" role="status">
+          {t('medications.sync.localCopy')}
+        </p>
+      ) : syncStatus.phase === 'upload-failed' ? (
+        <p className="action-notice error" role="status">
+          {t('medications.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => setSyncAttempt((count) => count + 1)}
+          >
+            {t('medications.sync.retry')}
+          </button>
+        </p>
+      ) : null}
 
       <section aria-labelledby="medications-list-title">
         <h2 id="medications-list-title">{t('medications.listTitle')}</h2>

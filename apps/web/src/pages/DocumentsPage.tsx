@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   deleteDocumentFile,
@@ -13,19 +13,26 @@ import {
   type MvpDocumentStatus,
 } from '../storage/mvp-storage.js';
 import { useAuth } from '../auth/auth-context.js';
+import { importCaseDocument, listCaseDocuments } from '../api/client.js';
+import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
+import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
+import {
+  rememberUploadedServerId,
+  uploadUnsyncedRecords,
+  type SyncStatus,
+} from '../sync/legacy-upload.js';
+import {
+  dateLabelToIsoDate,
+  documentResponseToLocal,
+  isAllowedDocumentMediaType,
+  localCategoryToDocumentType,
+  parseDataUrl,
+} from '../sync/document-mapping.js';
 
 const MAX_FILE_SIZE = 10_000_000;
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
-function toDateInputValue(dateLabel: string): string {
-  const isoMatch = dateLabel.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-
-  const displayMatch = dateLabel.match(/\b(\d{2})[./](\d{2})[./](\d{4})\b/);
-  if (displayMatch) return `${displayMatch[3]}-${displayMatch[2]}-${displayMatch[1]}`;
-
-  return '';
-}
+const toDateInputValue = dateLabelToIsoDate;
 
 function formatExpiryDate(value: string): string {
   const [year, month, day] = value.split('-');
@@ -50,9 +57,101 @@ export function DocumentsPage() {
   const [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
+  const legacyClientId = useLegacyClientId();
+  const caseLookup = useCaseForLegacyClient(legacyClientId);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ phase: 'checking' });
+  const [syncAttempt, setSyncAttempt] = useState(0);
+
+  useEffect(() => {
+    if (caseLookup.status !== 'found') {
+      setSyncStatus(
+        caseLookup.status === 'checking' ? { phase: 'checking' } : { phase: 'no-case' },
+      );
+      return;
+    }
+    const caseId = caseLookup.caseId;
+    let active = true;
+
+    async function run() {
+      // Only records with an inline `dataUrl` carry a file at all — see the
+      // long comment on parseDataUrl in sync/document-mapping.ts for why the
+      // separate device file cache (document-file-store.ts) is out of scope
+      // here. Every other local record uploads as metadata only, which the
+      // import endpoint explicitly supports (no version, same as a document
+      // nobody has attached a file to yet).
+      const localNow = readMvpDocuments();
+      const outcome = await uploadUnsyncedRecords(
+        'documents',
+        caseId,
+        localNow,
+        (localDocument) => {
+          const parsedFile = localDocument.dataUrl ? parseDataUrl(localDocument.dataUrl) : null;
+          const importFile =
+            parsedFile && isAllowedDocumentMediaType(parsedFile.mediaType)
+              ? { mediaType: parsedFile.mediaType, content: parsedFile.content }
+              : undefined;
+          return importCaseDocument(caseId, {
+            legacyLocalId: localDocument.id,
+            documentType: localCategoryToDocumentType(localDocument.category),
+            sensitivity: 'identity_sensitive',
+            file: importFile,
+            expiresOn: dateLabelToIsoDate(localDocument.dateLabel) || undefined,
+          });
+        },
+      );
+      if (!active) return;
+      if (outcome.failedIds.length > 0) {
+        setSyncStatus({ phase: 'upload-failed', failedCount: outcome.failedIds.length });
+        return;
+      }
+
+      try {
+        const serverDocuments = await listCaseDocuments(caseId);
+        if (!active) return;
+        const byLocalId = new Map(
+          serverDocuments
+            .filter((document) => document.legacyLocalId)
+            .map((document) => [document.legacyLocalId as string, document] as const),
+        );
+        const merged = readMvpDocuments().map((document) => {
+          const match = byLocalId.get(document.id);
+          // The server response never carries the file bytes or name back
+          // (Constitution §16), so an already-known local record keeps its
+          // own fileName/fileType/dataUrl — only the fields the server can
+          // actually confirm (category/date/status) are refreshed.
+          return match
+            ? {
+                ...document,
+                ...documentResponseToLocal(match),
+                fileName: document.fileName,
+                fileType: document.fileType,
+              }
+            : document;
+        });
+        for (const serverDocument of serverDocuments) {
+          if (serverDocument.legacyLocalId) continue;
+          if (merged.some((document) => document.id === serverDocument.id)) continue;
+          rememberUploadedServerId('documents', caseId, serverDocument.id, serverDocument.id);
+          merged.push(documentResponseToLocal(serverDocument));
+        }
+        saveMvpDocuments(merged);
+        setDocuments(merged);
+        setSyncStatus({ phase: 'synced' });
+      } catch {
+        setSyncStatus({ phase: 'offline' });
+      }
+    }
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [caseLookup, syncAttempt]);
+
   function persist(next: MvpDocument[]) {
     saveMvpDocuments(next);
     setDocuments(next);
+    if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
 
   function startEdit(document: MvpDocument) {
@@ -164,6 +263,24 @@ export function DocumentsPage() {
       {message ? (
         <p className="info-box" role="status">
           {message}
+        </p>
+      ) : null}
+
+      {/* Honest data-source labelling — see the matching comment in TasksPage.tsx §2. */}
+      {syncStatus.phase === 'offline' ? (
+        <p className="info-box" role="status">
+          {t('documents.sync.localCopy')}
+        </p>
+      ) : syncStatus.phase === 'upload-failed' ? (
+        <p className="action-notice error" role="alert">
+          {t('documents.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => setSyncAttempt((count) => count + 1)}
+          >
+            {t('documents.sync.retry')}
+          </button>
         </p>
       ) : null}
 

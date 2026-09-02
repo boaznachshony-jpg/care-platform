@@ -1,13 +1,20 @@
 import type {
   AddContactRequest,
   CaseContactResponse,
+  CreateMedicationRequest,
   CreateTaskRequest,
   DocumentDownloadUrlResponse,
   DocumentResponse,
   EmploymentCaseResponse,
+  ImportDocumentRequest,
+  ImportMedicationRequest,
+  ImportTaskRequest,
+  MedicationResponse,
   OpenEmploymentCaseRequest,
   TaskResponse,
   TimelineEventResponse,
+  UpdateMedicationRequest,
+  UpdateTaskRequest,
   UploadDocumentRequest,
   SaveWorkspaceRequest,
   WorkspaceResponse,
@@ -272,6 +279,38 @@ export function completeCaseTask(caseId: string, taskId: string): Promise<TaskRe
   });
 }
 
+export function updateCaseTask(
+  caseId: string,
+  taskId: string,
+  input: UpdateTaskRequest,
+): Promise<TaskResponse> {
+  return apiRequest(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Soft-close only (status -> 'cancelled'); there is no delete route for tasks. */
+export function archiveCaseTask(caseId: string, taskId: string): Promise<TaskResponse> {
+  return apiRequest(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}/archive`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Idempotent upload of one browser-only task (MVP cutover). The server keys
+ * idempotency on `input.legacyLocalId` (migration 0046): calling this twice
+ * with the same id returns the same task rather than creating a duplicate,
+ * which is what makes it safe to call from a background sync effect without
+ * first checking whether a previous attempt already succeeded.
+ */
+export function importCaseTask(caseId: string, input: ImportTaskRequest): Promise<TaskResponse> {
+  return apiRequest(`${casePath(caseId)}/tasks/import`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export type CanonicalTimelineEvent = TimelineEventResponse & {
   /** Server-derived allowlisted destination; never an arbitrary browser URL. */
   actionTarget?: '/documents' | '/tasks' | '/payroll';
@@ -305,6 +344,69 @@ export function getCaseDocumentDownloadUrl(
   documentId: string,
 ): Promise<DocumentDownloadUrlResponse> {
   return apiRequest(`${casePath(caseId)}/documents/${encodeURIComponent(documentId)}/download-url`);
+}
+
+/**
+ * Idempotent upload of one browser-only document record (MVP cutover), keyed
+ * on `input.legacyLocalId` the same way {@link importCaseTask} is (migration
+ * 0046). `input.file` is omitted for a local record that never had a scanned
+ * file — the import still creates the document, with no version, exactly as
+ * `ImportCaseDocument` documents.
+ */
+export function importCaseDocument(
+  caseId: string,
+  input: ImportDocumentRequest,
+): Promise<DocumentResponse> {
+  return apiRequest(`${casePath(caseId)}/documents/import`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function listCaseMedications(caseId: string): Promise<MedicationResponse[]> {
+  return apiRequest(`${casePath(caseId)}/medications`);
+}
+
+export function createCaseMedication(
+  caseId: string,
+  input: CreateMedicationRequest,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Idempotent upload of one browser-only medication (MVP cutover) — see importCaseTask. */
+export function importCaseMedication(
+  caseId: string,
+  input: ImportMedicationRequest,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications/import`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCaseMedication(
+  caseId: string,
+  medicationId: string,
+  input: UpdateMedicationRequest,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications/${encodeURIComponent(medicationId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Soft-close only (status -> 'archived'); there is no delete route for medications. */
+export function archiveCaseMedication(
+  caseId: string,
+  medicationId: string,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications/${encodeURIComponent(medicationId)}/archive`, {
+    method: 'POST',
+  });
 }
 
 export function getWorkspace(): Promise<WorkspaceResponse> {
