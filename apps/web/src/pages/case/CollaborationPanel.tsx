@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiRequest, newIdempotencyKey } from '../../api/client.js';
+import { apiRequest } from '../../api/client.js';
+import { newIdempotencyKey } from '../../api/idempotency.js';
 import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
 
 type Member = { id: string; display_name: string; role: string; status: string };

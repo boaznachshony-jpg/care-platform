@@ -626,6 +626,32 @@ export class Wave5Service {
     );
   }
 
+  /**
+   * Consent guarantee (server-side; the client is a convenience only —
+   * WorkerPortalPage echoing the right value does not make this safe on its
+   * own, because nothing stops a future caller from doing what this one used
+   * to: hardcode a blank).
+   *
+   * WIRE SHAPE — "not supplied" vs. "set to unknown":
+   * routes/wave5.ts requires whatsappConsent/smsConsent on every PUT and
+   * constrains each to the literals 'unknown' | 'revoked' — the portal never
+   * grants consent, only revokes it or says nothing. That schema is not
+   * touched by this fix, so this request can never literally omit the field.
+   * Instead 'unknown' IS how "not supplied" is expressed here: a save that is
+   * not about consent (the bug this closes: a display-language change) has
+   * nothing truthful to say about consent, so it sends 'unknown' and that is
+   * read as "no opinion," never as an instruction. Only 'revoked' is a real
+   * instruction and the only value that can ever change what is stored.
+   *
+   * A withdrawn ('revoked') consent — or any other already-stored value,
+   * including 'granted', which this endpoint cannot even send — must never be
+   * resurrected by a request that was not about consent. The SQL below
+   * enforces that directly: the UPDATE branch only ever writes
+   * whatsapp_consent/sms_consent when the incoming value is 'revoked';
+   * otherwise it falls back to the row's own current value, never to
+   * `excluded`. The INSERT branch (first write for this worker) has no prior
+   * state to protect, so it takes whatever was sent.
+   */
   async updatePreference(
     context: WorkerContext,
     input: {
@@ -651,7 +677,24 @@ export class Wave5Service {
         async () => {
           const row = (
             await client.query(
-              `insert into communication_preference (tenant_id,participant_type,participant_id,preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent,consent_source,consent_recorded_at,revoked_at) values ($1,'worker',$2,$3,'email',true,false,false,$4,$5,'worker_portal',now(),case when $4='revoked' or $5='revoked' then now() end) on conflict (tenant_id,participant_type,participant_id) do update set preferred_locale=excluded.preferred_locale,preferred_channel='email',email_enabled=true,whatsapp_enabled=false,sms_enabled=false,whatsapp_consent=excluded.whatsapp_consent,sms_consent=excluded.sms_consent,consent_source='worker_portal',consent_recorded_at=now(),revoked_at=excluded.revoked_at,updated_at=now() returning preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent`,
+              `insert into communication_preference (tenant_id,participant_type,participant_id,preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent,consent_source,consent_recorded_at,revoked_at)
+               values ($1,'worker',$2,$3,'email',true,false,false,$4,$5,
+                 case when $4='revoked' or $5='revoked' then 'worker_portal' end,
+                 case when $4='revoked' or $5='revoked' then now() end,
+                 case when $4='revoked' or $5='revoked' then now() end)
+               on conflict (tenant_id,participant_type,participant_id) do update set
+                 preferred_locale=excluded.preferred_locale,
+                 preferred_channel='email',
+                 email_enabled=true,
+                 whatsapp_enabled=false,
+                 sms_enabled=false,
+                 whatsapp_consent=case when excluded.whatsapp_consent='revoked' then 'revoked' else communication_preference.whatsapp_consent end,
+                 sms_consent=case when excluded.sms_consent='revoked' then 'revoked' else communication_preference.sms_consent end,
+                 consent_source=case when excluded.whatsapp_consent='revoked' or excluded.sms_consent='revoked' then 'worker_portal' else communication_preference.consent_source end,
+                 consent_recorded_at=case when excluded.whatsapp_consent='revoked' or excluded.sms_consent='revoked' then now() else communication_preference.consent_recorded_at end,
+                 revoked_at=case when excluded.whatsapp_consent='revoked' or excluded.sms_consent='revoked' then now() else communication_preference.revoked_at end,
+                 updated_at=now()
+               returning preferred_locale,preferred_channel,email_enabled,whatsapp_enabled,sms_enabled,whatsapp_consent,sms_consent`,
               [
                 context.tenantId,
                 context.accessId,

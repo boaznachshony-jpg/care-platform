@@ -28,6 +28,11 @@ import {
   localCategoryToDocumentType,
   parseDataUrl,
 } from '../sync/document-mapping.js';
+import {
+  classifyExpiry,
+  extractIsoDateFromLabel,
+  type ExpiryClassification,
+} from '../date-diff.js';
 
 const MAX_FILE_SIZE = 10_000_000;
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
@@ -37,6 +42,43 @@ const toDateInputValue = dateLabelToIsoDate;
 function formatExpiryDate(value: string): string {
   const [year, month, day] = value.split('-');
   return `בתוקף עד ${day}.${month}.${year}`;
+}
+
+/**
+ * The badge on this screen answers one question — "is this document still
+ * valid" — and used to answer it purely from whatever was picked in the
+ * "מצב" dropdown when the document was saved, with no link back to the
+ * expiry date itself. A passport that expired six months ago kept its green
+ * "תקין" badge until someone remembered to edit it by hand: the one screen
+ * whose job is to catch an expired document could not.
+ *
+ * The fix derives the badge from the expiry date using the same 14/30-day
+ * windows as the rest of the app (see date-diff.ts), with one deliberate
+ * exception for the manual "מצב" field rather than deleting it outright:
+ *
+ * - No expiry date at all: many document types genuinely have none (e.g. a
+ *   bank confirmation letter), so a missing date is not "expired" — the
+ *   manual choice is the only signal available and stands unchanged.
+ * - An expiry date that is today, in the past, or inside the 14/30-day
+ *   windows: the badge must say "דורש טיפול" (or "פג תוקף" once actually
+ *   expired) regardless of what was picked, or forgotten, in the form —
+ *   this is exactly the bug being fixed, so the date always wins here.
+ * - A human who picked "דורש טיפול" may be flagging something no date can
+ *   see (an illegible scan, a document under dispute...). That judgement is
+ *   never silently thrown away by a comfortable expiry date — it can only
+ *   push the badge to "דורש טיפול", never pull it back to "תקין".
+ */
+function documentDisplayStatus(
+  document: MvpDocument,
+  today: Date = new Date(),
+): { status: MvpDocumentStatus; classification: ExpiryClassification } {
+  const expiryIso = extractIsoDateFromLabel(document.dateLabel);
+  const classification = classifyExpiry(expiryIso, today);
+  if (classification === 'no-date') return { status: document.status, classification };
+  const dateSaysAttention = classification !== 'ok';
+  const status: MvpDocumentStatus =
+    dateSaysAttention || document.status === 'attention' ? 'attention' : 'valid';
+  return { status, classification };
 }
 
 const emptyDraft = {
@@ -384,46 +426,55 @@ export function DocumentsPage() {
             {t('liability.data')}
           </p>
           <section className="document-grid" aria-describedby="documents-liability-note">
-            {documents.map((document) => (
-              <article className="document-card" key={document.id}>
-                <div className="doc-icon" aria-hidden="true">
-                  ▤
-                </div>
-                <div>
-                  <h3>{document.name}</h3>
-                  <p>
-                    {document.category} · {document.dateLabel}
-                  </p>
-                  <small>{document.fileName}</small>
-                </div>
-                <span className={`pill ${document.status === 'attention' ? 'amber' : 'green'}`}>
-                  {document.status === 'attention' ? 'דורש טיפול' : 'תקין'}
-                </span>
-                <div className="document-actions">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => void openDocument(document)}
-                  >
-                    פתיחה
-                  </button>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => startEdit(document)}
-                  >
-                    עריכה
-                  </button>
-                  <button
-                    className="danger-button"
-                    type="button"
-                    onClick={() => void removeDocument(document)}
-                  >
-                    מחיקה
-                  </button>
-                </div>
-              </article>
-            ))}
+            {documents.map((document) => {
+              const display = documentDisplayStatus(document);
+              const badgeLabel =
+                display.status === 'attention'
+                  ? display.classification === 'expired'
+                    ? 'פג תוקף'
+                    : 'דורש טיפול'
+                  : 'תקין';
+              return (
+                <article className="document-card" key={document.id}>
+                  <div className="doc-icon" aria-hidden="true">
+                    ▤
+                  </div>
+                  <div>
+                    <h3>{document.name}</h3>
+                    <p>
+                      {document.category} · {document.dateLabel}
+                    </p>
+                    <small>{document.fileName}</small>
+                  </div>
+                  <span className={`pill ${display.status === 'attention' ? 'amber' : 'green'}`}>
+                    {badgeLabel}
+                  </span>
+                  <div className="document-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void openDocument(document)}
+                    >
+                      פתיחה
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => startEdit(document)}
+                    >
+                      עריכה
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => void removeDocument(document)}
+                    >
+                      מחיקה
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </section>
         </>
       )}

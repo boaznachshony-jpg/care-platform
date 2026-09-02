@@ -357,4 +357,18 @@ describe('DashboardPage', () => {
       '/clients/client-001/settings',
     );
   });
+
+  /**
+   * The 14-field completeness list now lives in profile-completeness.ts,
+   * shared with OpenIssuesPage (see OpenIssuesPage.test.tsx's "aggregates
+   * missing profile fields" test for the same rule exercised from the other
+   * screen) — this pins that the dashboard's status card still reflects it
+   * correctly after the extraction, rather than the two screens quietly
+   * drifting apart.
+   */
+  it('flags the profile as missing details when a tracked field is blank', () => {
+    mockProfile.saturdayRate = 0;
+    renderPage();
+    expect(screen.getByText('חסרים 1 פרטים חיוניים')).toBeInTheDocument();
+  });
 });

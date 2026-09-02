@@ -3,7 +3,8 @@
    which a concurrent agent owns; these strings should move there later. */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { confirmAssistantChecklist, newIdempotencyKey } from '../../api/client.js';
+import { confirmAssistantChecklist } from '../../api/client.js';
+import { newIdempotencyKey } from '../../api/idempotency.js';
 
 type View = 'home' | 'events' | 'travel' | 'plan' | 'assistant';
 type EventType =

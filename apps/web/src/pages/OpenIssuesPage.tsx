@@ -9,48 +9,10 @@ import {
   healthFactorExplanation,
   healthFactorTitle,
 } from '../health-factors.js';
-import {
-  OpenIssuesGlance,
-  type OpenIssue,
-  type OpenIssueSeverity,
-} from '../components/OpenIssuesGlance.js';
-import type { MvpProfile } from '../storage/mvp-storage.js';
+import { OpenIssuesGlance, type OpenIssue } from '../components/OpenIssuesGlance.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const URGENT_WINDOW_DAYS = 14;
-const SOON_WINDOW_DAYS = 30;
-
-function daysUntil(isoDate: string): number {
-  return Math.ceil((new Date(isoDate).getTime() - Date.now()) / DAY_MS);
-}
-
-function expirySeverity(days: number): OpenIssueSeverity {
-  if (days < URGENT_WINDOW_DAYS) return 'urgent';
-  if (days < SOON_WINDOW_DAYS) return 'soon';
-  return 'ok';
-}
-
-/** Same 14-field completeness list as DashboardPage, keyed for readable labels. */
-function missingProfileFieldKeys(profile: MvpProfile): string[] {
-  const checks: Array<[key: string, missing: boolean]> = [
-    ['employerName', !profile.employerName.trim()],
-    ['recipientName', !profile.recipientName.trim()],
-    ['caregiverName', !profile.caregiverName.trim()],
-    ['employmentStartDate', !profile.employmentStartDate.trim()],
-    ['representativeName', !profile.representativeName.trim()],
-    ['licensedBureauName', !profile.licensedBureauName.trim()],
-    ['licensedBureauContactName', !profile.licensedBureauContactName.trim()],
-    ['licensedBureauContactPhone', !profile.licensedBureauContactPhone.trim()],
-    ['employmentAgreementConfirmed', !profile.employmentAgreementConfirmed],
-    ['medicalInsurance', !profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate],
-    ['baseSalary', (profile.baseSalary ?? 0) <= 0],
-    ['saturdayRate', (profile.saturdayRate ?? 0) <= 0],
-    ['licenseRenewalDate', !profile.licenseRenewalDate],
-    ['visaRenewalDate', !profile.visaRenewalDate],
-  ];
-  return checks.filter(([, missing]) => missing).map(([key]) => key);
-}
+import { SOON_WINDOW_DAYS, daysUntil, expirySeverity } from '../date-diff.js';
+import { missingProfileFieldKeys } from '../profile-completeness.js';
 
 export function OpenIssuesPage() {
   const { t } = useTranslation();
@@ -113,6 +75,7 @@ export function OpenIssuesPage() {
   for (const [key, isoDate] of expiryDates) {
     if (!isoDate) continue; // Missing dates are already covered by the missing-fields issue.
     const days = daysUntil(isoDate);
+    if (days === null) continue; // Malformed date — nothing sane to show, and no false certainty either.
     const severity = expirySeverity(days);
     issues.push({
       id: `expiry-${key}`,

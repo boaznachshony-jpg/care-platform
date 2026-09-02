@@ -8,6 +8,7 @@ import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
 import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
+import { missingProfileFieldCount } from '../profile-completeness.js';
 import {
   healthFactorAction,
   healthFactorExplanation,
@@ -244,22 +245,8 @@ export function DashboardPage() {
       to: path('/binder'),
     },
   ] as const;
-  const missingCount = [
-    !profile.employerName.trim(),
-    !profile.recipientName.trim(),
-    !profile.caregiverName.trim(),
-    !profile.employmentStartDate.trim(),
-    !profile.representativeName.trim(),
-    !profile.licensedBureauName.trim(),
-    !profile.licensedBureauContactName.trim(),
-    !profile.licensedBureauContactPhone.trim(),
-    !profile.employmentAgreementConfirmed,
-    !profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate,
-    (profile.baseSalary ?? 0) <= 0,
-    (profile.saturdayRate ?? 0) <= 0,
-    !profile.licenseRenewalDate,
-    !profile.visaRenewalDate,
-  ].filter(Boolean).length;
+  // Single source of truth for "is the profile complete" — see profile-completeness.ts.
+  const missingCount = missingProfileFieldCount(profile);
   const hasAttention = health?.factors.some((factor) => factor.status === 'attention') ?? false;
   const status: 'missing' | 'attention' | 'ok' | 'loading' =
     missingCount > 0 ? 'missing' : !health ? 'loading' : hasAttention ? 'attention' : 'ok';

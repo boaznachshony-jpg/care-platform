@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
-import { recordLegalAcceptance } from '../api/client.js';
+import type { LegalAcceptanceRequest } from '@caredesk/schemas';
+import { ApiRequestError, getBillingSubscription, recordLegalAcceptance } from '../api/client.js';
 import {
   caregiverCountries,
   caregiverLanguages,
@@ -47,6 +48,58 @@ const DRAFT_SAVE_DELAY_MS = 500;
 
 function stepStorageKey(clientId: string): string {
   return `caredesk.onboarding.step.${clientId || 'default'}`;
+}
+
+/**
+ * Defect fix: `complete()` used to end with
+ * `recordLegalAcceptance({...}).catch(() => undefined)`, on the theory that
+ * the billing flow re-records the same acceptance. That is only true for a
+ * customer who actually reaches /billing — a customer who closes the tab
+ * right after finishing onboarding never does, and the account then holds a
+ * caregiver's identity documents, visa data and payroll details with no
+ * record anyone accepted the terms at all.
+ *
+ * Onboarding must still complete offline (constitution §13: an error here
+ * cannot destroy the user's completed setup), so the fix cannot make the
+ * click block on the network. Instead a failure leaves a trace: the exact
+ * request is written to localStorage — account-scoped, not client-scoped,
+ * because legal acceptance itself is (recordLegalAcceptance takes no
+ * clientId) — and is retried the next time this page mounts (a customer
+ * with more than one client returns here again) and whenever the browser
+ * regains connectivity. The record is idempotent per (user, document,
+ * version), so a retry after the billing flow already recorded it, or a
+ * retry firing twice, is a harmless no-op.
+ */
+const PENDING_LEGAL_ACCEPTANCE_KEY = 'caredesk.onboarding.pending-legal-acceptance.v1';
+
+function readPendingLegalAcceptance(): LegalAcceptanceRequest | null {
+  try {
+    const raw = window.localStorage.getItem(PENDING_LEGAL_ACCEPTANCE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<LegalAcceptanceRequest>;
+    return Array.isArray(parsed.documents) && parsed.documents.length > 0 && parsed.context
+      ? (parsed as LegalAcceptanceRequest)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingLegalAcceptance(input: LegalAcceptanceRequest): void {
+  window.localStorage.setItem(PENDING_LEGAL_ACCEPTANCE_KEY, JSON.stringify(input));
+}
+
+function clearPendingLegalAcceptance(): void {
+  window.localStorage.removeItem(PENDING_LEGAL_ACCEPTANCE_KEY);
+}
+
+/** Retries a queued acceptance; leaves it queued for the next attempt on failure. */
+function flushPendingLegalAcceptance(): void {
+  const pending = readPendingLegalAcceptance();
+  if (!pending) return;
+  void recordLegalAcceptance(pending)
+    .then(() => clearPendingLegalAcceptance())
+    .catch(() => undefined);
 }
 
 function readSavedStep(clientId: string): number {
@@ -103,12 +156,20 @@ export function OnboardingPage() {
     return draft.representativeName || draft.representativePhone ? 'yes' : '';
   });
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
-  const isFirstRun = !profile.onboardingCompleted;
   const checklistComplete = employmentSetupCompletedCount(draft);
 
   useEffect(() => {
     window.localStorage.setItem(stepStorageKey(clientId), String(step));
   }, [clientId, step]);
+
+  // Retries a legal acceptance a previous visit failed to record (see
+  // flushPendingLegalAcceptance above), both on mount and whenever the
+  // browser regains connectivity while this page is open.
+  useEffect(() => {
+    flushPendingLegalAcceptance();
+    window.addEventListener('online', flushPendingLegalAcceptance);
+    return () => window.removeEventListener('online', flushPendingLegalAcceptance);
+  }, []);
 
   // Debounced draft auto-save: in-progress (possibly invalid) values are kept
   // out of the committed profile but survive leaving the page mid-step.
@@ -280,7 +341,7 @@ export function OnboardingPage() {
     saveMvpOnboardingDraft(committed, { samePersonChoice: samePerson, helperChoice });
   }
 
-  function complete() {
+  async function complete() {
     const completed = withSamePersonFallbacks({
       ...draft,
       salaryEffectiveDate: draft.salaryEffectiveDate || draft.employmentStartDate,
@@ -325,15 +386,58 @@ export function OnboardingPage() {
     // failure does. The recording is idempotent per (user, document, version),
     // so the billing flow - where it IS awaited and IS blocking - re-records it
     // for free if this call was lost.
-    void recordLegalAcceptance({
+    //
+    // The failure path used to be `.catch(() => undefined)` - a customer who
+    // closed the tab right here, before ever reaching billing, left an account
+    // holding a third party's identity documents with no record anyone agreed
+    // to anything. It cannot become `.catch(writePendingLegalAcceptance)`
+    // unconditionally either: a rejection can mean "the network is down" (queue
+    // it) or "the server told us this request is malformed" (queuing it would
+    // just retry the same failure forever). ApiRequestError with a 4xx status
+    // is the latter; anything else - a network failure, a timeout, a 5xx - is
+    // queued for flushPendingLegalAcceptance to retry.
+    const legalAcceptanceInput: LegalAcceptanceRequest = {
       documents: [
         { document: 'terms', version: TERMS_DOCUMENT_VERSION },
         { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
       ],
       context: 'onboarding',
-    }).catch(() => undefined);
+    };
+    void recordLegalAcceptance(legalAcceptanceInput).catch((error: unknown) => {
+      if (error instanceof ApiRequestError && error.status >= 400 && error.status < 500) return;
+      writePendingLegalAcceptance(legalAcceptanceInput);
+    });
 
-    navigate(isFirstRun ? '/billing?from=onboarding' : path('/'));
+    // "First run" is a property of the ACCOUNT's subscription, not of any one
+    // client record. `profile.onboardingCompleted` (useMvpProfile) is scoped
+    // to the client id in the path, so completing setup for a SECOND client on
+    // an account that already pays used to read as "first run" again and send
+    // a paying customer back to /billing. The billing subscription endpoint is
+    // account-scoped (no caseId), so its status is what actually answers this.
+    //
+    // A subscription row exists for every tenant the moment anyone reads it
+    // (billing's getOrCreate), so mere existence says nothing - its *status*
+    // does: 'payment_method_pending' with no payment method attached is the
+    // untouched default of an account that has never engaged billing at all.
+    // Anything else (a payment method is on file, or the status has moved past
+    // that default) means this account has already engaged billing, and must
+    // never be sent back to the payment screen.
+    //
+    // This must not block onboarding from completing offline, so the request
+    // is awaited only for the navigation decision - profile/case/consent are
+    // already committed above regardless of its outcome. On failure the
+    // answer is genuinely unknown, and between the two ways to be wrong -
+    // skipping the payment prompt for a genuine first-time signup, or sending
+    // an already-paying customer back to demand a payment method - the second
+    // is strictly worse, so an unknown answer defaults to "not first run".
+    let goToBilling = false;
+    try {
+      const plan = await getBillingSubscription();
+      goToBilling = plan.paymentMethod === null && plan.status === 'payment_method_pending';
+    } catch {
+      goToBilling = false;
+    }
+    navigate(goToBilling ? '/billing?from=onboarding' : path('/'));
   }
 
   return (
@@ -366,7 +470,7 @@ export function OnboardingPage() {
             event.preventDefault();
             if (!currentValid) return;
             if (step === LAST_STEP) {
-              complete();
+              void complete();
             } else {
               commitStep(draft);
               setStep((value) => value + 1);

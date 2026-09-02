@@ -9,13 +9,11 @@ const DEMO_CASE_ID = 'case-demo-001';
 const mockConfirm = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../api/client.js', () => ({
   confirmAssistantChecklist: (...args: unknown[]) => mockConfirm(...args),
-  // Real fallback logic, not mocked away: the retry-key tests below rely on
-  // it actually producing distinct-but-stable values.
-  newIdempotencyKey: () =>
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `idem-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`,
 }));
+
+// The key generator is a separate module now, so a suite that mocks the API
+// surface still gets the real fallback logic the retry tests depend on.
+vi.unmock('../../api/idempotency.js');
 
 function renderPanel(caseId = DEMO_CASE_ID) {
   return render(

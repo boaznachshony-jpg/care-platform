@@ -12,6 +12,7 @@
  * (dashboard, timeline, open issues, notifications) stay deterministic and
  * testable.
  */
+import { daysUntil } from './date-diff.js';
 
 /** Official Bituach Leumi report-and-pay service for household employers. */
 export const NATIONAL_INSURANCE_PAYMENT_URL =
@@ -59,11 +60,15 @@ export function nextNationalInsuranceDueDate(today = new Date()): string {
   return isoDate(today.getFullYear() + 1, 0, NATIONAL_INSURANCE_DUE_DAY);
 }
 
-/** Whole days between today (date-only) and an ISO due date. */
+/**
+ * Whole calendar days between today and an ISO due date.
+ * Delegates to the shared date-diff module (see date-diff.ts for why naive
+ * `Date` subtraction across the local/UTC boundary is wrong) - `dueIsoDate`
+ * here is always a well-formed `yyyy-mm-dd` produced by this module, so the
+ * `null` case of the shared function never applies.
+ */
 export function daysUntilDate(dueIsoDate: string, today = new Date()): number {
-  const due = new Date(`${dueIsoDate}T12:00:00`);
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
-  return Math.ceil((due.getTime() - start.getTime()) / 86_400_000);
+  return daysUntil(dueIsoDate, today) ?? 0;
 }
 
 /** Formats an ISO date (yyyy-mm-dd) as DD.MM.YYYY for display. */

@@ -76,8 +76,9 @@ vi.mock('../api/client.js', () => ({
   // server/local-fallback/none cases explicitly.
   listCaseMedications: mocks.listCaseMedications,
   createBinderExport: mocks.createBinderExport,
-  newIdempotencyKey: () => 'idem-test-token',
 }));
+
+vi.mock('../api/idempotency.js', () => ({ newIdempotencyKey: () => 'idem-test-token' }));
 
 import { listEmploymentCases } from '../api/client.js';
 import { saveMvpMedications } from '../storage/mvp-storage.js';

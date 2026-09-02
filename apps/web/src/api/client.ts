@@ -31,6 +31,7 @@ import type {
   LegalAcceptanceRequest,
   LegalAcceptanceResponse,
 } from '@caredesk/schemas';
+import { newIdempotencyKey } from './idempotency.js';
 import { getBrowserAuthClient } from '../auth/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
 
@@ -171,27 +172,6 @@ export function listEmploymentCases(): Promise<EmploymentCaseResponse[]> {
 }
 
 const casePath = (caseId: string): string => `/cases/${encodeURIComponent(caseId)}`;
-
-/**
- * Idempotency keys only need to be unique, not secret. `crypto.randomUUID`
- * exists only in secure contexts, and this app is deliberately reachable over
- * plain http on a phone at 192.168.x.x, where a bare `crypto.randomUUID()`
- * throws before any request is sent and the action fails with no error shown
- * (the exact bug `EmergencyBinderPage` hit first). The fallback below keeps
- * every idempotency-bearing action working on exactly the device this
- * mobile-first product most needs testing on.
- *
- * Callers that need retry-safety (the same logical attempt must reuse the
- * same key so a lost response and a second press don't create a duplicate)
- * should generate one key once — e.g. with `useMemo` keyed on the form
- * inputs — and pass it explicitly instead of relying on the default.
- */
-export function newIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `idem-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
-}
 
 export interface VisaRenewalWorkflowResponse {
   id: string;
@@ -500,6 +480,32 @@ export function recordLegalAcceptance(
 
 export function listLegalAcceptances(): Promise<LegalAcceptanceResponse> {
   return apiRequest('/legal/acceptances');
+}
+
+/**
+ * Wave 5 worker portal communication preference (migration 0025,
+ * `communication_preference`). `whatsapp_consent`/`sms_consent` can be
+ * `'granted'` even though the portal itself can never set that value — a
+ * caregiver's WhatsApp opt-in is collected elsewhere. This getter exists
+ * because nothing previously read it at all: WorkerPortalPage's save always
+ * sent a hardcoded `whatsappConsent: 'unknown'`, which is how a caregiver's
+ * explicit `'revoked'` got silently reset the next time she changed her
+ * display language. See WorkerPortalPage for how the loaded value is echoed
+ * back, and Wave5Service.updatePreference for why the server never trusts
+ * that echo alone.
+ */
+export interface WorkerPreferencesResponse {
+  preferred_locale: 'he' | 'en';
+  preferred_channel: 'email';
+  email_enabled: boolean;
+  whatsapp_enabled: boolean;
+  sms_enabled: boolean;
+  whatsapp_consent: 'unknown' | 'granted' | 'revoked';
+  sms_consent: 'unknown' | 'granted' | 'revoked';
+}
+
+export function getWorkerPreferences(): Promise<WorkerPreferencesResponse> {
+  return apiRequest('/worker/preferences');
 }
 
 export interface CaseHealthResponse {

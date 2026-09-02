@@ -7,6 +7,7 @@ import type {
 } from './storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from './quarterly-national-insurance.js';
 import { nextSalaryPaymentDate } from './upcoming-payments.js';
+import { daysUntil, extractIsoDateFromLabel } from './date-diff.js';
 
 export interface CareNotification {
   id: string;
@@ -25,25 +26,17 @@ export interface CareNotificationInput {
   today?: Date;
 }
 
-function dateAtNoon(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
+// Day-difference arithmetic now lives in date-diff.ts (see the comment there
+// for why naive `new Date(iso) - Date.now()` subtraction is wrong) - this
+// alias keeps the rest of the file, and its tests, unchanged.
 function daysFrom(today: Date, value: string): number | null {
-  const due = dateAtNoon(value);
-  if (!due) return null;
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
-  return Math.ceil((due.getTime() - start.getTime()) / 86_400_000);
+  return daysUntil(value, today);
 }
 
-function documentExpiry(dateLabel: string): string | null {
-  const iso = dateLabel.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const display = dateLabel.match(/\b(\d{2})[./](\d{2})[./](\d{4})\b/);
-  return display ? `${display[3]}-${display[2]}-${display[1]}` : null;
-}
+// documentExpiry is now the shared extractIsoDateFromLabel (see date-diff.ts)
+// so DocumentsPage's badge and this notification list agree on what a
+// document's expiry date is.
+const documentExpiry = extractIsoDateFromLabel;
 
 function timing(days: number): Pick<CareNotification, 'severity' | 'detail'> {
   if (days < 0) {

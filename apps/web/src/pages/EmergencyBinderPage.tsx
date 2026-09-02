@@ -17,10 +17,10 @@ import {
   listCaseMedications,
   listCaseTasks,
   listEmploymentCases,
-  newIdempotencyKey,
   type BinderExportReceiptResponse,
   type CanonicalPayrollClose,
 } from '../api/client.js';
+import { newIdempotencyKey } from '../api/idempotency.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';

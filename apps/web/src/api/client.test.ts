@@ -10,11 +10,12 @@ vi.mock('../auth/client.js', () => ({
 
 import {
   confirmAssistantChecklist,
+  getWorkerPreferences,
   listEmploymentCases,
-  newIdempotencyKey,
   prewarmApi,
   resetApiPrewarmForTests,
 } from './client.js';
+import { newIdempotencyKey } from './idempotency.js';
 
 describe('API authentication', () => {
   afterEach(() => {
@@ -53,6 +54,43 @@ describe('API authentication', () => {
           authorization: 'Bearer verified-user-access-token',
         }),
       }),
+    );
+  });
+});
+
+describe('getWorkerPreferences', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    getSession.mockClear();
+  });
+
+  // Defect: WorkerPortalPage never called GET /worker/preferences at all, so
+  // its save always sent a hardcoded consent value instead of what was
+  // actually stored. This getter is what closes that gap.
+  it('reads the stored worker preference from /worker/preferences', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            preferred_locale: 'he',
+            preferred_channel: 'email',
+            email_enabled: true,
+            whatsapp_enabled: false,
+            sms_enabled: false,
+            whatsapp_consent: 'revoked',
+            sms_consent: 'unknown',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getWorkerPreferences()).resolves.toEqual(
+      expect.objectContaining({ whatsapp_consent: 'revoked', sms_consent: 'unknown' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/worker/preferences'),
+      expect.objectContaining({ method: undefined }),
     );
   });
 });

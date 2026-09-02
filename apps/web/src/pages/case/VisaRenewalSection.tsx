@@ -7,10 +7,10 @@ import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@ca
 import {
   ApiRequestError,
   listVisaRenewals,
-  newIdempotencyKey,
   startVisaRenewal,
   type VisaRenewalWorkflowResponse,
 } from '../../api/client.js';
+import { newIdempotencyKey } from '../../api/idempotency.js';
 
 type LoadState =
   | { kind: 'loading' }
