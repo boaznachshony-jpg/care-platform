@@ -5,6 +5,11 @@ import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import {
+  healthFactorAction,
+  healthFactorExplanation,
+  healthFactorTitle,
+} from '../health-factors.js';
+import {
   OpenIssuesGlance,
   type OpenIssue,
   type OpenIssueSeverity,
@@ -61,20 +66,23 @@ export function OpenIssuesPage() {
 
   for (const factor of health?.factors ?? []) {
     if (factor.status === 'attention') {
+      // The API answers in English. This page is the one a family opens to see
+      // what needs doing, so every one of the three strings is localised — the
+      // action label included, since it is the only one that is a link.
       issues.push({
         id: `factor-${factor.id}`,
         severity: 'urgent',
-        title: factor.title,
-        explanation: factor.explanation,
-        actionLabel: factor.recommendedAction,
+        title: healthFactorTitle(factor, t),
+        explanation: healthFactorExplanation(factor, t),
+        actionLabel: healthFactorAction(factor, t),
         actionTo: factor.actionTarget ? path(factor.actionTarget) : undefined,
       });
     } else if (factor.status === 'good') {
       issues.push({
         id: `factor-${factor.id}`,
         severity: 'ok',
-        title: factor.title,
-        explanation: factor.explanation,
+        title: healthFactorTitle(factor, t),
+        explanation: healthFactorExplanation(factor, t),
       });
     }
   }

@@ -227,7 +227,9 @@
     "documentValid": "קיים מסמך בתוקף בתיק",
     "documentMissing": "לא נמצא מסמך בתוקף — נדרש חידוש או העלאה",
     "tasksNone": "אין משימות פתוחות",
-    "tasksOpen": "{{count}} משימות פתוחות ממתינות לטיפול"
+    "tasksOpen": "{{count}} משימות פתוחות ממתינות לטיפול",
+    "actionDocument": "העלאת מסמך או בדיקתו",
+    "actionTasks": "מעבר למשימות הפתוחות"
   },
   "nav": {
     "dashboard": "ראשי",

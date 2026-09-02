@@ -21,6 +21,7 @@ export interface HealthFactorLike {
   title: string;
   status: 'good' | 'attention' | 'not_applicable';
   explanation: string;
+  recommendedAction?: string;
   provenance?: { sourceIds?: string[] };
 }
 
@@ -40,4 +41,25 @@ export function healthFactorExplanation(factor: HealthFactorLike, t: Translate):
   const key = factor.status === 'good' ? 'health.documentValid' : 'health.documentMissing';
   const translated = t(key);
   return translated === key ? factor.explanation : translated;
+}
+
+/**
+ * The action link's wording.
+ *
+ * The titles and explanations were localised when this module was written; the
+ * `recommendedAction` was not, so three English links — "Upload or review the
+ * document" — sat inside otherwise-Hebrew sentences on the case panel, the
+ * dashboard and the open-issues page. It is the only clickable text in that
+ * list, which makes it the worst one to leave untranslated: it is what the
+ * reader is being asked to do.
+ *
+ * Same contract as the two above: the server decides whether there is an
+ * action, the locale decides how it reads, and an unrecognised factor falls
+ * back to the server's text rather than losing its link.
+ */
+export function healthFactorAction(factor: HealthFactorLike, t: Translate): string | undefined {
+  if (!factor.recommendedAction) return undefined;
+  const key = factor.id === 'governed_tasks' ? 'health.actionTasks' : 'health.actionDocument';
+  const translated = t(key);
+  return translated === key ? factor.recommendedAction : translated;
 }

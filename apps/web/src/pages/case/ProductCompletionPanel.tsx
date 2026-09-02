@@ -16,7 +16,11 @@ import {
   type ProfessionalReviewTransitionResponse,
 } from '../../api/client.js';
 import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
-import { healthFactorExplanation, healthFactorTitle } from '../../health-factors.js';
+import {
+  healthFactorAction,
+  healthFactorExplanation,
+  healthFactorTitle,
+} from '../../health-factors.js';
 
 /**
  * Mirror of the server-side lifecycle. The server is authoritative — this map
@@ -115,8 +119,13 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                 <small>
                   {factor.points}/{factor.weight}
                 </small>
-                {factor.actionTarget ? (
-                  <a href={factor.actionTarget}>{factor.recommendedAction}</a>
+                {factor.actionTarget && healthFactorAction(factor, t) ? (
+                  // The separator is not cosmetic: without it the score and the
+                  // link ran together as "0/25Upload or review the document".
+                  <>
+                    {' · '}
+                    <a href={factor.actionTarget}>{healthFactorAction(factor, t)}</a>
+                  </>
                 ) : null}
               </li>
             ))}

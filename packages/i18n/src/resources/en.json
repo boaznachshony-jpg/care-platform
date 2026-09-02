@@ -227,7 +227,9 @@
     "documentValid": "A valid document is stored in the case",
     "documentMissing": "No currently valid document was found - renewal or upload required",
     "tasksNone": "No open tasks",
-    "tasksOpen": "{{count}} open tasks require attention"
+    "tasksOpen": "{{count}} open tasks require attention",
+    "actionDocument": "Upload or review the document",
+    "actionTasks": "Review open tasks"
   },
   "nav": {
     "dashboard": "Home",
