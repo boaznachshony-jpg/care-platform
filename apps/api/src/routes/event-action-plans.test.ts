@@ -73,6 +73,12 @@ describe('event action plan commit', () => {
   it('commits exactly once and replays the identical stored receipt', async () => {
     const { app } = makeApp();
     const caseId = await createCase(app);
+    // Opening a case now seeds 3 compliance tasks (passport/visa/medical
+    // insurance — see CASE_HEALTH_TASK_FACTORS), so the task list is no
+    // longer empty at this point. Asserting the delta over this baseline
+    // keeps the test about what committing the plan does, not about how many
+    // things case-opening happens to seed today.
+    const baseline = await taskCount(app, caseId);
     const headers = { ...AUTH, 'idempotency-key': 'event-plan-replay-key-1' };
 
     const first = await app.inject({
@@ -91,7 +97,7 @@ describe('event action plan commit', () => {
       (item: { taskId: string | null }) => item.taskId,
     );
     expect(actionable).toHaveLength(1);
-    expect(await taskCount(app, caseId)).toBe(1);
+    expect(await taskCount(app, caseId)).toBe(baseline + 1);
 
     const replay = await app.inject({
       method: 'POST',
@@ -105,12 +111,13 @@ describe('event action plan commit', () => {
     expect(replayed.confirmationId).toBe(receipt.confirmationId);
     expect(replayed.committedItems).toEqual(receipt.committedItems);
     // No double task creation on replay.
-    expect(await taskCount(app, caseId)).toBe(1);
+    expect(await taskCount(app, caseId)).toBe(baseline + 1);
   });
 
   it('keeps concurrent duplicates safe: exactly one execution', async () => {
     const { app } = makeApp();
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const headers = { ...AUTH, 'idempotency-key': 'event-plan-concurrent-key' };
     const request = () =>
       app.inject({
@@ -123,12 +130,13 @@ describe('event action plan commit', () => {
     const statuses = [a.statusCode, b.statusCode].sort();
     expect(statuses[0] === 201 || statuses[1] === 201).toBe(true);
     for (const status of statuses) expect([200, 201, 409]).toContain(status);
-    expect(await taskCount(app, caseId)).toBe(1);
+    expect(await taskCount(app, caseId)).toBe(baseline + 1);
   });
 
   it('rejects the same key reused with a different plan', async () => {
     const { app } = makeApp();
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const headers = { ...AUTH, 'idempotency-key': 'event-plan-reuse-key-1' };
     const first = await app.inject({
       method: 'POST',
@@ -148,12 +156,13 @@ describe('event action plan commit', () => {
     });
     expect(reused.statusCode).toBe(409);
     expect(reused.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
-    expect(await taskCount(app, caseId)).toBe(1);
+    expect(await taskCount(app, caseId)).toBe(baseline + 1);
   });
 
   it('rejects a cancelled plan without any mutation', async () => {
     const { app } = makeApp();
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const response = await app.inject({
       method: 'POST',
       url: `/cases/${caseId}/event-plans`,
@@ -162,12 +171,15 @@ describe('event action plan commit', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
-    expect(await taskCount(app, caseId)).toBe(0);
+    // "Without any mutation" now means "unchanged from the post-open
+    // baseline", which is 3 seeded compliance tasks, not 0.
+    expect(await taskCount(app, caseId)).toBe(baseline);
   });
 
   it('rejects an invalid plan (missing required answer, bad travel dates) without mutation', async () => {
     const { app } = makeApp();
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const missingAnswer = await app.inject({
       method: 'POST',
       url: `/cases/${caseId}/event-plans`,
@@ -194,12 +206,15 @@ describe('event action plan commit', () => {
     });
     expect(badTravel.statusCode).toBe(422);
     expect(badTravel.json()).toMatchObject({ code: 'PLAN_INVALID' });
-    expect(await taskCount(app, caseId)).toBe(0);
+    // "Without mutation" now means "unchanged from the post-open baseline"
+    // (3 seeded compliance tasks), not literally zero tasks.
+    expect(await taskCount(app, caseId)).toBe(baseline);
   });
 
   it('denies cross-tenant commits with 404 and no change', async () => {
     const { app, container } = makeApp();
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     vi.spyOn(container.getCase, 'execute').mockRejectedValue(
       new AuthorizationError('cross-tenant'),
     );
@@ -212,6 +227,6 @@ describe('event action plan commit', () => {
     expect(response.statusCode).toBe(404);
     expect(response.json()).toMatchObject({ code: 'NOT_FOUND' });
     vi.restoreAllMocks();
-    expect(await taskCount(app, caseId)).toBe(0);
+    expect(await taskCount(app, caseId)).toBe(baseline);
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiRequest } from '../api/client.js';
+import { apiRequest, getWorkerPreferences, type WorkerPreferencesResponse } from '../api/client.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 type Portal = {
@@ -33,6 +33,16 @@ export function WorkerPortalPage() {
   const [tab, setTab] = useState('home');
   const [message, setMessage] = useState('');
   const [locale, setLocale] = useState<'he' | 'en'>('he');
+  // Defect fix: the save on the profile tab used to hardcode
+  // `whatsappConsent: 'unknown'` on every submit because nothing here ever
+  // read the stored preference first — so saving a language change could
+  // silently reset a caregiver's earlier, explicit WhatsApp/SMS opt-out back
+  // to 'unknown'. Loading it is what makes the save able to echo a value the
+  // worker actually holds instead of a hardcoded blank. The server
+  // (Wave5Service.updatePreference) is still the real guarantee: it never
+  // trusts this echo to be right and never lets an 'unknown' overwrite a
+  // stored 'revoked' (or 'granted') — this is only the client-side half.
+  const [preferences, setPreferences] = useState<WorkerPreferencesResponse | null>(null);
   const load = () =>
     apiRequest<Portal>('/worker/portal')
       .then(setData)
@@ -41,6 +51,16 @@ export function WorkerPortalPage() {
     void apiRequest<Portal>('/worker/portal')
       .then(setData)
       .catch(() => setError(true));
+  }, []);
+  useEffect(() => {
+    void getWorkerPreferences()
+      .then((prefs) => {
+        setPreferences(prefs);
+        if (prefs.preferred_locale === 'he' || prefs.preferred_locale === 'en') {
+          setLocale(prefs.preferred_locale);
+        }
+      })
+      .catch(() => undefined);
   }, []);
   if (error)
     return (
@@ -253,8 +273,16 @@ export function WorkerPortalPage() {
                 body: JSON.stringify({
                   locale,
                   channel: 'email',
-                  whatsappConsent: 'unknown',
-                  smsConsent: 'unknown',
+                  // Echo the one consent state this portal is ever allowed to
+                  // write: an explicit prior revoke. Anything else (unknown,
+                  // granted, or a preference we failed to load) sends
+                  // 'unknown' — read server-side as "this request has no
+                  // opinion about consent" and never allowed to overwrite
+                  // whatever is actually stored. See getWorkerPreferences and
+                  // Wave5Service.updatePreference.
+                  whatsappConsent:
+                    preferences?.whatsapp_consent === 'revoked' ? 'revoked' : 'unknown',
+                  smsConsent: preferences?.sms_consent === 'revoked' ? 'revoked' : 'unknown',
                 }),
               });
             }}

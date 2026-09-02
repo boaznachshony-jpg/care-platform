@@ -26,3 +26,4 @@ export type TaskId = Branded<string, 'TaskId'>;
 export type TimelineEventId = Branded<string, 'TimelineEventId'>;
 export type DocumentId = Branded<string, 'DocumentId'>;
 export type DocumentVersionId = Branded<string, 'DocumentVersionId'>;
+export type MedicationId = Branded<string, 'MedicationId'>;

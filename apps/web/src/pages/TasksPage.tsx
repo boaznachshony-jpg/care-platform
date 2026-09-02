@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   readMvpTasks,
@@ -10,6 +10,16 @@ import {
 } from '../storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 import { NATIONAL_INSURANCE_PAYMENT_URL } from '../upcoming-payments.js';
+import { archiveCaseTask, completeCaseTask, importCaseTask, listCaseTasks } from '../api/client.js';
+import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
+import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
+import {
+  getUploadedServerId,
+  rememberUploadedServerId,
+  uploadUnsyncedRecords,
+  type SyncStatus,
+} from '../sync/legacy-upload.js';
+import { localTaskPriorityToCanonical, taskResponseToLocal } from '../sync/task-mapping.js';
 
 type TaskFilter = 'open' | 'week' | 'completed';
 
@@ -53,6 +63,90 @@ export function TasksPage({ today }: { today?: Date } = {}) {
   const [draft, setDraft] = useState(emptyDraft);
   const [message, setMessage] = useState('');
   const quarterlyInsurance = useMemo(() => createQuarterlyInsuranceTask(today), [today]);
+
+  // The case this device's local tasks belong to, if setup has gone far
+  // enough to have opened one. Nothing below runs until this resolves, and
+  // 'none'/'unavailable' both leave this screen exactly as it always
+  // behaved — pure local storage, no network involved.
+  const legacyClientId = useLegacyClientId();
+  const caseLookup = useCaseForLegacyClient(legacyClientId);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ phase: 'checking' });
+  const [syncAttempt, setSyncAttempt] = useState(0);
+
+  useEffect(() => {
+    if (caseLookup.status === 'checking') {
+      setSyncStatus({ phase: 'checking' });
+      return;
+    }
+    if (caseLookup.status !== 'found') {
+      setSyncStatus({ phase: 'no-case' });
+      return;
+    }
+    const caseId = caseLookup.caseId;
+    let active = true;
+
+    async function run() {
+      // Step 1: upload whatever this browser holds locally and has not
+      // already sent for this case. Idempotent on legacyLocalId (migration
+      // 0046) — safe to attempt on every mount, every retry, every tab.
+      const localNow = readMvpTasks();
+      const outcome = await uploadUnsyncedRecords('tasks', caseId, localNow, (task) =>
+        importCaseTask(caseId, {
+          legacyLocalId: task.id,
+          title: task.title,
+          priority: localTaskPriorityToCanonical(task.priority),
+          dueDate: task.dueDate || undefined,
+          status: task.status,
+        }),
+      );
+      if (!active) return;
+      if (outcome.failedIds.length > 0) {
+        setSyncStatus({ phase: 'upload-failed', failedCount: outcome.failedIds.length });
+        return;
+      }
+
+      // Step 2: read the canonical list back. This is what makes a second
+      // device (or a task someone else added straight on /cases/:caseId)
+      // show up here — local storage alone can never know about it.
+      try {
+        const serverTasks = await listCaseTasks(caseId);
+        if (!active) return;
+        const byLocalId = new Map(
+          serverTasks
+            .filter((task) => task.legacyLocalId)
+            .map((task) => [task.legacyLocalId as string, task] as const),
+        );
+        const merged = readMvpTasks().map((task) => {
+          const match = byLocalId.get(task.id);
+          return match ? taskResponseToLocal(match, task.createdAt) : task;
+        });
+        // Tasks that exist on the server but were never created on this
+        // device (legacyLocalId null — created on another device, or
+        // directly via CaseTasksSection) are appended and pre-marked as
+        // already-uploaded so the next sync pass never tries to "import"
+        // something that is already canonical.
+        for (const serverTask of serverTasks) {
+          if (serverTask.legacyLocalId) continue;
+          if (merged.some((task) => task.id === serverTask.id)) continue;
+          rememberUploadedServerId('tasks', caseId, serverTask.id, serverTask.id);
+          merged.push(taskResponseToLocal(serverTask, new Date().toISOString()));
+        }
+        saveMvpTasks(merged);
+        setTasks(merged);
+        setSyncStatus({ phase: 'synced' });
+      } catch {
+        // Uploaded successfully but could not read the list back — the
+        // local copy (already reflecting the upload attempt) stays on
+        // screen, honestly labelled as possibly stale rather than canonical.
+        setSyncStatus({ phase: 'offline' });
+      }
+    }
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [caseLookup, syncAttempt]);
 
   const visibleTasks = useMemo(
     () =>
@@ -105,20 +199,37 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     setShowForm(false);
     setFilter(saved.status === 'completed' ? 'completed' : 'open');
     setMessage(existing ? 'המשימה עודכנה ונשמרה.' : 'המשימה נוספה ונשמרה.');
+    // A brand-new task is not yet on the server; re-running the sync pass
+    // (rather than importing inline here) reuses the same idempotent,
+    // failure-visible path instead of a second, parallel upload codepath.
+    if (!existing && caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
 
   function toggleTask(task: MvpTask) {
-    persist(
-      tasks.map((item) =>
-        item.id === task.id
-          ? { ...item, status: item.status === 'completed' ? 'open' : 'completed' }
-          : item,
-      ),
-    );
+    const nextStatus = task.status === 'completed' ? 'open' : 'completed';
+    persist(tasks.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)));
+    // Forwarded best-effort only in the open->completed direction: the
+    // server has a `complete` action but no `reopen` one, so an uncheck
+    // here cannot be mirrored server-side. The task stays reopened locally
+    // regardless — Constitution §13, local input is never rolled back
+    // because a server call has nowhere to go.
+    if (nextStatus === 'completed' && caseLookup.status === 'found') {
+      const serverId = getUploadedServerId('tasks', caseLookup.caseId, task.id);
+      if (serverId) void completeCaseTask(caseLookup.caseId, serverId).catch(() => undefined);
+    }
   }
 
   function removeTask(task: MvpTask) {
     if (!window.confirm(`למחוק את המשימה "${task.title}"?`)) return;
+    // Local delete only — this is the pre-existing behaviour, unchanged. The
+    // server side is soft-closed (archived), never deleted (there is no
+    // delete route for tasks), which is the safer of the two possible
+    // outcomes: a device removing its own local copy never erases the case's
+    // history on the server or on any other device.
+    if (caseLookup.status === 'found') {
+      const serverId = getUploadedServerId('tasks', caseLookup.caseId, task.id);
+      if (serverId) void archiveCaseTask(caseLookup.caseId, serverId).catch(() => undefined);
+    }
     persist(tasks.filter((item) => item.id !== task.id));
     setMessage('המשימה נמחקה.');
   }
@@ -139,6 +250,31 @@ export function TasksPage({ today }: { today?: Date } = {}) {
       {message ? (
         <p className="info-box" role="status">
           {message}
+        </p>
+      ) : null}
+
+      {/*
+        Honest labelling of which copy is on screen (see cutover brief §2):
+        'offline'/'no-case' say plainly that this is the device's own copy,
+        never presented as if it were confirmed synced. 'upload-failed' names
+        a real count and offers a retry that reuses the same idempotent path.
+        'synced'/'checking' render nothing — a quiet success is the right
+        amount of noise for a screen the user opens many times a day.
+      */}
+      {syncStatus.phase === 'offline' ? (
+        <p className="info-box" role="status">
+          {t('tasks.sync.localCopy')}
+        </p>
+      ) : syncStatus.phase === 'upload-failed' ? (
+        <p className="action-notice error" role="alert">
+          {t('tasks.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => setSyncAttempt((count) => count + 1)}
+          >
+            {t('tasks.sync.retry')}
+          </button>
         </p>
       ) : null}
 

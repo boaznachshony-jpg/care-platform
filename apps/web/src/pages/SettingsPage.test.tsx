@@ -45,8 +45,10 @@ describe('SettingsPage complete client profile', () => {
     fireEvent.change(screen.getAllByLabelText('Email')[0]!, {
       target: { value: 'recipient@example.test' },
     });
+    // employerRelationship is now a fixed-option <select> (relationship-options.ts)
+    // rather than free text, so the value must be one of its real options.
     fireEvent.change(screen.getAllByLabelText('Relationship to care recipient')[0]!, {
-      target: { value: 'Family member' },
+      target: { value: 'Relative' },
     });
     fireEvent.change(screen.getByLabelText(/^Caregiver passport number/), {
       target: { value: 'ab-123 456' },
@@ -57,7 +59,7 @@ describe('SettingsPage complete client profile', () => {
       recipientCity: 'Haifa',
       recipientHealthFund: 'Sample Health Fund',
       recipientEmail: 'recipient@example.test',
-      employerRelationship: 'Family member',
+      employerRelationship: 'Relative',
       caregiverPassportNumber: 'AB123456',
     });
     expect(screen.getByText('Changes saved successfully')).toBeVisible();
@@ -92,6 +94,15 @@ describe('SettingsPage complete client profile', () => {
     expect(screen.getByRole('heading', { name: 'Data security' })).toBeVisible();
     expect(screen.getByText(/stored encrypted on your device/)).toBeVisible();
     expect(readMvpProfile().recipientName).toBe('Sample Recipient');
+  });
+
+  // The key was missing from both he.json and en.json, so the field label
+  // rendered as the raw key string "profile.employmentStartDate" instead of
+  // translated text.
+  it('translates the employment start date field label instead of showing the raw key', async () => {
+    await renderPage();
+    expect(screen.getByLabelText('Employment start date')).toBeInTheDocument();
+    expect(screen.queryByText('profile.employmentStartDate')).toBeNull();
   });
 });
 

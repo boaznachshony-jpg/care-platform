@@ -1,17 +1,22 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n, PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
 
 const mocks = vi.hoisted(() => ({
   recordLegalAcceptance: vi.fn(),
   ensureCanonicalCase: vi.fn(),
+  getBillingSubscription: vi.fn(),
 }));
 
 vi.mock('../api/client.js', async () => {
   const actual = await vi.importActual<typeof import('../api/client.js')>('../api/client.js');
-  return { ...actual, recordLegalAcceptance: mocks.recordLegalAcceptance };
+  return {
+    ...actual,
+    recordLegalAcceptance: mocks.recordLegalAcceptance,
+    getBillingSubscription: mocks.getBillingSubscription,
+  };
 });
 
 vi.mock('../canonical-case.js', async () => {
@@ -20,6 +25,7 @@ vi.mock('../canonical-case.js', async () => {
   return { ...actual, ensureCanonicalCase: mocks.ensureCanonicalCase };
 });
 
+import { ApiRequestError } from '../api/client.js';
 import {
   emptyMvpProfile,
   readMvpOnboardingDraft,
@@ -28,10 +34,16 @@ import {
 } from '../storage/mvp-storage.js';
 import { employmentSetupCompletedCount, OnboardingPage } from './OnboardingPage.js';
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname + location.search}</span>;
+}
+
 function renderPage() {
   return render(
     <I18nextProvider i18n={initI18n()}>
       <MemoryRouter>
+        <LocationProbe />
         <OnboardingPage />
       </MemoryRouter>
     </I18nextProvider>,
@@ -287,11 +299,22 @@ describe('onboarding legal acceptance', () => {
     localStorage.clear();
     mocks.recordLegalAcceptance.mockReset().mockResolvedValue({ acceptances: [] });
     mocks.ensureCanonicalCase.mockReset().mockResolvedValue(undefined);
+    // Default: an account that has never engaged billing at all — the
+    // untouched status a fresh subscription row gets from getOrCreate.
+    mocks.getBillingSubscription
+      .mockReset()
+      .mockResolvedValue({ status: 'payment_method_pending', paymentMethod: null });
     saveMvpProfile(completedChecklist);
     // Restore straight onto the final step rather than typing through six of
     // them; the step index is persisted exactly this way by the wizard itself.
     localStorage.setItem('caredesk.onboarding.step.default', '5');
   });
+
+  async function clickComplete() {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ }));
+    });
+  }
 
   it('shows the terms and privacy links beside the button that completes setup', () => {
     renderPage();
@@ -304,9 +327,7 @@ describe('onboarding legal acceptance', () => {
 
   it('records acceptance of both documents when setup is completed', async () => {
     renderPage();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ }));
-    });
+    await clickComplete();
 
     expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith({
       context: 'onboarding',
@@ -323,10 +344,146 @@ describe('onboarding legal acceptance', () => {
     // blocking - re-records it for free if this call was lost.
     mocks.recordLegalAcceptance.mockRejectedValue(new Error('offline'));
     renderPage();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ }));
-    });
+    await clickComplete();
 
     expect(readMvpProfile().onboardingCompleted).toBe(true);
+  });
+
+  /**
+   * Defect: `.catch(() => undefined)` treated the billing flow's re-record as
+   * a guarantee, but that only holds for a customer who actually reaches
+   * /billing. A customer who closes the tab right here left an account
+   * holding a caregiver's identity documents, visa data and payroll figures
+   * with no record anyone accepted anything, and nothing ever retried it.
+   */
+  describe('a failed acceptance leaves a trace instead of being discarded', () => {
+    const PENDING_KEY = 'caredesk.onboarding.pending-legal-acceptance.v1';
+    const expectedAcceptance = {
+      context: 'onboarding',
+      documents: [
+        { document: 'terms', version: TERMS_DOCUMENT_VERSION },
+        { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
+      ],
+    };
+
+    it('queues the acceptance locally when recording fails for a reason other than a rejected request', async () => {
+      mocks.recordLegalAcceptance.mockRejectedValue(new Error('network down'));
+      renderPage();
+      await clickComplete();
+
+      expect(JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null')).toEqual(expectedAcceptance);
+    });
+
+    it('does not queue a retry for a request the server rejected as malformed', async () => {
+      mocks.recordLegalAcceptance.mockRejectedValue(new ApiRequestError(422, 'VALIDATION_ERROR'));
+      renderPage();
+      await clickComplete();
+
+      // Retrying an identical 4xx forever would never succeed - it would
+      // just keep firing the same doomed request on every later visit.
+      expect(localStorage.getItem(PENDING_KEY)).toBeNull();
+    });
+
+    it('retries a queued acceptance on the next mount and clears it once it succeeds', async () => {
+      localStorage.setItem(PENDING_KEY, JSON.stringify(expectedAcceptance));
+      mocks.recordLegalAcceptance.mockResolvedValue({ acceptances: [] });
+
+      renderPage();
+
+      await waitFor(() =>
+        expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith(expectedAcceptance),
+      );
+      await waitFor(() => expect(localStorage.getItem(PENDING_KEY)).toBeNull());
+    });
+
+    it('leaves the queued acceptance in place when the retry itself fails', async () => {
+      localStorage.setItem(PENDING_KEY, JSON.stringify(expectedAcceptance));
+      mocks.recordLegalAcceptance.mockRejectedValue(new Error('still offline'));
+
+      renderPage();
+
+      await waitFor(() =>
+        expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith(expectedAcceptance),
+      );
+      expect(JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null')).toEqual(expectedAcceptance);
+    });
+  });
+
+  /**
+   * Defect: `isFirstRun` was `!profile.onboardingCompleted`, and
+   * `useMvpProfile` is scoped to the client id in the URL — so adding a
+   * SECOND client to an account that already pays read as "first run" again
+   * and sent a paying customer back to /billing instead of to the case they
+   * just finished creating.
+   */
+  describe('navigation after setup depends on the account, not the client record', () => {
+    it('sends a first-time account to billing when the subscription has never been engaged', async () => {
+      mocks.getBillingSubscription.mockResolvedValue({
+        status: 'payment_method_pending',
+        paymentMethod: null,
+      });
+      renderPage();
+      await clickComplete();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('location')).toHaveTextContent('/billing?from=onboarding'),
+      );
+    });
+
+    it('does not send an already-paying account back to billing for a second client', async () => {
+      mocks.getBillingSubscription.mockResolvedValue({
+        status: 'active',
+        paymentMethod: { last4: '1234', expiryMonth: 1, expiryYear: 2030 },
+      });
+      renderPage();
+      await clickComplete();
+
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/app'));
+    });
+
+    it('treats a started-but-not-yet-paying account as already engaged too', async () => {
+      // A payment method setup was started (status moved past the untouched
+      // default) even though no card is attached yet - still not a genuine
+      // first-time signup.
+      mocks.getBillingSubscription.mockResolvedValue({
+        status: 'payment_method_ready',
+        paymentMethod: null,
+      });
+      renderPage();
+      await clickComplete();
+
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/app'));
+    });
+
+    /**
+     * When the subscription check fails, the answer is unknown, and the code
+     * now falls back to the local `isFirstRun` signal (`profile.
+     * onboardingCompleted`) instead of always assuming "not first run".
+     * Always answering "not first run" meant a genuine new signup who
+     * happened to be offline at that moment never saw the billing screen and
+     * therefore never paid - a Playwright end-to-end run caught exactly that.
+     * The two cases below pin the corrected fallback in both directions.
+     */
+    it('falls back to billing when the check fails and the local record says this is a first run', async () => {
+      // beforeEach's saveMvpProfile(completedChecklist) does not set
+      // onboardingCompleted, so it keeps emptyMvpProfile's default of
+      // false - i.e. the local record says setup was never finished before.
+      mocks.getBillingSubscription.mockRejectedValue(new Error('offline'));
+      renderPage();
+      await clickComplete();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('location')).toHaveTextContent('/billing?from=onboarding'),
+      );
+    });
+
+    it('falls back to /app when the check fails and the local record says setup was already completed', async () => {
+      saveMvpProfile({ ...completedChecklist, onboardingCompleted: true });
+      mocks.getBillingSubscription.mockRejectedValue(new Error('offline'));
+      renderPage();
+      await clickComplete();
+
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/app'));
+    });
   });
 });

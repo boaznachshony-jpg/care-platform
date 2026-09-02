@@ -1,4 +1,9 @@
-import type { CreateTaskRecord, TaskRepository, TimelineRepository } from '@caredesk/application';
+import type {
+  CreateTaskRecord,
+  TaskRepository,
+  TimelineRepository,
+  UpdateTaskRecord,
+} from '@caredesk/application';
 import { brandId, type Task, type TimelineEvent } from '@caredesk/domain';
 import type { InMemoryTimelineService } from './in-memory-timeline-service.js';
 
@@ -10,14 +15,16 @@ export class InMemoryTaskRepository implements TaskRepository {
       id: brandId(input.id),
       tenantId: brandId(input.tenantId),
       employmentCaseId: brandId(input.employmentCaseId),
-      title: input.title,
-      titleKey: null,
+      title: input.title ?? null,
+      titleKey: input.titleKey ?? null,
       description: input.description,
       status: 'open',
       priority: input.priority,
       dueAt: input.dueAt,
       completedAt: null,
-      sourceType: 'manual',
+      sourceType: input.sourceType ?? 'manual',
+      legacyLocalId: input.legacyLocalId ?? null,
+      sourceKey: input.sourceKey ?? null,
     };
     const tasks = this.tasksByTenant.get(input.tenantId) ?? [];
     tasks.push(task);
@@ -33,6 +40,31 @@ export class InMemoryTaskRepository implements TaskRepository {
 
   async findTask(tenantId: string, taskId: string): Promise<Task | null> {
     return (this.tasksByTenant.get(tenantId) ?? []).find((task) => task.id === taskId) ?? null;
+  }
+
+  async findTaskByLegacyLocalId(
+    tenantId: string,
+    employmentCaseId: string,
+    legacyLocalId: string,
+  ): Promise<Task | null> {
+    return (
+      (this.tasksByTenant.get(tenantId) ?? []).find(
+        (task) =>
+          task.employmentCaseId === employmentCaseId && task.legacyLocalId === legacyLocalId,
+      ) ?? null
+    );
+  }
+
+  async findTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+  ): Promise<Task | null> {
+    return (
+      (this.tasksByTenant.get(tenantId) ?? []).find(
+        (task) => task.employmentCaseId === employmentCaseId && task.sourceKey === sourceKey,
+      ) ?? null
+    );
   }
 
   async completeTask(
@@ -51,6 +83,70 @@ export class InMemoryTaskRepository implements TaskRepository {
       return null;
     }
     const updated: Task = { ...existing, status: 'completed', completedAt };
+    tasks[index] = updated;
+    return updated;
+  }
+
+  /** Mirrors PgTaskRepository.completeTaskBySourceKey — see TaskRepository port for why. */
+  async completeTaskBySourceKey(
+    tenantId: string,
+    employmentCaseId: string,
+    sourceKey: string,
+    completedAt: string,
+    _completedBy: string | null,
+  ): Promise<Task | null> {
+    const tasks = this.tasksByTenant.get(tenantId) ?? [];
+    const index = tasks.findIndex(
+      (task) =>
+        task.employmentCaseId === employmentCaseId &&
+        task.sourceKey === sourceKey &&
+        task.status !== 'completed',
+    );
+    if (index === -1) {
+      return null;
+    }
+    const existing = tasks[index];
+    if (!existing) {
+      return null;
+    }
+    const updated: Task = { ...existing, status: 'completed', completedAt };
+    tasks[index] = updated;
+    return updated;
+  }
+
+  async updateTask(
+    tenantId: string,
+    taskId: string,
+    changes: UpdateTaskRecord,
+    _updatedBy: string,
+  ): Promise<Task | null> {
+    const tasks = this.tasksByTenant.get(tenantId) ?? [];
+    const index = tasks.findIndex(
+      (task) => task.id === taskId && task.status !== 'completed' && task.status !== 'cancelled',
+    );
+    if (index === -1) return null;
+    const existing = tasks[index];
+    if (!existing) return null;
+    const updated: Task = {
+      ...existing,
+      title: changes.title ?? existing.title,
+      description: changes.description !== undefined ? changes.description : existing.description,
+      priority: changes.priority ?? existing.priority,
+      dueAt: changes.dueAt !== undefined ? changes.dueAt : existing.dueAt,
+    };
+    tasks[index] = updated;
+    return updated;
+  }
+
+  async archiveTask(tenantId: string, taskId: string, _updatedBy: string): Promise<Task | null> {
+    const tasks = this.tasksByTenant.get(tenantId) ?? [];
+    const index = tasks.findIndex(
+      (task) => task.id === taskId && task.status !== 'completed' && task.status !== 'cancelled',
+    );
+    if (index === -1) return null;
+    const existing = tasks[index];
+    if (!existing) return null;
+    const updated: Task = { ...existing, status: 'cancelled' };
     tasks[index] = updated;
     return updated;
   }

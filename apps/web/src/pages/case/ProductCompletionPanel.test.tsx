@@ -128,6 +128,128 @@ describe('ProductCompletionPanel', () => {
     expect(mockListProfessionalReviews).toHaveBeenCalledWith(DEMO_CASE_ID);
   });
 
+  describe('assistant answer translation', () => {
+    const ASSISTANT_RESPONSE = {
+      answer: 'Your CareDesk file is missing valid evidence for: passport, visa.',
+      answerId: 'assistant.answer.missingDocuments',
+      answerParams: { missingTypes: ['passport', 'visa'] },
+      groundingLabel: 'Based on your CareDesk file',
+      groundingLabelId: 'assistant.groundingLabel',
+      factsUsed: [
+        {
+          factPath: 'caseSummary.status',
+          label: 'Case status: active',
+          labelId: 'assistant.fact.caseStatus',
+          labelParams: { status: 'active' },
+        },
+      ],
+      uncertainties: [{ code: 'no_approved_rule', message: 'No approved rule was available.' }],
+      recommendedActions: [],
+      escalation: {
+        required: true,
+        reason: 'No approved rule covers professional interpretation',
+        reasonId: 'assistant.escalation.reasonNoRule',
+      },
+    };
+
+    async function askAndGetArticle() {
+      renderPanel();
+      await waitFor(() => screen.getByRole('heading', { name: 'מצב תיק ההעסקה' }));
+      fireEvent.change(screen.getByLabelText('מה תרצו לבדוק?'), {
+        target: { value: 'מה חסר בתיק?' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'בדיקה לפי תיק CareDesk' }));
+      return waitFor(() => screen.getByRole('article', { name: 'תשובה לתיק בסיוע AI' }));
+    }
+
+    it('renders the answer, grounding label, fact and uncertainty in Hebrew via their ids', async () => {
+      mockAskCaseAssistant.mockResolvedValue(ASSISTANT_RESPONSE);
+      await askAndGetArticle();
+      expect(screen.getByText('בהתבסס על תיק ה-CareDesk שלכם')).toBeInTheDocument();
+      expect(
+        screen.getByText('בתיק ה-CareDesk שלכם חסרות ראיות בתוקף עבור: דרכון, אשרה והיתר עבודה.'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('סטטוס התיק: פעיל')).toBeInTheDocument();
+      expect(screen.getByText('לא נמצא כלל מאושר לפרשנות מקצועית.')).toBeInTheDocument();
+      expect(screen.queryByText(ASSISTANT_RESPONSE.answer)).not.toBeInTheDocument();
+    });
+
+    it('falls back to the server English text when an id is not recognised', async () => {
+      mockAskCaseAssistant.mockResolvedValue({
+        ...ASSISTANT_RESPONSE,
+        answerId: 'assistant.answer.somethingNew',
+      });
+      await askAndGetArticle();
+      expect(
+        screen.getByText('Your CareDesk file is missing valid evidence for: passport, visa.'),
+      ).toBeInTheDocument();
+    });
+
+    it('sends the translated escalation reason when creating a review from an answer', async () => {
+      mockAskCaseAssistant.mockResolvedValue(ASSISTANT_RESPONSE);
+      await askAndGetArticle();
+      fireEvent.click(screen.getByRole('button', { name: 'יצירת בקשת בדיקה' }));
+      await waitFor(() =>
+        expect(mockCreateProfessionalReview).toHaveBeenCalledWith(
+          DEMO_CASE_ID,
+          expect.objectContaining({ reason: 'לא נמצא כלל מאושר לפרשנות מקצועית' }),
+        ),
+      );
+    });
+  });
+
+  describe('honest failure states', () => {
+    it('shows an error and a retry that reloads the case health after a failed load', async () => {
+      mockGetCaseHealth.mockReset();
+      mockGetCaseHealth.mockRejectedValueOnce(new Error('network down')).mockResolvedValue({
+        score: 55,
+        actionsRemaining: 1,
+        factors: [],
+      });
+      renderPanel();
+      await waitFor(() =>
+        expect(
+          screen.getByText('טעינת נתוני התיק נכשלה. שום נתון בתיק לא נפגע.'),
+        ).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'ניסיון נוסף' }));
+      await waitFor(() => expect(screen.getByText('55')).toBeInTheDocument());
+    });
+
+    it('shows an error and a retry when the review list fails to load', async () => {
+      mockListProfessionalReviews.mockReset();
+      mockListProfessionalReviews
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValue([]);
+      renderPanel();
+      await waitFor(() =>
+        expect(
+          screen.getByText('טעינת בקשות הבדיקה נכשלה. שום נתון בתיק לא נפגע.'),
+        ).toBeInTheDocument(),
+      );
+      expect(screen.queryByText('אין בקשות בדיקה פתוחות.')).not.toBeInTheDocument();
+    });
+
+    it('shows an error instead of silently pretending the escalation succeeded', async () => {
+      mockCreateProfessionalReview.mockRejectedValue(new Error('server error'));
+      renderPanel();
+      await waitFor(() => screen.getByRole('button', { name: 'בקשת בדיקה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'בקשת בדיקה' }));
+      await waitFor(() =>
+        expect(screen.getByText('יצירת בקשת הבדיקה נכשלה. נסו שוב.')).toBeInTheDocument(),
+      );
+    });
+
+    it('shows an error instead of an empty-looking audit history when it fails to load', async () => {
+      mockListProfessionalReviews.mockResolvedValue([REQUESTED_REVIEW]);
+      mockGetProfessionalReview.mockRejectedValue(new Error('server error'));
+      renderPanel();
+      await waitFor(() => screen.getByText(tt('escalation.status.requested')));
+      fireEvent.click(screen.getByText(tt('escalation.history')));
+      await waitFor(() => expect(screen.getByText('טעינת ההיסטוריה נכשלה.')).toBeInTheDocument());
+    });
+  });
+
   describe('escalation lifecycle', () => {
     it('shows the status badge, the manual-handoff disclaimer and the legal transition buttons', async () => {
       mockListProfessionalReviews.mockResolvedValue([REQUESTED_REVIEW]);

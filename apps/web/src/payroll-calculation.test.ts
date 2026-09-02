@@ -29,6 +29,31 @@ describe('monthly payroll calculation', () => {
     });
   });
 
+  it('rounds the prorated amount the way the domain (and the DB CHECK) does, not the way plain float division does', () => {
+    // Root 8. The old implementation was
+    // `Math.round(((fullSalary * paidDays) / daysInMonth) * 100) / 100` — a
+    // second money model living outside `@caredesk/domain`. For a caregiver
+    // paid ₪4,096.69/month starting March 2, 2024 (25 of 26 working days;
+    // March 2024 has five Saturdays), that formula computes ₪3,939.12. The
+    // true value, rounded half-away-from-zero on the exact decimal — the same
+    // rule `@caredesk/domain`'s `scaleAgorot` and migration 0045's
+    // `payroll_entry_total_reconciles_agorot` CHECK both apply — is ₪3,939.13.
+    // The one-agora gap is `(4096.69 * 25) / 26 * 100`, which is
+    // 393912.99999999994 in IEEE-754 double precision rather than the exact
+    // 393913: `Math.round` on the float floors it to 393912 and the base
+    // salary this screen would have recorded, saved and reported to National
+    // Insurance is a single agora short of what the domain and the database
+    // both agree the caregiver is owed.
+    expect(calculateProratedBaseSalary(4_096.69, '2024-03', '2024-03-02')).toEqual({
+      amount: 3_939.13,
+      paidDays: 25,
+      daysInMonth: 26,
+      calendarDaysInMonth: 31,
+      excludedSaturdays: 5,
+      isProrated: true,
+    });
+  });
+
   it('keeps the full base salary when no partial-month date is selected', () => {
     expect(calculateProratedBaseSalary(6_400, '2026-07', '')).toEqual({
       amount: 6_400,

@@ -5,47 +5,14 @@ import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import {
-  OpenIssuesGlance,
-  type OpenIssue,
-  type OpenIssueSeverity,
-} from '../components/OpenIssuesGlance.js';
-import type { MvpProfile } from '../storage/mvp-storage.js';
+  healthFactorAction,
+  healthFactorExplanation,
+  healthFactorTitle,
+} from '../health-factors.js';
+import { OpenIssuesGlance, type OpenIssue } from '../components/OpenIssuesGlance.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const URGENT_WINDOW_DAYS = 14;
-const SOON_WINDOW_DAYS = 30;
-
-function daysUntil(isoDate: string): number {
-  return Math.ceil((new Date(isoDate).getTime() - Date.now()) / DAY_MS);
-}
-
-function expirySeverity(days: number): OpenIssueSeverity {
-  if (days < URGENT_WINDOW_DAYS) return 'urgent';
-  if (days < SOON_WINDOW_DAYS) return 'soon';
-  return 'ok';
-}
-
-/** Same 14-field completeness list as DashboardPage, keyed for readable labels. */
-function missingProfileFieldKeys(profile: MvpProfile): string[] {
-  const checks: Array<[key: string, missing: boolean]> = [
-    ['employerName', !profile.employerName.trim()],
-    ['recipientName', !profile.recipientName.trim()],
-    ['caregiverName', !profile.caregiverName.trim()],
-    ['employmentStartDate', !profile.employmentStartDate.trim()],
-    ['representativeName', !profile.representativeName.trim()],
-    ['licensedBureauName', !profile.licensedBureauName.trim()],
-    ['licensedBureauContactName', !profile.licensedBureauContactName.trim()],
-    ['licensedBureauContactPhone', !profile.licensedBureauContactPhone.trim()],
-    ['employmentAgreementConfirmed', !profile.employmentAgreementConfirmed],
-    ['medicalInsurance', !profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate],
-    ['baseSalary', (profile.baseSalary ?? 0) <= 0],
-    ['saturdayRate', (profile.saturdayRate ?? 0) <= 0],
-    ['licenseRenewalDate', !profile.licenseRenewalDate],
-    ['visaRenewalDate', !profile.visaRenewalDate],
-  ];
-  return checks.filter(([, missing]) => missing).map(([key]) => key);
-}
+import { SOON_WINDOW_DAYS, daysUntil, expirySeverity } from '../date-diff.js';
+import { missingProfileFieldKeys } from '../profile-completeness.js';
 
 export function OpenIssuesPage() {
   const { t } = useTranslation();
@@ -61,20 +28,29 @@ export function OpenIssuesPage() {
 
   for (const factor of health?.factors ?? []) {
     if (factor.status === 'attention') {
+      // The API answers in English. This page is the one a family opens to see
+      // what needs doing, so every one of the three strings is localised — the
+      // action label included, since it is the only one that is a link.
       issues.push({
         id: `factor-${factor.id}`,
         severity: 'urgent',
-        title: factor.title,
-        explanation: factor.explanation,
-        actionLabel: factor.recommendedAction,
-        actionTo: factor.actionTarget ? path(factor.actionTarget) : undefined,
+        title: healthFactorTitle(factor, t),
+        explanation: healthFactorExplanation(factor, t),
+        actionLabel: healthFactorAction(factor, t),
+        // factor.actionTarget is already an app-rooted path from the health API
+        // ("/cases/{id}#..."), not one relative to this client workspace.
+        // Wrapping it in `path()` (which prefixes /clients/:clientId) produced
+        // a URL matching no route, so the router's catch-all silently sent the
+        // user to /app instead of the case screen — the urgent-action button
+        // did nothing, with no error.
+        actionTo: factor.actionTarget,
       });
     } else if (factor.status === 'good') {
       issues.push({
         id: `factor-${factor.id}`,
         severity: 'ok',
-        title: factor.title,
-        explanation: factor.explanation,
+        title: healthFactorTitle(factor, t),
+        explanation: healthFactorExplanation(factor, t),
       });
     }
   }
@@ -99,6 +75,7 @@ export function OpenIssuesPage() {
   for (const [key, isoDate] of expiryDates) {
     if (!isoDate) continue; // Missing dates are already covered by the missing-fields issue.
     const days = daysUntil(isoDate);
+    if (days === null) continue; // Malformed date — nothing sane to show, and no false certainty either.
     const severity = expirySeverity(days);
     issues.push({
       id: `expiry-${key}`,

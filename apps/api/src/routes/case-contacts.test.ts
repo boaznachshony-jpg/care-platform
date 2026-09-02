@@ -98,7 +98,12 @@ describe('case task routes', () => {
       url: `/cases/${caseId}/tasks`,
       headers: AUTH,
     });
-    expect(listed.json()).toHaveLength(1);
+    // Opening a case now seeds 3 compliance tasks (passport/visa/medical
+    // insurance) alongside the one created here, so the list is no longer a
+    // singleton. Scoping to the task this test actually created keeps the
+    // assertion true regardless of how many things the product seeds later.
+    const listedTaskIds = (listed.json() as Array<{ id: string }>).map((t) => t.id);
+    expect(listedTaskIds).toContain(task.id);
 
     const completed = await app.inject({
       method: 'POST',

@@ -34,6 +34,12 @@ describe('assistant checklist confirmation durable idempotency', () => {
   it('confirms once and replays the identical stored receipt without double task creation', async () => {
     const app = buildServer(loadEnv({}));
     const caseId = await createCase(app);
+    // Opening a case now seeds 3 compliance tasks (passport/visa/medical
+    // insurance — see CASE_HEALTH_TASK_FACTORS), so the absolute task count is
+    // no longer 0 at this point. Capturing it here and asserting the *delta*
+    // keeps this test about what the checklist confirmation does, not about
+    // how many things case-opening happens to seed today.
+    const baseline = await taskCount(app, caseId);
     const headers = { ...AUTH, 'idempotency-key': 'checklist-replay-key-1' };
 
     const first = await app.inject({
@@ -47,7 +53,7 @@ describe('assistant checklist confirmation durable idempotency', () => {
     expect(receipt.replayed).toBe(false);
     expect(receipt.created).toHaveLength(ITEMS.length);
     expect(receipt.confirmationId).toBe(receipt.receiptId);
-    expect(await taskCount(app, caseId)).toBe(ITEMS.length);
+    expect(await taskCount(app, caseId)).toBe(baseline + ITEMS.length);
 
     const replay = await app.inject({
       method: 'POST',
@@ -60,12 +66,13 @@ describe('assistant checklist confirmation durable idempotency', () => {
     expect(replayed.replayed).toBe(true);
     expect(replayed.confirmationId).toBe(receipt.confirmationId);
     expect(replayed.created).toEqual(receipt.created);
-    expect(await taskCount(app, caseId)).toBe(ITEMS.length);
+    expect(await taskCount(app, caseId)).toBe(baseline + ITEMS.length);
   });
 
   it('keeps concurrent duplicates safe: the checklist executes exactly once', async () => {
     const app = buildServer(loadEnv({}));
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const headers = { ...AUTH, 'idempotency-key': 'checklist-concurrent-key' };
     const request = () =>
       app.inject({
@@ -78,12 +85,13 @@ describe('assistant checklist confirmation durable idempotency', () => {
     const statuses = [a.statusCode, b.statusCode];
     expect(statuses).toContain(201);
     for (const status of statuses) expect([200, 201, 409]).toContain(status);
-    expect(await taskCount(app, caseId)).toBe(ITEMS.length);
+    expect(await taskCount(app, caseId)).toBe(baseline + ITEMS.length);
   });
 
   it('rejects the same key reused with different items', async () => {
     const app = buildServer(loadEnv({}));
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const headers = { ...AUTH, 'idempotency-key': 'checklist-reuse-key-1' };
     const first = await app.inject({
       method: 'POST',
@@ -100,12 +108,13 @@ describe('assistant checklist confirmation durable idempotency', () => {
     });
     expect(reused.statusCode).toBe(409);
     expect(reused.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
-    expect(await taskCount(app, caseId)).toBe(ITEMS.length);
+    expect(await taskCount(app, caseId)).toBe(baseline + ITEMS.length);
   });
 
   it('still requires an idempotency key and an authorized case', async () => {
     const app = buildServer(loadEnv({}));
     const caseId = await createCase(app);
+    const baseline = await taskCount(app, caseId);
     const missingKey = await app.inject({
       method: 'POST',
       url: `/cases/${caseId}/assistant/checklist-confirmations`,
@@ -122,6 +131,9 @@ describe('assistant checklist confirmation durable idempotency', () => {
       payload: { items: ITEMS },
     });
     expect(unknownCase.statusCode).toBe(404);
-    expect(await taskCount(app, caseId)).toBe(0);
+    // Neither the missing-key rejection nor the unknown-case 404 mutated
+    // anything, so the count is unchanged from the post-open baseline (which
+    // is 3, not 0, now that case-opening seeds compliance tasks).
+    expect(await taskCount(app, caseId)).toBe(baseline);
   });
 });

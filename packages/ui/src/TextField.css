@@ -37,9 +37,17 @@
   border-color: var(--color-danger);
 }
 
+.cd-text-field__hint,
 .cd-text-field__error {
   margin: 0;
   font-family: var(--font-family-base);
   font-size: var(--text-caption-size);
+}
+
+.cd-text-field__hint {
+  color: var(--color-text-secondary);
+}
+
+.cd-text-field__error {
   color: var(--color-danger);
 }

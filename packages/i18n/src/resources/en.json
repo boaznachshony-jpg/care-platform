@@ -227,7 +227,9 @@
     "documentValid": "A valid document is stored in the case",
     "documentMissing": "No currently valid document was found - renewal or upload required",
     "tasksNone": "No open tasks",
-    "tasksOpen": "{{count}} open tasks require attention"
+    "tasksOpen": "{{count}} open tasks require attention",
+    "actionDocument": "Upload or review the document",
+    "actionTasks": "Review open tasks"
   },
   "nav": {
     "dashboard": "Home",
@@ -247,7 +249,15 @@
     "defaultRelationship": "Employer",
     "employerCity": "City",
     "caregiverLegalName": "Caregiver legal name (as in passport)",
-    "caregiverPreferredName": "Preferred name",
+    "caregiverPreferredName": "Name used day to day",
+    "caregiverPreferredNameHint": "The name she is actually called, if it differs from the passport name. May be left blank.",
+    "relationshipPlaceholder": "Choose a relationship",
+    "relationshipOptions": {
+      "son": "Son",
+      "daughter": "Daughter",
+      "relative": "Relative",
+      "trustee": "Trustee"
+    },
     "caregiverNationality": "Nationality",
     "caregiverLanguage": "Primary language",
     "startDate": "Employment start date",
@@ -259,7 +269,11 @@
     "statusDraft": "Draft",
     "statusActive": "Active",
     "caseNotFound": "Case not found",
-    "loadFailed": "Failed to load the case"
+    "loadFailed": "Failed to load the case",
+    "statusSuspended": "Suspended",
+    "statusEnded": "Ended",
+    "statusCancelled": "Cancelled",
+    "statusArchived": "Archived"
   },
   "contacts": {
     "heading": "Contacts",
@@ -286,7 +300,19 @@
       "public_authority": "Public authority",
       "independent_professional": "Independent professional",
       "other": "Other"
-    }
+    },
+    "roleTypeHint": "The role describes the person's standing with the family. It appears on the case and in the emergency binder, and grants no access to the system.",
+    "rolePlaceholder": "Choose a role",
+    "roleOptions": {
+      "informed": "Informed — receives updates only",
+      "interested": "Interested party — involved, without authority to decide",
+      "care": "Care decision-maker — may decide on care matters",
+      "management": "Authorised representative — may act for the family"
+    },
+    "organizationHint": "Only if this contact represents an organisation. For a family member, neighbour or friend, leave blank.",
+    "orgTypeNone": "No organisation — an individual",
+    "organizationNameRequired": "Enter an organisation name, or leave the organisation type blank too.",
+    "organizationTypeRequired": "Choose an organisation type, or leave the organisation name blank too."
   },
   "tasks": {
     "heading": "Tasks",
@@ -315,6 +341,17 @@
       "normal": "Normal",
       "high": "High",
       "urgent": "Urgent"
+    },
+    "sync": {
+      "localCopy": "Showing this device's local copy — could not reach the server.",
+      "uploadFailed": "{{count}} tasks failed to upload.",
+      "retry": "Retry"
+    },
+    "legacyUploadFailed": "{{count}} existing tasks from this device failed to upload.",
+    "seeded": {
+      "passport": "Complete passport details",
+      "visa": "Complete visa / work authorization",
+      "medicalInsurance": "Complete medical insurance"
     }
   },
   "documents": {
@@ -357,7 +394,14 @@
       "verified": "Verified",
       "rejected": "Rejected",
       "superseded": "Superseded"
-    }
+    },
+    "sync": {
+      "localCopy": "Showing this device's local copy — could not reach the server.",
+      "uploadFailed": "{{count}} documents failed to upload.",
+      "retry": "Retry",
+      "uploading": "Uploading documents from this device to the server ({{completed}} of {{total}})…"
+    },
+    "legacyUploadFailed": "{{count}} existing documents from this device failed to upload."
   },
   "common": {
     "back": "Back",
@@ -401,7 +445,8 @@
     "licensedBureauContactPhone": "Bureau contact phone",
     "licensedBureauContactEmail": "Bureau contact email",
     "phone": "Phone number",
-    "startDate": "Employment start date"
+    "startDate": "Employment start date",
+    "employmentStartDate": "Employment start date"
   },
   "licensedBureau": {
     "choose": "Choose a licensed private bureau",
@@ -718,6 +763,11 @@
     "formIntro": "Write a short, clear message. We will confirm as soon as the request is received.",
     "replyEmail": "Email address for our reply",
     "replyEmailHint": "This address is used only to reply to this request.",
+    "replyToAccountEmail": "We will reply to your account email address.",
+    "showEmail": "Show the address",
+    "hideEmail": "Hide the address",
+    "useOtherEmail": "Send to a different address",
+    "useAccountEmail": "Use my account address",
     "messageLabel": "Your message",
     "helpPlaceholder": "For example: I could not mark a task as complete on the Tasks screen.",
     "feedbackPlaceholder": "For example: Please add a short explanation beside the Print button.",
@@ -999,6 +1049,9 @@
     "case": {
       "opened": {
         "summary": "Employment case opened"
+      },
+      "compliance_tasks_seeded": {
+        "summary": "Tasks were created for details missing from the case"
       }
     },
     "contact": {
@@ -1012,6 +1065,15 @@
       },
       "completed": {
         "summary": "A task was marked complete"
+      },
+      "archived": {
+        "summary": "A task was closed"
+      },
+      "imported": {
+        "summary": "A task from this device was added to the case"
+      },
+      "auto_completed": {
+        "summary": "A currently valid document satisfied this task, so it was completed automatically"
       }
     },
     "document": {
@@ -1020,6 +1082,12 @@
       },
       "intake_reviewed": {
         "summary": "A document AI review was recorded"
+      },
+      "imported": {
+        "summary": "A document from this device was added to the case"
+      },
+      "file_attached": {
+        "summary": "A file was attached to a previously imported document"
       }
     },
     "automation": {
@@ -1030,7 +1098,18 @@
         "summary": "Event action plan committed"
       }
     },
-    "byActor": "By"
+    "byActor": "By",
+    "medication": {
+      "created": {
+        "summary": "A medication was added to the case"
+      },
+      "archived": {
+        "summary": "A medication was removed from the active list"
+      },
+      "imported": {
+        "summary": "A medication from this device was added to the case"
+      }
+    }
   },
   "visaRenewal": {
     "eyebrow": "Governed workflow",
@@ -1144,7 +1223,10 @@
     "recordingExport": "Recording the export on the server…",
     "receiptLabel": "Export receipt",
     "receiptHash": "SHA-256 fingerprint",
-    "unrecordedLocalPrint": "Unrecorded local print — the server could not be reached, so this export was not recorded. This copy is undocumented."
+    "unrecordedLocalPrint": "Unrecorded local print — the server could not be reached, so this export was not recorded. This copy is undocumented.",
+    "medications": {
+      "localCopyNotice": "Showing this device's local copy — could not confirm with the server that this is the most current list."
+    }
   },
   "completion": {
     "health": "Employment file health",
@@ -1162,7 +1244,47 @@
     "noReviews": "No review requests are open.",
     "manualReview": "Request a review",
     "reviewReason": "The case needs professional review",
-    "reviewSummary": "Please review the relevant case evidence. No professional has been assigned yet."
+    "reviewSummary": "Please review the relevant case evidence. No professional has been assigned yet.",
+    "healthLoadFailed": "Loading the case file failed. Nothing in the file was affected.",
+    "reviewsLoadFailed": "Loading the review requests failed. Nothing in the file was affected.",
+    "escalateFailed": "Creating the review request failed. Please try again.",
+    "historyLoadFailed": "Loading the history failed.",
+    "retry": "Try again"
+  },
+  "assistant": {
+    "groundingLabel": "Based on your CareDesk file",
+    "answer": {
+      "missingDocuments": "Your CareDesk file is missing valid evidence for: {{types}}.",
+      "documentsValid": "The stored case facts show valid core documents. {{count}} open task(s) remain."
+    },
+    "documentType": {
+      "passport": "passport",
+      "visa": "visa / authorization",
+      "medical_insurance": "medical insurance"
+    },
+    "fact": {
+      "caseStatus": "Case status: {{status}}",
+      "documentStatus": "Stored document {{index}} status",
+      "approvedRule": "Approved rule: {{title}}"
+    },
+    "caseStatus": {
+      "draft": "draft",
+      "active": "active",
+      "suspended": "suspended",
+      "ended": "ended",
+      "cancelled": "cancelled",
+      "archived": "archived"
+    },
+    "uncertainty": {
+      "missing_fact": "A fact needed to answer fully was not available in the case file.",
+      "conflicting_fact": "The case file contains conflicting facts on this topic.",
+      "no_approved_rule": "No approved rule was available for professional interpretation.",
+      "professional_interpretation": "This point requires a professional's interpretation."
+    },
+    "escalation": {
+      "reasonRulesApplied": "Approved rules were applied; professional validation is still required before reliance",
+      "reasonNoRule": "No approved rule covers professional interpretation"
+    }
   },
   "escalation": {
     "manualHandoffDisclaimer": "Review requests are handed off manually to a professional you record. CareDesk does not contact any provider and makes no fulfilment claim.",
@@ -1371,7 +1493,12 @@
     "savedNotice": "The list has been saved.",
     "updatedAt": "Updated",
     "footnote": "The list is stored with the case and also appears in the emergency binder, so it is available to whoever steps in.",
-    "binderSection": "Standing medications"
+    "binderSection": "Standing medications",
+    "sync": {
+      "localCopy": "Showing this device's local copy — could not reach the server.",
+      "uploadFailed": "{{count}} medications failed to upload.",
+      "retry": "Retry"
+    }
   },
   "reminderRecipients": {
     "title": "Who receives reminders",

@@ -227,7 +227,9 @@
     "documentValid": "קיים מסמך בתוקף בתיק",
     "documentMissing": "לא נמצא מסמך בתוקף — נדרש חידוש או העלאה",
     "tasksNone": "אין משימות פתוחות",
-    "tasksOpen": "{{count}} משימות פתוחות ממתינות לטיפול"
+    "tasksOpen": "{{count}} משימות פתוחות ממתינות לטיפול",
+    "actionDocument": "העלאת מסמך או בדיקתו",
+    "actionTasks": "מעבר למשימות הפתוחות"
   },
   "nav": {
     "dashboard": "ראשי",
@@ -247,7 +249,15 @@
     "defaultRelationship": "מעסיק",
     "employerCity": "עיר",
     "caregiverLegalName": "שם המטפל (כמופיע בדרכון)",
-    "caregiverPreferredName": "כינוי",
+    "caregiverPreferredName": "שם לפנייה יומיומית",
+    "caregiverPreferredNameHint": "השם שבו פונים אליה בפועל, אם הוא שונה מהשם בדרכון. אפשר להשאיר ריק.",
+    "relationshipPlaceholder": "בחרו קרבה",
+    "relationshipOptions": {
+      "son": "בן",
+      "daughter": "בת",
+      "relative": "קרוב משפחה",
+      "trustee": "נאמן"
+    },
     "caregiverNationality": "אזרחות",
     "caregiverLanguage": "שפה עיקרית",
     "startDate": "תאריך תחילת העסקה",
@@ -259,7 +269,11 @@
     "statusDraft": "טיוטה",
     "statusActive": "פעיל",
     "caseNotFound": "התיק לא נמצא",
-    "loadFailed": "טעינת התיק נכשלה"
+    "loadFailed": "טעינת התיק נכשלה",
+    "statusSuspended": "מושהה",
+    "statusEnded": "הסתיים",
+    "statusCancelled": "בוטל",
+    "statusArchived": "בארכיון"
   },
   "contacts": {
     "heading": "אנשי קשר",
@@ -286,7 +300,19 @@
       "public_authority": "רשות ציבורית",
       "independent_professional": "בעל מקצוע עצמאי",
       "other": "אחר"
-    }
+    },
+    "roleTypeHint": "התפקיד מתאר את מעמדו של האדם מול המשפחה. הוא מוצג בתיק ובתיק החירום, ואינו מעניק גישה למערכת.",
+    "rolePlaceholder": "בחרו תפקיד",
+    "roleOptions": {
+      "informed": "מיודע — מקבל עדכונים בלבד",
+      "interested": "בעל עניין — מעורב בתיק, ללא סמכות להחליט",
+      "care": "מורשה טיפול — מוסמך להחליט בענייני הטיפול",
+      "management": "מורשה ניהול — מוסמך לפעול בשם המשפחה"
+    },
+    "organizationHint": "רק אם איש הקשר מייצג ארגון. בן משפחה, שכן או מכר — השאירו ריק.",
+    "orgTypeNone": "ללא ארגון — אדם פרטי",
+    "organizationNameRequired": "יש להזין שם ארגון, או להשאיר גם את סוג הארגון ריק.",
+    "organizationTypeRequired": "יש לבחור סוג ארגון, או להשאיר גם את שם הארגון ריק."
   },
   "tasks": {
     "heading": "משימות",
@@ -315,6 +341,17 @@
       "normal": "רגילה",
       "high": "גבוהה",
       "urgent": "דחופה"
+    },
+    "sync": {
+      "localCopy": "מוצג העותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת.",
+      "uploadFailed": "{{count}} משימות לא הועלו לשרת.",
+      "retry": "נסו שוב"
+    },
+    "legacyUploadFailed": "{{count}} משימות קיימות מהמכשיר לא הועלו לתיק.",
+    "seeded": {
+      "passport": "השלמת פרטי דרכון",
+      "visa": "השלמת ויזה / אישור העסקה",
+      "medicalInsurance": "השלמת ביטוח רפואי"
     }
   },
   "documents": {
@@ -357,7 +394,14 @@
       "verified": "מאומת",
       "rejected": "נדחה",
       "superseded": "הוחלף"
-    }
+    },
+    "sync": {
+      "localCopy": "מוצג העותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת.",
+      "uploadFailed": "{{count}} מסמכים לא הועלו לשרת.",
+      "retry": "נסו שוב",
+      "uploading": "מעלים מסמכים מהמכשיר לשרת ({{completed}} מתוך {{total}})…"
+    },
+    "legacyUploadFailed": "{{count}} מסמכים קיימים מהמכשיר לא הועלו לתיק."
   },
   "common": {
     "back": "חזרה",
@@ -401,7 +445,8 @@
     "licensedBureauContactPhone": "טלפון איש הקשר בתאגיד",
     "licensedBureauContactEmail": "דוא״ל איש הקשר בתאגיד",
     "phone": "מספר טלפון",
-    "startDate": "תאריך תחילת ההעסקה"
+    "startDate": "תאריך תחילת ההעסקה",
+    "employmentStartDate": "תאריך תחילת ההעסקה"
   },
   "licensedBureau": {
     "choose": "בחירת תאגיד או לשכה פרטית מורשית",
@@ -479,7 +524,7 @@
     "legalConsentNote": "ההסכמה נרשמת עם שם המסמך, גרסתו ומועד האישור. הזנת פרטי העובד/ת מחייבת בסיס חוקי, כמוסבר במדיניות הפרטיות."
   },
   "clients": {
-    "backupPlaintextWarning": "קובץ הגיבוי אינו מוצפן וכולל מספרי זהות, דרכון ונתוני שכר. יש לשמור אותו במקום מוגן ולא לשלוח אותו בדוא\u05f4ל או בהודעה.",
+    "backupPlaintextWarning": "קובץ הגיבוי אינו מוצפן וכולל מספרי זהות, דרכון ונתוני שכר. יש לשמור אותו במקום מוגן ולא לשלוח אותו בדוא״ל או בהודעה.",
     "eyebrow": "ניהול תיקי העסקה",
     "title": "תיקי ההעסקה שלי",
     "introCloud": "כל תיק נשמר בנפרד בחשבון המאובטח ומסתנכרן בין המכשירים המורשים.",
@@ -718,6 +763,11 @@
     "formIntro": "כתבו הודעה קצרה וברורה. נשלח אישור מיד לאחר שהפנייה התקבלה.",
     "replyEmail": "כתובת דוא״ל לקבלת תשובה",
     "replyEmailHint": "הכתובת משמשת רק למענה לפנייה זו.",
+    "replyToAccountEmail": "התשובה תישלח לכתובת הדוא״ל של החשבון שלכם.",
+    "showEmail": "הצגת הכתובת",
+    "hideEmail": "הסתרת הכתובת",
+    "useOtherEmail": "שליחה לכתובת אחרת",
+    "useAccountEmail": "חזרה לכתובת החשבון",
     "messageLabel": "תוכן הפנייה",
     "helpPlaceholder": "לדוגמה: במסך המשימות לא הצלחתי לסמן משימה כהושלמה.",
     "feedbackPlaceholder": "לדוגמה: כדאי להוסיף הסבר קצר ליד כפתור ההדפסה.",
@@ -999,6 +1049,9 @@
     "case": {
       "opened": {
         "summary": "תיק ההעסקה נפתח"
+      },
+      "compliance_tasks_seeded": {
+        "summary": "נוצרו משימות עבור פרטים חסרים בתיק"
       }
     },
     "contact": {
@@ -1012,6 +1065,15 @@
       },
       "completed": {
         "summary": "משימה סומנה כהושלמה"
+      },
+      "archived": {
+        "summary": "משימה נסגרה"
+      },
+      "imported": {
+        "summary": "משימה נקלטה מהמכשיר לתיק"
+      },
+      "auto_completed": {
+        "summary": "מסמך תקף סיפק את דרישת המשימה, והיא הושלמה אוטומטית"
       }
     },
     "document": {
@@ -1020,6 +1082,12 @@
       },
       "intake_reviewed": {
         "summary": "נרשמה סקירת מסמך של ה-AI"
+      },
+      "imported": {
+        "summary": "מסמך נקלט מהמכשיר לתיק"
+      },
+      "file_attached": {
+        "summary": "קובץ צורף למסמך שנקלט בעבר"
       }
     },
     "automation": {
@@ -1030,7 +1098,18 @@
         "summary": "בוצעה תוכנית אירוע"
       }
     },
-    "byActor": "בוצע על ידי"
+    "byActor": "בוצע על ידי",
+    "medication": {
+      "created": {
+        "summary": "נוספה תרופה לתיק"
+      },
+      "archived": {
+        "summary": "תרופה הוסרה מהרשימה הפעילה"
+      },
+      "imported": {
+        "summary": "תרופה נקלטה מהמכשיר לתיק"
+      }
+    }
   },
   "visaRenewal": {
     "eyebrow": "תהליך מפוקח",
@@ -1144,7 +1223,10 @@
     "recordingExport": "רושם את הייצוא בשרת…",
     "receiptLabel": "אסמכתת ייצוא",
     "receiptHash": "טביעת אצבע SHA-256",
-    "unrecordedLocalPrint": "הדפסה מקומית ללא רישום — לא היה חיבור לשרת והייצוא לא נרשם. העותק הזה אינו מתועד."
+    "unrecordedLocalPrint": "הדפסה מקומית ללא רישום — לא היה חיבור לשרת והייצוא לא נרשם. העותק הזה אינו מתועד.",
+    "medications": {
+      "localCopyNotice": "הרשימה מוצגת מהעותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת כדי לוודא שזו הרשימה העדכנית ביותר."
+    }
   },
   "completion": {
     "health": "מצב תיק ההעסקה",
@@ -1162,7 +1244,47 @@
     "noReviews": "אין בקשות בדיקה פתוחות.",
     "manualReview": "בקשת בדיקה",
     "reviewReason": "המקרה דורש בדיקה מקצועית",
-    "reviewSummary": "נא לבדוק את הראיות הרלוונטיות בתיק. טרם הוקצה גורם מקצועי."
+    "reviewSummary": "נא לבדוק את הראיות הרלוונטיות בתיק. טרם הוקצה גורם מקצועי.",
+    "healthLoadFailed": "טעינת נתוני התיק נכשלה. שום נתון בתיק לא נפגע.",
+    "reviewsLoadFailed": "טעינת בקשות הבדיקה נכשלה. שום נתון בתיק לא נפגע.",
+    "escalateFailed": "יצירת בקשת הבדיקה נכשלה. נסו שוב.",
+    "historyLoadFailed": "טעינת ההיסטוריה נכשלה.",
+    "retry": "ניסיון נוסף"
+  },
+  "assistant": {
+    "groundingLabel": "בהתבסס על תיק ה-CareDesk שלכם",
+    "answer": {
+      "missingDocuments": "בתיק ה-CareDesk שלכם חסרות ראיות בתוקף עבור: {{types}}.",
+      "documentsValid": "העובדות השמורות בתיק מראות מסמכי ליבה בתוקף. נותרו {{count}} משימות פתוחות."
+    },
+    "documentType": {
+      "passport": "דרכון",
+      "visa": "אשרה והיתר עבודה",
+      "medical_insurance": "ביטוח רפואי"
+    },
+    "fact": {
+      "caseStatus": "סטטוס התיק: {{status}}",
+      "documentStatus": "סטטוס מסמך שמור מספר {{index}}",
+      "approvedRule": "כלל מאושר: {{title}}"
+    },
+    "caseStatus": {
+      "draft": "טיוטה",
+      "active": "פעיל",
+      "suspended": "מושהה",
+      "ended": "הסתיים",
+      "cancelled": "בוטל",
+      "archived": "בארכיון"
+    },
+    "uncertainty": {
+      "missing_fact": "עובדה שנדרשה למתן תשובה מלאה לא הייתה זמינה בתיק.",
+      "conflicting_fact": "בתיק נמצאו עובדות סותרות בנושא זה.",
+      "no_approved_rule": "לא נמצא כלל מאושר לפרשנות מקצועית.",
+      "professional_interpretation": "נקודה זו דורשת פרשנות של גורם מקצועי."
+    },
+    "escalation": {
+      "reasonRulesApplied": "כללים מאושרים הוחלו; עדיין נדרש אימות מקצועי לפני הסתמכות",
+      "reasonNoRule": "לא נמצא כלל מאושר לפרשנות מקצועית"
+    }
   },
   "escalation": {
     "manualHandoffDisclaimer": "בקשות בדיקה נמסרות ידנית לגורם מקצועי שנרשם על ידכם. CareDesk אינה פונה לספק חיצוני ואינה מתחייבת לביצוע הבדיקה.",
@@ -1371,7 +1493,12 @@
     "savedNotice": "הרשימה נשמרה.",
     "updatedAt": "עודכן",
     "footnote": "הרשימה נשמרת בתיק ומופיעה גם בתיק החירום, כדי שתהיה זמינה למי שנכנס לתמונה.",
-    "binderSection": "תרופות קבועות"
+    "binderSection": "תרופות קבועות",
+    "sync": {
+      "localCopy": "מוצג העותק המקומי במכשיר זה — לא ניתן היה להתחבר לשרת.",
+      "uploadFailed": "{{count}} תרופות לא הועלו לשרת.",
+      "retry": "נסו שוב"
+    }
   },
   "reminderRecipients": {
     "title": "מי מקבל תזכורות",

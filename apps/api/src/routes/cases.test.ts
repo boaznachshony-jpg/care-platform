@@ -45,7 +45,9 @@ describe('/cases routes', () => {
     });
     expect(created.statusCode).toBe(201);
     const createdBody = created.json();
-    expect(createdBody.status).toBe('draft');
+    // Product decision (2026-09-02): a case is born 'active', not 'draft' —
+    // saving the case is what makes it exist. See open-employment-case.ts.
+    expect(createdBody.status).toBe('active');
     expect(createdBody.careRecipient.fullName).toBe('Synthetic Care Recipient');
 
     const fetched = await app.inject({
@@ -126,6 +128,51 @@ describe('/cases routes', () => {
     expect((await app.inject({ method: 'GET', url: '/cases', headers: AUTH })).json()).toHaveLength(
       2,
     );
+  });
+
+  // --- Caregiver identity corrections -----------------------------------
+  //
+  // The caregiver table (migration 0003) existed from the start, but nothing
+  // let a family correct it after intake — see UpdateCaregiverProfileUseCase.
+
+  it('corrects caregiver identity fields and returns the update on the case read', async () => {
+    const app = buildServer(loadEnv({}));
+    const created = await app.inject({
+      method: 'POST',
+      url: '/cases',
+      headers: AUTH,
+      payload: VALID_BODY,
+    });
+    const caseId = created.json().id as string;
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/cases/${caseId}/caregiver`,
+      headers: AUTH,
+      payload: { primaryLanguage: 'Tagalog' },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().primaryLanguage).toBe('Tagalog');
+    // Unmentioned fields are untouched.
+    expect(updated.json().nationality).toBe('Philippines');
+
+    const fetched = await app.inject({ method: 'GET', url: `/cases/${caseId}`, headers: AUTH });
+    expect(fetched.json().caregiver.primaryLanguage).toBe('Tagalog');
+  });
+
+  it('returns 404 for a caregiver update on an unknown case', async () => {
+    const app = buildServer(loadEnv({}));
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/cases/does-not-exist/caregiver',
+      headers: AUTH,
+      // A valid body on purpose. The route validates the payload before it
+      // looks the case up, so a one-character name returned 400 and the test
+      // passed for the wrong reason — it never reached the lookup it exists to
+      // check. Schema rejection has its own test.
+      payload: { legalName: 'Ana Reyes' },
+    });
+    expect(response.statusCode).toBe(404);
   });
 
   it('returns the standard 404 envelope for an unknown case id', async () => {

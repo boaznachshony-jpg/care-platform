@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   AddContactToCase,
+  ArchiveCaseTask,
   AuthorizationError,
   CompleteCaseTask,
   CreateCaseTask,
+  ImportCaseTask,
   ListCaseContacts,
   ListCaseTasks,
   ListCaseTimeline,
+  UpdateCaseTask,
   type Actor,
 } from '@caredesk/application';
 import { FixedClock } from './clock.js';
@@ -56,6 +59,9 @@ function buildHarness() {
     timelineService,
     createTask: new CreateCaseTask(deps),
     completeTask: new CompleteCaseTask(deps),
+    updateTask: new UpdateCaseTask(deps),
+    archiveTask: new ArchiveCaseTask(deps),
+    importTask: new ImportCaseTask(deps),
     listTasks: new ListCaseTasks(deps),
     listTimeline: new ListCaseTimeline({
       ...deps,
@@ -112,6 +118,79 @@ describe('case tasks', () => {
     await h.createTask.execute(OWNER, CASE_ID, { title: 'A' });
     await h.createTask.execute(OWNER, CASE_ID, { title: 'B' });
     expect(await h.listTasks.execute(VIEWER, CASE_ID)).toHaveLength(2);
+  });
+
+  it('updates a task field and audits the field names, never the values', async () => {
+    const h = buildHarness();
+    const task = await h.createTask.execute(OWNER, CASE_ID, { title: 'Original title' });
+    const updated = await h.updateTask.execute(OWNER, CASE_ID, task.id, { title: 'New title' });
+    expect(updated?.title).toBe('New title');
+    const event = h.audit.events.find((e) => e.action === 'task.updated');
+    expect(event?.changeSummary).toContain('title');
+    expect(event?.changeSummary).not.toContain('New title');
+  });
+
+  it('clears a due date with dueDate: null', async () => {
+    const h = buildHarness();
+    const task = await h.createTask.execute(OWNER, CASE_ID, {
+      title: 'Renew visa',
+      dueDate: '2026-09-01',
+    });
+    const updated = await h.updateTask.execute(OWNER, CASE_ID, task.id, { dueDate: null });
+    expect(updated?.dueAt).toBeNull();
+  });
+
+  it('returns null when updating an already-completed task', async () => {
+    const h = buildHarness();
+    const task = await h.createTask.execute(OWNER, CASE_ID, { title: 'x' });
+    await h.completeTask.execute(OWNER, CASE_ID, task.id);
+    expect(await h.updateTask.execute(OWNER, CASE_ID, task.id, { title: 'y' })).toBeNull();
+  });
+
+  it('archives (soft-closes) a task — status becomes cancelled, never deleted', async () => {
+    const h = buildHarness();
+    const task = await h.createTask.execute(OWNER, CASE_ID, { title: 'x' });
+    const archived = await h.archiveTask.execute(OWNER, CASE_ID, task.id);
+    expect(archived?.status).toBe('cancelled');
+    // Still listed — archiving is not deletion.
+    expect((await h.listTasks.execute(OWNER, CASE_ID)).map((t) => t.id)).toContain(task.id);
+  });
+
+  it('archiving twice is idempotent — the second attempt returns null', async () => {
+    const h = buildHarness();
+    const task = await h.createTask.execute(OWNER, CASE_ID, { title: 'x' });
+    await h.archiveTask.execute(OWNER, CASE_ID, task.id);
+    expect(await h.archiveTask.execute(OWNER, CASE_ID, task.id)).toBeNull();
+  });
+
+  it('imports a browser-only task, idempotent on legacyLocalId', async () => {
+    const h = buildHarness();
+    const first = await h.importTask.execute(OWNER, CASE_ID, {
+      legacyLocalId: 'local-task-1',
+      title: 'חידוש ויזה',
+      status: 'open',
+    });
+    expect(first.legacyLocalId).toBe('local-task-1');
+
+    const second = await h.importTask.execute(OWNER, CASE_ID, {
+      legacyLocalId: 'local-task-1',
+      title: 'חידוש ויזה',
+      status: 'open',
+    });
+    expect(second.id).toBe(first.id);
+    expect(h.audit.events.filter((e) => e.action === 'task.imported')).toHaveLength(1);
+  });
+
+  it('an imported task already completed on the device is created already completed', async () => {
+    const h = buildHarness();
+    const imported = await h.importTask.execute(OWNER, CASE_ID, {
+      legacyLocalId: 'local-task-2',
+      title: 'Done already',
+      status: 'completed',
+      completedAt: '2026-02-01T00:00:00.000Z',
+    });
+    expect(imported.status).toBe('completed');
+    expect(imported.completedAt).toBe('2026-02-01T00:00:00.000Z');
   });
 });
 

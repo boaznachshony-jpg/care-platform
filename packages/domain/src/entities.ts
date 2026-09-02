@@ -7,6 +7,7 @@ import type {
   DocumentVersionId,
   EmployerId,
   EmploymentCaseId,
+  MedicationId,
   OrganizationId,
   TaskId,
   TenantId,
@@ -21,6 +22,9 @@ import type {
   DocumentUploadSource,
   DocumentVersionStatus,
   EmploymentCaseStatus,
+  MedicationDayOfWeek,
+  MedicationStatus,
+  MedicationTimeOfDay,
   OrganizationType,
   SensitivityClass,
   TaskPriority,
@@ -177,6 +181,21 @@ export interface Task {
   dueAt: string | null;
   completedAt: string | null;
   sourceType: 'manual' | 'rule' | 'workflow';
+  /**
+   * Opaque id of the browser-only task (`caredesk.mvp.tasks.v1`) this row was
+   * imported from, or null for a task created directly on the server. Same
+   * provenance-marker role as EmploymentCase.legacyClientId (ADR-006) — it is
+   * what makes replaying an import from a device idempotent.
+   */
+  legacyLocalId: string | null;
+  /**
+   * Deterministic idempotency key for a task the server generated on its own
+   * (migration 0047), e.g. `case_health:passport` for the case-open
+   * compliance seeding. Null for a manually created or imported task. Same
+   * provenance-marker role as legacyLocalId, but for rows no browser store
+   * ever held.
+   */
+  sourceKey: string | null;
 }
 
 /**
@@ -196,6 +215,8 @@ export interface Document {
   currentVersionId: DocumentVersionId | null;
   expiresAt: string | null;
   status: 'active' | 'archived';
+  /** Same provenance-marker role as Task.legacyLocalId — see there for why. */
+  legacyLocalId: string | null;
 }
 
 /**
@@ -220,6 +241,38 @@ export interface DocumentVersion {
   verifiedAt: string | null;
   supersedesVersionId: DocumentVersionId | null;
   createdAt: string;
+}
+
+/**
+ * A standing medication the care recipient takes — a transcription of what the
+ * family already knows, not a prescription and not medical advice (mirrors the
+ * stance the browser-only version took; see MvpMedication in
+ * apps/web/src/storage/mvp-storage.ts). Modelled as plain, typed columns with
+ * `sensitivity` fixed to `care_sensitive` — the same treatment already given to
+ * `care_recipient` (migration 0003) — rather than as the encrypted-credential
+ * records that database/migrations/sensitive-record-migration-requirements.md
+ * gates. That document targets identity credentials and banking details; a
+ * medication name/dosage/notes is a descriptive care fact of the same kind as
+ * `care_recipient.care_level`, not a secret to be crypto-shredded.
+ */
+export interface Medication {
+  id: MedicationId;
+  tenantId: TenantId;
+  employmentCaseId: EmploymentCaseId;
+  name: string;
+  /** Free text ("1 tablet", "5ml") — never parsed, never calculated on. */
+  dosage: string;
+  /** Empty means "as needed" rather than "unknown". */
+  timesOfDay: MedicationTimeOfDay[];
+  daily: boolean;
+  /** Meaningful only when `daily` is false; absent/[] distinction mirrors the client (see mvp-storage.ts). */
+  daysOfWeek: MedicationDayOfWeek[] | null;
+  prescribingDoctor: string;
+  notes: string;
+  status: MedicationStatus;
+  sensitivity: SensitivityClass;
+  /** Same provenance-marker role as Task.legacyLocalId — see there for why. */
+  legacyLocalId: string | null;
 }
 
 /** User-facing case history — translation keys only, never raw sensitive values. */

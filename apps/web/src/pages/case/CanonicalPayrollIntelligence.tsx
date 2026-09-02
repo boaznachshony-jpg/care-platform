@@ -2,7 +2,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectFutureCost } from '@caredesk/application';
-import { calculateMonthlyPayroll } from '@caredesk/domain';
+import {
+  agorotFromShekels,
+  calculateMonthlyPayroll,
+  scaleAgorot,
+  shekelsOf,
+} from '@caredesk/domain';
 import {
   ApiRequestError,
   createScenarioExpense,
@@ -20,9 +25,11 @@ import {
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
+  readMvpProfile,
   saveMvpEmploymentExpenses,
   saveMvpPayroll,
   type MvpEmploymentExpense,
+  type MvpProfile,
 } from '../../storage/mvp-storage.js';
 import { ValueOrigin, ValueOriginLegend } from '../../components/ValueOrigin.js';
 import { formatDateOnly } from '../../format-timestamp.js';
@@ -50,11 +57,50 @@ const blank = (): SavePayrollEntryRequest => ({
   total: 0,
   status: 'draft',
 });
-const numericFields = [
+
+/**
+ * WEB-04(b). A brand-new month started out with `baseSalary: 0,
+ * restDayRate: 0` even when the customer had already told the product both
+ * figures during setup (`profile.baseSalary`, `profile.saturdayRate`) — the
+ * one MVP field the older `PayrollPage` DOES prefill from, via its own
+ * `payrollValues()`. This screen is meant to be the canonical source of
+ * truth, which made retyping numbers the customer already gave the more
+ * broken of the two screens, not the less.
+ *
+ * This is used ONLY to seed a month that has no saved server entry: the
+ * reset effect below calls it exactly where it used to call `blank()`, never
+ * where a `savedEntry` exists. A saved entry always wins over the profile —
+ * this function is never consulted once one exists — so prefilling can never
+ * overwrite a figure that was already saved.
+ */
+function prefillFromProfile(profile: MvpProfile): SavePayrollEntryRequest {
+  return {
+    ...blank(),
+    baseSalary: profile.baseSalary ?? 0,
+    restDayRate: profile.saturdayRate ?? 0,
+  };
+}
+
+/**
+ * Rest days are asked as their own pair, not as two cells in a sixteen-cell
+ * grid.
+ *
+ * Reported against production: `restDayRate` held 440 and `paidRestDays` held
+ * 0, and the four Saturdays worked were typed as a free-text additional payment
+ * of ₪440 — where 4 × 440 = ₪1,760 was owed. The month was short by ₪1,320.
+ *
+ * The formula was never wrong (`calculateMonthlyPayrollAgorot` multiplies the
+ * two). The form was: the count sat in one row, the rate in another, nothing on
+ * screen showed their product, and "תשלומים נוספים" sat below with an inviting
+ * empty box and a total that moved when you typed in it. A screen that makes
+ * the right field harder to find than the wrong one produces wrong pay.
+ */
+const leadingFields = [
   ['baseSalary', 'שכר בסיס'],
   ['workDays', 'ימי עבודה'],
-  ['paidRestDays', 'ימי מנוחה בתשלום'],
-  ['restDayRate', 'תעריף יום מנוחה'],
+] as const;
+
+const numericFields = [
   ['paidHolidays', 'ימי חג'],
   ['holidayPay', 'דמי חג'],
   ['vacationDays', 'ימי חופשה'],
@@ -121,10 +167,29 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   /** Ids of legacy expenses whose canonical persistence has been confirmed by the server. */
   const [migratedExpenseIds, setMigratedExpenseIds] = useState<string[]>([]);
   const [expensesPurged, setExpensesPurged] = useState(false);
+  /**
+   * WEB-04(b): which of the two prefilled fields, if any, still hold the
+   * profile's figure rather than the server's or the customer's own typing on
+   * this screen. Read by the render below to show the honest `ValueOrigin`
+   * badge; cleared the instant the customer edits that field, because at that
+   * point the value is this screen's own input and no longer the profile's.
+   */
+  const [prefilledFields, setPrefilledFields] = useState({ baseSalary: false, restDayRate: false });
   const legacy = readMvpPayroll().find((record) => record.month === month);
   const legacyExpenses = readMvpEmploymentExpenses().filter(
     (expense) => expense.amountEntered !== false,
   );
+  /**
+   * Read the same way `legacy`/`legacyExpenses` above are: directly, once per
+   * render, from the path-scoped MVP store. A ref carries the latest value
+   * into the reset effect below WITHOUT the effect depending on it — the
+   * effect must fire only when the saved-entry identity changes (WEB-04), not
+   * on every render, or the same bug this file was already patched for comes
+   * back for the profile instead of the entries array.
+   */
+  const profile = readMvpProfile();
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
   /**
    * Root 4 (DOM-02): the same function the server recomputes with.
    *
@@ -145,6 +210,42 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       return null;
     }
   }, [draft]);
+  /**
+   * Shown beside the two rest-day fields.
+   *
+   * Root 8: this used to be plain `draft.paidRestDays * draft.restDayRate` —
+   * a float multiplication living outside `@caredesk/domain`, on the exact
+   * screen whose worked example (above) is a caregiver shorted ₪1,320 because
+   * a count and a rate were never multiplied at all. It must still read as
+   * "these two numbers, multiplied" rather than a second call into the
+   * canonical total, so it stays its own small computation — but it now uses
+   * `scaleAgorot`/`agorotFromShekels`, the same "one rounding step" the
+   * canonical formula applies to this exact pair
+   * (`calculateMonthlyPayrollAgorot`'s `restDayPay`), so the preview shown
+   * here and the total the server reconciles cannot round this product
+   * differently. Guarded like `calculatedTotal`: the two fields are live text
+   * inputs the user may still be mid-edit, and an invalid intermediate value
+   * previews as 0 rather than throwing out of render.
+   */
+  const restDayPay = useMemo(() => {
+    if (!Number.isFinite(draft.paidRestDays) || !Number.isFinite(draft.restDayRate)) return 0;
+    try {
+      return shekelsOf(scaleAgorot(agorotFromShekels(draft.restDayRate), draft.paidRestDays));
+    } catch {
+      return 0;
+    }
+  }, [draft.paidRestDays, draft.restDayRate]);
+  /**
+   * The mistake this screen actually produced, caught rather than prevented.
+   *
+   * Blocking the save would be wrong — an additional payment may legitimately
+   * mention a Saturday (a bonus for one, a reimbursement). So this warns, names
+   * the field to use, and leaves the decision with the person, who knows which
+   * of the two it is and the form does not.
+   */
+  const restDaysLookMisfiled =
+    draft.paidRestDays === 0 &&
+    draft.additionalPayments.some((payment) => /שבת|מנוחה/.test(payment.description));
   const refresh = useCallback(async () => {
     setState('loading');
     setError('');
@@ -189,9 +290,29 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     : `none:${month}`;
   const savedEntryRef = useRef(savedEntry);
   savedEntryRef.current = savedEntry;
+  /** The JSON snapshot of the draft as of the last reset — see `hasUnsavedWork` below. */
+  const committedDraftSnapshotRef = useRef('');
   useEffect(() => {
     const found = savedEntryRef.current;
-    setDraft(found ? { ...found, version: found.version } : blank());
+    // WEB-04(b): a saved server entry always wins over the profile — this
+    // branch only ever reaches `prefillFromProfile` when there is NO saved
+    // entry for the month, i.e. exactly the case `blank()` used to handle.
+    const next = found
+      ? { ...found, version: found.version }
+      : prefillFromProfile(profileRef.current);
+    setDraft(next);
+    // What "unsaved" means below: the draft this effect just produced, before
+    // any keystroke. Recorded as a snapshot rather than compared field-by-field
+    // so a future field added to the request shape is covered automatically.
+    committedDraftSnapshotRef.current = JSON.stringify(next);
+    setPrefilledFields(
+      found
+        ? { baseSalary: false, restDayRate: false }
+        : {
+            baseSalary: profileRef.current.baseSalary !== null,
+            restDayRate: profileRef.current.saturdayRate !== null,
+          },
+    );
     setState('idle');
     setError('');
     // Reset all migration state when the selected month changes.
@@ -199,6 +320,21 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setMigrationSaved(false);
     setLegacyPurged(false);
   }, [savedEntryIdentity]);
+  /**
+   * WEB-04(c) / Constitution §13: a screen never destroys a user's input.
+   *
+   * `PayrollPage.loadMonth` already solved this for the MVP worksheet by
+   * comparing a live snapshot of the form against the snapshot it was last
+   * reset from; this is the same pattern applied to this screen's sixteen
+   * numeric fields. `hasUnsavedWork` is false immediately after the reset
+   * effect above runs (the two snapshots are identical) and turns true the
+   * moment the customer changes anything, independent of `calculatedTotal`
+   * or any other derived value.
+   */
+  const hasUnsavedWork = useMemo(
+    () => JSON.stringify(draft) !== committedDraftSnapshotRef.current,
+    [draft],
+  );
   /**
    * All projection inputs are canonical: closed months (actuals), the payroll
    * worksheet (forecast base + entered months) and scenario_expense rows (the
@@ -269,6 +405,9 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   }
   function prepareLegacyMigration() {
     if (!legacy || !migrationConfirmed) return;
+    // These figures now come from the legacy MVP record, not the profile —
+    // the "prefilled from setup" badge would be actively misleading here.
+    setPrefilledFields({ baseSalary: false, restDayRate: false });
     setDraft({
       ...blank(),
       baseSalary: legacy.baseSalary,
@@ -359,8 +498,36 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     setExpensesPurged(true);
   }
 
-  const setNumber = (key: (typeof numericFields)[number][0], value: string) =>
+  // Every numeric component the form writes: the two leading fields, the two
+  // rest-day fields, and the rest of the grid. Typed as the union rather than
+  // one array's element so no caller can pass a key the draft does not hold.
+  type NumericKey =
+    | (typeof leadingFields)[number][0]
+    | (typeof numericFields)[number][0]
+    | 'paidRestDays'
+    | 'restDayRate';
+  const setNumber = (key: NumericKey, value: string) => {
     setDraft((old) => ({ ...old, [key]: Number(value) }));
+    // The field is now the customer's own typing on this screen, not the
+    // profile's figure — the badge below must stop claiming otherwise.
+    if (key === 'baseSalary' || key === 'restDayRate') {
+      setPrefilledFields((current) => ({ ...current, [key]: false }));
+    }
+  };
+  /**
+   * WEB-04(c). Changing the month `<input type="month">` used to call
+   * `setMonth` directly with no guard at all: the reset effect above then ran
+   * on the next render and, for a month with no saved server entry, replaced
+   * every one of the sixteen numeric fields with zeros (or now, a fresh
+   * profile prefill) — silently discarding whatever the customer had just
+   * typed. Same protection `PayrollPage.loadMonth` already applies to the MVP
+   * worksheet, applied here to the canonical screen's own month switch.
+   */
+  function changeMonth(nextMonth: string) {
+    if (nextMonth === month) return;
+    if (hasUnsavedWork && !window.confirm(t('payments.draftSwitchMonthConfirm'))) return;
+    setMonth(nextMonth);
+  }
   return (
     <section className="card canonical-payroll" aria-labelledby="canonical-payroll-title">
       <p className="eyebrow">שכר קנוני בתיק</p>
@@ -376,8 +543,66 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       <div className="form-grid">
         <label>
           חודש
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <input type="month" value={month} onChange={(e) => changeMonth(e.target.value)} />
         </label>
+        {leadingFields.map(([key, label]) => (
+          <label key={key}>
+            {label}
+            {/* WEB-04(b). Honest about where this figure came from: the customer
+                typed it during setup (`profile.baseSalary`), not on this
+                screen and not computed by it — hence `kind="input"` rather
+                than "calculated", with the same source label the rest of
+                this file already uses for user-entered figures. */}
+            {key === 'baseSalary' && prefilledFields.baseSalary ? (
+              <ValueOrigin
+                kind="input"
+                provenance={{ source: t('valueOrigin.source.userEntry') }}
+              />
+            ) : null}
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft[key]}
+              onChange={(e) => setNumber(key, e.target.value)}
+            />
+          </label>
+        ))}
+        <fieldset className="payroll-rest-days">
+          <legend>שבתות וימי מנוחה</legend>
+          <label>
+            ימי מנוחה בתשלום
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={draft.paidRestDays}
+              onChange={(e) => setNumber('paidRestDays', e.target.value)}
+            />
+          </label>
+          <label>
+            תעריף יום מנוחה
+            {prefilledFields.restDayRate ? (
+              <ValueOrigin
+                kind="input"
+                provenance={{ source: t('valueOrigin.source.userEntry') }}
+              />
+            ) : null}
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.restDayRate}
+              onChange={(e) => setNumber('restDayRate', e.target.value)}
+            />
+          </label>
+          {/* The product, spelled out. It is the number the two fields exist to
+              produce, and until now it appeared nowhere on the form. */}
+          <p className="payroll-rest-days-total" role="status">
+            {draft.paidRestDays} × {money.format(draft.restDayRate)} ={' '}
+            <strong>{money.format(restDayPay)}</strong>
+          </p>
+        </fieldset>
         {numericFields.map(([key, label]) => (
           <label key={key}>
             {label}
@@ -462,6 +687,13 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           ))}
         </div>
       </div>
+      {restDaysLookMisfiled ? (
+        <p className="payroll-misfiled-warning" role="alert">
+          נראה שרשמתם שבתות או ימי מנוחה כתשלום נוסף, ו<strong>ימי מנוחה בתשלום</strong> עומד על 0.
+          הזנה בשדה הייעודי מכפילה את מספר הימים בתעריף; תשלום נוסף נספר כסכום אחד בלבד. אם התשלום
+          הנוסף אינו עבור ימי מנוחה — אפשר להתעלם מההודעה.
+        </p>
+      ) : null}
       <p className="payroll-live-total">
         סה״כ מחושב:{' '}
         <strong>{calculatedTotal === null ? '—' : money.format(calculatedTotal)}</strong>{' '}

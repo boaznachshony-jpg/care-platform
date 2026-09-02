@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   deleteDocumentFile,
@@ -13,23 +13,72 @@ import {
   type MvpDocumentStatus,
 } from '../storage/mvp-storage.js';
 import { useAuth } from '../auth/auth-context.js';
+import { importCaseDocument, listCaseDocuments } from '../api/client.js';
+import { LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
+import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
+import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
+import {
+  rememberUploadedServerId,
+  uploadUnsyncedRecords,
+  type SyncStatus,
+} from '../sync/legacy-upload.js';
+import {
+  dateLabelToIsoDate,
+  documentResponseToLocal,
+  localCategoryToDocumentType,
+  resolveDocumentImportFile,
+} from '../sync/document-mapping.js';
+import {
+  classifyExpiry,
+  extractIsoDateFromLabel,
+  type ExpiryClassification,
+} from '../date-diff.js';
 
 const MAX_FILE_SIZE = 10_000_000;
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
-function toDateInputValue(dateLabel: string): string {
-  const isoMatch = dateLabel.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-
-  const displayMatch = dateLabel.match(/\b(\d{2})[./](\d{2})[./](\d{4})\b/);
-  if (displayMatch) return `${displayMatch[3]}-${displayMatch[2]}-${displayMatch[1]}`;
-
-  return '';
-}
+const toDateInputValue = dateLabelToIsoDate;
 
 function formatExpiryDate(value: string): string {
   const [year, month, day] = value.split('-');
   return `בתוקף עד ${day}.${month}.${year}`;
+}
+
+/**
+ * The badge on this screen answers one question — "is this document still
+ * valid" — and used to answer it purely from whatever was picked in the
+ * "מצב" dropdown when the document was saved, with no link back to the
+ * expiry date itself. A passport that expired six months ago kept its green
+ * "תקין" badge until someone remembered to edit it by hand: the one screen
+ * whose job is to catch an expired document could not.
+ *
+ * The fix derives the badge from the expiry date using the same 14/30-day
+ * windows as the rest of the app (see date-diff.ts), with one deliberate
+ * exception for the manual "מצב" field rather than deleting it outright:
+ *
+ * - No expiry date at all: many document types genuinely have none (e.g. a
+ *   bank confirmation letter), so a missing date is not "expired" — the
+ *   manual choice is the only signal available and stands unchanged.
+ * - An expiry date that is today, in the past, or inside the 14/30-day
+ *   windows: the badge must say "דורש טיפול" (or "פג תוקף" once actually
+ *   expired) regardless of what was picked, or forgotten, in the form —
+ *   this is exactly the bug being fixed, so the date always wins here.
+ * - A human who picked "דורש טיפול" may be flagging something no date can
+ *   see (an illegible scan, a document under dispute...). That judgement is
+ *   never silently thrown away by a comfortable expiry date — it can only
+ *   push the badge to "דורש טיפול", never pull it back to "תקין".
+ */
+function documentDisplayStatus(
+  document: MvpDocument,
+  today: Date = new Date(),
+): { status: MvpDocumentStatus; classification: ExpiryClassification } {
+  const expiryIso = extractIsoDateFromLabel(document.dateLabel);
+  const classification = classifyExpiry(expiryIso, today);
+  if (classification === 'no-date') return { status: document.status, classification };
+  const dateSaysAttention = classification !== 'ok';
+  const status: MvpDocumentStatus =
+    dateSaysAttention || document.status === 'attention' ? 'attention' : 'valid';
+  return { status, classification };
 }
 
 const emptyDraft = {
@@ -50,9 +99,110 @@ export function DocumentsPage() {
   const [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
+  const legacyClientIdParam = useLegacyClientId();
+  const caseLookup = useCaseForLegacyClient(legacyClientIdParam);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ phase: 'checking' });
+  const [syncAttempt, setSyncAttempt] = useState(0);
+
+  useEffect(() => {
+    if (caseLookup.status !== 'found') {
+      setSyncStatus(
+        caseLookup.status === 'checking' ? { phase: 'checking' } : { phase: 'no-case' },
+      );
+      return;
+    }
+    const caseId = caseLookup.caseId;
+    // clientIdFromPath()-style sentinel handling: DocumentsPage is mounted
+    // both scoped (`/clients/:clientId/documents`) and unscoped (`/documents`)
+    // — useLegacyClientId() returns LEGACY_UNSCOPED_CLIENT_ID on the latter,
+    // which is not a real client and must not be sent to the workspace-file
+    // lookup in resolveDocumentImportFile (it would 404 or, worse, collide).
+    const legacyClientId =
+      legacyClientIdParam === LEGACY_UNSCOPED_CLIENT_ID ? null : legacyClientIdParam;
+    let active = true;
+
+    async function run() {
+      const localNow = readMvpDocuments();
+      if (localNow.length === 0) {
+        setSyncStatus({ phase: 'checking' });
+      } else {
+        setSyncStatus({ phase: 'uploading', completed: 0, total: localNow.length });
+      }
+      const outcome = await uploadUnsyncedRecords(
+        'documents',
+        caseId,
+        localNow,
+        async (localDocument) => {
+          // See document-mapping.ts's resolveDocumentImportFile for the full
+          // order of places a file may live; this never throws for "no file
+          // found" (normal), only for a genuine fetch failure on bytes known
+          // to exist, which is exactly what should make this record retryable.
+          const importFile = await resolveDocumentImportFile(localDocument, legacyClientId);
+          return importCaseDocument(caseId, {
+            legacyLocalId: localDocument.id,
+            documentType: localCategoryToDocumentType(localDocument.category),
+            sensitivity: 'identity_sensitive',
+            file: importFile,
+            expiresOn: dateLabelToIsoDate(localDocument.dateLabel) || undefined,
+          });
+        },
+        (completed, total) => {
+          if (active) setSyncStatus({ phase: 'uploading', completed, total });
+        },
+      );
+      if (!active) return;
+      if (outcome.failedIds.length > 0) {
+        setSyncStatus({ phase: 'upload-failed', failedCount: outcome.failedIds.length });
+        return;
+      }
+
+      try {
+        const serverDocuments = await listCaseDocuments(caseId);
+        if (!active) return;
+        const byLocalId = new Map(
+          serverDocuments
+            .filter((document) => document.legacyLocalId)
+            .map((document) => [document.legacyLocalId as string, document] as const),
+        );
+        const merged = readMvpDocuments().map((document) => {
+          const match = byLocalId.get(document.id);
+          // The server response never carries the file bytes or name back
+          // (Constitution §16), so an already-known local record keeps its
+          // own fileName/fileType/dataUrl — only the fields the server can
+          // actually confirm (category/date/status) are refreshed.
+          return match
+            ? {
+                ...document,
+                ...documentResponseToLocal(match),
+                fileName: document.fileName,
+                fileType: document.fileType,
+              }
+            : document;
+        });
+        for (const serverDocument of serverDocuments) {
+          if (serverDocument.legacyLocalId) continue;
+          if (merged.some((document) => document.id === serverDocument.id)) continue;
+          rememberUploadedServerId('documents', caseId, serverDocument.id, serverDocument.id);
+          merged.push(documentResponseToLocal(serverDocument));
+        }
+        saveMvpDocuments(merged);
+        setDocuments(merged);
+        setSyncStatus({ phase: 'synced' });
+      } catch {
+        setSyncStatus({ phase: 'offline' });
+      }
+    }
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [caseLookup, legacyClientIdParam, syncAttempt]);
+
   function persist(next: MvpDocument[]) {
     saveMvpDocuments(next);
     setDocuments(next);
+    if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
 
   function startEdit(document: MvpDocument) {
@@ -167,6 +317,31 @@ export function DocumentsPage() {
         </p>
       ) : null}
 
+      {/* Honest data-source labelling — see the matching comment in TasksPage.tsx §2. */}
+      {syncStatus.phase === 'uploading' ? (
+        <p className="info-box" role="status">
+          {t('documents.sync.uploading', {
+            completed: syncStatus.completed,
+            total: syncStatus.total,
+          })}
+        </p>
+      ) : syncStatus.phase === 'offline' ? (
+        <p className="info-box" role="status">
+          {t('documents.sync.localCopy')}
+        </p>
+      ) : syncStatus.phase === 'upload-failed' ? (
+        <p className="action-notice error" role="alert">
+          {t('documents.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => setSyncAttempt((count) => count + 1)}
+          >
+            {t('documents.sync.retry')}
+          </button>
+        </p>
+      ) : null}
+
       {showForm ? (
         <form
           className="card readable-form document-editor"
@@ -267,46 +442,55 @@ export function DocumentsPage() {
             {t('liability.data')}
           </p>
           <section className="document-grid" aria-describedby="documents-liability-note">
-            {documents.map((document) => (
-              <article className="document-card" key={document.id}>
-                <div className="doc-icon" aria-hidden="true">
-                  ▤
-                </div>
-                <div>
-                  <h3>{document.name}</h3>
-                  <p>
-                    {document.category} · {document.dateLabel}
-                  </p>
-                  <small>{document.fileName}</small>
-                </div>
-                <span className={`pill ${document.status === 'attention' ? 'amber' : 'green'}`}>
-                  {document.status === 'attention' ? 'דורש טיפול' : 'תקין'}
-                </span>
-                <div className="document-actions">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => void openDocument(document)}
-                  >
-                    פתיחה
-                  </button>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => startEdit(document)}
-                  >
-                    עריכה
-                  </button>
-                  <button
-                    className="danger-button"
-                    type="button"
-                    onClick={() => void removeDocument(document)}
-                  >
-                    מחיקה
-                  </button>
-                </div>
-              </article>
-            ))}
+            {documents.map((document) => {
+              const display = documentDisplayStatus(document);
+              const badgeLabel =
+                display.status === 'attention'
+                  ? display.classification === 'expired'
+                    ? 'פג תוקף'
+                    : 'דורש טיפול'
+                  : 'תקין';
+              return (
+                <article className="document-card" key={document.id}>
+                  <div className="doc-icon" aria-hidden="true">
+                    ▤
+                  </div>
+                  <div>
+                    <h3>{document.name}</h3>
+                    <p>
+                      {document.category} · {document.dateLabel}
+                    </p>
+                    <small>{document.fileName}</small>
+                  </div>
+                  <span className={`pill ${display.status === 'attention' ? 'amber' : 'green'}`}>
+                    {badgeLabel}
+                  </span>
+                  <div className="document-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void openDocument(document)}
+                    >
+                      פתיחה
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => startEdit(document)}
+                    >
+                      עריכה
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => void removeDocument(document)}
+                    >
+                      מחיקה
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </section>
         </>
       )}

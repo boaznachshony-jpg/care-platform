@@ -5,6 +5,15 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
   /**
+   * One short line under the field explaining what belongs in it.
+   *
+   * A label names a field; it does not always explain it. "כינוי" is a correct
+   * label and still left the owner asking what it was for. The hint is the
+   * place for that answer, so the label can stay short and the explanation does
+   * not become placeholder text that vanishes the moment typing starts.
+   */
+  hint?: string;
+  /**
    * Set 'ltr' for values that are inherently left-to-right (passport
    * numbers, email, IBAN) while the label/layout stay RTL (Constitution §8).
    */
@@ -21,12 +30,14 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
  * RTL: layout follows document direction; only the input value direction flips via inputDir.
  */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, error, inputDir, required, id: idProp, className, ...rest },
+  { label, error, hint, inputDir, required, id: idProp, className, ...rest },
   ref,
 ) {
   const autoId = useId();
   const id = idProp ?? autoId;
   const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ');
 
   return (
     <div className={['cd-text-field', className].filter(Boolean).join(' ')}>
@@ -44,10 +55,15 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         dir={inputDir}
         required={required}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy || undefined}
         className="cd-text-field__input"
         {...rest}
       />
+      {hint ? (
+        <p id={hintId} className="cd-text-field__hint">
+          {hint}
+        </p>
+      ) : null}
       {error ? (
         <p id={errorId} role="alert" className="cd-text-field__error">
           {error}

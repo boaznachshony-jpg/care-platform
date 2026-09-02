@@ -8,7 +8,12 @@ import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
 import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
-import { healthFactorExplanation, healthFactorTitle } from '../health-factors.js';
+import { missingProfileFieldCount } from '../profile-completeness.js';
+import {
+  healthFactorAction,
+  healthFactorExplanation,
+  healthFactorTitle,
+} from '../health-factors.js';
 
 type DashboardTabId = 'overview' | 'payments' | 'case';
 
@@ -240,22 +245,8 @@ export function DashboardPage() {
       to: path('/binder'),
     },
   ] as const;
-  const missingCount = [
-    !profile.employerName.trim(),
-    !profile.recipientName.trim(),
-    !profile.caregiverName.trim(),
-    !profile.employmentStartDate.trim(),
-    !profile.representativeName.trim(),
-    !profile.licensedBureauName.trim(),
-    !profile.licensedBureauContactName.trim(),
-    !profile.licensedBureauContactPhone.trim(),
-    !profile.employmentAgreementConfirmed,
-    !profile.medicalInsuranceConfirmed || !profile.medicalInsuranceExpiryDate,
-    (profile.baseSalary ?? 0) <= 0,
-    (profile.saturdayRate ?? 0) <= 0,
-    !profile.licenseRenewalDate,
-    !profile.visaRenewalDate,
-  ].filter(Boolean).length;
+  // Single source of truth for "is the profile complete" — see profile-completeness.ts.
+  const missingCount = missingProfileFieldCount(profile);
   const hasAttention = health?.factors.some((factor) => factor.status === 'attention') ?? false;
   const status: 'missing' | 'attention' | 'ok' | 'loading' =
     missingCount > 0 ? 'missing' : !health ? 'loading' : hasAttention ? 'attention' : 'ok';
@@ -333,8 +324,8 @@ export function DashboardPage() {
               .map((item) => (
                 <article className="attention-item high" key={item.id}>
                   <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.explanation}</p>
+                    <strong>{healthFactorTitle(item, t)}</strong>
+                    <p>{healthFactorExplanation(item, t)}</p>
                     {/* R5-05. This line used to read "documents: doc-1" — a
                         machine token and a row id, in a place a human is asked
                         to act on. The source is now named in the interface
@@ -356,9 +347,14 @@ export function DashboardPage() {
                       {item.provenance.sourceIds.join(', ')}
                     </small>
                   </div>
-                  {item.actionTarget && item.recommendedAction ? (
-                    <Link className="primary-button" to={path(item.actionTarget)}>
-                      {item.recommendedAction}
+                  {item.actionTarget && healthFactorAction(item, t) ? (
+                    // actionTarget is already an app-rooted path from the health
+                    // API ("/cases/{id}#..."), not one relative to the current
+                    // client workspace — wrapping it in `path()` (which prefixes
+                    // /clients/:clientId) produced a URL matching no route, so
+                    // the router's catch-all silently sent the user to /app.
+                    <Link className="primary-button" to={item.actionTarget}>
+                      {healthFactorAction(item, t)}
                     </Link>
                   ) : null}
                 </article>

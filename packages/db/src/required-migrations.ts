@@ -67,6 +67,9 @@ export const REQUIRED_MIGRATIONS: readonly string[] = [
   '0043_terms_acceptance',
   '0044_app_role_reads_migration_ledger',
   '0045_money_is_a_model',
+  '0046_mvp_local_data_server_migration',
+  '0047_case_born_active_and_task_source_key',
+  '0048_backfill_seeded_task_completion',
 ];
 
 /**

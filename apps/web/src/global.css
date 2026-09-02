@@ -10,19 +10,55 @@ body,
   min-height: 100%;
   margin: 0;
 }
-/* One typographic voice across the whole app. Rubik/Heebo are the Hebrew-first
+/* One typographic voice across the whole app. Heebo is the Hebrew-first
    faces; the system stack follows only as a fallback. Every other rule inherits
    from here — never re-declare a different family per component. */
+/* Heebo, not Rubik, and the reason is the reader rather than the brand.
+   Rubik rounds its corners, which is what gives it a friendly voice — and also
+   what softens the very features an ageing eye uses to tell one letter from
+   another. Heebo is the Hebrew cut of Roboto: open counters, even stroke
+   contrast, no rounding. The two have near-identical metrics, so this is a
+   swap and not a re-layout. (Frontiers in Psychology 2022 systematic review:
+   reading time is driven by SIZE, not by typeface — so the typeface is chosen
+   for letter discrimination and the size is set separately, below.) */
 :root {
-  --cd-font-family: 'Rubik', 'Heebo', 'Segoe UI', Arial, sans-serif;
+  --cd-font-family: 'Heebo', 'Rubik', 'Segoe UI', Arial, sans-serif;
 }
 /* No background/color here on purpose: the later `body` rule next to the token
    block sets both from --cd-canvas/--cd-ink and wins on document order. A
    hardcoded pair here would look authoritative and change nothing. */
+/* 18px, and deliberately not more. The 2022 review puts intensive reading at
+   17-20px, and also warns that "reading speed declines for extremely large
+   print" — bigger is not linearly better. 1.65 line-height follows the same
+   review's clearest spacing finding: usability IMPROVED as line spacing grew
+   and DEGRADED as word spacing grew, so line-height goes up here and
+   letter-spacing/word-spacing are left alone everywhere. Readers who need more
+   still have the A+/A- control, which scales from this base. */
 body {
   font-family: var(--cd-font-family);
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 18px;
+  line-height: 1.65;
+}
+/* Stop headings from stranding their last word on a line of its own.
+   "תיקי ההעסקה שלי" was breaking as "תיקי ההעסקה" / "שלי" — not broken by any
+   measure the width matrix can take, and still wrong: an orphan reads as a
+   separate thought for a moment before the eye corrects, and that moment is
+   exactly what an older reader pays for.
+   `balance` asks the browser to even out the lines instead of filling the first
+   one greedily, so a two-line heading breaks near its middle. `pretty` does the
+   narrower job for body copy: it only prevents the final orphan.
+   Both are progressive — a browser that does not know them ignores the
+   declaration and renders exactly what it renders today. No fallback needed,
+   and no `nowrap`, which would trade an ugly wrap for a real overflow. */
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+}
+p,
+li {
+  text-wrap: pretty;
 }
 input,
 select,
@@ -1034,7 +1070,10 @@ a {
   border: 1px solid #e4e8ed;
   border-radius: 22px;
   padding: 24px;
-  box-shadow: 0 7px 24px rgba(32, 52, 73, 0.04);
+  /* Was a lone `0 7px 24px` at 4% alpha — invisible in practice. Uses the
+     shared elevation token now, so every raised surface in the app lifts by the
+     same amount instead of each one guessing. */
+  box-shadow: var(--cd-shadow);
 }
 .clients-landing {
   min-height: 100vh;
@@ -1360,13 +1399,49 @@ a {
 .primary-button:hover {
   background: #263d62;
 }
+/* Lifted off the page rather than drawn on it.
+   A flat outline says "boundary"; a shadow says "object you can press". That
+   distinction is doing real work here, because the app is used by people who
+   are not fluent in interface convention and who should not have to infer
+   which rectangles are actionable. The shadow is two-layer and shallow — a
+   tight dark edge for definition plus a soft spread for lift — because a
+   single large blur reads as blur, not as depth.
+   Deliberately NOT a bright fill: on a light canvas a saturated button lowers
+   text contrast, which is the opposite of the goal. The lift comes from
+   elevation, the legibility from dark-on-light. */
 .secondary-button {
   border: 1px solid #d5dce5;
   background: var(--cd-surface);
   color: #30415d;
+  box-shadow:
+    0 1px 2px rgba(16, 30, 54, 0.08),
+    0 3px 8px rgba(16, 30, 54, 0.07);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease;
 }
 .secondary-button:hover {
   background: #f4f6f8;
+  box-shadow:
+    0 2px 4px rgba(16, 30, 54, 0.1),
+    0 8px 18px rgba(16, 30, 54, 0.1);
+  transform: translateY(-1px);
+}
+/* Pressed sits back down. Without this the button rises and never returns, and
+   the gesture loses its acknowledgement — which matters more than it sounds
+   for a user who is unsure whether the tap registered. */
+.secondary-button:active {
+  box-shadow: 0 1px 2px rgba(16, 30, 54, 0.12);
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .secondary-button {
+    transition: none;
+  }
+  .secondary-button:hover {
+    transform: none;
+  }
 }
 .primary-button:disabled,
 .secondary-button:disabled {
@@ -1610,21 +1685,35 @@ a {
   display: grid;
   margin-top: 15px;
 }
+/* Stacked, not `space-between`.
+   The old rule pinned the label to one edge and the value to the other, so the
+   gap grew with the card: on a wide card the reader crossed several hundred
+   pixels of nothing to pair "טלפון איש הקשר" with its number. That is the
+   classic table-without-leaders association failure, and it costs most where
+   saccadic accuracy is already reduced. In Hebrew it was also inverted — the
+   eye starts at the right, where the small grey label sat, while the fact the
+   reader came for was pushed to the far left.
+   Stacking removes the horizontal journey entirely and, as a side effect,
+   frees the value to grow to 20px without competing for the row. */
 .detail-list > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 12px 0;
+  display: grid;
+  gap: 3px;
+  padding: 14px 0;
   border-bottom: 1px solid #edf0f3;
-  /* R4-04, same shape as `.section-heading`: "עריכת החודש" in the payroll
-     history row was shrunk to a 38.59px interior for 49.38px of text. */
-  flex-wrap: wrap;
 }
 .detail-list > div:last-child {
   border: 0;
 }
 .detail-list span {
-  color: #728093;
+  /* Darkened from #728093. The label is still secondary, but it is a label on a
+     medical-adjacent record, not decoration — it has to survive reduced
+     contrast sensitivity. */
+  color: #5b6775;
+  font-size: 15px;
+}
+.detail-list strong {
+  font-size: 20px;
+  line-height: 1.45;
 }
 .balance-grid {
   display: grid;
@@ -3366,7 +3455,19 @@ body {
   --cd-canvas: #eef3f9;
   --cd-border: #d3dde9;
   --cd-focus: #0b4f9c;
-  --cd-shadow: 0 12px 32px rgba(20, 47, 82, 0.09);
+  /* Three layers, not one, and that is the whole point.
+     The previous value was a single 32px blur at 9% alpha. Spread across a
+     large card that does not read as elevation — it reads as a faint tint, and
+     the card still looks printed onto the page rather than resting on it.
+     Depth in the real world is three things at once: a tight dark contact
+     edge where the object meets the surface, a mid falloff, and a wide soft
+     ambient. Reproduce all three and the eye accepts the object; reproduce
+     only the ambient and the eye sees haze.
+     Total alpha stays low (0.06-0.07 per layer) so nothing looks heavy — the
+     lift comes from the STRUCTURE of the shadow, not from its darkness. */
+  --cd-shadow:
+    0 1px 2px rgba(20, 47, 82, 0.07), 0 4px 10px rgba(20, 47, 82, 0.07),
+    0 16px 32px rgba(20, 47, 82, 0.06);
 
   /* Canonical token set (docs/governance/DESIGN-PALETTE-AUDIT.md section 4).
      Nothing references these yet, and that is deliberate: they are declared in
@@ -4404,13 +4505,23 @@ input[type='number'] {
 }
 .contact-about {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  /* `minmax(280px, …)` is a floor a grid track will honour even when there is
+     no room for it — so between 760px and 960px the second column kept its
+     280px, the track overflowed the card's padding box, and the "יוזם המיזם"
+     tile was drawn outside the white card. `min(280px, 100%)` keeps the same
+     preferred width while allowing the track to give way rather than escape.
+     The column is also given `min-width: 0` below: a grid item's automatic
+     minimum size is its content, which is the other half of this overflow. */
+  grid-template-columns: minmax(0, 1.2fr) minmax(min(280px, 100%), 0.8fr);
   gap: clamp(24px, 4vw, 48px);
   padding: clamp(24px, 4vw, 38px);
   border: 1px solid #d5e1ef;
   border-radius: 24px;
   background: var(--cd-surface);
   box-shadow: 0 12px 34px rgb(28 58 92 / 7%);
+}
+.contact-about > * {
+  min-width: 0;
 }
 .contact-about h2 {
   margin: 4px 0 10px;
@@ -4440,6 +4551,53 @@ input[type='number'] {
   margin: 3px 0 0;
   color: #17385e;
   font-weight: 900;
+  /* "© 2026 CareDesk. כל הזכויות שמורות." is one long unbreakable-looking run
+     of mixed-direction text; without this it pushes the tile wider than its
+     track instead of wrapping inside it. */
+  overflow-wrap: anywhere;
+}
+/* Two columns stop earning their keep well before 760px: the detail tiles get
+   narrower than their own labels long before the text column runs out. */
+@media (max-width: 960px) {
+  .contact-about {
+    grid-template-columns: 1fr;
+  }
+}
+/* The reply address is described, not printed. These are the two ways to get
+   at it — small, quiet, and never mistaken for the send button. */
+.contact-reply-target {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f2f7fd;
+}
+.contact-reply-target-line {
+  margin: 0;
+  color: #17385e;
+}
+.contact-reply-target-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.contact-inline-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #175bc1;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  /* Kept reachable by thumb without becoming a button-shaped thing. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.contact-inline-link:disabled {
+  color: #7c8ba0;
+  cursor: default;
 }
 .contact-dialog-backdrop {
   position: fixed;
@@ -5920,6 +6078,73 @@ input[type='number'] {
 }
 .binder-controls label {
   min-height: 44px;
+}
+/* The empty state is the whole card, not a line of small print inside a dead
+   form. It gets the room to say what a binder is and one thing to do about it. */
+.binder-empty {
+  display: grid;
+  gap: 0.85rem;
+  justify-items: start;
+  padding-block: 0.5rem;
+}
+.binder-empty h2 {
+  margin: 0;
+}
+.binder-empty p {
+  margin: 0;
+  max-width: 52ch;
+  color: #4a5768;
+}
+.binder-empty .primary-button {
+  min-width: 15rem;
+}
+/* Says why a control is unavailable, in place of a greyed-out control that
+   does not. */
+.binder-hint {
+  margin: 0;
+  color: #5b6775;
+}
+/* The two rest-day fields are asked together, and their product is printed
+   under them, because apart they produced a month short by ₪1,320. */
+.payroll-rest-days {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px 18px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #cfe0f4;
+  border-radius: 14px;
+  background: #f4f9ff;
+}
+.payroll-rest-days legend {
+  padding-inline: 6px;
+  font-weight: 800;
+  color: #17385e;
+}
+.payroll-rest-days-total {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 17px;
+  color: #17385e;
+}
+.payroll-misfiled-warning {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid #e6c98a;
+  border-inline-start: 5px solid #c98a1a;
+  border-radius: 12px;
+  background: #fdf7e8;
+  color: #5c451a;
+  line-height: 1.6;
+}
+@media (max-width: 520px) {
+  .binder-empty {
+    justify-items: stretch;
+  }
+  .binder-empty .primary-button {
+    width: 100%;
+  }
 }
 .sensitive-label {
   color: #8a3b16;

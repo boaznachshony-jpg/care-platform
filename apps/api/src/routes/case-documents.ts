@@ -6,6 +6,7 @@ import { withTenant } from '@caredesk/db';
 import {
   MAX_DOCUMENT_BYTES,
   uploadDocumentRequestSchema,
+  importDocumentRequestSchema,
   type DocumentResponse,
   type DocumentDownloadUrlResponse,
 } from '@caredesk/schemas';
@@ -93,6 +94,7 @@ function toResponse(entry: DocumentWithCurrentVersion): DocumentResponse {
     mediaType: currentVersion?.mediaType ?? null,
     sizeBytes: currentVersion?.sizeBytes ?? null,
     uploadedAt: currentVersion?.createdAt ?? null,
+    legacyLocalId: document.legacyLocalId,
   };
 }
 
@@ -145,6 +147,33 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
           parsed.data,
         );
         reply.status(201).send(toResponse(created));
+      } catch (error) {
+        if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * Idempotent import for the UI cutover — see ImportCaseDocument. Reuses the
+   * upload route's raised body limit: an imported record may carry the same
+   * base64 file content an upload would.
+   */
+  app.post<{ Params: CaseParams }>(
+    '/cases/:caseId/documents/import',
+    uploadOptions,
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      const parsed = importDocumentRequestSchema.safeParse(request.body);
+      if (!parsed.success) return sendValidationError(request, reply, parsed.error);
+      try {
+        const imported = await container.importDocument.execute(
+          actor,
+          request.params.caseId,
+          parsed.data,
+        );
+        reply.status(200).send(toResponse(imported));
       } catch (error) {
         if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
         throw error;

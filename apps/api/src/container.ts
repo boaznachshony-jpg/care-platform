@@ -9,6 +9,7 @@ import type {
   DocumentRepository,
   FamilyMembershipRepository,
   IdentityInvitationService,
+  MedicationRepository,
   ProductBillingGateway,
   TaskRepository,
   TimelineRepository,
@@ -25,13 +26,19 @@ import {
   CollectDueProductSubscriptions,
   CancelProductSubscription,
   CompleteProductBillingSetup,
+  ArchiveCaseTask,
+  ArchiveMedication,
   CompleteCaseTask,
   CreateCaseTask,
+  CreateMedication,
   GetDocumentDownloadUrl,
   GetEmploymentCase,
   GetWorkspace,
   GetProductSubscription,
   GetWorkspaceFileUrl,
+  ImportCaseDocument,
+  ImportCaseTask,
+  ImportMedication,
   InviteFamilyMember,
   ListCaseDocuments,
   ListCaseContacts,
@@ -39,8 +46,12 @@ import {
   ListCaseTimeline,
   ListEmploymentCases,
   ListFamilyMembers,
+  ListMedications,
   OpenEmploymentCase,
   SaveWorkspace,
+  UpdateCaregiverProfileUseCase,
+  UpdateCaseTask,
+  UpdateMedication,
   ListWorkspaceVersions,
   RestoreWorkspaceVersion,
   ScanForSilentDataLoss,
@@ -67,6 +78,7 @@ import {
   PgCaseFoundationRepository,
   PgDocumentRepository,
   PgFamilyMembershipRepository,
+  PgMedicationRepository,
   PgMembershipAuthorizationService,
   PgTaskRepository,
   PgTimelineService,
@@ -91,6 +103,7 @@ import {
   InMemoryDocumentRepository,
   InMemoryDocumentStorage,
   InMemoryFamilyMembershipRepository,
+  InMemoryMedicationRepository,
   InMemoryTaskRepository,
   InMemoryTimelineRepository,
   InMemoryTimelineService,
@@ -154,6 +167,10 @@ const ROLE_PERMISSIONS = {
     'timeline:read',
     'document:create',
     'document:read',
+    'medication:create',
+    'medication:read',
+    'medication:update',
+    'caregiver:update',
     'workspace:read',
     'workspace:update',
     // Restoring an archived version is separable from saving on purpose. It is
@@ -180,6 +197,10 @@ const ROLE_PERMISSIONS = {
     'timeline:read',
     'document:create',
     'document:read',
+    'medication:create',
+    'medication:read',
+    'medication:update',
+    'caregiver:update',
     'workspace:read',
     'workspace:update',
     'membership:read',
@@ -195,6 +216,7 @@ const ROLE_PERMISSIONS = {
     'task:read',
     'timeline:read',
     'document:read',
+    'medication:read',
     'workspace:read',
     'membership:read',
     'billing:read',
@@ -208,6 +230,7 @@ const ROLE_PERMISSIONS = {
     // Read-only, deliberately: viewing a case never confers authority to add
     // to it (Constitution §18).
     'document:read',
+    'medication:read',
     'workspace:read',
     'membership:read',
     'billing:read',
@@ -256,11 +279,25 @@ export interface Container {
   listContacts: ListCaseContacts;
   createTask: CreateCaseTask;
   completeTask: CompleteCaseTask;
+  updateTask: UpdateCaseTask;
+  archiveTask: ArchiveCaseTask;
+  /** Idempotent create for the UI cutover — see ImportCaseTask. */
+  importTask: ImportCaseTask;
   listTasks: ListCaseTasks;
   listTimeline: ListCaseTimeline;
   uploadDocument: UploadCaseDocument;
+  /** Idempotent create for the UI cutover — see ImportCaseDocument. */
+  importDocument: ImportCaseDocument;
   listDocuments: ListCaseDocuments;
   getDocumentDownloadUrl: GetDocumentDownloadUrl;
+  /** The one genuinely new server-side domain in this round — see migration 0046. */
+  createMedication: CreateMedication;
+  listMedications: ListMedications;
+  updateMedication: UpdateMedication;
+  archiveMedication: ArchiveMedication;
+  importMedication: ImportMedication;
+  /** Corrects caregiver identity fields after intake — see UpdateCaregiverProfileUseCase. */
+  updateCaregiver: UpdateCaregiverProfileUseCase;
   getWorkspace: GetWorkspace;
   saveWorkspace: SaveWorkspace;
   /** Read side of the 0035 archive: which versions exist, in metadata only. */
@@ -341,6 +378,7 @@ export function buildContainer(env: Env): Container {
   let contactRepository: CaseContactRepository;
   let taskRepository: TaskRepository;
   let documentRepository: DocumentRepository;
+  let medicationRepository: MedicationRepository;
   let timeline: TimelineService;
   let timelineRepository: TimelineRepository;
   let audit: AuditService;
@@ -376,6 +414,7 @@ export function buildContainer(env: Env): Container {
     contactRepository = new PgCaseContactRepository(pool);
     taskRepository = new PgTaskRepository(pool);
     documentRepository = new PgDocumentRepository(pool);
+    medicationRepository = new PgMedicationRepository(pool);
     const pgTimeline = new PgTimelineService(pool);
     timeline = pgTimeline;
     timelineRepository = pgTimeline;
@@ -397,6 +436,7 @@ export function buildContainer(env: Env): Container {
     contactRepository = new InMemoryCaseContactRepository();
     taskRepository = new InMemoryTaskRepository();
     documentRepository = new InMemoryDocumentRepository();
+    medicationRepository = new InMemoryMedicationRepository();
     const memoryTimeline = new InMemoryTimelineService();
     timeline = memoryTimeline;
     timelineRepository = new InMemoryTimelineRepository(memoryTimeline);
@@ -526,7 +566,18 @@ export function buildContainer(env: Env): Container {
         ? new MockProductBillingGateway()
         : new DisabledProductBillingGateway();
 
-  const caseDeps = { authorization, repository, audit, timeline, clock, ids };
+  const caseDeps = {
+    authorization,
+    repository,
+    audit,
+    timeline,
+    clock,
+    ids,
+    // OpenEmploymentCase seeds compliance tasks (missing passport/visa/
+    // medical insurance) right after creating the case — see
+    // packages/application/src/use-cases/open-employment-case.ts.
+    tasks: taskRepository,
+  };
   const taskDeps = { authorization, tasks: taskRepository, audit, timeline, clock, ids };
   const documentDeps = {
     authorization,
@@ -536,7 +587,20 @@ export function buildContainer(env: Env): Container {
     timeline,
     clock,
     ids,
+    // UploadCaseDocument/ImportCaseDocument auto-complete the seeded
+    // compliance task a newly-valid document satisfies — see
+    // completeMatchingSeededTask in manage-case-documents.ts.
+    tasks: taskRepository,
   };
+  const medicationDeps = {
+    authorization,
+    medications: medicationRepository,
+    audit,
+    timeline,
+    clock,
+    ids,
+  };
+  const caregiverDeps = { authorization, repository, audit, clock };
   const workspaceDeps = { authorization, workspaces: workspaceRepository, audit, clock };
   // The destination the port was written for. `DataLossAlertSink` names email
   // to the named production operator as step (1) of closing this gap: the pilot
@@ -653,6 +717,9 @@ export function buildContainer(env: Env): Container {
     }),
     createTask: new CreateCaseTask(taskDeps),
     completeTask: new CompleteCaseTask(taskDeps),
+    updateTask: new UpdateCaseTask(taskDeps),
+    archiveTask: new ArchiveCaseTask(taskDeps),
+    importTask: new ImportCaseTask(taskDeps),
     listTasks: new ListCaseTasks(taskDeps),
     listTimeline: new ListCaseTimeline({
       authorization,
@@ -661,8 +728,15 @@ export function buildContainer(env: Env): Container {
       clock,
     }),
     uploadDocument: new UploadCaseDocument(documentDeps),
+    importDocument: new ImportCaseDocument(documentDeps),
     listDocuments: new ListCaseDocuments(documentDeps),
     getDocumentDownloadUrl: new GetDocumentDownloadUrl(documentDeps),
+    createMedication: new CreateMedication(medicationDeps),
+    listMedications: new ListMedications(medicationDeps),
+    updateMedication: new UpdateMedication(medicationDeps),
+    archiveMedication: new ArchiveMedication(medicationDeps),
+    importMedication: new ImportMedication(medicationDeps),
+    updateCaregiver: new UpdateCaregiverProfileUseCase(caregiverDeps),
     getWorkspace: new GetWorkspace(workspaceDeps),
     saveWorkspace: new SaveWorkspace(workspaceDeps),
     listWorkspaceVersions: new ListWorkspaceVersions(workspaceRestoreDeps),

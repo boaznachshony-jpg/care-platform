@@ -6,7 +6,17 @@ import { z } from 'zod';
 import { TASK_PRIORITIES } from '@caredesk/domain';
 import { createTaskRequestSchema, type TaskResponse } from '@caredesk/schemas';
 import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
-import { completeCaseTask, createCaseTask, listCaseTasks } from '../../api/client.js';
+import {
+  completeCaseTask,
+  createCaseTask,
+  getEmploymentCase,
+  importCaseTask,
+  listCaseTasks,
+} from '../../api/client.js';
+import { LEGACY_UNSCOPED_CLIENT_ID } from '../../canonical-case.js';
+import { readMvpTasksForClient } from '../../storage/mvp-storage.js';
+import { uploadUnsyncedRecords, type UploadOutcome } from '../../sync/legacy-upload.js';
+import { localTaskPriorityToCanonical } from '../../sync/task-mapping.js';
 
 /**
  * The API schema defaults an omitted priority to 'normal', but a zod
@@ -61,6 +71,47 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
     };
   }, [caseId]);
 
+  // One-time upload of tasks this browser already holds locally under the
+  // legacy client this case is linked to (employment_case.legacy_client_id,
+  // migration 0042), for a family opening /cases/:caseId for the first time
+  // after using the client-scoped Tasks screen before a case existed. Runs
+  // once per caseId (via uploadAttempt) and is idempotent regardless — see
+  // uploadUnsyncedRecords.
+  const [uploadOutcome, setUploadOutcome] = useState<UploadOutcome | null>(null);
+  const [uploadAttempt, setUploadAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    getEmploymentCase(caseId)
+      .then((employmentCase) => {
+        if (cancelled) return;
+        const legacyClientId =
+          employmentCase.legacyClientId === LEGACY_UNSCOPED_CLIENT_ID
+            ? null
+            : employmentCase.legacyClientId;
+        const localTasks = readMvpTasksForClient(legacyClientId);
+        if (localTasks.length === 0) return;
+        return uploadUnsyncedRecords('tasks', caseId, localTasks, (task) =>
+          importCaseTask(caseId, {
+            legacyLocalId: task.id,
+            title: task.title,
+            priority: localTaskPriorityToCanonical(task.priority),
+            dueDate: task.dueDate || undefined,
+            status: task.status,
+          }),
+        ).then((outcome) => {
+          if (cancelled) return;
+          setUploadOutcome(outcome);
+          if (outcome.succeeded > 0)
+            void listCaseTasks(caseId).then((rows) => !cancelled && setTasks(rows));
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, uploadAttempt]);
+
   const onSubmit = handleSubmit(async (data) => {
     setAddFailed(false);
     try {
@@ -89,6 +140,20 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
     <section>
       <h2>{t('tasks.heading')}</h2>
       {completeFailed ? <Alert variant="error" title={t('tasks.completeFailed')} /> : null}
+      {uploadOutcome && uploadOutcome.failedIds.length > 0 ? (
+        <Alert
+          variant="error"
+          title={t('tasks.legacyUploadFailed', { count: uploadOutcome.failedIds.length })}
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setUploadAttempt((count) => count + 1)}
+          >
+            {t('tasks.sync.retry')}
+          </Button>
+        </Alert>
+      ) : null}
 
       {tasks === null ? (
         <Skeleton loadingLabel={t('shell.loading')} height="1.5rem" width="14rem" />

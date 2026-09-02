@@ -1,4 +1,9 @@
-import { calculateMonthlyPayroll as calculateCanonicalPayroll } from '@caredesk/domain';
+import {
+  agorotFromShekels,
+  calculateMonthlyPayroll as calculateCanonicalPayroll,
+  scaleAgorot,
+  shekelsOf,
+} from '@caredesk/domain';
 
 /**
  * Root 4 (DOM-02): this file no longer contains a payroll formula.
@@ -103,7 +108,21 @@ export function calculateProratedBaseSalary(
   const startDay = Number(dateMatch[3]);
   const paidDays = countBaseDays(startDay, calendarDaysInMonth);
   return {
-    amount: Math.round(((fullSalary * paidDays) / daysInMonth) * 100) / 100,
+    // Root 8: this used to be
+    // `Math.round(((fullSalary * paidDays) / daysInMonth) * 100) / 100`, a
+    // second money model living outside `@caredesk/domain` that could disagree
+    // with `payroll_entry_total_reconciles_agorot` (migration 0045) by the same
+    // kind of binary-float drift DOM-04 removed everywhere else — a prorated
+    // base salary computed here and re-verified by the server were not
+    // guaranteed to be the same agora. `paidDays / daysInMonth` is exactly the
+    // "dimensionless factor" `scaleAgorot` exists for: convert the full salary
+    // to agorot once, scale, and convert back, so this prorated figure rounds
+    // by the identical half-away-from-zero rule the domain and the CHECK
+    // constraint already use.
+    amount:
+      daysInMonth === 0
+        ? 0
+        : shekelsOf(scaleAgorot(agorotFromShekels(fullSalary), paidDays / daysInMonth)),
     paidDays,
     daysInMonth,
     calendarDaysInMonth,

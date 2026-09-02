@@ -70,3 +70,33 @@ describe('Wave 5 mutation audit-evidence contract', () => {
     }
   });
 });
+
+/**
+ * Defect (compliance, highest priority): saving an unrelated preference (the
+ * worker portal's language selector) always sent whatsappConsent/smsConsent
+ * as 'unknown', and the upsert wrote `excluded.whatsapp_consent`
+ * unconditionally — so a caregiver who had explicitly withdrawn WhatsApp/SMS
+ * consent had that withdrawal silently reset the next time she changed her
+ * display language.
+ *
+ * The server is the real guarantee here, not the client: this asserts the
+ * upsert itself can never unconditionally overwrite stored consent, the same
+ * way the audit-evidence contract above asserts the SQL shape directly
+ * rather than trusting a live database in this test file (PostgreSQL-only,
+ * no DB in this suite).
+ */
+describe('Wave 5 worker consent preservation contract', () => {
+  const source = String(Wave5Service.prototype.updatePreference);
+
+  it('never unconditionally overwrites stored consent with the incoming value', () => {
+    expect(source).not.toContain('whatsapp_consent=excluded.whatsapp_consent');
+    expect(source).not.toContain('sms_consent=excluded.sms_consent');
+  });
+
+  it('falls back to the row already on file whenever the incoming value is not an explicit revoke', () => {
+    expect(source).toContain('communication_preference.whatsapp_consent');
+    expect(source).toContain('communication_preference.sms_consent');
+    expect(source).toContain("excluded.whatsapp_consent='revoked'");
+    expect(source).toContain("excluded.sms_consent='revoked'");
+  });
+});

@@ -42,15 +42,17 @@ const originalProfile = { ...mockProfile };
 
 const mockGetCaseHealth = vi.fn();
 
+// A vi.fn() (not a bare arrow function) so a single test can swap in a
+// realistic /clients/:clientId-prefixing implementation to prove the
+// attention item's actionTarget bypasses it.
+const mockClientPath = vi.hoisted(() => vi.fn((path: string = '/') => path));
+
 vi.mock('../hooks/use-mvp-profile.js', () => ({
   useMvpProfile: () => [mockProfile, vi.fn()],
 }));
 
 vi.mock('../hooks/use-client-path.js', () => ({
-  useClientPath:
-    () =>
-    (path: string = '/') =>
-      path,
+  useClientPath: () => mockClientPath,
 }));
 
 vi.mock('../api/client.js', () => ({
@@ -72,6 +74,7 @@ function renderPage(clientId = 'client-001') {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockClientPath.mockImplementation((path: string = '/') => path);
     Object.assign(mockProfile, originalProfile);
     mockGetCaseHealth.mockResolvedValue({
       score: 90,
@@ -278,5 +281,94 @@ describe('DashboardPage', () => {
 
     const line = await screen.findByText(/מקור: something_new/);
     expect(line.textContent).not.toContain('valueOrigin.source');
+  });
+
+  /**
+   * The attention block is the first thing a customer sees on entering the
+   * app. It used to print factor.title/explanation/recommendedAction
+   * straight from the API (English), while the health-card list a few
+   * sections down already used healthFactorTitle/Explanation/Action
+   * correctly — this test pins that both blocks now agree.
+   */
+  it('translates a recognised health factor in the attention block instead of printing the API English', async () => {
+    mockGetCaseHealth.mockResolvedValue({
+      score: 40,
+      actionsRemaining: 1,
+      factors: [
+        {
+          id: 'medical_insurance',
+          title: 'Medical insurance',
+          explanation: 'No currently valid document was found',
+          status: 'attention',
+          points: 0,
+          weight: 25,
+          recommendedAction: 'Upload or review the document',
+          actionTarget: '/cases/case-demo-001#documents',
+          provenance: { sourceType: 'document', sourceIds: ['doc-1'] },
+        },
+      ],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('ביטוח רפואי')).toBeInTheDocument());
+    expect(screen.getByText('לא נמצא מסמך בתוקף — נדרש חידוש או העלאה')).toBeInTheDocument();
+    expect(screen.queryByText('Medical insurance')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'העלאת מסמך או בדיקתו' })).toBeInTheDocument();
+  });
+
+  /**
+   * The API's actionTarget ("/cases/{caseId}#documents") is already an
+   * app-rooted path matched by the top-level `/cases/:caseId` route — not
+   * one relative to the client-scoped workspace. Wrapping it in the
+   * /clients/:clientId-prefixing path() produced a URL matching no route,
+   * so the router's catch-all silently sent the user to /app and the
+   * urgent-action button did nothing.
+   */
+  it('does not run the attention item actionTarget through the client-scoped path()', async () => {
+    mockClientPath.mockImplementation((path: string = '/') =>
+      path === '/' ? '/clients/client-001' : `/clients/client-001${path}`,
+    );
+    mockGetCaseHealth.mockResolvedValue({
+      score: 40,
+      actionsRemaining: 1,
+      factors: [
+        {
+          id: 'medical_insurance',
+          title: 'Medical insurance',
+          explanation: 'No currently valid document was found',
+          status: 'attention',
+          points: 0,
+          weight: 25,
+          recommendedAction: 'Upload or review the document',
+          actionTarget: '/cases/case-demo-001#documents',
+          provenance: { sourceType: 'document', sourceIds: ['doc-1'] },
+        },
+      ],
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'העלאת מסמך או בדיקתו' })).toHaveAttribute(
+        'href',
+        '/cases/case-demo-001#documents',
+      ),
+    );
+    // A tile link that *should* still go through path().
+    expect(screen.getByRole('link', { name: 'ויזה עד 01.06.2027' })).toHaveAttribute(
+      'href',
+      '/clients/client-001/settings',
+    );
+  });
+
+  /**
+   * The 14-field completeness list now lives in profile-completeness.ts,
+   * shared with OpenIssuesPage (see OpenIssuesPage.test.tsx's "aggregates
+   * missing profile fields" test for the same rule exercised from the other
+   * screen) — this pins that the dashboard's status card still reflects it
+   * correctly after the extraction, rather than the two screens quietly
+   * drifting apart.
+   */
+  it('flags the profile as missing details when a tracked field is blank', () => {
+    mockProfile.saturdayRate = 0;
+    renderPage();
+    expect(screen.getByText('חסרים 1 פרטים חיוניים')).toBeInTheDocument();
   });
 });

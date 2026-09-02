@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanonicalPayrollIntelligence } from './CanonicalPayrollIntelligence.js';
+import type { MvpProfile } from '../../storage/mvp-storage.js';
 
 // Constitution §16: synthetic data only.
 const DEMO_CASE_ID = 'case-demo-001';
@@ -86,7 +87,13 @@ const mockReadMvpPayroll = vi.fn();
 const mockSaveMvpPayroll = vi.fn();
 const mockReadMvpEmploymentExpenses = vi.fn();
 const mockSaveMvpEmploymentExpenses = vi.fn();
+const mockReadMvpProfile = vi.fn();
 const mockProjectFutureCost = vi.fn();
+
+/** WEB-04(b): a profile with no salary set — the same shape `emptyMvpProfile` has for these two fields. */
+const EMPTY_PROFILE = { baseSalary: null, saturdayRate: null } as unknown as MvpProfile;
+/** A profile where the customer already told the product both figures during MVP setup. */
+const PROFILE_WITH_SALARY = { baseSalary: 6200, saturdayRate: 310 } as unknown as MvpProfile;
 
 vi.mock('../../api/client.js', () => {
   class ApiRequestError extends Error {
@@ -112,6 +119,7 @@ vi.mock('../../storage/mvp-storage.js', () => ({
   saveMvpPayroll: (...args: unknown[]) => mockSaveMvpPayroll(...args),
   readMvpEmploymentExpenses: (...args: unknown[]) => mockReadMvpEmploymentExpenses(...args),
   saveMvpEmploymentExpenses: (...args: unknown[]) => mockSaveMvpEmploymentExpenses(...args),
+  readMvpProfile: (...args: unknown[]) => mockReadMvpProfile(...args),
 }));
 
 vi.mock('@caredesk/application', () => ({
@@ -133,6 +141,7 @@ beforeEach(() => {
   mockSaveMvpPayroll.mockReturnValue(undefined);
   mockReadMvpEmploymentExpenses.mockReturnValue([]);
   mockSaveMvpEmploymentExpenses.mockReturnValue(undefined);
+  mockReadMvpProfile.mockReturnValue(EMPTY_PROFILE);
   mockProjectFutureCost.mockReturnValue({ months: [] });
 });
 
@@ -378,8 +387,8 @@ describe('CanonicalPayrollIntelligence — Future Cost canonical inputs', () => 
     await waitFor(() => screen.getByRole('region', { name: /רישום שכר חודשי/ }));
 
     // The user fills in the month's worksheet…
-    fireEvent.change(screen.getByLabelText('שכר בסיס'), { target: { value: '5000' } });
-    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(5000);
+    fireEvent.change(screen.getByLabelText(/שכר בסיס/), { target: { value: '5000' } });
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(5000);
 
     // …then scrolls down and adds a planning expense. addExpense calls
     // refresh(), which hands setEntries a brand-new array. Keying the draft
@@ -392,7 +401,7 @@ describe('CanonicalPayrollIntelligence — Future Cost canonical inputs', () => 
     await waitFor(() => expect(mockCreateScenarioExpense).toHaveBeenCalledOnce());
     // Two refetches have now completed; the worksheet still holds the entry.
     await waitFor(() => expect(mockListPayrollEntries).toHaveBeenCalledTimes(2));
-    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(5000);
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(5000);
   });
 
   it('still reseeds the draft when the saved entry for the month actually changes', async () => {
@@ -403,13 +412,13 @@ describe('CanonicalPayrollIntelligence — Future Cost canonical inputs', () => 
     mockListPayrollEntries.mockResolvedValue([{ ...saved, baseSalary: 7000, version: 2 }]);
 
     renderPanel();
-    await waitFor(() => expect(screen.getByLabelText('שכר בסיס')).toHaveValue(5000));
+    await waitFor(() => expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(5000));
 
     fireEvent.change(screen.getByLabelText('תיאור ההוצאה'), { target: { value: 'ביטוח רפואי' } });
     fireEvent.change(screen.getByLabelText('סכום חודשי'), { target: { value: '250' } });
     fireEvent.click(screen.getByRole('button', { name: 'הוספת הוצאת תרחיש' }));
 
-    await waitFor(() => expect(screen.getByLabelText('שכר בסיס')).toHaveValue(7000));
+    await waitFor(() => expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(7000));
   });
 
   it('soft deletes a scenario expense through the canonical API', async () => {
@@ -496,5 +505,179 @@ describe('CanonicalPayrollIntelligence — legacy expense reconciliation', () =>
     expect(
       screen.queryByRole('button', { name: /הסרת ההוצאות הישנות מהדפדפן/ }),
     ).not.toBeInTheDocument();
+  });
+  // --- Rest days: the pair, and the mistake it used to invite --------------
+  //
+  // Production, September 2026: rate 440, count 0, and four Saturdays typed as
+  // an additional payment of 440 — where 4 × 440 = 1,760 was owed. The formula
+  // was right and the form was wrong, so these tests are about the form.
+
+  it('prints the product of the two rest-day fields', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/ימי מנוחה בתשלום/));
+
+    fireEvent.change(screen.getByLabelText(/ימי מנוחה בתשלום/), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText(/תעריף יום מנוחה/), { target: { value: '440' } });
+
+    // The number nobody typed, shown beside the two that were. Scoped to the
+    // rest-day line: with no other component filled in, the card total below
+    // is the same 1,760, so a page-wide query legitimately matches twice.
+    expect(document.querySelector('.payroll-rest-days-total')?.textContent).toMatch(/1,760/);
+  });
+
+  it('warns when Saturdays were typed as an additional payment instead', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/ימי מנוחה בתשלום/));
+
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת תשלום' }));
+    const [description] = screen.getAllByLabelText('תיאור');
+    fireEvent.change(description!, { target: { value: '4 שבתות' } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/ימי מנוחה בתשלום/);
+  });
+
+  it('stops warning once the rest days are recorded in their own field', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/ימי מנוחה בתשלום/));
+
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת תשלום' }));
+    const [description] = screen.getAllByLabelText('תיאור');
+    fireEvent.change(description!, { target: { value: '4 שבתות' } });
+    fireEvent.change(screen.getByLabelText(/ימי מנוחה בתשלום/), { target: { value: '4' } });
+
+    // An additional payment may legitimately mention a Saturday; the warning is
+    // about the count being zero, not about the word.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('computes the rest-day product through the domain rounding rule, not raw float multiplication', async () => {
+    // Root 8. `100.21 * 2.5` is `250.52499999999998` in IEEE-754 double, and
+    // naive display of that raw float rounds to ₪250.52. Half-away-from-zero
+    // on the exact decimal — the rule `scaleAgorot` applies and the DB CHECK
+    // constraint (migration 0045) enforces — rounds ₪250.525 UP to ₪250.53.
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/ימי מנוחה בתשלום/));
+
+    fireEvent.change(screen.getByLabelText(/ימי מנוחה בתשלום/), { target: { value: '2.5' } });
+    fireEvent.change(screen.getByLabelText(/תעריף יום מנוחה/), { target: { value: '100.21' } });
+
+    const restDayLine = document.querySelector('.payroll-rest-days-total')?.textContent ?? '';
+    expect(restDayLine).toMatch(/250\.53/);
+    expect(restDayLine).not.toMatch(/250\.52[^0-9]/);
+  });
+});
+
+// --- WEB-04(b): prefill from the setup profile, honestly labelled ----------
+describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', () => {
+  // Its own reset: without one, a profile stubbed by an earlier test in this
+  // file survives into the "no stored salary" case and it prefills after all.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListCanonicalPayrollCloses.mockResolvedValue([]);
+    mockListScenarioExpenses.mockResolvedValue([]);
+    mockReadMvpPayroll.mockReturnValue([]);
+    mockReadMvpEmploymentExpenses.mockReturnValue([]);
+    mockProjectFutureCost.mockReturnValue({ months: [] });
+    mockSavePayrollEntry.mockResolvedValue({ entry: {}, replayed: false });
+  });
+
+  it('prefills baseSalary and restDayRate from the profile for a brand-new month', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([]); // no saved entry for the month
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(6200);
+    expect(screen.getByLabelText(/תעריף יום מנוחה/)).toHaveValue(310);
+  });
+
+  it('marks a prefilled field honestly as "input", not "calculated"', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
+    // Asserted on the badge's own data attribute, not its Hebrew wording:
+    // this suite renders the panel without an i18n provider, so ValueOrigin's
+    // label comes back as the raw key. The attribute is what the component
+    // actually promises, and it does not move when the copy changes.
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).not.toBeNull();
+  });
+
+  it('a saved server entry always wins: no prefill when the month already has one', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([SAVED_ENTRY]); // baseSalary: 0, restDayRate: 0
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    // The saved entry's own (zero) figures are shown, never the profile's.
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(0);
+    expect(screen.getByLabelText(/תעריף יום מנוחה/)).toHaveValue(0);
+    const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).toBeNull();
+  });
+
+  it('clears the prefilled badge the moment the customer edits the field', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    fireEvent.change(screen.getByLabelText(/שכר בסיס/), { target: { value: '6500' } });
+
+    const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).toBeNull();
+  });
+
+  it('does not prefill when the profile has no stored salary', async () => {
+    mockReadMvpProfile.mockReturnValue(EMPTY_PROFILE);
+    mockListPayrollEntries.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(0);
+    const baseSalaryLabel = screen.getByText(/שכר בסיס/, { selector: 'label' });
+    expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).toBeNull();
+  });
+});
+
+// --- WEB-04(c) / Constitution §13: the month switch never destroys a draft -
+describe('CanonicalPayrollIntelligence — month switch guards an unsaved draft', () => {
+  it('asks before a month change discards unsaved values, and keeps them on refusal', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    fireEvent.change(screen.getByLabelText(/שכר בסיס/), { target: { value: '6500' } });
+    fireEvent.change(screen.getByLabelText('חודש'), { target: { value: '2020-01' } });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    // Refused: still on the original month, value intact.
+    expect(screen.getByLabelText('חודש')).toHaveValue(CURRENT_MONTH);
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(6500);
+  });
+
+  it('lets the month change through once the user confirms, and resets the draft for the new month', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    fireEvent.change(screen.getByLabelText(/שכר בסיס/), { target: { value: '6500' } });
+    fireEvent.change(screen.getByLabelText('חודש'), { target: { value: '2020-01' } });
+
+    expect(screen.getByLabelText('חודש')).toHaveValue('2020-01');
+    expect(screen.getByLabelText(/שכר בסיס/)).toHaveValue(0);
+  });
+
+  it('does not ask when the draft matches what was last loaded (nothing unsaved)', async () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    renderPanel();
+    await waitFor(() => screen.getByLabelText(/שכר בסיס/));
+
+    fireEvent.change(screen.getByLabelText('חודש'), { target: { value: '2020-01' } });
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('חודש')).toHaveValue('2020-01');
   });
 });

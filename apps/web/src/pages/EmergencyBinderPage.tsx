@@ -14,15 +14,18 @@ import {
   listCanonicalPayrollCloses,
   listCaseContacts,
   listCaseDocuments,
+  listCaseMedications,
   listCaseTasks,
   listEmploymentCases,
   type BinderExportReceiptResponse,
   type CanonicalPayrollClose,
 } from '../api/client.js';
+import { newIdempotencyKey } from '../api/idempotency.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { readMvpMedications, type MvpMedication } from '../storage/mvp-storage.js';
+import { medicationResponseToLocal } from '../sync/medication-mapping.js';
 
 const presets = {
   full: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
@@ -51,19 +54,6 @@ interface BinderData {
   contacts: CaseContactResponse[];
 }
 
-/**
- * crypto.randomUUID only exists in secure contexts, and this app is
- * deliberately reachable over plain http on a phone at 192.168.x.x — so a
- * non-cryptographic fallback keeps the export recordable there too. The key
- * only de-duplicates retries; uniqueness, not secrecy, is what it needs.
- */
-function newIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `binder-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
-}
-
 export function EmergencyBinderPage() {
   const { t } = useTranslation();
   const openCasePath = useClientPath()('/cases/new');
@@ -84,9 +74,15 @@ export function EmergencyBinderPage() {
     'idle',
   );
   const [receipt, setReceipt] = useState<BinderExportReceiptResponse>();
-  // Medications live in the client's own local record rather than on the
-  // server, so they are read directly instead of arriving with the case.
-  const [medications] = useState<MvpMedication[]>(() => readMvpMedications());
+  // Medications: the section a family or a stand-in most needs on someone
+  // else's device, in an emergency, right now — which is exactly the case
+  // this whole page exists for (a device that has never seen this browser's
+  // localStorage). The server is therefore tried first; only when it cannot
+  // be reached does this fall back to this device's own local record, and
+  // the fallback is always labelled on screen so nobody reads a possibly
+  // stale local list believing it is the confirmed, shared one.
+  const [medications, setMedications] = useState<MvpMedication[]>([]);
+  const [medicationsSource, setMedicationsSource] = useState<'server' | 'local' | 'none'>('none');
   const generatedAt = useMemo(
     () =>
       new Intl.DateTimeFormat('he-IL', { dateStyle: 'long', timeStyle: 'short' }).format(
@@ -133,6 +129,24 @@ export function EmergencyBinderPage() {
     if (!employmentCase) return;
     setState('loading-case');
     setDocumentIds([]);
+
+    // Fetched independently of the Promise.all below: a medications outage
+    // must never take down the rest of the binder (documents/payroll/tasks/
+    // contacts, which the family may need just as urgently), and a documents
+    // outage must not hide medications this device already has locally.
+    listCaseMedications(caseId)
+      .then((rows) => {
+        if (!active) return;
+        setMedications(rows.map(medicationResponseToLocal));
+        setMedicationsSource('server');
+      })
+      .catch(() => {
+        if (!active) return;
+        const local = readMvpMedications();
+        setMedications(local);
+        setMedicationsSource(local.length ? 'local' : 'none');
+      });
+
     Promise.all([
       listCaseDocuments(caseId),
       listCanonicalPayrollCloses(caseId),
@@ -198,113 +212,159 @@ export function EmergencyBinderPage() {
         </div>
       </header>
       <section className="card binder-controls no-print" aria-labelledby="binder-review-title">
-        <h2 id="binder-review-title">מה לכלול בתיק?</h2>
-        <label>
-          תיק העסקה
-          <select value={caseId} onChange={(event) => setCaseId(event.target.value)}>
-            <option value="">בחרו תיק</option>
-            {cases.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.careRecipient.fullName} —{' '}
-                {row.caregiver.preferredName ?? row.caregiver.legalName}
-              </option>
-            ))}
-          </select>
-        </label>
-        {caseId ? (
-          // The canonical case screen used to be reachable only by pasting a
-          // UUID into the address bar (WEB-11). This is the link.
-          <p>
-            <Link to={`/cases/${encodeURIComponent(caseId)}`}>מעבר לתיק ההעסקה המלא</Link>
-          </p>
-        ) : null}
-        {state === 'loading' || state === 'loading-case' ? <p role="status">טוען מידע…</p> : null}
+        {/*
+          A form whose every control is inert is a broken screen, not a patient
+          one. Until this change the picker, the preset select, seven checkboxes
+          and the export button were all rendered whether or not there was
+          anything to export - the checkboxes even rendered pre-ticked inside a
+          `disabled` fieldset, which reads as "chosen" and behaves as "cannot be
+          chosen". The owner's report was exact: nothing on the screen could be
+          operated, and nothing on the screen said why.
+
+          So the card now renders one of three things and never a mixture:
+
+            1. no case exists    -> what a binder is, and one primary action
+            2. a case exists,
+               none chosen yet   -> the picker, plus a sentence saying what
+                                    choosing will reveal
+            3. a case is loaded  -> the full form, every control live
+
+          Nothing is greyed out to stand in for an explanation.
+        */}
+        {state === 'loading' ? <p role="status">טוען מידע…</p> : null}
         {state === 'error' ? <p role="alert">לא ניתן לטעון את התיק. נסו שוב.</p> : null}
-        {state === 'select' && cases.length === 0 ? (
-          // Was a bare "לא נמצא תיק העסקה פעיל." shown to every real user,
-          // because nothing in the product created a case (WEB-11). Now that
-          // case creation is reachable, the empty state says what to do about
-          // it instead of being a dead end on a headline feature.
-          <p>
-            לא נמצא תיק העסקה פעיל. <Link to={openCasePath}>פתיחת תיק העסקה</Link>
-          </p>
-        ) : null}
-        <label>
-          סוג תיק
-          <select
-            onChange={(event) =>
-              setSelected([...presets[event.target.value as keyof typeof presets]])
-            }
-            defaultValue="full"
-          >
-            <option value="full">תיק העסקה מלא</option>
-            <option value="review">חבילת בדיקה מקצועית</option>
-            <option value="handoff">העברה משפחתית בחירום</option>
-            <option value="documents">מסמכים בלבד</option>
-          </select>
-        </label>
-        <fieldset disabled={!data}>
-          <legend>סעיפים</legend>
-          {(Object.keys(labels) as Section[]).map((section) => (
-            <label key={section}>
-              <input
-                type="checkbox"
-                checked={selected.includes(section)}
-                onChange={() => toggle(section)}
-              />{' '}
-              {labels[section]}{' '}
-              {section === 'payroll' ? (
-                <strong className="sensitive-label">מידע רגיש</strong>
-              ) : null}
+        {state !== 'loading' && state !== 'error' && cases.length === 0 ? (
+          // Was a bare "לא נמצא תיק העסקה פעיל." under a dead form (WEB-11).
+          // The sentence about existing details matters: a customer who has
+          // finished setup has already typed all of this, and needs to be told
+          // the binder will be built from it rather than re-entered.
+          <div className="binder-empty">
+            <h2 id="binder-review-title">עדיין אין תיק העסקה</h2>
+            <p>
+              תיק החירום נבנה מתוך תיק העסקה פעיל. לאחר פתיחת התיק, המסך הזה יתמלא מעצמו מהפרטים
+              שכבר הזנתם — אין צורך להקליד אותם שוב.
+            </p>
+            <Link className="primary-button" to={openCasePath}>
+              פתיחת תיק העסקה
+            </Link>
+          </div>
+        ) : state !== 'loading' && state !== 'error' ? (
+          <>
+            <h2 id="binder-review-title">מה לכלול בתיק?</h2>
+            <label>
+              תיק העסקה
+              <select value={caseId} onChange={(event) => setCaseId(event.target.value)}>
+                <option value="">בחרו תיק</option>
+                {cases.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.careRecipient.fullName} —{' '}
+                    {row.caregiver.preferredName ?? row.caregiver.legalName}
+                  </option>
+                ))}
+              </select>
             </label>
-          ))}
-        </fieldset>
-        {data && selected.includes('documents') ? (
-          <fieldset>
-            <legend>מסמכים — לא נבחרים אוטומטית</legend>
-            {data.documents.length ? (
-              data.documents.map((document) => (
-                <label key={document.id}>
-                  <input
-                    type="checkbox"
-                    checked={documentIds.includes(document.id)}
-                    onChange={() =>
-                      setDocumentIds((current) =>
-                        current.includes(document.id)
-                          ? current.filter((id) => id !== document.id)
-                          : [...current, document.id],
-                      )
+            {caseId ? (
+              // The canonical case screen used to be reachable only by pasting
+              // a UUID into the address bar (WEB-11). This is the link.
+              <p>
+                <Link to={`/cases/${encodeURIComponent(caseId)}`}>מעבר לתיק ההעסקה המלא</Link>
+              </p>
+            ) : null}
+            {state === 'loading-case' ? <p role="status">טוען מידע…</p> : null}
+            {data ? (
+              <>
+                <label>
+                  סוג תיק
+                  <select
+                    onChange={(event) =>
+                      setSelected([...presets[event.target.value as keyof typeof presets]])
                     }
-                  />{' '}
-                  {document.documentType} ({document.verificationStatus ?? document.status})
+                    defaultValue="full"
+                  >
+                    <option value="full">תיק העסקה מלא</option>
+                    <option value="review">חבילת בדיקה מקצועית</option>
+                    <option value="handoff">העברה משפחתית בחירום</option>
+                    <option value="documents">מסמכים בלבד</option>
+                  </select>
                 </label>
-              ))
-            ) : (
-              <p>לא נשמרו מסמכים.</p>
+                <fieldset>
+                  <legend>סעיפים</legend>
+                  {(Object.keys(labels) as Section[]).map((section) => (
+                    <label key={section}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(section)}
+                        onChange={() => toggle(section)}
+                      />{' '}
+                      {labels[section]}{' '}
+                      {section === 'payroll' ? (
+                        <strong className="sensitive-label">מידע רגיש</strong>
+                      ) : null}
+                    </label>
+                  ))}
+                </fieldset>
+                {selected.includes('documents') ? (
+                  <fieldset>
+                    <legend>מסמכים — לא נבחרים אוטומטית</legend>
+                    {data.documents.length ? (
+                      data.documents.map((document) => (
+                        <label key={document.id}>
+                          <input
+                            type="checkbox"
+                            checked={documentIds.includes(document.id)}
+                            onChange={() =>
+                              setDocumentIds((current) =>
+                                current.includes(document.id)
+                                  ? current.filter((id) => id !== document.id)
+                                  : [...current, document.id],
+                              )
+                            }
+                          />{' '}
+                          {document.documentType} ({document.verificationStatus ?? document.status})
+                        </label>
+                      ))
+                    ) : (
+                      <p>לא נשמרו מסמכים.</p>
+                    )}
+                  </fieldset>
+                ) : null}
+                <button
+                  className="primary-button"
+                  type="button"
+                  // The only remaining disabled state is one the user caused
+                  // and can undo: every section un-ticked, or a save in
+                  // flight. The hint below names it.
+                  disabled={!selected.length || exportState === 'recording'}
+                  onClick={() => void exportBinder()}
+                >
+                  יצירת PDF / הדפסה
+                </button>
+                {!selected.length ? (
+                  <p className="binder-hint">בחרו לפחות סעיף אחד כדי לייצא.</p>
+                ) : null}
+                {exportState === 'recording' ? (
+                  <p role="status">{t('binder.recordingExport')}</p>
+                ) : null}
+                {exportState === 'recorded' && receipt ? (
+                  <p role="status">
+                    {t('binder.receiptLabel')}: <code>{receipt.id}</code> ·{' '}
+                    {t('binder.receiptHash')}: <code>{receipt.contentHash}</code>
+                  </p>
+                ) : null}
+                {exportState === 'unrecorded' ? (
+                  <p role="alert">{t('binder.unrecordedLocalPrint')}</p>
+                ) : null}
+                <p>
+                  <small>
+                    קובץ ההדפסה נוצר במכשיר ואינו קישור ציבורי. בדקו הרשאות שיתוף לפני העברה.
+                  </small>
+                </p>
+              </>
+            ) : state === 'loading-case' ? null : (
+              <p className="binder-hint">בחרו תיק העסקה כדי לראות מה אפשר לכלול בייצוא.</p>
             )}
-          </fieldset>
+          </>
         ) : null}
-        <button
-          className="primary-button"
-          type="button"
-          disabled={!data || !selected.length || exportState === 'recording'}
-          onClick={() => void exportBinder()}
-        >
-          יצירת PDF / הדפסה
-        </button>
-        {exportState === 'recording' ? <p role="status">{t('binder.recordingExport')}</p> : null}
-        {exportState === 'recorded' && receipt ? (
-          <p role="status">
-            {t('binder.receiptLabel')}: <code>{receipt.id}</code> · {t('binder.receiptHash')}:{' '}
-            <code>{receipt.contentHash}</code>
-          </p>
-        ) : null}
-        {exportState === 'unrecorded' ? (
-          <p role="alert">{t('binder.unrecordedLocalPrint')}</p>
-        ) : null}
-        <p>
-          <small>קובץ ההדפסה נוצר במכשיר ואינו קישור ציבורי. בדקו הרשאות שיתוף לפני העברה.</small>
-        </p>
       </section>
       {data ? (
         <article className="card binder-document" dir="rtl">
@@ -375,6 +435,18 @@ export function EmergencyBinderPage() {
           {selected.includes('medications') && (
             <section id="binder-medications">
               <h3>{labels.medications}</h3>
+              {/*
+                Which copy this is matters more here than anywhere else in the
+                binder: a paramedic or a stand-in reading this on a device
+                that has never held this family's localStorage needs to know
+                whether the list came from the shared server record or from
+                whichever device happened to print it.
+              */}
+              {medicationsSource === 'local' ? (
+                <p className="action-notice error" role="note">
+                  {t('binder.medications.localCopyNotice')}
+                </p>
+              ) : null}
               {medications.length ? (
                 <>
                   <table>

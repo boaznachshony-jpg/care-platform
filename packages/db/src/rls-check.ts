@@ -91,6 +91,7 @@ const ALL_TENANT_TABLES = [
   'tenant_workspace_history', // 0035
   'tenant_data_census', // 0038
   'terms_acceptance', // 0043
+  'medication', // 0046
 ] as const;
 
 interface Fixture {

@@ -1,13 +1,20 @@
 import type {
   AddContactRequest,
   CaseContactResponse,
+  CreateMedicationRequest,
   CreateTaskRequest,
   DocumentDownloadUrlResponse,
   DocumentResponse,
   EmploymentCaseResponse,
+  ImportDocumentRequest,
+  ImportMedicationRequest,
+  ImportTaskRequest,
+  MedicationResponse,
   OpenEmploymentCaseRequest,
   TaskResponse,
   TimelineEventResponse,
+  UpdateMedicationRequest,
+  UpdateTaskRequest,
   UploadDocumentRequest,
   SaveWorkspaceRequest,
   WorkspaceResponse,
@@ -24,6 +31,7 @@ import type {
   LegalAcceptanceRequest,
   LegalAcceptanceResponse,
 } from '@caredesk/schemas';
+import { newIdempotencyKey } from './idempotency.js';
 import { getBrowserAuthClient } from '../auth/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
 
@@ -208,10 +216,14 @@ export function listVisaRenewals(caseId: string): Promise<VisaRenewalWorkflowRes
 export function startVisaRenewal(
   caseId: string,
   input: StartVisaRenewalRequest,
+  // Defaults to a fresh key for callers that don't pass one yet; a caller
+  // that wants retry-safety across a lost response should pass a key it
+  // generated once for this attempt (see `newIdempotencyKey`).
+  idempotencyKey: string = newIdempotencyKey(),
 ): Promise<VisaRenewalWorkflowResponse> {
   return apiRequest(`${casePath(caseId)}/visa-renewals`, {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }
@@ -244,6 +256,38 @@ export function createCaseTask(caseId: string, input: CreateTaskRequest): Promis
 export function completeCaseTask(caseId: string, taskId: string): Promise<TaskResponse> {
   return apiRequest(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}/complete`, {
     method: 'POST',
+  });
+}
+
+export function updateCaseTask(
+  caseId: string,
+  taskId: string,
+  input: UpdateTaskRequest,
+): Promise<TaskResponse> {
+  return apiRequest(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Soft-close only (status -> 'cancelled'); there is no delete route for tasks. */
+export function archiveCaseTask(caseId: string, taskId: string): Promise<TaskResponse> {
+  return apiRequest(`${casePath(caseId)}/tasks/${encodeURIComponent(taskId)}/archive`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Idempotent upload of one browser-only task (MVP cutover). The server keys
+ * idempotency on `input.legacyLocalId` (migration 0046): calling this twice
+ * with the same id returns the same task rather than creating a duplicate,
+ * which is what makes it safe to call from a background sync effect without
+ * first checking whether a previous attempt already succeeded.
+ */
+export function importCaseTask(caseId: string, input: ImportTaskRequest): Promise<TaskResponse> {
+  return apiRequest(`${casePath(caseId)}/tasks/import`, {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
 
@@ -280,6 +324,69 @@ export function getCaseDocumentDownloadUrl(
   documentId: string,
 ): Promise<DocumentDownloadUrlResponse> {
   return apiRequest(`${casePath(caseId)}/documents/${encodeURIComponent(documentId)}/download-url`);
+}
+
+/**
+ * Idempotent upload of one browser-only document record (MVP cutover), keyed
+ * on `input.legacyLocalId` the same way {@link importCaseTask} is (migration
+ * 0046). `input.file` is omitted for a local record that never had a scanned
+ * file — the import still creates the document, with no version, exactly as
+ * `ImportCaseDocument` documents.
+ */
+export function importCaseDocument(
+  caseId: string,
+  input: ImportDocumentRequest,
+): Promise<DocumentResponse> {
+  return apiRequest(`${casePath(caseId)}/documents/import`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function listCaseMedications(caseId: string): Promise<MedicationResponse[]> {
+  return apiRequest(`${casePath(caseId)}/medications`);
+}
+
+export function createCaseMedication(
+  caseId: string,
+  input: CreateMedicationRequest,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Idempotent upload of one browser-only medication (MVP cutover) — see importCaseTask. */
+export function importCaseMedication(
+  caseId: string,
+  input: ImportMedicationRequest,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications/import`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCaseMedication(
+  caseId: string,
+  medicationId: string,
+  input: UpdateMedicationRequest,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications/${encodeURIComponent(medicationId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Soft-close only (status -> 'archived'); there is no delete route for medications. */
+export function archiveCaseMedication(
+  caseId: string,
+  medicationId: string,
+): Promise<MedicationResponse> {
+  return apiRequest(`${casePath(caseId)}/medications/${encodeURIComponent(medicationId)}/archive`, {
+    method: 'POST',
+  });
 }
 
 export function getWorkspace(): Promise<WorkspaceResponse> {
@@ -375,6 +482,32 @@ export function listLegalAcceptances(): Promise<LegalAcceptanceResponse> {
   return apiRequest('/legal/acceptances');
 }
 
+/**
+ * Wave 5 worker portal communication preference (migration 0025,
+ * `communication_preference`). `whatsapp_consent`/`sms_consent` can be
+ * `'granted'` even though the portal itself can never set that value — a
+ * caregiver's WhatsApp opt-in is collected elsewhere. This getter exists
+ * because nothing previously read it at all: WorkerPortalPage's save always
+ * sent a hardcoded `whatsappConsent: 'unknown'`, which is how a caregiver's
+ * explicit `'revoked'` got silently reset the next time she changed her
+ * display language. See WorkerPortalPage for how the loaded value is echoed
+ * back, and Wave5Service.updatePreference for why the server never trusts
+ * that echo alone.
+ */
+export interface WorkerPreferencesResponse {
+  preferred_locale: 'he' | 'en';
+  preferred_channel: 'email';
+  email_enabled: boolean;
+  whatsapp_enabled: boolean;
+  sms_enabled: boolean;
+  whatsapp_consent: 'unknown' | 'granted' | 'revoked';
+  sms_consent: 'unknown' | 'granted' | 'revoked';
+}
+
+export function getWorkerPreferences(): Promise<WorkerPreferencesResponse> {
+  return apiRequest('/worker/preferences');
+}
+
 export interface CaseHealthResponse {
   score: number;
   actionsRemaining: number;
@@ -467,10 +600,14 @@ export const askCaseAssistant = (
     method: 'POST',
     body: JSON.stringify({ question, intent }),
   });
-export const confirmAssistantChecklist = (caseId: string, items: string[]) =>
+export const confirmAssistantChecklist = (
+  caseId: string,
+  items: string[],
+  idempotencyKey: string = newIdempotencyKey(),
+) =>
   apiRequest(`${casePath(caseId)}/assistant/checklist-confirmations`, {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify({ items }),
   });
 export const listProfessionalReviews = (caseId: string) =>
@@ -478,10 +615,11 @@ export const listProfessionalReviews = (caseId: string) =>
 export const createProfessionalReview = (
   caseId: string,
   input: { category: string; reason: string; summary: string; source: string },
+  idempotencyKey: string = newIdempotencyKey(),
 ) =>
   apiRequest<ProfessionalReviewResponse>(`${casePath(caseId)}/professional-reviews`, {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 export const getProfessionalReview = (caseId: string, reviewId: string) =>
@@ -494,10 +632,11 @@ export const transitionProfessionalReview = (
   caseId: string,
   reviewId: string,
   input: { status: ProfessionalReviewStatus; assignedTo?: string; resolutionNote?: string },
+  idempotencyKey: string = newIdempotencyKey(),
 ) =>
   apiRequest<ProfessionalReviewResponse>(`${casePath(caseId)}/professional-reviews/${reviewId}`, {
     method: 'PATCH',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 
@@ -679,18 +818,21 @@ export function listRegulationRules(): Promise<RegulationRuleResponse[]> {
   return apiRequest('/regulation-rules');
 }
 
-export function createRegulationRule(input: {
-  ruleKey: string;
-  title: string;
-  statement: string;
-  sourceCitation: string;
-  sourceAuthority?: string;
-  effectiveFrom?: string;
-  effectiveTo?: string;
-}): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
+export function createRegulationRule(
+  input: {
+    ruleKey: string;
+    title: string;
+    statement: string;
+    sourceCitation: string;
+    sourceAuthority?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+  },
+  idempotencyKey: string = newIdempotencyKey(),
+): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
   return apiRequest('/regulation-rules', {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }
@@ -700,10 +842,11 @@ export function createRegulationRule(input: {
 export function transitionRegulationRule(
   ruleId: string,
   input: { status: Exclude<RegulationRuleStatus, 'draft'>; reviewedBy?: string },
+  idempotencyKey: string = newIdempotencyKey(),
 ): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
   return apiRequest(`/regulation-rules/${encodeURIComponent(ruleId)}`, {
     method: 'PATCH',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }

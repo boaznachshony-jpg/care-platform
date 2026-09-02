@@ -1,4 +1,6 @@
 import type {
+  AttachDocumentVersionRecord,
+  CreateDocumentRecord,
   CreateDocumentVersionRecord,
   DocumentRepository,
   DocumentWithCurrentVersion,
@@ -19,6 +21,7 @@ interface DocumentRow {
   current_version_id: string | null;
   expires_at: Date | null;
   status: string;
+  legacy_local_id: string | null;
 }
 
 interface VersionRow {
@@ -52,6 +55,7 @@ function toDocument(row: DocumentRow): Document {
     currentVersionId: row.current_version_id ? brandId(row.current_version_id) : null,
     expiresAt: row.expires_at ? row.expires_at.toISOString() : null,
     status: row.status as Document['status'],
+    legacyLocalId: row.legacy_local_id,
   };
 }
 
@@ -95,7 +99,12 @@ function toResult(row: JoinedRow): DocumentWithCurrentVersion {
 
 const DOCUMENT_COLUMNS = `d.id, d.tenant_id, d.employment_case_id, d.document_type,
   d.owner_type, d.owner_id, d.sensitivity, d.compliance_status, d.current_version_id,
-  d.expires_at, d.status`;
+  d.expires_at, d.status, d.legacy_local_id`;
+
+// Same fields, unaliased — for `insert ... returning`, which has no `d.` join alias.
+const DOCUMENT_COLUMNS_UNALIASED = `id, tenant_id, employment_case_id, document_type,
+  owner_type, owner_id, sensitivity, compliance_status, current_version_id,
+  expires_at, status, legacy_local_id`;
 
 const VERSION_COLUMNS = `v.id as v_id, v.document_id as v_document_id,
   v.version_number as v_version_number, v.storage_key as v_storage_key,
@@ -122,8 +131,8 @@ export class PgDocumentRepository implements DocumentRepository {
       await client.query(
         `insert into document
            (id, tenant_id, employment_case_id, document_type, owner_type, owner_id,
-            sensitivity, compliance_status, expires_at, created_by, updated_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
+            sensitivity, compliance_status, expires_at, created_by, updated_by, legacy_local_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11)`,
         [
           input.documentId,
           input.tenantId,
@@ -135,6 +144,7 @@ export class PgDocumentRepository implements DocumentRepository {
           input.complianceStatus,
           input.expiresAt,
           input.createdBy,
+          input.legacyLocalId ?? null,
         ],
       );
 
@@ -168,6 +178,119 @@ export class PgDocumentRepository implements DocumentRepository {
         throw new Error('Document insert returned no row.');
       }
       return toResult(row);
+    });
+  }
+
+  async createDocument(input: CreateDocumentRecord): Promise<DocumentWithCurrentVersion> {
+    return withTenant(this.pool, input.tenantId, async (client) => {
+      const result = await client.query<DocumentRow>(
+        `insert into document
+           (id, tenant_id, employment_case_id, document_type, owner_type, owner_id,
+            sensitivity, compliance_status, expires_at, created_by, updated_by, legacy_local_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11)
+         returning ${DOCUMENT_COLUMNS_UNALIASED}`,
+        [
+          input.documentId,
+          input.tenantId,
+          input.employmentCaseId,
+          input.documentType,
+          input.ownerType,
+          input.ownerId,
+          input.sensitivity,
+          input.complianceStatus,
+          input.expiresAt,
+          input.createdBy,
+          input.legacyLocalId ?? null,
+        ],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        throw new Error('Document insert returned no row.');
+      }
+      return { document: toDocument(row), currentVersion: null };
+    });
+  }
+
+  /**
+   * See DocumentRepository.attachDocumentVersion for the contract. The
+   * `select ... for update` is what makes the check-then-attach atomic: it
+   * locks the document row before deciding anything, so a second concurrent
+   * call for the same document (two tabs replaying the cutover retry, or a
+   * client retry after a dropped response) blocks here instead of racing.
+   * When it wakes up — after the first call's transaction has committed —
+   * `current_version_id` is no longer null, so it takes the early-return
+   * branch and inserts nothing. That is also why the row lock and the insert
+   * must share one transaction (`withTenant`'s client): a lock released
+   * between statements would defeat the whole point.
+   */
+  async attachDocumentVersion(
+    input: AttachDocumentVersionRecord,
+  ): Promise<DocumentWithCurrentVersion | null> {
+    return withTenant(this.pool, input.tenantId, async (client) => {
+      const locked = await client.query<{ current_version_id: string | null }>(
+        `select current_version_id from document
+           where id = $1 and tenant_id = $2 and employment_case_id = $3
+           for update`,
+        [input.documentId, input.tenantId, input.employmentCaseId],
+      );
+      const lockedRow = locked.rows[0];
+      // No such document in this case/tenant, or it already has a version —
+      // either way there is nothing left for this call to do.
+      if (!lockedRow || lockedRow.current_version_id !== null) {
+        return null;
+      }
+
+      await client.query(
+        `insert into document_version
+           (id, tenant_id, document_id, version_number, storage_key, media_type,
+            size_bytes, checksum, upload_source, created_by)
+         values ($1, $2, $3, 1, $4, $5, $6, $7, 'web_upload', $8)`,
+        [
+          input.versionId,
+          input.tenantId,
+          input.documentId,
+          input.storageKey,
+          input.mediaType,
+          input.sizeBytes,
+          input.checksum,
+          input.createdBy,
+        ],
+      );
+
+      // compliance_status and expires_at are deliberately NOT touched here —
+      // see ImportCaseDocument's comment on why attaching a file never
+      // rewrites facts the metadata import already recorded.
+      await client.query(
+        `update document
+            set current_version_id = $2, updated_at = now(), updated_by = $3,
+                version = version + 1
+          where id = $1`,
+        [input.documentId, input.versionId, input.createdBy],
+      );
+
+      const result = await client.query<JoinedRow>(`${SELECT_JOINED} where d.id = $1`, [
+        input.documentId,
+      ]);
+      const row = result.rows[0];
+      if (!row) {
+        throw new Error('Document attach-version returned no row.');
+      }
+      return toResult(row);
+    });
+  }
+
+  async findDocumentByLegacyLocalId(
+    tenantId: string,
+    employmentCaseId: string,
+    legacyLocalId: string,
+  ): Promise<DocumentWithCurrentVersion | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<JoinedRow>(
+        `${SELECT_JOINED} where d.employment_case_id = $1 and d.legacy_local_id = $2`,
+        [employmentCaseId, legacyLocalId],
+      );
+      const row = result.rows[0];
+      return row ? toResult(row) : null;
     });
   }
 

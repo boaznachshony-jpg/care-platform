@@ -4,9 +4,10 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { openEmploymentCaseRequestSchema, type OpenEmploymentCaseRequest } from '@caredesk/schemas';
-import { Alert, Button, TextField } from '@caredesk/ui';
+import { Alert, Button, SelectField, TextField } from '@caredesk/ui';
 import { openEmploymentCase } from '../api/client.js';
 import { findCanonicalCase } from '../canonical-case.js';
+import { relationshipOptions } from '../relationship-options.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { readActiveMvpProfile } from '../storage/mvp-storage.js';
 
@@ -128,9 +129,14 @@ export function OpenCasePage() {
             error={errors.employer?.fullName ? requiredMessage : undefined}
             {...register('employer.fullName')}
           />
-          <TextField
+          <SelectField
             label={t('case.employerRelationship')}
             required
+            placeholder={t('case.relationshipPlaceholder')}
+            // The stored value is passed in so a relationship typed before this
+            // list existed stays selectable instead of being silently replaced
+            // the first time this form is opened and saved.
+            options={relationshipOptions(t, setupProfile.employerRelationship)}
             error={errors.employer?.relationshipToRecipient ? requiredMessage : undefined}
             {...register('employer.relationshipToRecipient')}
           />
@@ -148,6 +154,7 @@ export function OpenCasePage() {
           />
           <TextField
             label={t('case.caregiverPreferredName')}
+            hint={t('case.caregiverPreferredNameHint')}
             {...register('caregiver.preferredName')}
           />
           <TextField

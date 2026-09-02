@@ -14,9 +14,11 @@ import type {
 } from '../ports/document-repository.js';
 import type { DocumentStorage } from '../ports/document-storage.js';
 import type { IdGenerator } from '../ports/id-generator.js';
+import type { TaskRepository } from '../ports/task-repository.js';
 import type { TimelineService } from '../ports/timeline-service.js';
-import type { Actor } from './actor.js';
+import { AuthorizationError, type Actor } from './actor.js';
 import { authorizeOrThrow } from './authorize.js';
+import { findCaseHealthTaskFactor } from './case-health-factors.js';
 
 /**
  * Signed links are short-lived by design (blueprint §4.5). 15 minutes is long
@@ -43,6 +45,11 @@ export interface CaseDocumentDeps {
   timeline: TimelineService;
   clock: Clock;
   ids: IdGenerator;
+  /**
+   * Needed only so a document that lands 'valid' can auto-close the seeded
+   * compliance task it satisfies — see completeMatchingSeededTask below.
+   */
+  tasks: TaskRepository;
 }
 
 /**
@@ -120,6 +127,123 @@ export function deriveComplianceStatus(
   return expiresAfter - now.getTime() <= windowMs ? 'expiring' : 'valid';
 }
 
+/**
+ * Closes the seeded compliance task a document just satisfied, e.g. the
+ * "complete your passport details" task once a passport document is on file
+ * and currently valid — NOT merely present. A document that exists but has
+ * expired, or one that is still 'expiring', leaves the task open on purpose:
+ * the health factor this task mirrors (`/cases/:caseId/health`) checks
+ * `complianceStatus === 'valid'`, and a task that closed on upload alone
+ * would go green while the case health score it is supposed to track stays
+ * red — reintroducing exactly the "list that lies" problem this change
+ * exists to fix.
+ *
+ * WHERE this lives: document upload/import (UploadCaseDocument,
+ * ImportCaseDocument below) is the only place in the codebase that ever
+ * computes or writes a document's complianceStatus — deriveComplianceStatus
+ * runs once, at creation, and nothing today re-derives it later (no cron, no
+ * separate "verify" transition; grep the repo for complianceStatus writes).
+ * So the moment a document's status becomes 'valid' happens exactly once,
+ * exactly here, which makes this the strongest place to react to it: no
+ * polling, no second source of truth to keep in sync, and the completion
+ * happens inside the same request that made the fact true, not on some later
+ * page load or job run.
+ *
+ * WHO completes it: nobody clicked anything — an upload made a fact true and
+ * the system noticed. `completedBy: null` follows the same convention
+ * CollectDueProductSubscriptions uses for the billing cron
+ * (`actorId: null // system cron; no human actor.` in manage-product-billing.ts):
+ * an automatic action is never attributed to the human who merely triggered
+ * the chain of events that led to it, because they did not perform it.
+ *
+ * WHAT ABOUT EXPIRY OR REMOVAL: not wired up, and deliberately so. There is
+ * no code path in this system today that ever transitions a document's
+ * complianceStatus away from 'valid' after creation (no recompute job, no
+ * document-delete endpoint — migration 0047's task.source_key unique index
+ * would in any case forbid inserting a second row under the same key while a
+ * completed one already holds it, so "create a fresh task" was never on the
+ * table without first reopening the old row). Building a reopen path with no
+ * caller that can ever invoke it would be speculative dead code, which the
+ * instructions for this change rank below doing nothing. When a compliance
+ * recompute job is eventually added, it is the natural place to call
+ * TaskRepository's completeTask-shaped counterpart to reopen a task — this
+ * function does not need to anticipate that job's shape today.
+ *
+ * Never allowed to fail the upload/import it runs inside: the document is
+ * already fully persisted, audited and timelined by the time this is called.
+ * Unlike OpenEmploymentCase.seedComplianceTasks (which has no such guard and
+ * can turn an already-written case into a 500), a document upload having
+ * succeeded is the whole point of the request — a bookkeeping side effect on
+ * top of it must not turn a successful upload into a failed one.
+ */
+async function completeMatchingSeededTask(
+  deps: Pick<CaseDocumentDeps, 'tasks' | 'authorization' | 'audit' | 'timeline' | 'clock'>,
+  actor: Actor,
+  caseId: string,
+  documentType: DocumentType,
+  complianceStatus: DocumentComplianceStatus,
+): Promise<void> {
+  if (complianceStatus !== 'valid') return;
+  const factor = findCaseHealthTaskFactor(documentType);
+  if (!factor) return;
+
+  try {
+    // Deny-by-default still applies to this system-triggered write: an actor
+    // who may upload a document but may not touch tasks does not get to close
+    // one just because their upload happened to satisfy it.
+    await authorizeOrThrow(deps, actor, {
+      resourceType: 'task',
+      action: 'update',
+      caseId,
+      sensitivity: 'employment_sensitive',
+    });
+
+    const now = deps.clock.now().toISOString();
+    const completed = await deps.tasks.completeTaskBySourceKey(
+      actor.tenantId,
+      caseId,
+      factor.sourceKey,
+      now,
+      // System completion: no human clicked anything (see function doc above).
+      null,
+    );
+    // null means there was nothing to close — no seeded task exists (a case
+    // opened before this factor existed, or it was already completed/
+    // archived). Nothing to audit or timeline in that case.
+    if (!completed) return;
+
+    await deps.audit.record({
+      tenantId: actor.tenantId,
+      // System-derived, not a human decision — see AuditEventInput.actorId's
+      // own null-for-system-actor convention.
+      actorId: null,
+      action: 'task.auto_completed',
+      resourceType: 'task',
+      resourceId: completed.id,
+      correlationId: actor.correlationId,
+      occurredAt: now,
+      changeSummary: `Task auto-completed: a currently valid ${documentType} document now exists on the case.`,
+      sensitivity: 'employment_sensitive',
+    });
+
+    await deps.timeline.record({
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      eventTypeKey: 'timeline.task.auto_completed',
+      occurredAt: now,
+      summaryKey: 'timeline.task.auto_completed.summary',
+      sensitivity: 'general',
+    });
+  } catch (error) {
+    // A denial here just means the task stays open — deny-by-default is still
+    // honoured, nothing was completed. Any other failure (repository error,
+    // audit/timeline hiccup) is swallowed for the same reason the whole
+    // function is wrapped: the document upload already succeeded and must not
+    // be turned into a 500 by a side effect on top of it.
+    if (error instanceof AuthorizationError) return;
+  }
+}
+
 export class UploadCaseDocument {
   constructor(private readonly deps: CaseDocumentDeps) {}
 
@@ -194,7 +318,275 @@ export class UploadCaseDocument {
       sensitivity: 'general',
     });
 
+    // See completeMatchingSeededTask's doc comment for why this runs here,
+    // who it attributes the completion to, and why expiry/removal are not
+    // handled. Never allowed to fail this already-successful upload.
+    await completeMatchingSeededTask(
+      this.deps,
+      actor,
+      caseId,
+      input.documentType,
+      stored.document.complianceStatus,
+    );
+
     return stored;
+  }
+}
+
+export interface ImportDocumentInput {
+  documentType: DocumentType;
+  sensitivity: SensitivityClass;
+  /** Present when the browser record had a scanned file (MvpDocument.dataUrl); absent for metadata only. */
+  file?: { mediaType: string; content: string };
+  expiresOn?: string;
+  legacyLocalId: string;
+}
+
+/**
+ * Idempotent create for the UI cutover, mirroring ImportCaseTask. A device may
+ * hold a document record with no scanned file at all (the family only noted
+ * "we have a passport", never photographed it) — that case creates the
+ * container with no version, exactly like a document nobody has uploaded a
+ * file to yet, and the family can attach the scan later through the normal
+ * upload flow.
+ */
+export class ImportCaseDocument {
+  constructor(private readonly deps: CaseDocumentDeps) {}
+
+  async execute(
+    actor: Actor,
+    caseId: string,
+    input: ImportDocumentInput,
+  ): Promise<DocumentWithCurrentVersion> {
+    await authorizeOrThrow(this.deps, actor, {
+      resourceType: 'document',
+      action: 'create',
+      caseId,
+      sensitivity: input.sensitivity,
+    });
+
+    const existing = await this.deps.documents.findDocumentByLegacyLocalId(
+      actor.tenantId,
+      caseId,
+      input.legacyLocalId,
+    );
+    if (existing) {
+      // A prior run of this same legacy import already created the document
+      // container. Two cases now:
+      //  - It already has a file (either this is a pure repeat of an import
+      //    that carried one, or a metadata-only container already got its
+      //    scan through this same path before). Returning early is correct:
+      //    the family never re-scanned anything, so inserting a second
+      //    version here would create a phantom "new upload" event nobody
+      //    performed and would misrepresent the document's history.
+      //  - It has NO file yet, and this call carries one. This is the exact
+      //    gap this change exists to close: the browser cutover first sent
+      //    metadata only (this row was created with `current_version_id`
+      //    null), then later resolved the actual bytes (IndexedDB / dataUrl /
+      //    workspace storage — see apps/web/src/sync/document-mapping.ts) and
+      //    retried the same `legacyLocalId` with `file` set. Returning early
+      //    here used to silently discard that file forever — the scan stayed
+      //    on the one device and the emergency binder could never produce it.
+      if (!input.file || existing.currentVersion) {
+        return existing;
+      }
+      return this.attachFileToExistingDocument(actor, caseId, existing, input.file);
+    }
+
+    const now = this.deps.clock.now();
+    const documentId = this.deps.ids.next();
+    const expiresAt = input.expiresOn ? `${input.expiresOn}T00:00:00.000Z` : null;
+    const complianceStatus = deriveComplianceStatus(expiresAt, now);
+
+    let stored: DocumentWithCurrentVersion;
+    if (input.file) {
+      const versionId = this.deps.ids.next();
+      const bytes = decodeBase64(input.file.content);
+      const { storageKey } = await this.deps.storage.putObject({
+        tenantId: actor.tenantId,
+        key: `cases/${caseId}/documents/${documentId}/${versionId}`,
+        contentType: input.file.mediaType,
+        body: bytes,
+      });
+      stored = await this.deps.documents.createDocumentWithVersion({
+        documentId,
+        versionId,
+        tenantId: actor.tenantId,
+        employmentCaseId: caseId,
+        documentType: input.documentType,
+        ownerType: 'employment_case',
+        ownerId: null,
+        sensitivity: input.sensitivity,
+        complianceStatus,
+        expiresAt,
+        storageKey,
+        mediaType: input.file.mediaType,
+        sizeBytes: bytes.byteLength,
+        checksum: null,
+        createdBy: actor.userId,
+        legacyLocalId: input.legacyLocalId,
+      });
+    } else {
+      stored = await this.deps.documents.createDocument({
+        documentId,
+        tenantId: actor.tenantId,
+        employmentCaseId: caseId,
+        documentType: input.documentType,
+        ownerType: 'employment_case',
+        ownerId: null,
+        sensitivity: input.sensitivity,
+        complianceStatus,
+        expiresAt,
+        createdBy: actor.userId,
+        legacyLocalId: input.legacyLocalId,
+      });
+    }
+
+    await this.deps.audit.record({
+      tenantId: actor.tenantId,
+      actorId: actor.userId,
+      action: 'document.imported',
+      resourceType: 'document',
+      resourceId: documentId,
+      correlationId: actor.correlationId,
+      occurredAt: now.toISOString(),
+      changeSummary: `Document type ${input.documentType} imported from local device record.`,
+      sensitivity: input.sensitivity,
+    });
+
+    await this.deps.timeline.record({
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      eventTypeKey: 'timeline.document.imported',
+      occurredAt: now.toISOString(),
+      summaryKey: 'timeline.document.imported.summary',
+      sensitivity: 'general',
+    });
+
+    // See completeMatchingSeededTask's doc comment. Only reached on an actual
+    // new import (the legacyLocalId idempotency check above returns early on
+    // a repeat, before any of this), so a replayed import cannot re-trigger it.
+    await completeMatchingSeededTask(
+      this.deps,
+      actor,
+      caseId,
+      input.documentType,
+      stored.document.complianceStatus,
+    );
+
+    return stored;
+  }
+
+  /**
+   * Attaches a file as the first version of a document container that
+   * already exists but has none — see the comment at the `existing.currentVersion`
+   * check in execute() for why this path exists at all.
+   *
+   * `existing` is the pre-attach snapshot: it is only used for ids and
+   * display fields (documentType, sensitivity) that do not change here, never
+   * as a source of truth for whether the attach itself succeeded — that is
+   * entirely `attachDocumentVersion`'s job (see below).
+   */
+  private async attachFileToExistingDocument(
+    actor: Actor,
+    caseId: string,
+    existing: DocumentWithCurrentVersion,
+    file: { mediaType: string; content: string },
+  ): Promise<DocumentWithCurrentVersion> {
+    const now = this.deps.clock.now();
+    const versionId = this.deps.ids.next();
+    const bytes = decodeBase64(file.content);
+
+    // The storage key is derived from the document's own id, exactly like
+    // UploadCaseDocument and the fresh-import branch above — never accepted
+    // from the caller, so no request body can steer a write at another
+    // tenant's or document's object path.
+    const { storageKey } = await this.deps.storage.putObject({
+      tenantId: actor.tenantId,
+      key: `cases/${caseId}/documents/${existing.document.id}/${versionId}`,
+      contentType: file.mediaType,
+      body: bytes,
+    });
+
+    const attached = await this.deps.documents.attachDocumentVersion({
+      documentId: existing.document.id,
+      versionId,
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      storageKey,
+      mediaType: file.mediaType,
+      sizeBytes: bytes.byteLength,
+      checksum: null,
+      createdBy: actor.userId,
+    });
+
+    // null means the repository's own atomic re-check (a row lock in
+    // PgDocumentRepository, see its doc comment) found a version already
+    // attached by the time it looked — a concurrent duplicate of this exact
+    // retry (two browser tabs, or the client retrying after a response it
+    // never saw). This is the idempotency guard the client's own "retry
+    // exactly once" behaviour cannot provide by itself: the document already
+    // has its file by construction, so re-read the current state and return
+    // it rather than treating a lost race as a failure.
+    if (!attached) {
+      const refreshed = await this.deps.documents.findCaseDocument(
+        actor.tenantId,
+        caseId,
+        existing.document.id,
+      );
+      // Cannot actually be null in practice — this row was found moments ago
+      // and documents are never deleted (no DELETE grant on tenant data,
+      // migration 0037) — but fall back to the pre-attach snapshot rather
+      // than throw: it is still a truthful answer to "does the import exist".
+      return refreshed ?? existing;
+    }
+
+    // A real event, distinct from the 'document.imported' audit/timeline
+    // entries already recorded when the metadata-only container was first
+    // created. Reusing 'document.imported' here would misrepresent this as a
+    // second import of the same record; what actually happened is that a
+    // file the family already told the system about has now arrived.
+    await this.deps.audit.record({
+      tenantId: actor.tenantId,
+      actorId: actor.userId,
+      action: 'document.file_attached',
+      resourceType: 'document',
+      resourceId: existing.document.id,
+      correlationId: actor.correlationId,
+      occurredAt: now.toISOString(),
+      // Document *type* only — never the file name, storage key, checksum or
+      // any content (Constitution §16/§19), same rule as every other
+      // document audit entry in this file.
+      changeSummary: `File attached to previously imported document type ${existing.document.documentType}.`,
+      sensitivity: existing.document.sensitivity,
+    });
+
+    await this.deps.timeline.record({
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      eventTypeKey: 'timeline.document.file_attached',
+      occurredAt: now.toISOString(),
+      summaryKey: 'timeline.document.file_attached.summary',
+      sensitivity: 'general',
+    });
+
+    // Deliberately NOT calling completeMatchingSeededTask here. Unlike
+    // UploadCaseDocument and the fresh-import branch of execute() above,
+    // attaching a file to an already-existing document never changes
+    // complianceStatus — attachDocumentVersion's contract leaves it and
+    // expiresAt exactly as the metadata import set them (see that method's
+    // doc comment). deriveComplianceStatus never considers whether a file
+    // exists, only expiry, so nothing about "is this document now compliant"
+    // became newly true just because its bytes finally arrived — whatever
+    // seeded-task completion that status warranted already happened (or
+    // correctly did not) at metadata-import time. Recomputing compliance
+    // status from `now` at attach time was considered and rejected: nothing
+    // else in this codebase ever recomputes a document's compliance status
+    // after creation (see the long comment on completeMatchingSeededTask
+    // above), and doing it only here — behind a retry the family never
+    // consciously initiates — would silently move a status they already saw,
+    // for reasons unrelated to anything they did.
+    return attached;
   }
 }
 
