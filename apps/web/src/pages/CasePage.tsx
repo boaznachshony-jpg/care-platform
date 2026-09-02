@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import type { EmploymentCaseResponse } from '@caredesk/schemas';
 import { ErrorState, Skeleton, StatusBadge, type StatusTone } from '@caredesk/ui';
 import { ApiRequestError, getEmploymentCase } from '../api/client.js';
@@ -87,6 +87,17 @@ export function CasePage() {
 
   return (
     <div>
+      {/*
+        `/cases/:caseId` is a top-level route: it is deliberately NOT wrapped in
+        ClientApp, so none of the app shell's navigation renders here. The
+        screen is a long scroll of independent sections, and until this link a
+        customer who followed a health-factor action into it had no way back
+        except the browser's own Back button — reported from production:
+        "איך חוזרים מהמסך הזה לתפריט".
+      */}
+      <p className="case-back-link">
+        <Link to="/app">{t('case.backToCases')}</Link>
+      </p>
       <h1>{t('case.viewTitle')}</h1>
       <StatusBadge tone={statusPresentation.tone} label={statusLabel} />
 

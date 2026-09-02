@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
+import { findCanonicalCase } from '../canonical-case.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
 import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
@@ -146,9 +147,29 @@ export function DashboardPage() {
   const [profile] = useMvpProfile();
   const { clientId } = useParams<{ clientId: string }>();
   const [health, setHealth] = useState<CaseHealthResponse>();
+  const [healthError, setHealthError] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardTabId>('overview');
   useEffect(() => {
-    if (clientId) void getCaseHealth(clientId).then(setHealth);
+    // The health API is keyed by the canonical EMPLOYMENT CASE id, and the
+    // route gives a legacy CLIENT id. Passing the client id straight through
+    // made every request 404, and with no `.catch` the rejection was silent —
+    // so this screen's score simply never appeared, and looked to a customer
+    // exactly like a case with nothing to report. Resolve the case first, and
+    // say so when it cannot be loaded rather than rendering an absence.
+    if (!clientId) return;
+    let cancelled = false;
+    setHealthError(false);
+    findCanonicalCase(clientId)
+      .then((found) => (found ? getCaseHealth(found.id) : undefined))
+      .then((result) => {
+        if (!cancelled && result) setHealth(result);
+      })
+      .catch(() => {
+        if (!cancelled) setHealthError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
   const selectTab = (tab: DashboardTabId) => {
     setActiveTab(tab);
@@ -377,6 +398,8 @@ export function DashboardPage() {
         <div>
           <h2 id="health-title">{t('intelligence.health')}</h2>
           <p>{health ? t('intelligence.healthDisclaimer') : t('dashboard.scoreUnavailable')}</p>
+          {/* A failed load is named, not left to read as "nothing to report". */}
+          {healthError ? <p role="alert">{t('completion.healthLoadFailed')}</p> : null}
           {/* healthDisclaimer covers what the score measures; this line adds the
               part it leaves out - the score does not replace an outside check. */}
           {health ? <p className="legal-note">{t('liability.score')}</p> : null}

@@ -273,7 +273,8 @@
     "statusSuspended": "Suspended",
     "statusEnded": "Ended",
     "statusCancelled": "Cancelled",
-    "statusArchived": "Archived"
+    "statusArchived": "Archived",
+    "backToCases": "← Back to cases"
   },
   "contacts": {
     "heading": "Contacts",

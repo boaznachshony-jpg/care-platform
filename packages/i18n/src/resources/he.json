@@ -273,7 +273,8 @@
     "statusSuspended": "מושהה",
     "statusEnded": "הסתיים",
     "statusCancelled": "בוטל",
-    "statusArchived": "בארכיון"
+    "statusArchived": "בארכיון",
+    "backToCases": "← חזרה לתיקי ההעסקה"
   },
   "contacts": {
     "heading": "אנשי קשר",

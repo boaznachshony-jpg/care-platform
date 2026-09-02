@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
+import { findCanonicalCase } from '../canonical-case.js';
 import {
   healthFactorAction,
   healthFactorExplanation,
@@ -20,11 +21,42 @@ export function OpenIssuesPage() {
   const [profile] = useMvpProfile();
   const { clientId } = useParams<{ clientId: string }>();
   const [health, setHealth] = useState<CaseHealthResponse>();
+  const [healthError, setHealthError] = useState(false);
   useEffect(() => {
-    if (clientId) void getCaseHealth(clientId).then(setHealth);
+    // The health API is keyed by the canonical EMPLOYMENT CASE id, and the
+    // route gives a legacy CLIENT id. Passing the client id straight through
+    // made every request 404, and with no `.catch` the rejection was silent —
+    // so this screen's score simply never appeared, and looked to a customer
+    // exactly like a case with nothing to report. Resolve the case first, and
+    // say so when it cannot be loaded rather than rendering an absence.
+    if (!clientId) return;
+    let cancelled = false;
+    setHealthError(false);
+    findCanonicalCase(clientId)
+      .then((found) => (found ? getCaseHealth(found.id) : undefined))
+      .then((result) => {
+        if (!cancelled && result) setHealth(result);
+      })
+      .catch(() => {
+        if (!cancelled) setHealthError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   const issues: OpenIssue[] = [];
+
+  // A failed load must not look like a clean case. Reported as an issue in the
+  // same list the customer is already reading, rather than as a silent absence.
+  if (healthError) {
+    issues.push({
+      id: 'health-unavailable',
+      severity: 'soon',
+      title: t('completion.healthLoadFailed'),
+      explanation: '',
+    });
+  }
 
   for (const factor of health?.factors ?? []) {
     if (factor.status === 'attention') {
