@@ -7,6 +7,7 @@ import { RegulationRulesAdmin } from '../components/RegulationRulesAdmin.js';
 import { israeliLocalities } from '../data/israeli-localities.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
+import { relationshipOptions } from '../relationship-options.js';
 import {
   withSamePersonFallbacks,
   type MvpProfile,
@@ -359,12 +360,22 @@ export function SettingsPage() {
             </label>
             <label>
               {t('profile.relationship')}
-              <input
+              {/* Same closed question as the case form, so the same list — a
+                  customer who picks "קרוב משפחה" in one place must not find a
+                  blank text box asking it again in the other. */}
+              <select
                 value={draft.employerRelationship}
                 onChange={(event) =>
                   setDraft({ ...draft, employerRelationship: event.target.value })
                 }
-              />
+              >
+                <option value="">{t('case.relationshipPlaceholder')}</option>
+                {relationshipOptions(t, draft.employerRelationship).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               {t('profile.address')}

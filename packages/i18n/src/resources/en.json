@@ -247,7 +247,15 @@
     "defaultRelationship": "Employer",
     "employerCity": "City",
     "caregiverLegalName": "Caregiver legal name (as in passport)",
-    "caregiverPreferredName": "Preferred name",
+    "caregiverPreferredName": "Name used day to day",
+    "caregiverPreferredNameHint": "The name she is actually called, if it differs from the passport name. May be left blank.",
+    "relationshipPlaceholder": "Choose a relationship",
+    "relationshipOptions": {
+      "son": "Son",
+      "daughter": "Daughter",
+      "relative": "Relative",
+      "trustee": "Trustee"
+    },
     "caregiverNationality": "Nationality",
     "caregiverLanguage": "Primary language",
     "startDate": "Employment start date",

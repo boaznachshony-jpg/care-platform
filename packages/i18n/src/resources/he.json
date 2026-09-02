@@ -247,7 +247,15 @@
     "defaultRelationship": "מעסיק",
     "employerCity": "עיר",
     "caregiverLegalName": "שם המטפל (כמופיע בדרכון)",
-    "caregiverPreferredName": "כינוי",
+    "caregiverPreferredName": "שם לפנייה יומיומית",
+    "caregiverPreferredNameHint": "השם שבו פונים אליה בפועל, אם הוא שונה מהשם בדרכון. אפשר להשאיר ריק.",
+    "relationshipPlaceholder": "בחרו קרבה",
+    "relationshipOptions": {
+      "son": "בן",
+      "daughter": "בת",
+      "relative": "קרוב משפחה",
+      "trustee": "נאמן"
+    },
     "caregiverNationality": "אזרחות",
     "caregiverLanguage": "שפה עיקרית",
     "startDate": "תאריך תחילת העסקה",
