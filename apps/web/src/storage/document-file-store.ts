@@ -14,10 +14,24 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function requireClientId(): string {
-  const clientId = clientIdFromPath();
-  if (!clientId) throw new Error('workspace-client-id-required');
-  return clientId;
+/**
+ * The workspace file API is scoped to a client, and the client id is only in
+ * the path on the `/clients/:clientId/...` routes. On the unscoped `/documents`
+ * route there is none.
+ *
+ * This used to throw `workspace-client-id-required`, which the upload screen
+ * caught in a blanket `catch` and reported as "could not save the file on this
+ * device — check you are not browsing privately". So a signed-in customer on
+ * `/documents` could never attach a file, and the message sent them to fix
+ * something unrelated. Reported from production: "עדיין לא ניתן לעלות קובץ".
+ *
+ * Returning null instead lets the caller store the file where the rest of that
+ * record already lives — the unscoped local store — rather than failing. It is
+ * not a silent downgrade: the metadata for an unscoped document is local too,
+ * so the file and its record stay together either way.
+ */
+function workspaceClientId(): string | null {
+  return clientIdFromPath();
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -35,8 +49,9 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 export async function saveDocumentFile(id: string, file: File): Promise<void> {
-  if (getBrowserAuthClient()) {
-    await uploadWorkspaceFile(requireClientId(), id, {
+  const clientId = workspaceClientId();
+  if (getBrowserAuthClient() && clientId) {
+    await uploadWorkspaceFile(clientId, id, {
       mediaType: file.type as 'application/pdf' | 'image/jpeg' | 'image/png',
       content: toBase64(new Uint8Array(await file.arrayBuffer())),
     });
@@ -58,8 +73,9 @@ export async function saveDocumentFile(id: string, file: File): Promise<void> {
 }
 
 export async function readDocumentFile(id: string): Promise<Blob | string | null> {
-  if (getBrowserAuthClient()) {
-    return (await getWorkspaceFileUrl(requireClientId(), id)).url;
+  const clientId = workspaceClientId();
+  if (getBrowserAuthClient() && clientId) {
+    return (await getWorkspaceFileUrl(clientId, id)).url;
   }
   const database = await openDatabase();
   try {
@@ -74,8 +90,9 @@ export async function readDocumentFile(id: string): Promise<Blob | string | null
 }
 
 export async function deleteDocumentFile(id: string): Promise<void> {
-  if (getBrowserAuthClient()) {
-    await deleteWorkspaceFile(requireClientId(), id);
+  const clientId = workspaceClientId();
+  if (getBrowserAuthClient() && clientId) {
+    await deleteWorkspaceFile(clientId, id);
     return;
   }
   const database = await openDatabase();
