@@ -455,10 +455,30 @@ describe('onboarding legal acceptance', () => {
       await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/app'));
     });
 
-    it('defaults to not sending the customer to billing when the subscription check fails', async () => {
-      // Unknown is unknown: getting this wrong by skipping a genuine
-      // first-time payment prompt is a smaller mistake than getting it wrong
-      // by sending an already-paying customer back to a payment screen.
+    /**
+     * When the subscription check fails, the answer is unknown, and the code
+     * now falls back to the local `isFirstRun` signal (`profile.
+     * onboardingCompleted`) instead of always assuming "not first run".
+     * Always answering "not first run" meant a genuine new signup who
+     * happened to be offline at that moment never saw the billing screen and
+     * therefore never paid - a Playwright end-to-end run caught exactly that.
+     * The two cases below pin the corrected fallback in both directions.
+     */
+    it('falls back to billing when the check fails and the local record says this is a first run', async () => {
+      // beforeEach's saveMvpProfile(completedChecklist) does not set
+      // onboardingCompleted, so it keeps emptyMvpProfile's default of
+      // false - i.e. the local record says setup was never finished before.
+      mocks.getBillingSubscription.mockRejectedValue(new Error('offline'));
+      renderPage();
+      await clickComplete();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('location')).toHaveTextContent('/billing?from=onboarding'),
+      );
+    });
+
+    it('falls back to /app when the check fails and the local record says setup was already completed', async () => {
+      saveMvpProfile({ ...completedChecklist, onboardingCompleted: true });
       mocks.getBillingSubscription.mockRejectedValue(new Error('offline'));
       renderPage();
       await clickComplete();

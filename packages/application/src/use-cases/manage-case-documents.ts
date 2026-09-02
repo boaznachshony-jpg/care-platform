@@ -370,7 +370,28 @@ export class ImportCaseDocument {
       caseId,
       input.legacyLocalId,
     );
-    if (existing) return existing;
+    if (existing) {
+      // A prior run of this same legacy import already created the document
+      // container. Two cases now:
+      //  - It already has a file (either this is a pure repeat of an import
+      //    that carried one, or a metadata-only container already got its
+      //    scan through this same path before). Returning early is correct:
+      //    the family never re-scanned anything, so inserting a second
+      //    version here would create a phantom "new upload" event nobody
+      //    performed and would misrepresent the document's history.
+      //  - It has NO file yet, and this call carries one. This is the exact
+      //    gap this change exists to close: the browser cutover first sent
+      //    metadata only (this row was created with `current_version_id`
+      //    null), then later resolved the actual bytes (IndexedDB / dataUrl /
+      //    workspace storage — see apps/web/src/sync/document-mapping.ts) and
+      //    retried the same `legacyLocalId` with `file` set. Returning early
+      //    here used to silently discard that file forever — the scan stayed
+      //    on the one device and the emergency binder could never produce it.
+      if (!input.file || existing.currentVersion) {
+        return existing;
+      }
+      return this.attachFileToExistingDocument(actor, caseId, existing, input.file);
+    }
 
     const now = this.deps.clock.now();
     const documentId = this.deps.ids.next();
@@ -454,6 +475,118 @@ export class ImportCaseDocument {
     );
 
     return stored;
+  }
+
+  /**
+   * Attaches a file as the first version of a document container that
+   * already exists but has none — see the comment at the `existing.currentVersion`
+   * check in execute() for why this path exists at all.
+   *
+   * `existing` is the pre-attach snapshot: it is only used for ids and
+   * display fields (documentType, sensitivity) that do not change here, never
+   * as a source of truth for whether the attach itself succeeded — that is
+   * entirely `attachDocumentVersion`'s job (see below).
+   */
+  private async attachFileToExistingDocument(
+    actor: Actor,
+    caseId: string,
+    existing: DocumentWithCurrentVersion,
+    file: { mediaType: string; content: string },
+  ): Promise<DocumentWithCurrentVersion> {
+    const now = this.deps.clock.now();
+    const versionId = this.deps.ids.next();
+    const bytes = decodeBase64(file.content);
+
+    // The storage key is derived from the document's own id, exactly like
+    // UploadCaseDocument and the fresh-import branch above — never accepted
+    // from the caller, so no request body can steer a write at another
+    // tenant's or document's object path.
+    const { storageKey } = await this.deps.storage.putObject({
+      tenantId: actor.tenantId,
+      key: `cases/${caseId}/documents/${existing.document.id}/${versionId}`,
+      contentType: file.mediaType,
+      body: bytes,
+    });
+
+    const attached = await this.deps.documents.attachDocumentVersion({
+      documentId: existing.document.id,
+      versionId,
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      storageKey,
+      mediaType: file.mediaType,
+      sizeBytes: bytes.byteLength,
+      checksum: null,
+      createdBy: actor.userId,
+    });
+
+    // null means the repository's own atomic re-check (a row lock in
+    // PgDocumentRepository, see its doc comment) found a version already
+    // attached by the time it looked — a concurrent duplicate of this exact
+    // retry (two browser tabs, or the client retrying after a response it
+    // never saw). This is the idempotency guard the client's own "retry
+    // exactly once" behaviour cannot provide by itself: the document already
+    // has its file by construction, so re-read the current state and return
+    // it rather than treating a lost race as a failure.
+    if (!attached) {
+      const refreshed = await this.deps.documents.findCaseDocument(
+        actor.tenantId,
+        caseId,
+        existing.document.id,
+      );
+      // Cannot actually be null in practice — this row was found moments ago
+      // and documents are never deleted (no DELETE grant on tenant data,
+      // migration 0037) — but fall back to the pre-attach snapshot rather
+      // than throw: it is still a truthful answer to "does the import exist".
+      return refreshed ?? existing;
+    }
+
+    // A real event, distinct from the 'document.imported' audit/timeline
+    // entries already recorded when the metadata-only container was first
+    // created. Reusing 'document.imported' here would misrepresent this as a
+    // second import of the same record; what actually happened is that a
+    // file the family already told the system about has now arrived.
+    await this.deps.audit.record({
+      tenantId: actor.tenantId,
+      actorId: actor.userId,
+      action: 'document.file_attached',
+      resourceType: 'document',
+      resourceId: existing.document.id,
+      correlationId: actor.correlationId,
+      occurredAt: now.toISOString(),
+      // Document *type* only — never the file name, storage key, checksum or
+      // any content (Constitution §16/§19), same rule as every other
+      // document audit entry in this file.
+      changeSummary: `File attached to previously imported document type ${existing.document.documentType}.`,
+      sensitivity: existing.document.sensitivity,
+    });
+
+    await this.deps.timeline.record({
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      eventTypeKey: 'timeline.document.file_attached',
+      occurredAt: now.toISOString(),
+      summaryKey: 'timeline.document.file_attached.summary',
+      sensitivity: 'general',
+    });
+
+    // Deliberately NOT calling completeMatchingSeededTask here. Unlike
+    // UploadCaseDocument and the fresh-import branch of execute() above,
+    // attaching a file to an already-existing document never changes
+    // complianceStatus — attachDocumentVersion's contract leaves it and
+    // expiresAt exactly as the metadata import set them (see that method's
+    // doc comment). deriveComplianceStatus never considers whether a file
+    // exists, only expiry, so nothing about "is this document now compliant"
+    // became newly true just because its bytes finally arrived — whatever
+    // seeded-task completion that status warranted already happened (or
+    // correctly did not) at metadata-import time. Recomputing compliance
+    // status from `now` at attach time was considered and rejected: nothing
+    // else in this codebase ever recomputes a document's compliance status
+    // after creation (see the long comment on completeMatchingSeededTask
+    // above), and doing it only here — behind a retry the family never
+    // consciously initiates — would silently move a status they already saw,
+    // for reasons unrelated to anything they did.
+    return attached;
   }
 }
 

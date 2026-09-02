@@ -1,4 +1,5 @@
 import type {
+  AttachDocumentVersionRecord,
   CreateDocumentRecord,
   CreateDocumentVersionRecord,
   DocumentRepository,
@@ -207,6 +208,74 @@ export class PgDocumentRepository implements DocumentRepository {
         throw new Error('Document insert returned no row.');
       }
       return { document: toDocument(row), currentVersion: null };
+    });
+  }
+
+  /**
+   * See DocumentRepository.attachDocumentVersion for the contract. The
+   * `select ... for update` is what makes the check-then-attach atomic: it
+   * locks the document row before deciding anything, so a second concurrent
+   * call for the same document (two tabs replaying the cutover retry, or a
+   * client retry after a dropped response) blocks here instead of racing.
+   * When it wakes up — after the first call's transaction has committed —
+   * `current_version_id` is no longer null, so it takes the early-return
+   * branch and inserts nothing. That is also why the row lock and the insert
+   * must share one transaction (`withTenant`'s client): a lock released
+   * between statements would defeat the whole point.
+   */
+  async attachDocumentVersion(
+    input: AttachDocumentVersionRecord,
+  ): Promise<DocumentWithCurrentVersion | null> {
+    return withTenant(this.pool, input.tenantId, async (client) => {
+      const locked = await client.query<{ current_version_id: string | null }>(
+        `select current_version_id from document
+           where id = $1 and tenant_id = $2 and employment_case_id = $3
+           for update`,
+        [input.documentId, input.tenantId, input.employmentCaseId],
+      );
+      const lockedRow = locked.rows[0];
+      // No such document in this case/tenant, or it already has a version —
+      // either way there is nothing left for this call to do.
+      if (!lockedRow || lockedRow.current_version_id !== null) {
+        return null;
+      }
+
+      await client.query(
+        `insert into document_version
+           (id, tenant_id, document_id, version_number, storage_key, media_type,
+            size_bytes, checksum, upload_source, created_by)
+         values ($1, $2, $3, 1, $4, $5, $6, $7, 'web_upload', $8)`,
+        [
+          input.versionId,
+          input.tenantId,
+          input.documentId,
+          input.storageKey,
+          input.mediaType,
+          input.sizeBytes,
+          input.checksum,
+          input.createdBy,
+        ],
+      );
+
+      // compliance_status and expires_at are deliberately NOT touched here —
+      // see ImportCaseDocument's comment on why attaching a file never
+      // rewrites facts the metadata import already recorded.
+      await client.query(
+        `update document
+            set current_version_id = $2, updated_at = now(), updated_by = $3,
+                version = version + 1
+          where id = $1`,
+        [input.documentId, input.versionId, input.createdBy],
+      );
+
+      const result = await client.query<JoinedRow>(`${SELECT_JOINED} where d.id = $1`, [
+        input.documentId,
+      ]);
+      const row = result.rows[0];
+      if (!row) {
+        throw new Error('Document attach-version returned no row.');
+      }
+      return toResult(row);
     });
   }
 

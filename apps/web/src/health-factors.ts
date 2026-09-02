@@ -57,9 +57,24 @@ export function healthFactorExplanation(factor: HealthFactorLike, t: Translate):
  * action, the locale decides how it reads, and an unrecognised factor falls
  * back to the server's text rather than losing its link.
  */
+// The document-backed factors this app knows about (apps/api/src/routes/
+// product-differentiation.ts documentFactor() calls) all share the same
+// English recommendedAction text ("Upload or review the document"), so they
+// all resolve to the one health.actionDocument key. governed_tasks has its
+// own wording. Any other id — including one this app has never seen — is
+// not in this map on purpose: translating it here would silently replace
+// the server's specific instruction with a generic one.
+const KNOWN_ACTION_KEYS: Record<string, string> = {
+  passport: 'health.actionDocument',
+  visa: 'health.actionDocument',
+  medical_insurance: 'health.actionDocument',
+  governed_tasks: 'health.actionTasks',
+};
+
 export function healthFactorAction(factor: HealthFactorLike, t: Translate): string | undefined {
   if (!factor.recommendedAction) return undefined;
-  const key = factor.id === 'governed_tasks' ? 'health.actionTasks' : 'health.actionDocument';
+  const key = KNOWN_ACTION_KEYS[factor.id];
+  if (!key) return factor.recommendedAction;
   const translated = t(key);
   return translated === key ? factor.recommendedAction : translated;
 }

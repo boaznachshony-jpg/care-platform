@@ -131,8 +131,13 @@ describe('CasePage', () => {
     it('shows the draft label and neutral tone', async () => {
       mockGetEmploymentCase.mockResolvedValue({ ...DEMO_CASE, status: 'draft' });
       const { container } = renderPage();
-      await waitFor(() => expect(screen.getByText('טיוטה')).toBeInTheDocument());
-      expect(container.querySelector('.cd-status-badge--neutral')).not.toBeNull();
+      // 'טיוטה' also matches the payroll panel's <option value="draft">
+      // that CasePage renders alongside the badge, so scope to the badge
+      // element itself instead of a page-wide text query.
+      await waitFor(() =>
+        expect(container.querySelector('.cd-status-badge--neutral')).not.toBeNull(),
+      );
+      expect(container.querySelector('.cd-status-badge--neutral')?.textContent).toBe('טיוטה');
     });
 
     it('shows the active label and success tone', async () => {

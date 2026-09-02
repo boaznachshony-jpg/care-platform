@@ -45,8 +45,10 @@ describe('SettingsPage complete client profile', () => {
     fireEvent.change(screen.getAllByLabelText('Email')[0]!, {
       target: { value: 'recipient@example.test' },
     });
+    // employerRelationship is now a fixed-option <select> (relationship-options.ts)
+    // rather than free text, so the value must be one of its real options.
     fireEvent.change(screen.getAllByLabelText('Relationship to care recipient')[0]!, {
-      target: { value: 'Family member' },
+      target: { value: 'Relative' },
     });
     fireEvent.change(screen.getByLabelText(/^Caregiver passport number/), {
       target: { value: 'ab-123 456' },
@@ -57,7 +59,7 @@ describe('SettingsPage complete client profile', () => {
       recipientCity: 'Haifa',
       recipientHealthFund: 'Sample Health Fund',
       recipientEmail: 'recipient@example.test',
-      employerRelationship: 'Family member',
+      employerRelationship: 'Relative',
       caregiverPassportNumber: 'AB123456',
     });
     expect(screen.getByText('Changes saved successfully')).toBeVisible();

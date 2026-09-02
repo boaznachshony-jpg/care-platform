@@ -114,7 +114,12 @@ describe('AutomationPanel', () => {
     fireEvent.change(screen.getByLabelText('תאריך חזרה'), { target: { value: '2026-09-15' } });
     fireEvent.click(screen.getByRole('button', { name: 'יצירת תוכנית לבדיקה' }));
 
-    expect(screen.getByText(/2026-09-10–2026-09-15/)).toBeInTheDocument();
+    // All three checklist items get the trip-dates suffix (planItems is the
+    // single array both the <li> list and confirmPlan() read from), so all
+    // three <li> elements match — getByText would throw "found multiple
+    // elements" here even though the behaviour under test is correct.
+    const onScreenItems = screen.getAllByText(/2026-09-10–2026-09-15/);
+    expect(onScreenItems).toHaveLength(3);
 
     fireEvent.click(screen.getByRole('button', { name: 'אישור ויצירת משימות' }));
     await waitFor(() => expect(mockConfirm).toHaveBeenCalledOnce());

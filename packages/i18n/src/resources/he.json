@@ -1085,6 +1085,9 @@
       },
       "imported": {
         "summary": "מסמך נקלט מהמכשיר לתיק"
+      },
+      "file_attached": {
+        "summary": "קובץ צורף למסמך שנקלט בעבר"
       }
     },
     "automation": {

@@ -1085,6 +1085,9 @@
       },
       "imported": {
         "summary": "A document from this device was added to the case"
+      },
+      "file_attached": {
+        "summary": "A file was attached to a previously imported document"
       }
     },
     "automation": {
