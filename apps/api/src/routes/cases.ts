@@ -2,11 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { AuthorizationError, type EmploymentCaseGraph } from '@caredesk/application';
 import {
   openEmploymentCaseRequestSchema,
+  updateCaregiverRequestSchema,
   type ApiError,
+  type CaregiverResponse,
   type EmploymentCaseResponse,
 } from '@caredesk/schemas';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
+import { sendError, sendValidationError } from './http-errors.js';
 
 function toResponse(graph: EmploymentCaseGraph): EmploymentCaseResponse {
   return {
@@ -99,6 +102,49 @@ export function registerCaseRoutes(app: FastifyInstance, container: Container): 
       throw error;
     }
   });
+
+  /**
+   * The caregiver identity fields already had a canonical table (`caregiver`,
+   * migration 0003) but no way to edit them after intake — see
+   * UpdateCaregiverProfileUseCase for why the passport number field is
+   * deliberately absent from this contract.
+   */
+  app.patch<{ Params: { caseId: string } }>(
+    '/cases/:caseId/caregiver',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      const body = updateCaregiverRequestSchema.safeParse(request.body);
+      if (!body.success) return sendValidationError(request, reply, body.error);
+      try {
+        // The route takes no caregiverId in the URL — the case/caregiver
+        // relationship is 1:1 today (employment_case_active_pair_unique), so
+        // resolving it from the case graph avoids exposing a second id the
+        // web client would otherwise have to track for no reason.
+        const graph = await container.getCase.execute(actor, request.params.caseId);
+        if (!graph) return sendError(request, reply, 404, 'NOT_FOUND');
+        const updated = await container.updateCaregiver.execute(
+          actor,
+          request.params.caseId,
+          graph.caregiver.id,
+          body.data,
+        );
+        if (!updated) return sendError(request, reply, 404, 'NOT_FOUND');
+        const response: CaregiverResponse = {
+          id: updated.id,
+          legalName: updated.legalName,
+          preferredName: updated.preferredName,
+          nationality: updated.nationality,
+          primaryLanguage: updated.primaryLanguage,
+        };
+        reply.send(response);
+      } catch (error) {
+        if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
+        throw error;
+      }
+    },
+  );
 
   app.get<{ Params: { caseId: string } }>(
     '/cases/:caseId',

@@ -165,6 +165,27 @@ export function listEmploymentCases(): Promise<EmploymentCaseResponse[]> {
 
 const casePath = (caseId: string): string => `/cases/${encodeURIComponent(caseId)}`;
 
+/**
+ * Idempotency keys only need to be unique, not secret. `crypto.randomUUID`
+ * exists only in secure contexts, and this app is deliberately reachable over
+ * plain http on a phone at 192.168.x.x, where a bare `crypto.randomUUID()`
+ * throws before any request is sent and the action fails with no error shown
+ * (the exact bug `EmergencyBinderPage` hit first). The fallback below keeps
+ * every idempotency-bearing action working on exactly the device this
+ * mobile-first product most needs testing on.
+ *
+ * Callers that need retry-safety (the same logical attempt must reuse the
+ * same key so a lost response and a second press don't create a duplicate)
+ * should generate one key once — e.g. with `useMemo` keyed on the form
+ * inputs — and pass it explicitly instead of relying on the default.
+ */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idem-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+}
+
 export interface VisaRenewalWorkflowResponse {
   id: string;
   employmentCaseId: string;
@@ -208,10 +229,14 @@ export function listVisaRenewals(caseId: string): Promise<VisaRenewalWorkflowRes
 export function startVisaRenewal(
   caseId: string,
   input: StartVisaRenewalRequest,
+  // Defaults to a fresh key for callers that don't pass one yet; a caller
+  // that wants retry-safety across a lost response should pass a key it
+  // generated once for this attempt (see `newIdempotencyKey`).
+  idempotencyKey: string = newIdempotencyKey(),
 ): Promise<VisaRenewalWorkflowResponse> {
   return apiRequest(`${casePath(caseId)}/visa-renewals`, {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }
@@ -467,10 +492,14 @@ export const askCaseAssistant = (
     method: 'POST',
     body: JSON.stringify({ question, intent }),
   });
-export const confirmAssistantChecklist = (caseId: string, items: string[]) =>
+export const confirmAssistantChecklist = (
+  caseId: string,
+  items: string[],
+  idempotencyKey: string = newIdempotencyKey(),
+) =>
   apiRequest(`${casePath(caseId)}/assistant/checklist-confirmations`, {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify({ items }),
   });
 export const listProfessionalReviews = (caseId: string) =>
@@ -478,10 +507,11 @@ export const listProfessionalReviews = (caseId: string) =>
 export const createProfessionalReview = (
   caseId: string,
   input: { category: string; reason: string; summary: string; source: string },
+  idempotencyKey: string = newIdempotencyKey(),
 ) =>
   apiRequest<ProfessionalReviewResponse>(`${casePath(caseId)}/professional-reviews`, {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 export const getProfessionalReview = (caseId: string, reviewId: string) =>
@@ -494,10 +524,11 @@ export const transitionProfessionalReview = (
   caseId: string,
   reviewId: string,
   input: { status: ProfessionalReviewStatus; assignedTo?: string; resolutionNote?: string },
+  idempotencyKey: string = newIdempotencyKey(),
 ) =>
   apiRequest<ProfessionalReviewResponse>(`${casePath(caseId)}/professional-reviews/${reviewId}`, {
     method: 'PATCH',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 
@@ -679,18 +710,21 @@ export function listRegulationRules(): Promise<RegulationRuleResponse[]> {
   return apiRequest('/regulation-rules');
 }
 
-export function createRegulationRule(input: {
-  ruleKey: string;
-  title: string;
-  statement: string;
-  sourceCitation: string;
-  sourceAuthority?: string;
-  effectiveFrom?: string;
-  effectiveTo?: string;
-}): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
+export function createRegulationRule(
+  input: {
+    ruleKey: string;
+    title: string;
+    statement: string;
+    sourceCitation: string;
+    sourceAuthority?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+  },
+  idempotencyKey: string = newIdempotencyKey(),
+): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
   return apiRequest('/regulation-rules', {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }
@@ -700,10 +734,11 @@ export function createRegulationRule(input: {
 export function transitionRegulationRule(
   ruleId: string,
   input: { status: Exclude<RegulationRuleStatus, 'draft'>; reviewedBy?: string },
+  idempotencyKey: string = newIdempotencyKey(),
 ): Promise<{ rule: RegulationRuleResponse; replayed: boolean }> {
   return apiRequest(`/regulation-rules/${encodeURIComponent(ruleId)}`, {
     method: 'PATCH',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }

@@ -93,6 +93,15 @@ describe('SettingsPage complete client profile', () => {
     expect(screen.getByText(/stored encrypted on your device/)).toBeVisible();
     expect(readMvpProfile().recipientName).toBe('Sample Recipient');
   });
+
+  // The key was missing from both he.json and en.json, so the field label
+  // rendered as the raw key string "profile.employmentStartDate" instead of
+  // translated text.
+  it('translates the employment start date field label instead of showing the raw key', async () => {
+    await renderPage();
+    expect(screen.getByLabelText('Employment start date')).toBeInTheDocument();
+    expect(screen.queryByText('profile.employmentStartDate')).toBeNull();
+  });
 });
 
 describe('SettingsPage prefills details captured during client setup', () => {

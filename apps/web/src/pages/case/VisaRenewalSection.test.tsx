@@ -118,4 +118,48 @@ describe('VisaRenewalSection', () => {
     await waitFor(() => expect(startVisaRenewal).toHaveBeenCalledOnce());
     expect(await screen.findByText(/הבקשה מתנגשת/)).toBeInTheDocument();
   });
+
+  // Defect 1: startVisaRenewal used to generate a fresh crypto.randomUUID()
+  // idempotency key inside client.ts on every call, so pressing "start" again
+  // after a lost response (same form, same data) minted a different key and
+  // the server created a second workflow. The key must now stay the same
+  // across a retry with unchanged inputs.
+  it('reuses the same idempotency key when retrying the same start form after a failure', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    vi.mocked(startVisaRenewal).mockRejectedValue(new Error('network error'));
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
+    const ids = [
+      '10000000-0000-4000-8000-000000000002',
+      '10000000-0000-4000-8000-000000000003',
+      '10000000-0000-4000-8000-000000000004',
+      '10000000-0000-4000-8000-000000000005',
+    ];
+    fireEvent.change(screen.getByRole('textbox', { name: /מזהה גרסת תבנית/ }), {
+      target: { value: ids[0] },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: /מזהה האישור הנוכחי/ }), {
+      target: { value: ids[1] },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: /מזהה האחראי לביצוע/ }), {
+      target: { value: ids[2] },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: /מזהה בעל האחריות הכוללת/ }), {
+      target: { value: ids[3] },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'התחלת התהליך' }));
+    await waitFor(() => expect(startVisaRenewal).toHaveBeenCalledTimes(1));
+
+    // Retry with the exact same field values — as if the user pressed the
+    // button again after the first response was lost.
+    fireEvent.click(screen.getByRole('button', { name: 'התחלת התהליך' }));
+    await waitFor(() => expect(startVisaRenewal).toHaveBeenCalledTimes(2));
+
+    const [, , firstKey] = vi.mocked(startVisaRenewal).mock.calls[0]!;
+    const [, , secondKey] = vi.mocked(startVisaRenewal).mock.calls[1]!;
+    expect(secondKey).toBe(firstKey);
+    expect(typeof secondKey).toBe('string');
+  });
 });

@@ -2,7 +2,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { PayrollComponentError } from '@caredesk/domain';
+import {
+  addAgorot,
+  agorotFromShekels,
+  MoneyError,
+  PayrollComponentError,
+  percentOfAgorot,
+  shekelsOf,
+  ZERO_AGOROT,
+  type Agorot,
+} from '@caredesk/domain';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
@@ -67,9 +76,28 @@ export const MONTH_NAME_KEYS = [
  */
 export const DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT = 3.6;
 
-/** Rounds to agorot and keeps binary floating point artifacts off the screen. */
+/**
+ * Rounds to agorot and keeps binary floating point artifacts off the screen.
+ *
+ * Root 8: this used to be `Math.round(value * 100) / 100`, a hand-rolled
+ * rounding rule living outside `@caredesk/domain` — exactly the kind of
+ * second money model DOM-04 removed everywhere else, kept alive here by the
+ * fact that this file computes `recordedGrossWage` and
+ * `nationalInsuranceAmount`, the figures this product presents as the basis
+ * for a National Insurance filing. Those numbers now round on the DIGITS via
+ * `agorotFromShekels` (the same decimal-text rounding the domain and the
+ * `payroll_entry_total_reconciles_agorot` CHECK constraint use), not on the
+ * binary float, so this screen's National Insurance figure cannot silently
+ * diverge from the canonical payroll total for the same month.
+ */
 function roundMoney(value: number): number {
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
+  if (!Number.isFinite(value)) return 0;
+  try {
+    return shekelsOf(agorotFromShekels(value));
+  } catch (error) {
+    if (error instanceof MoneyError) return 0;
+    throw error;
+  }
 }
 
 function positiveAmount(value: number | undefined): number {
@@ -111,33 +139,71 @@ export function nationalInsuranceWageMonths(
   return [lastMonth];
 }
 
+/** A recorded shekel field, agorot, or zero — never a float that could carry a fraction of an agora forward. */
+function positiveAgorot(value: number | undefined): Agorot {
+  const amount = positiveAmount(value);
+  if (amount <= 0) return ZERO_AGOROT;
+  try {
+    return agorotFromShekels(amount);
+  } catch (error) {
+    if (error instanceof MoneyError) return ZERO_AGOROT;
+    throw error;
+  }
+}
+
 /**
  * The gross wage a saved payroll month recorded for the caregiver: the base
  * salary actually paid plus every wage addition. Employer contributions are
  * excluded because they are not the caregiver's wage, and deductions are not
  * subtracted because the wage was earned before them.
+ *
+ * Root 8: this used to sum plain `number` shekels and round the total once
+ * with `roundMoney` — the same shape of bug DOM-04 removed from the canonical
+ * formula, just re-introduced on the one screen that turns this figure into a
+ * National Insurance filing. Six or more binary floats summed before rounding
+ * can land a half-agora off from the same six amounts summed as integers, so
+ * this now converts every addend to agorot first and lets `addAgorot` do exact
+ * integer addition; the single conversion back to shekels happens once, at
+ * the end.
  */
 export function recordedGrossWage(record: MvpPayrollRecord): number {
   const additionalPayments = (record.additionalPayments ?? []).reduce(
-    (total, payment) => total + positiveAmount(payment.amount),
-    0,
+    (total: Agorot, payment) => addAgorot(total, positiveAgorot(payment.amount)),
+    ZERO_AGOROT,
   );
-  return roundMoney(
-    positiveAmount(record.baseSalary) +
-      positiveAmount(record.saturdayPay) +
-      positiveAmount(record.holidayPay) +
-      positiveAmount(record.vacationPay) +
-      positiveAmount(record.sickPay) +
-      positiveAmount(record.otherAddition) +
+  return shekelsOf(
+    addAgorot(
+      positiveAgorot(record.baseSalary),
+      positiveAgorot(record.saturdayPay),
+      positiveAgorot(record.holidayPay),
+      positiveAgorot(record.vacationPay),
+      positiveAgorot(record.sickPay),
+      positiveAgorot(record.otherAddition),
       additionalPayments,
+    ),
   );
 }
 
-/** base x rate, in shekels, rounded to agorot. Never returns NaN. */
+/**
+ * base x rate, in shekels, rounded to agorot. Never returns NaN.
+ *
+ * Root 8: this used to be `roundMoney((wageBase * ratePercent) / 100)` — a
+ * plain float multiplication, only rounded at the very end. `percentOfAgorot`
+ * is the same "whole-percent share of an amount, rounded once" arithmetic the
+ * domain already uses for every other percentage-of-money figure in the
+ * product (DOM-09's launch discount), so this National Insurance figure now
+ * rounds by construction the same way the domain and migration 0045's CHECK
+ * constraint do, instead of by coincidence.
+ */
 export function nationalInsuranceAmount(wageBase: number, ratePercent: number): number {
   if (!Number.isFinite(wageBase) || !Number.isFinite(ratePercent)) return 0;
   if (wageBase <= 0 || ratePercent <= 0) return 0;
-  return roundMoney((wageBase * ratePercent) / 100);
+  try {
+    return shekelsOf(percentOfAgorot(agorotFromShekels(wageBase), ratePercent));
+  } catch (error) {
+    if (error instanceof MoneyError) return 0;
+    throw error;
+  }
 }
 
 /**

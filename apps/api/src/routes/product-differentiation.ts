@@ -303,6 +303,13 @@ export function registerProductDifferentiationRoutes(
               'Review medical insurance dates',
             ]
           : undefined;
+      // Every string below is deliberately kept in English: `validateAssistantResponse`
+      // and the AssistantResponse consumers (support tooling, evidence exports) rely on
+      // that fixed text. A Hebrew-first customer never sees it directly — the reply below
+      // attaches a stable *Id (+ params) alongside each string, following the same
+      // server-decides/locale-translates/unknown-id-falls-back-to-server-text contract as
+      // apps/web/src/health-factors.ts. Losing that identifier is what made the whole
+      // assistant answer render in English on the case panel.
       const response = validateAssistantResponse(
         {
           answer: missing.length
@@ -365,9 +372,39 @@ export function registerProductDifferentiationRoutes(
         },
         context,
       );
+      // Per-fact translation identifiers, positionally aligned with response.factsUsed
+      // above (built from the exact same three sources, in the same order).
+      const factsMeta: Array<{ labelId: string; labelParams: Record<string, unknown> }> = [
+        {
+          labelId: 'assistant.fact.caseStatus',
+          labelParams: { status: context.caseSummary.status },
+        },
+        ...context.documentStatusSummary.map((_item, index) => ({
+          labelId: 'assistant.fact.documentStatus',
+          labelParams: { index: index + 1 },
+        })),
+        ...context.relevantApprovedRules.map((rule) => ({
+          labelId: 'assistant.fact.approvedRule',
+          labelParams: { title: rule.title },
+        })),
+      ];
       reply.send({
         ...response,
+        factsUsed: response.factsUsed.map((fact, index) => ({ ...fact, ...factsMeta[index] })),
+        answerId: missing.length
+          ? 'assistant.answer.missingDocuments'
+          : 'assistant.answer.documentsValid',
+        answerParams: missing.length
+          ? { missingTypes: missing }
+          : { count: context.activeTasks.length },
+        escalation: {
+          ...response.escalation,
+          reasonId: context.relevantApprovedRules.length
+            ? 'assistant.escalation.reasonRulesApplied'
+            : 'assistant.escalation.reasonNoRule',
+        },
         groundingLabel: 'Based on your CareDesk file',
+        groundingLabelId: 'assistant.groundingLabel',
         providerStatus: 'deterministic_fallback',
       });
     },

@@ -405,6 +405,62 @@ describe('BillingPage', () => {
     ).toHaveAttribute('href', '/terms/subscription');
   });
 
+  // ── Every product_subscription.status gets its own honest branch ──────────
+  //
+  // Before this, only 'past_due' had a dedicated note; everything else fell
+  // through to "you will be charged X on Y" — and for 'cancelled' the API
+  // has already nulled nextChargeOn, so that fallback read chargingStartsAt,
+  // a date that is always in the past for a cancelled subscription.
+
+  it('never shows a past charge date for a cancelled subscription', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({
+      ...savedCardPlan,
+      status: 'cancelled',
+      paymentMethod: null,
+      chargingStartsAt: '2026-01-01',
+      nextChargeOn: null,
+      accessGraceStartsAt: '2026-08-21',
+    });
+    await renderPage();
+
+    // Not the "paid and active" wording, and not the stale historic date.
+    expect(screen.queryByText('Monthly subscription active')).not.toBeInTheDocument();
+    expect(screen.queryByText(/January 1, 2026/)).not.toBeInTheDocument();
+    // The cancelled note itself is inline Hebrew (packages/i18n is owned by
+    // another workstream mid-change — see the comment on
+    // renderPlanStatusNote in BillingPage.tsx), so it renders regardless of
+    // the page's language setting.
+    expect(await screen.findByText('המנוי בוטל')).toBeInTheDocument();
+  });
+
+  it('tells a tenant with no payment method yet that nothing has been charged', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({
+      ...savedCardPlan,
+      status: 'payment_method_pending',
+      paymentMethod: null,
+      chargingStartsAt: '2026-09-01',
+      nextChargeOn: null,
+    });
+    await renderPage();
+
+    expect(screen.queryByText('Monthly subscription active')).not.toBeInTheDocument();
+    expect(await screen.findByText('טרם הוגדר אמצעי תשלום')).toBeInTheDocument();
+  });
+
+  it('renders a neutral note instead of "paid and active" for a status this build does not recognise', async () => {
+    mocks.getBillingSubscription.mockResolvedValue({
+      ...savedCardPlan,
+      // A future status value this deployed build predates — the API layer
+      // already accepts whatever the DB constraint allows; the client must
+      // never default an unrecognised value to "paid and active".
+      status: 'future_status_this_build_does_not_know' as BillingPlanResponse['status'],
+    });
+    await renderPage();
+
+    expect(screen.queryByText('Monthly subscription active')).not.toBeInTheDocument();
+    expect(await screen.findByText('לא ניתן לקבוע את מצב המנוי')).toBeInTheDocument();
+  });
+
   // ── Non-owner view ────────────────────────────────────────────────────────
 
   it('shows an owner-only message when the actor cannot manage billing', async () => {

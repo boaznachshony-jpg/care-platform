@@ -1,4 +1,5 @@
 import type {
+  CreateDocumentRecord,
   CreateDocumentVersionRecord,
   DocumentRepository,
   DocumentWithCurrentVersion,
@@ -28,6 +29,7 @@ export class InMemoryDocumentRepository implements DocumentRepository {
       currentVersionId: brandId(input.versionId),
       expiresAt: input.expiresAt,
       status: 'active',
+      legacyLocalId: input.legacyLocalId ?? null,
     };
 
     const currentVersion: DocumentVersion = {
@@ -52,6 +54,42 @@ export class InMemoryDocumentRepository implements DocumentRepository {
     rows.push(entry);
     this.byTenant.set(input.tenantId, rows);
     return entry;
+  }
+
+  async createDocument(input: CreateDocumentRecord): Promise<DocumentWithCurrentVersion> {
+    const document: Document = {
+      id: brandId(input.documentId),
+      tenantId: brandId(input.tenantId),
+      employmentCaseId: brandId(input.employmentCaseId),
+      documentType: input.documentType,
+      ownerType: input.ownerType,
+      ownerId: input.ownerId,
+      sensitivity: input.sensitivity,
+      complianceStatus: input.complianceStatus,
+      currentVersionId: null,
+      expiresAt: input.expiresAt,
+      status: 'active',
+      legacyLocalId: input.legacyLocalId ?? null,
+    };
+    const entry: DocumentWithCurrentVersion = { document, currentVersion: null };
+    const rows = this.byTenant.get(input.tenantId) ?? [];
+    rows.push(entry);
+    this.byTenant.set(input.tenantId, rows);
+    return entry;
+  }
+
+  async findDocumentByLegacyLocalId(
+    tenantId: string,
+    employmentCaseId: string,
+    legacyLocalId: string,
+  ): Promise<DocumentWithCurrentVersion | null> {
+    return (
+      (this.byTenant.get(tenantId) ?? []).find(
+        (entry) =>
+          entry.document.employmentCaseId === employmentCaseId &&
+          entry.document.legacyLocalId === legacyLocalId,
+      ) ?? null
+    );
   }
 
   async listCaseDocuments(

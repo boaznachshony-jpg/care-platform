@@ -9,7 +9,7 @@ import {
   getProfessionalReview,
   listProfessionalReviews,
   transitionProfessionalReview,
-  type AssistantResponse,
+  type AssistantResponse as ApiAssistantResponse,
   type CaseHealthResponse,
   type ProfessionalReviewResponse,
   type ProfessionalReviewStatus,
@@ -35,19 +35,118 @@ const ESCALATION_TRANSITIONS: Record<ProfessionalReviewStatus, ProfessionalRevie
   cancelled: [],
 };
 
+/**
+ * apps/web/src/api/client.ts (owned by another workstream — not edited here)
+ * does not yet declare the `*Id`/`*Params` identifier fields the assistant
+ * route now sends. The server already puts them on the wire at runtime; this
+ * local extension lets the panel read them without waiting for client.ts to
+ * catch up. Same contract as ../../health-factors.ts throughout: the server
+ * decides the identifier, the locale decides the wording, and a missing or
+ * unrecognised identifier falls back to the server's own text so a new
+ * message is never invisible.
+ */
+interface AssistantResponse extends Omit<ApiAssistantResponse, 'factsUsed' | 'escalation'> {
+  answerId?: string;
+  answerParams?: Record<string, unknown>;
+  groundingLabelId?: string;
+  factsUsed: Array<{
+    factPath: string;
+    label: string;
+    labelId?: string;
+    labelParams?: Record<string, unknown>;
+  }>;
+  escalation?: { required: boolean; reason: string; reasonId?: string };
+}
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+function translateOrFallback(
+  t: Translate,
+  key: string | undefined,
+  fallback: string,
+  params?: Record<string, unknown>,
+): string {
+  if (!key) return fallback;
+  const translated = t(key, params);
+  return translated === key ? fallback : translated;
+}
+
+function assistantAnswerText(answer: AssistantResponse, t: Translate): string {
+  if (answer.answerId === 'assistant.answer.missingDocuments') {
+    const missingTypes = (answer.answerParams?.missingTypes as string[] | undefined) ?? [];
+    const types = missingTypes
+      .map((type) => translateOrFallback(t, `assistant.documentType.${type}`, type))
+      .join(', ');
+    return translateOrFallback(t, answer.answerId, answer.answer, { types });
+  }
+  return translateOrFallback(t, answer.answerId, answer.answer, answer.answerParams);
+}
+
+function assistantGroundingLabel(answer: AssistantResponse, t: Translate): string {
+  return translateOrFallback(t, answer.groundingLabelId, answer.groundingLabel);
+}
+
+function assistantFactLabel(fact: AssistantResponse['factsUsed'][number], t: Translate): string {
+  if (fact.labelId === 'assistant.fact.caseStatus') {
+    const status = String(fact.labelParams?.status ?? '');
+    return translateOrFallback(t, fact.labelId, fact.label, {
+      status: translateOrFallback(t, `assistant.caseStatus.${status}`, status),
+    });
+  }
+  return translateOrFallback(t, fact.labelId, fact.label, fact.labelParams);
+}
+
+function assistantUncertaintyMessage(
+  item: AssistantResponse['uncertainties'][number],
+  t: Translate,
+): string {
+  return translateOrFallback(t, `assistant.uncertainty.${item.code}`, item.message);
+}
+
+function assistantEscalationReason(
+  escalation: AssistantResponse['escalation'],
+  t: Translate,
+): string | undefined {
+  if (!escalation) return undefined;
+  return translateOrFallback(t, escalation.reasonId, escalation.reason);
+}
+
 export function ProductCompletionPanel({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
   const [health, setHealth] = useState<CaseHealthResponse>();
+  const [healthError, setHealthError] = useState(false);
   const [reviews, setReviews] = useState<ProfessionalReviewResponse[]>([]);
+  const [reviewsError, setReviewsError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AssistantResponse>();
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    void Promise.all([
-      getCaseHealth(caseId).then(setHealth),
-      listProfessionalReviews(caseId).then(setReviews),
-    ]);
-  }, [caseId]);
+    // The two calls are independent (case health vs. review list), so one
+    // failing must not hide the other, and a retry (loadAttempt) must not
+    // apply stale state from a request that is still in flight for a caseId
+    // the user has since navigated away from.
+    let cancelled = false;
+    setHealthError(false);
+    setReviewsError(false);
+    getCaseHealth(caseId)
+      .then((result) => {
+        if (!cancelled) setHealth(result);
+      })
+      .catch(() => {
+        if (!cancelled) setHealthError(true);
+      });
+    listProfessionalReviews(caseId)
+      .then((result) => {
+        if (!cancelled) setReviews(result);
+      })
+      .catch(() => {
+        if (!cancelled) setReviewsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, loadAttempt]);
   async function ask() {
     setBusy(true);
     try {
@@ -62,20 +161,32 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       setBusy(false);
     }
   }
+  const [escalateError, setEscalateError] = useState(false);
   async function escalate() {
-    const row = await createProfessionalReview(caseId, {
-      category: 'general',
-      reason: answer?.escalation?.reason ?? t('completion.reviewReason'),
-      summary: t('completion.reviewSummary'),
-      source: answer ? 'case_ai' : 'manual',
-    });
-    setReviews((current) => [row, ...current]);
+    setEscalateError(false);
+    setBusy(true);
+    try {
+      const row = await createProfessionalReview(caseId, {
+        category: 'general',
+        reason: assistantEscalationReason(answer?.escalation, t) ?? t('completion.reviewReason'),
+        summary: t('completion.reviewSummary'),
+        source: answer ? 'case_ai' : 'manual',
+      });
+      setReviews((current) => [row, ...current]);
+    } catch {
+      // No confirmation on failure looked identical to "it worked" — an
+      // escalation request is exactly the case where that silence is unsafe.
+      setEscalateError(true);
+    } finally {
+      setBusy(false);
+    }
   }
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [histories, setHistories] = useState<
     Record<string, ProfessionalReviewTransitionResponse[]>
   >({});
+  const [historyErrors, setHistoryErrors] = useState<Record<string, boolean>>({});
   const [transitionError, setTransitionError] = useState(false);
   async function transition(review: ProfessionalReviewResponse, status: ProfessionalReviewStatus) {
     setTransitionError(false);
@@ -97,8 +208,16 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
     }
   }
   async function loadHistory(reviewId: string) {
-    const detail = await getProfessionalReview(caseId, reviewId);
-    setHistories((current) => ({ ...current, [reviewId]: detail.history }));
+    setHistoryErrors((current) => ({ ...current, [reviewId]: false }));
+    try {
+      const detail = await getProfessionalReview(caseId, reviewId);
+      setHistories((current) => ({ ...current, [reviewId]: detail.history }));
+    } catch {
+      // A failed load must not render as "no history yet" — that is exactly
+      // what a genuinely empty, and therefore reassuring, audit trail looks
+      // like.
+      setHistoryErrors((current) => ({ ...current, [reviewId]: true }));
+    }
   }
   return (
     <section className="card completion-panel" aria-labelledby="case-health-title">
@@ -132,6 +251,13 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
           </ul>
           <strong>{t('completion.actionsRemaining', { count: health.actionsRemaining })}</strong>
         </>
+      ) : healthError ? (
+        <p role="alert">
+          {t('completion.healthLoadFailed')}{' '}
+          <Button variant="secondary" onClick={() => setLoadAttempt((current) => current + 1)}>
+            {t('completion.retry')}
+          </Button>
+        </p>
       ) : (
         <p>{t('shell.loading')}</p>
       )}
@@ -146,19 +272,19 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       </Button>
       {answer ? (
         <article aria-label={t('completion.aiLabel')}>
-          <strong>{answer.groundingLabel}</strong>
-          <p>{answer.answer}</p>
+          <strong>{assistantGroundingLabel(answer, t)}</strong>
+          <p>{assistantAnswerText(answer, t)}</p>
           <details>
             <summary>{t('completion.facts')}</summary>
             <ul>
               {answer.factsUsed.map((fact) => (
-                <li key={fact.factPath}>{fact.label}</li>
+                <li key={fact.factPath}>{assistantFactLabel(fact, t)}</li>
               ))}
             </ul>
           </details>
           {answer.uncertainties.map((item) => (
             <p role="status" key={item.code}>
-              {item.message}
+              {assistantUncertaintyMessage(item, t)}
             </p>
           ))}
           {answer.proposedChecklist ? (
@@ -178,8 +304,16 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       <p>
         <small>{t('escalation.manualHandoffDisclaimer')}</small>
       </p>
+      {escalateError ? <p role="alert">{t('completion.escalateFailed')}</p> : null}
       {transitionError ? <p role="alert">{t('escalation.transitionFailed')}</p> : null}
-      {reviews.length ? (
+      {reviewsError ? (
+        <p role="alert">
+          {t('completion.reviewsLoadFailed')}{' '}
+          <Button variant="secondary" onClick={() => setLoadAttempt((current) => current + 1)}>
+            {t('completion.retry')}
+          </Button>
+        </p>
+      ) : reviews.length ? (
         <ul>
           {reviews.map((review) => (
             <li key={review.id}>
@@ -262,6 +396,14 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                 }}
               >
                 <summary>{t('escalation.history')}</summary>
+                {historyErrors[review.id] ? (
+                  <p role="alert">
+                    {t('completion.historyLoadFailed')}{' '}
+                    <Button variant="secondary" onClick={() => void loadHistory(review.id)}>
+                      {t('completion.retry')}
+                    </Button>
+                  </p>
+                ) : null}
                 <ul>
                   {(histories[review.id] ?? []).map((item) => (
                     <li key={item.id}>

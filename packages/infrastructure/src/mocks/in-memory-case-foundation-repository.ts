@@ -1,4 +1,9 @@
-import type { CaseFoundationRepository, EmploymentCaseGraph } from '@caredesk/application';
+import type {
+  CaseFoundationRepository,
+  EmploymentCaseGraph,
+  UpdateCaregiverProfile,
+} from '@caredesk/application';
+import type { Caregiver } from '@caredesk/domain';
 
 /**
  * Tenant-scoped in-memory persistence for Milestone 1. Every lookup requires
@@ -53,5 +58,33 @@ export class InMemoryCaseFoundationRepository implements CaseFoundationRepositor
 
   async listCaseGraphs(tenantId: string): Promise<EmploymentCaseGraph[]> {
     return Array.from(this.graphsByTenant.get(tenantId)?.values() ?? []);
+  }
+
+  async updateCaregiver(
+    tenantId: string,
+    caregiverId: string,
+    changes: UpdateCaregiverProfile,
+  ): Promise<Caregiver | null> {
+    const tenantGraphs = this.graphsByTenant.get(tenantId);
+    if (!tenantGraphs) return null;
+    for (const [caseId, graph] of tenantGraphs) {
+      if (graph.caregiver.id !== caregiverId) continue;
+      const updated: Caregiver = {
+        ...graph.caregiver,
+        legalName: changes.legalName ?? graph.caregiver.legalName,
+        preferredName:
+          changes.preferredName !== undefined
+            ? changes.preferredName
+            : graph.caregiver.preferredName,
+        nationality: changes.nationality ?? graph.caregiver.nationality,
+        primaryLanguage:
+          changes.primaryLanguage !== undefined
+            ? changes.primaryLanguage
+            : graph.caregiver.primaryLanguage,
+      };
+      tenantGraphs.set(caseId, { ...graph, caregiver: updated });
+      return updated;
+    }
+    return null;
   }
 }

@@ -423,7 +423,8 @@
     "licensedBureauContactPhone": "טלפון איש הקשר בתאגיד",
     "licensedBureauContactEmail": "דוא״ל איש הקשר בתאגיד",
     "phone": "מספר טלפון",
-    "startDate": "תאריך תחילת ההעסקה"
+    "startDate": "תאריך תחילת ההעסקה",
+    "employmentStartDate": "תאריך תחילת ההעסקה"
   },
   "licensedBureau": {
     "choose": "בחירת תאגיד או לשכה פרטית מורשית",
@@ -1189,7 +1190,47 @@
     "noReviews": "אין בקשות בדיקה פתוחות.",
     "manualReview": "בקשת בדיקה",
     "reviewReason": "המקרה דורש בדיקה מקצועית",
-    "reviewSummary": "נא לבדוק את הראיות הרלוונטיות בתיק. טרם הוקצה גורם מקצועי."
+    "reviewSummary": "נא לבדוק את הראיות הרלוונטיות בתיק. טרם הוקצה גורם מקצועי.",
+    "healthLoadFailed": "טעינת נתוני התיק נכשלה. שום נתון בתיק לא נפגע.",
+    "reviewsLoadFailed": "טעינת בקשות הבדיקה נכשלה. שום נתון בתיק לא נפגע.",
+    "escalateFailed": "יצירת בקשת הבדיקה נכשלה. נסו שוב.",
+    "historyLoadFailed": "טעינת ההיסטוריה נכשלה.",
+    "retry": "ניסיון נוסף"
+  },
+  "assistant": {
+    "groundingLabel": "בהתבסס על תיק ה-CareDesk שלכם",
+    "answer": {
+      "missingDocuments": "בתיק ה-CareDesk שלכם חסרות ראיות בתוקף עבור: {{types}}.",
+      "documentsValid": "העובדות השמורות בתיק מראות מסמכי ליבה בתוקף. נותרו {{count}} משימות פתוחות."
+    },
+    "documentType": {
+      "passport": "דרכון",
+      "visa": "אשרה והיתר עבודה",
+      "medical_insurance": "ביטוח רפואי"
+    },
+    "fact": {
+      "caseStatus": "סטטוס התיק: {{status}}",
+      "documentStatus": "סטטוס מסמך שמור מספר {{index}}",
+      "approvedRule": "כלל מאושר: {{title}}"
+    },
+    "caseStatus": {
+      "draft": "טיוטה",
+      "active": "פעיל",
+      "suspended": "מושהה",
+      "ended": "הסתיים",
+      "cancelled": "בוטל",
+      "archived": "בארכיון"
+    },
+    "uncertainty": {
+      "missing_fact": "עובדה שנדרשה למתן תשובה מלאה לא הייתה זמינה בתיק.",
+      "conflicting_fact": "בתיק נמצאו עובדות סותרות בנושא זה.",
+      "no_approved_rule": "לא נמצא כלל מאושר לפרשנות מקצועית.",
+      "professional_interpretation": "נקודה זו דורשת פרשנות של גורם מקצועי."
+    },
+    "escalation": {
+      "reasonRulesApplied": "כללים מאושרים הוחלו; עדיין נדרש אימות מקצועי לפני הסתמכות",
+      "reasonNoRule": "לא נמצא כלל מאושר לפרשנות מקצועית"
+    }
   },
   "escalation": {
     "manualHandoffDisclaimer": "בקשות בדיקה נמסרות ידנית לגורם מקצועי שנרשם על ידכם. CareDesk אינה פונה לספק חיצוני ואינה מתחייבת לביצוע הבדיקה.",

@@ -75,7 +75,13 @@ export function OpenIssuesPage() {
         title: healthFactorTitle(factor, t),
         explanation: healthFactorExplanation(factor, t),
         actionLabel: healthFactorAction(factor, t),
-        actionTo: factor.actionTarget ? path(factor.actionTarget) : undefined,
+        // factor.actionTarget is already an app-rooted path from the health API
+        // ("/cases/{id}#..."), not one relative to this client workspace.
+        // Wrapping it in `path()` (which prefixes /clients/:clientId) produced
+        // a URL matching no route, so the router's catch-all silently sent the
+        // user to /app instead of the case screen — the urgent-action button
+        // did nothing, with no error.
+        actionTo: factor.actionTarget,
       });
     } else if (factor.status === 'good') {
       issues.push({

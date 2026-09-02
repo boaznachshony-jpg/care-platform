@@ -175,3 +175,39 @@ export type DocumentOwnerType = (typeof DOCUMENT_OWNER_TYPES)[number];
 
 export const DOCUMENT_UPLOAD_SOURCES = ['web_upload', 'email_ingest', 'api', 'migration'] as const;
 export type DocumentUploadSource = (typeof DOCUMENT_UPLOAD_SOURCES)[number];
+
+/**
+ * Medication vocabulary (server-side counterpart of the browser-only
+ * `caredesk.mvp.medications.v1` store — see apps/web/src/storage/mvp-storage.ts).
+ * Named slots, not clock times: households say "morning and evening", not
+ * "08:00 and 20:00", and a slot cannot silently drift the way a specific hour
+ * can. Kept identical to the client vocabulary on purpose, so the future UI
+ * cutover is a data-shape no-op.
+ */
+export const MEDICATION_TIMES_OF_DAY = ['morning', 'noon', 'evening', 'night'] as const;
+export type MedicationTimeOfDay = (typeof MEDICATION_TIMES_OF_DAY)[number];
+
+/**
+ * Sunday-first, matching how the week is spoken and printed in Israel — see
+ * the identical ordering rationale in apps/web/src/storage/mvp-storage.ts.
+ */
+export const MEDICATION_DAYS_OF_WEEK = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+export type MedicationDayOfWeek = (typeof MEDICATION_DAYS_OF_WEEK)[number];
+
+/**
+ * Soft lifecycle only — there is no `delete` verb on tenant health data in
+ * this codebase (Constitution + migration 0037's DELETE-hole closure). A
+ * medication that is no longer taken is archived, never removed, so an
+ * emergency binder printed from history remains truthful about what a
+ * caregiver was told at the time.
+ */
+export const MEDICATION_STATUSES = ['active', 'archived'] as const;
+export type MedicationStatus = (typeof MEDICATION_STATUSES)[number];

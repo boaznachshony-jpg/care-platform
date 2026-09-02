@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AuthorizationError,
   GetDocumentDownloadUrl,
+  ImportCaseDocument,
   ListCaseDocuments,
   UploadCaseDocument,
   deriveComplianceStatus,
@@ -56,6 +57,7 @@ function buildHarness() {
     timeline,
     storage,
     upload: new UploadCaseDocument(deps),
+    import: new ImportCaseDocument(deps),
     list: new ListCaseDocuments(deps),
     downloadUrl: new GetDocumentDownloadUrl(deps),
   };
@@ -177,5 +179,57 @@ describe('issuing a download URL', () => {
   it('returns null for an unknown document id', async () => {
     const h = buildHarness();
     expect(await h.downloadUrl.execute(OWNER, CASE_ID, 'no-such-document')).toBeNull();
+  });
+});
+
+describe('importing a browser-only document (UI cutover)', () => {
+  it('creates a document with no file when the local record had no scan', async () => {
+    const h = buildHarness();
+    const { document, currentVersion } = await h.import.execute(OWNER, CASE_ID, {
+      documentType: 'passport',
+      sensitivity: 'identity_sensitive',
+      legacyLocalId: 'local-doc-1',
+    });
+    expect(currentVersion).toBeNull();
+    expect(document.currentVersionId).toBeNull();
+    expect(document.status).toBe('active');
+  });
+
+  it('creates a document with a file when the local record had a scan', async () => {
+    const h = buildHarness();
+    const { currentVersion } = await h.import.execute(OWNER, CASE_ID, {
+      documentType: 'passport',
+      sensitivity: 'identity_sensitive',
+      file: { mediaType: 'application/pdf', content: CONTENT },
+      legacyLocalId: 'local-doc-2',
+    });
+    expect(currentVersion?.versionNumber).toBe(1);
+  });
+
+  it('is idempotent on legacyLocalId — a repeated import returns the same document', async () => {
+    const h = buildHarness();
+    const first = await h.import.execute(OWNER, CASE_ID, {
+      documentType: 'passport',
+      sensitivity: 'identity_sensitive',
+      legacyLocalId: 'local-doc-3',
+    });
+    const second = await h.import.execute(OWNER, CASE_ID, {
+      documentType: 'passport',
+      sensitivity: 'identity_sensitive',
+      legacyLocalId: 'local-doc-3',
+    });
+    expect(second.document.id).toBe(first.document.id);
+    expect(h.audit.events.filter((e) => e.action === 'document.imported')).toHaveLength(1);
+  });
+
+  it('denies import to a read-only role', async () => {
+    const h = buildHarness();
+    await expect(
+      h.import.execute(VIEWER, CASE_ID, {
+        documentType: 'passport',
+        sensitivity: 'identity_sensitive',
+        legacyLocalId: 'local-doc-4',
+      }),
+    ).rejects.toThrow(AuthorizationError);
   });
 });

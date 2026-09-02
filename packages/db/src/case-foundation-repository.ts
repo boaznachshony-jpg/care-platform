@@ -1,5 +1,9 @@
-import type { CaseFoundationRepository, EmploymentCaseGraph } from '@caredesk/application';
-import { brandId } from '@caredesk/domain';
+import type {
+  CaseFoundationRepository,
+  EmploymentCaseGraph,
+  UpdateCaregiverProfile,
+} from '@caredesk/application';
+import { brandId, type Caregiver } from '@caredesk/domain';
 import type { Pool } from 'pg';
 import { withTenant } from './pool.js';
 
@@ -175,6 +179,54 @@ export class PgCaseFoundationRepository implements CaseFoundationRepository {
     return withTenant(this.pool, tenantId, async (client) => {
       const result = await client.query<CaseRow>(`${SELECT_GRAPH} order by c.created_at desc`);
       return result.rows.map((row) => toGraph(row, tenantId));
+    });
+  }
+
+  async updateCaregiver(
+    tenantId: string,
+    caregiverId: string,
+    changes: UpdateCaregiverProfile,
+  ): Promise<Caregiver | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      // coalesce($n, column) leaves an unmentioned field untouched, same
+      // convention as PgTaskRepository.updateTask.
+      const result = await client.query<{
+        id: string;
+        legal_name: string;
+        preferred_name: string | null;
+        nationality: string;
+        primary_language: string | null;
+        status: string;
+      }>(
+        `update caregiver
+            set legal_name = coalesce($2, legal_name),
+                preferred_name = case when $3::boolean then $4 else preferred_name end,
+                nationality = coalesce($5, nationality),
+                primary_language = case when $6::boolean then $7 else primary_language end,
+                updated_at = now(), version = version + 1
+          where id = $1
+         returning id, legal_name, preferred_name, nationality, primary_language, status`,
+        [
+          caregiverId,
+          changes.legalName ?? null,
+          changes.preferredName !== undefined,
+          changes.preferredName ?? null,
+          changes.nationality ?? null,
+          changes.primaryLanguage !== undefined,
+          changes.primaryLanguage ?? null,
+        ],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        id: brandId(row.id),
+        tenantId: brandId(tenantId),
+        legalName: row.legal_name,
+        preferredName: row.preferred_name,
+        nationality: row.nationality,
+        primaryLanguage: row.primary_language,
+        status: row.status === 'active' ? 'active' : 'inactive',
+      };
     });
   }
 }

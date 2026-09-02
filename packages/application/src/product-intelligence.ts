@@ -128,6 +128,15 @@ export interface PayrollFact {
   closed: boolean;
 }
 
+/** "2026-01" -> "2025-12". Crosses the year boundary on purpose (see below). */
+function previousCalendarMonth(month: string): string {
+  const year = Number(month.slice(0, 4));
+  const monthNumber = Number(month.slice(5, 7));
+  const prevYear = monthNumber === 1 ? year - 1 : year;
+  const prevMonthNumber = monthNumber === 1 ? 12 : monthNumber - 1;
+  return `${String(prevYear).padStart(4, '0')}-${String(prevMonthNumber).padStart(2, '0')}`;
+}
+
 /**
  * DOM-04. `cumulative` used to be raw float addition across twelve months and
  * `average` was an unrounded division, so a year's running total drifted by
@@ -148,21 +157,47 @@ export function projectPayrollAnalytics(records: readonly PayrollFact[], year: s
     ZERO_AGOROT,
   );
   const total = shekelsOf(totalAgorot);
+  /**
+   * DOM-21. This used to be `months.at(-1)` vs `months.at(-2)` from the
+   * year-filtered list: two problems compounded there. First, "months" only
+   * ever held records inside the selected `year`, so a January record's
+   * "previous month" comparison to the December before it was thrown away by
+   * the filter and the metric silently vanished instead of comparing across
+   * the boundary. Second — and worse, because it does not vanish, it lies —
+   * `.at(-2)` is "the second-most-recent record that exists", not "the
+   * calendar month before the most recent one". A customer who recorded June
+   * and August but never recorded July got "the change from the previous
+   * month" computed as August-minus-June while the label still said "previous
+   * month" (singular, adjacent). The label and the number disagreed, and the
+   * number that looked most current was the wrong one.
+   *
+   * The fix looks up the specific calendar month before the latest recorded
+   * one, in the FULL (unfiltered) record set so a December record on the
+   * other side of the year boundary is still found, and only reports a change
+   * when that exact month has its own record. Otherwise it says so —
+   * `previousMonthChange: null` — which the screen already renders as "אין
+   * השוואה" (no comparison), rather than a confident, wrong shekel figure.
+   */
+  const latestMonth = months.at(-1)?.month;
+  const previousMonthRecord = latestMonth
+    ? records.find((record) => record.month === previousCalendarMonth(latestMonth))
+    : undefined;
+  const previousMonthChange =
+    latestMonth && previousMonthRecord
+      ? shekelsOf(
+          subtractAgorot(
+            agorotFromShekels(months.at(-1)!.total),
+            agorotFromShekels(previousMonthRecord.total),
+          ),
+        )
+      : null;
   return {
     trend,
     total,
     average: months.length ? shekelsOf(scaleAgorot(totalAgorot, 1 / months.length)) : 0,
     highest: months.length ? months.reduce((a, b) => (a.total >= b.total ? a : b)) : null,
     lowest: months.length ? months.reduce((a, b) => (a.total <= b.total ? a : b)) : null,
-    previousMonthChange:
-      months.length > 1
-        ? shekelsOf(
-            subtractAgorot(
-              agorotFromShekels(months.at(-1)!.total),
-              agorotFromShekels(months.at(-2)!.total),
-            ),
-          )
-        : null,
+    previousMonthChange,
     hasOpenMonth: months.some((record) => !record.closed),
   };
 }

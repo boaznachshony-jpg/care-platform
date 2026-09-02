@@ -16,6 +16,7 @@ import {
   listCaseDocuments,
   listCaseTasks,
   listEmploymentCases,
+  newIdempotencyKey,
   type BinderExportReceiptResponse,
   type CanonicalPayrollClose,
 } from '../api/client.js';
@@ -49,19 +50,6 @@ interface BinderData {
   payroll: CanonicalPayrollClose[];
   tasks: TaskResponse[];
   contacts: CaseContactResponse[];
-}
-
-/**
- * crypto.randomUUID only exists in secure contexts, and this app is
- * deliberately reachable over plain http on a phone at 192.168.x.x — so a
- * non-cryptographic fallback keeps the export recordable there too. The key
- * only de-duplicates retries; uniqueness, not secrecy, is what it needs.
- */
-function newIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `binder-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
 }
 
 export function EmergencyBinderPage() {

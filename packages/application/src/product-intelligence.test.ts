@@ -95,6 +95,79 @@ describe('product intelligence projections', () => {
     });
   });
 
+  it('DOM-21: reports no comparison when the calendar month before the latest one has no record', () => {
+    // The customer recorded June and August but never recorded July. Before
+    // this fix, `previousMonthChange` took `months.at(-2)` — August's
+    // "previous" record was silently June, two months back — while the label
+    // this feeds ("שינוי מהחודש הקודם" / "change from the previous month")
+    // still claimed a single adjacent month. An honest "no comparable month"
+    // (rendered as `null`, which the screen already shows as "אין השוואה")
+    // beats a confident number that answers a different question than its
+    // own label.
+    const result = projectPayrollAnalytics(
+      [
+        { month: '2026-06', baseSalary: 0, additions: 0, deductions: 0, total: 100, closed: true },
+        { month: '2026-08', baseSalary: 0, additions: 0, deductions: 0, total: 500, closed: true },
+      ],
+      '2026',
+    );
+    expect(result.previousMonthChange).toBeNull();
+  });
+
+  it('DOM-21: compares across the year boundary instead of losing the comparison in January', () => {
+    // The old implementation filtered `records` down to the selected `year`
+    // BEFORE picking the "previous" one, so a January record's true previous
+    // month — December of the prior year — was thrown away by the filter and
+    // the metric vanished. The lookup now searches the full record set.
+    const result = projectPayrollAnalytics(
+      [
+        {
+          month: '2025-12',
+          baseSalary: 0,
+          additions: 0,
+          deductions: 0,
+          total: 7_000,
+          closed: true,
+        },
+        {
+          month: '2026-01',
+          baseSalary: 0,
+          additions: 0,
+          deductions: 0,
+          total: 7_300,
+          closed: true,
+        },
+      ],
+      '2026',
+    );
+    expect(result.previousMonthChange).toBe(300);
+  });
+
+  it('DOM-21: still reports a change for two genuinely consecutive months in the same year', () => {
+    const result = projectPayrollAnalytics(
+      [
+        {
+          month: '2026-03',
+          baseSalary: 0,
+          additions: 0,
+          deductions: 0,
+          total: 6_000,
+          closed: true,
+        },
+        {
+          month: '2026-04',
+          baseSalary: 0,
+          additions: 0,
+          deductions: 0,
+          total: 6_150,
+          closed: true,
+        },
+      ],
+      '2026',
+    );
+    expect(result.previousMonthChange).toBe(150);
+  });
+
   it('forecasts exactly 12 calendar months with inspectable known/projected portions', () => {
     const result = projectFutureCost({
       startMonth: '2027-12',

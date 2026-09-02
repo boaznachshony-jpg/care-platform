@@ -43,15 +43,18 @@ const mockProfile = {
 
 const mockGetCaseHealth = vi.fn();
 
+// A vi.fn() (not a bare arrow function) so a single test can swap in a
+// realistic /clients/:clientId-prefixing implementation to prove the health
+// factor's actionTarget bypasses it (see the "does not run the API's
+// actionTarget through the client-scoped path()" test below).
+const mockClientPath = vi.hoisted(() => vi.fn((path: string = '/') => path));
+
 vi.mock('../hooks/use-mvp-profile.js', () => ({
   useMvpProfile: () => [mockProfile, vi.fn()],
 }));
 
 vi.mock('../hooks/use-client-path.js', () => ({
-  useClientPath:
-    () =>
-    (path: string = '/') =>
-      path,
+  useClientPath: () => mockClientPath,
 }));
 
 vi.mock('../api/client.js', () => ({
@@ -160,6 +163,7 @@ function renderPage(clientId = 'client-001') {
 describe('OpenIssuesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockClientPath.mockImplementation((path: string = '/') => path);
     mockGetCaseHealth.mockResolvedValue({
       score: 85,
       actionsRemaining: 2,
@@ -244,5 +248,28 @@ describe('OpenIssuesPage', () => {
   it('shows the health score in the ring', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('85')).toBeInTheDocument());
+  });
+
+  /**
+   * The API's actionTarget ("/cases/{caseId}#documents") is already an
+   * app-rooted path, matched by the top-level `/cases/:caseId` route — not
+   * one relative to the client-scoped workspace. Running it through the
+   * /clients/:clientId-prefixing path() (as the missing-fields issue below
+   * correctly does for '/settings') produced a URL matching no route, so the
+   * router's catch-all silently sent the user to /app and the urgent-action
+   * button did nothing.
+   */
+  it('does not run the health factor actionTarget through the client-scoped path()', async () => {
+    mockClientPath.mockImplementation((path: string = '/') =>
+      path === '/' ? '/clients/client-001' : `/clients/client-001${path}`,
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByText('הסכם העסקה חתום')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'העלאת ההסכם' })).toHaveAttribute('href', '/documents');
+    // A path that path() *should* still touch, for contrast.
+    expect(screen.getByRole('link', { name: 'השלמה בהגדרות' })).toHaveAttribute(
+      'href',
+      '/clients/client-001/settings',
+    );
   });
 });

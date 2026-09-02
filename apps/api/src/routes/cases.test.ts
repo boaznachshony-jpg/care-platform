@@ -128,6 +128,47 @@ describe('/cases routes', () => {
     );
   });
 
+  // --- Caregiver identity corrections -----------------------------------
+  //
+  // The caregiver table (migration 0003) existed from the start, but nothing
+  // let a family correct it after intake — see UpdateCaregiverProfileUseCase.
+
+  it('corrects caregiver identity fields and returns the update on the case read', async () => {
+    const app = buildServer(loadEnv({}));
+    const created = await app.inject({
+      method: 'POST',
+      url: '/cases',
+      headers: AUTH,
+      payload: VALID_BODY,
+    });
+    const caseId = created.json().id as string;
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/cases/${caseId}/caregiver`,
+      headers: AUTH,
+      payload: { primaryLanguage: 'Tagalog' },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().primaryLanguage).toBe('Tagalog');
+    // Unmentioned fields are untouched.
+    expect(updated.json().nationality).toBe('Philippines');
+
+    const fetched = await app.inject({ method: 'GET', url: `/cases/${caseId}`, headers: AUTH });
+    expect(fetched.json().caregiver.primaryLanguage).toBe('Tagalog');
+  });
+
+  it('returns 404 for a caregiver update on an unknown case', async () => {
+    const app = buildServer(loadEnv({}));
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/cases/does-not-exist/caregiver',
+      headers: AUTH,
+      payload: { legalName: 'x' },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
   it('returns the standard 404 envelope for an unknown case id', async () => {
     const app = buildServer(loadEnv({}));
     const response = await app.inject({

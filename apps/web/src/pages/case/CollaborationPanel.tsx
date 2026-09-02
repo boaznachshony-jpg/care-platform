@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiRequest } from '../../api/client.js';
+import { apiRequest, newIdempotencyKey } from '../../api/client.js';
 import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
 
 type Member = { id: string; display_name: string; role: string; status: string };
@@ -31,7 +31,13 @@ const kinds = [
   'insurance',
   'general_administration',
 ];
-const key = () => crypto.randomUUID();
+// crypto.randomUUID throws outside a secure context, and this app is
+// deliberately reached over plain http on a phone at 192.168.x.x — so this
+// goes through the shared fallback (uniqueness, not secrecy, is all an
+// idempotency key needs). Each select's onChange is its own discrete user
+// action, so a fresh key per invocation here is correct (not a "retry" of a
+// prior attempt the way a form submit is).
+const key = () => newIdempotencyKey();
 
 /**
  * WEB-13: this screen was hardcoded English inside a `<html lang="he"
@@ -84,6 +90,25 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
     );
   if (!data) return <section aria-busy="true">{t('collaboration.loading')}</section>;
   const members = data.members.filter((m) => m.status === 'active');
+  /**
+   * A <select> bound to a value with no matching <option> silently falls
+   * back to rendering the browser's default: the FIRST option in the list.
+   * `members` only has active members, but the stored
+   * assignee_membership_id can point at someone who has since left — so this
+   * screen used to show the wrong person as responsible with no visible
+   * sign anything was off. Whenever the stored id points at an inactive (but
+   * still-known) member, that member is appended to the option list and
+   * labelled, so the displayed value can never diverge from the stored one.
+   * (The "(לא פעיל)" suffix is a local string, not an i18n key, because
+   * packages/i18n is owned by a concurrent agent; it should move there.)
+   */
+  const optionsFor = (selectedId: string | null | undefined): Member[] => {
+    if (!selectedId || members.some((m) => m.id === selectedId)) return members;
+    const assigned = data.members.find((m) => m.id === selectedId);
+    return assigned ? [...members, assigned] : members;
+  };
+  const memberOptionLabel = (member: Member): string =>
+    member.status === 'active' ? member.display_name : `${member.display_name} (לא פעיל)`;
   const put = async (path: string, body: unknown) => {
     setWriteError('');
     await apiRequest(path, {
@@ -107,34 +132,36 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
       <h2>{t('collaboration.title')}</h2>
       {writeError ? <p role="alert">{writeError}</p> : null}
       <h3>{t('collaboration.responsibilities')}</h3>
-      {kinds.map((kind) => (
-        <label key={kind}>
-          {enumLabel('responsibility', kind)}
-          <select
-            aria-label={t('collaboration.assigneeLabel', {
-              subject: enumLabel('responsibility', kind),
-            })}
-            value={
-              data.responsibilities.find((a) => a.responsibility === kind)
-                ?.assignee_membership_id ?? ''
-            }
-            onChange={(e) =>
-              runWrite(
-                put(`/cases/${caseId}/responsibilities/${kind}`, {
-                  assigneeMembershipId: e.target.value || null,
-                }),
-              )
-            }
-          >
-            <option value="">{t('collaboration.unassigned')}</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.display_name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
+      {kinds.map((kind) => {
+        const assigneeId =
+          data.responsibilities.find((a) => a.responsibility === kind)?.assignee_membership_id ??
+          '';
+        return (
+          <label key={kind}>
+            {enumLabel('responsibility', kind)}
+            <select
+              aria-label={t('collaboration.assigneeLabel', {
+                subject: enumLabel('responsibility', kind),
+              })}
+              value={assigneeId}
+              onChange={(e) =>
+                runWrite(
+                  put(`/cases/${caseId}/responsibilities/${kind}`, {
+                    assigneeMembershipId: e.target.value || null,
+                  }),
+                )
+              }
+            >
+              <option value="">{t('collaboration.unassigned')}</option>
+              {optionsFor(assigneeId).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {memberOptionLabel(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+        );
+      })}
       <h3>{t('collaboration.taskAssignments')}</h3>
       {data.tasks.map((task) => (
         <label key={task.id}>
@@ -151,9 +178,9 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
             }
           >
             <option value="">{t('collaboration.unassigned')}</option>
-            {members.map((m) => (
+            {optionsFor(task.assignee_membership_id).map((m) => (
               <option key={m.id} value={m.id}>
-                {m.display_name}
+                {memberOptionLabel(m)}
               </option>
             ))}
           </select>

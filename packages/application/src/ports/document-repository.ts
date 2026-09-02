@@ -24,6 +24,29 @@ export interface CreateDocumentVersionRecord {
   sizeBytes: number;
   checksum: string | null;
   createdBy: string;
+  /** Set only by ImportCaseDocument — see Document.legacyLocalId. */
+  legacyLocalId?: string | null;
+}
+
+/**
+ * A document container with no file yet — the metadata-only import path for a
+ * browser record that has no scanned file attached (`MvpDocument.dataUrl` was
+ * never set). `document.current_version_id` stays null, exactly as it does for
+ * any document nobody has uploaded a file to yet; the family can attach the
+ * scan later through the normal upload flow, which adds the first version.
+ */
+export interface CreateDocumentRecord {
+  documentId: string;
+  tenantId: string;
+  employmentCaseId: string;
+  documentType: Document['documentType'];
+  ownerType: Document['ownerType'];
+  ownerId: string | null;
+  sensitivity: Document['sensitivity'];
+  complianceStatus: Document['complianceStatus'];
+  expiresAt: string | null;
+  createdBy: string;
+  legacyLocalId?: string | null;
 }
 
 /** A document with the fields of its current version folded in, for list views. */
@@ -40,6 +63,8 @@ export interface DocumentRepository {
   createDocumentWithVersion(
     input: CreateDocumentVersionRecord,
   ): Promise<DocumentWithCurrentVersion>;
+  /** Creates the container only, with no version — see CreateDocumentRecord. */
+  createDocument(input: CreateDocumentRecord): Promise<DocumentWithCurrentVersion>;
   listCaseDocuments(
     tenantId: string,
     employmentCaseId: string,
@@ -49,5 +74,14 @@ export interface DocumentRepository {
     tenantId: string,
     employmentCaseId: string,
     documentId: string,
+  ): Promise<DocumentWithCurrentVersion | null>;
+  /**
+   * The document previously imported from this local id, or null. Read before
+   * any import write — see TaskRepository.findTaskByLegacyLocalId for why.
+   */
+  findDocumentByLegacyLocalId(
+    tenantId: string,
+    employmentCaseId: string,
+    legacyLocalId: string,
   ): Promise<DocumentWithCurrentVersion | null>;
 }

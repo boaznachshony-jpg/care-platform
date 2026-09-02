@@ -14,6 +14,7 @@ export * from './mocks/in-memory-case-foundation-repository.js';
 export * from './mocks/in-memory-case-contact-repository.js';
 export * from './mocks/in-memory-task-repository.js';
 export * from './mocks/in-memory-document-repository.js';
+export * from './mocks/in-memory-medication-repository.js';
 export * from './mocks/in-memory-workspace-repository.js';
 export * from './mocks/in-memory-workspace-history-repository.js';
 export * from './mocks/in-memory-workspace-file-repository.js';

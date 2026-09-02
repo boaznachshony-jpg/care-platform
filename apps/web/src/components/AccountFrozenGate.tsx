@@ -37,7 +37,14 @@ function fetchBillingStatusOncePerSession(): Promise<BillingPlanResponse> {
  *   network blip must never lock users out of the product.
  * - The /billing route is never locked — it is the page that fixes the
  *   problem, so the frozen screen only points there and steps aside on it.
+ * - Neither is the emergency binder (/binder and /clients/:clientId/binder):
+ *   a family frozen for non-payment can still be facing a hospital visit
+ *   tonight, and the document they might need for it must not be behind the
+ *   billing wall. The server enforces the matching exemption independently
+ *   in apps/api/src/billing/freeze-guard.ts — this check is a UX shortcut,
+ *   not the actual access control.
  */
+const BINDER_PATH = /^\/(clients\/[^/]+\/)?binder$/;
 export function AccountFrozenGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const auth = useAuth();
@@ -59,8 +66,9 @@ export function AccountFrozenGate({ children }: { children: ReactNode }) {
   }, []);
 
   const onBillingPage = pathname === '/billing';
+  const onBinderPage = BINDER_PATH.test(pathname);
 
-  if (plan?.accessState === 'frozen' && !onBillingPage) {
+  if (plan?.accessState === 'frozen' && !onBillingPage && !onBinderPage) {
     return (
       <main className="billing-page account-frozen-screen" id="main-content">
         <section className="card" role="alert">

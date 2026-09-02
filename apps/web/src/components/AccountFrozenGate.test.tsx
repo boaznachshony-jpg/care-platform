@@ -97,6 +97,22 @@ describe('AccountFrozenGate', () => {
     expect(screen.queryByRole('heading', { name: 'Account frozen' })).toBeNull();
   });
 
+  it('never locks the emergency binder — a frozen family may still need it tonight', async () => {
+    mocks.getBillingSubscription.mockResolvedValue(plan({ accessState: 'frozen' }));
+    await renderGate('/binder');
+
+    expect(await screen.findByText('protected content')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Account frozen' })).toBeNull();
+  });
+
+  it('never locks the per-client emergency binder route either', async () => {
+    mocks.getBillingSubscription.mockResolvedValue(plan({ accessState: 'frozen' }));
+    await renderGate('/clients/client-1/binder');
+
+    expect(await screen.findByText('protected content')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Account frozen' })).toBeNull();
+  });
+
   it('shows a non-blocking warning with the remaining days during the grace window', async () => {
     mocks.getBillingSubscription.mockResolvedValue(
       plan({ accessState: 'grace', graceDaysRemaining: 3 }),

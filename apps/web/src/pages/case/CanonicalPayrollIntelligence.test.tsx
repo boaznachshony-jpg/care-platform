@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanonicalPayrollIntelligence } from './CanonicalPayrollIntelligence.js';
+import type { MvpProfile } from '../../storage/mvp-storage.js';
 
 // Constitution §16: synthetic data only.
 const DEMO_CASE_ID = 'case-demo-001';
@@ -86,7 +87,13 @@ const mockReadMvpPayroll = vi.fn();
 const mockSaveMvpPayroll = vi.fn();
 const mockReadMvpEmploymentExpenses = vi.fn();
 const mockSaveMvpEmploymentExpenses = vi.fn();
+const mockReadMvpProfile = vi.fn();
 const mockProjectFutureCost = vi.fn();
+
+/** WEB-04(b): a profile with no salary set — the same shape `emptyMvpProfile` has for these two fields. */
+const EMPTY_PROFILE = { baseSalary: null, saturdayRate: null } as unknown as MvpProfile;
+/** A profile where the customer already told the product both figures during MVP setup. */
+const PROFILE_WITH_SALARY = { baseSalary: 6200, saturdayRate: 310 } as unknown as MvpProfile;
 
 vi.mock('../../api/client.js', () => {
   class ApiRequestError extends Error {
@@ -112,6 +119,7 @@ vi.mock('../../storage/mvp-storage.js', () => ({
   saveMvpPayroll: (...args: unknown[]) => mockSaveMvpPayroll(...args),
   readMvpEmploymentExpenses: (...args: unknown[]) => mockReadMvpEmploymentExpenses(...args),
   saveMvpEmploymentExpenses: (...args: unknown[]) => mockSaveMvpEmploymentExpenses(...args),
+  readMvpProfile: (...args: unknown[]) => mockReadMvpProfile(...args),
 }));
 
 vi.mock('@caredesk/application', () => ({
@@ -133,6 +141,7 @@ beforeEach(() => {
   mockSaveMvpPayroll.mockReturnValue(undefined);
   mockReadMvpEmploymentExpenses.mockReturnValue([]);
   mockSaveMvpEmploymentExpenses.mockReturnValue(undefined);
+  mockReadMvpProfile.mockReturnValue(EMPTY_PROFILE);
   mockProjectFutureCost.mockReturnValue({ months: [] });
 });
 
@@ -537,5 +546,119 @@ describe('CanonicalPayrollIntelligence — legacy expense reconciliation', () =>
     // An additional payment may legitimately mention a Saturday; the warning is
     // about the count being zero, not about the word.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('computes the rest-day product through the domain rounding rule, not raw float multiplication', async () => {
+    // Root 8. `100.21 * 2.5` is `250.52499999999998` in IEEE-754 double, and
+    // naive display of that raw float rounds to ₪250.52. Half-away-from-zero
+    // on the exact decimal — the rule `scaleAgorot` applies and the DB CHECK
+    // constraint (migration 0045) enforces — rounds ₪250.525 UP to ₪250.53.
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('ימי מנוחה בתשלום'));
+
+    fireEvent.change(screen.getByLabelText('ימי מנוחה בתשלום'), { target: { value: '2.5' } });
+    fireEvent.change(screen.getByLabelText('תעריף יום מנוחה'), { target: { value: '100.21' } });
+
+    expect(screen.getByText(/250\.53/)).toBeInTheDocument();
+    expect(screen.queryByText(/250\.52[^0-9]/)).not.toBeInTheDocument();
+  });
+});
+
+// --- WEB-04(b): prefill from the setup profile, honestly labelled ----------
+describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', () => {
+  it('prefills baseSalary and restDayRate from the profile for a brand-new month', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([]); // no saved entry for the month
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(6200);
+    expect(screen.getByLabelText('תעריף יום מנוחה')).toHaveValue(310);
+  });
+
+  it('marks a prefilled field honestly as "input", not "calculated"', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    const baseSalaryLabel = screen.getByText('שכר בסיס', { selector: 'label' });
+    expect(within(baseSalaryLabel).getByText('הוזן')).toBeInTheDocument();
+  });
+
+  it('a saved server entry always wins: no prefill when the month already has one', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([SAVED_ENTRY]); // baseSalary: 0, restDayRate: 0
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    // The saved entry's own (zero) figures are shown, never the profile's.
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(0);
+    expect(screen.getByLabelText('תעריף יום מנוחה')).toHaveValue(0);
+    const baseSalaryLabel = screen.getByText('שכר בסיס', { selector: 'label' });
+    expect(within(baseSalaryLabel).queryByText('הוזן')).not.toBeInTheDocument();
+  });
+
+  it('clears the prefilled badge the moment the customer edits the field', async () => {
+    mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
+    mockListPayrollEntries.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    fireEvent.change(screen.getByLabelText('שכר בסיס'), { target: { value: '6500' } });
+
+    const baseSalaryLabel = screen.getByText('שכר בסיס', { selector: 'label' });
+    expect(within(baseSalaryLabel).queryByText('הוזן')).not.toBeInTheDocument();
+  });
+
+  it('does not prefill when the profile has no stored salary', async () => {
+    mockReadMvpProfile.mockReturnValue(EMPTY_PROFILE);
+    mockListPayrollEntries.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(0);
+    const baseSalaryLabel = screen.getByText('שכר בסיס', { selector: 'label' });
+    expect(within(baseSalaryLabel).queryByText('הוזן')).not.toBeInTheDocument();
+  });
+});
+
+// --- WEB-04(c) / Constitution §13: the month switch never destroys a draft -
+describe('CanonicalPayrollIntelligence — month switch guards an unsaved draft', () => {
+  it('asks before a month change discards unsaved values, and keeps them on refusal', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    fireEvent.change(screen.getByLabelText('שכר בסיס'), { target: { value: '6500' } });
+    fireEvent.change(screen.getByLabelText('חודש'), { target: { value: '2020-01' } });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    // Refused: still on the original month, value intact.
+    expect(screen.getByLabelText('חודש')).toHaveValue(CURRENT_MONTH);
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(6500);
+  });
+
+  it('lets the month change through once the user confirms, and resets the draft for the new month', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    fireEvent.change(screen.getByLabelText('שכר בסיס'), { target: { value: '6500' } });
+    fireEvent.change(screen.getByLabelText('חודש'), { target: { value: '2020-01' } });
+
+    expect(screen.getByLabelText('חודש')).toHaveValue('2020-01');
+    expect(screen.getByLabelText('שכר בסיס')).toHaveValue(0);
+  });
+
+  it('does not ask when the draft matches what was last loaded (nothing unsaved)', async () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    renderPanel();
+    await waitFor(() => screen.getByLabelText('שכר בסיס'));
+
+    fireEvent.change(screen.getByLabelText('חודש'), { target: { value: '2020-01' } });
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('חודש')).toHaveValue('2020-01');
   });
 });

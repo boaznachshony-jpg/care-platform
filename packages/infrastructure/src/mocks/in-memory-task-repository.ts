@@ -1,4 +1,9 @@
-import type { CreateTaskRecord, TaskRepository, TimelineRepository } from '@caredesk/application';
+import type {
+  CreateTaskRecord,
+  TaskRepository,
+  TimelineRepository,
+  UpdateTaskRecord,
+} from '@caredesk/application';
 import { brandId, type Task, type TimelineEvent } from '@caredesk/domain';
 import type { InMemoryTimelineService } from './in-memory-timeline-service.js';
 
@@ -18,6 +23,7 @@ export class InMemoryTaskRepository implements TaskRepository {
       dueAt: input.dueAt,
       completedAt: null,
       sourceType: 'manual',
+      legacyLocalId: input.legacyLocalId ?? null,
     };
     const tasks = this.tasksByTenant.get(input.tenantId) ?? [];
     tasks.push(task);
@@ -33,6 +39,19 @@ export class InMemoryTaskRepository implements TaskRepository {
 
   async findTask(tenantId: string, taskId: string): Promise<Task | null> {
     return (this.tasksByTenant.get(tenantId) ?? []).find((task) => task.id === taskId) ?? null;
+  }
+
+  async findTaskByLegacyLocalId(
+    tenantId: string,
+    employmentCaseId: string,
+    legacyLocalId: string,
+  ): Promise<Task | null> {
+    return (
+      (this.tasksByTenant.get(tenantId) ?? []).find(
+        (task) =>
+          task.employmentCaseId === employmentCaseId && task.legacyLocalId === legacyLocalId,
+      ) ?? null
+    );
   }
 
   async completeTask(
@@ -51,6 +70,43 @@ export class InMemoryTaskRepository implements TaskRepository {
       return null;
     }
     const updated: Task = { ...existing, status: 'completed', completedAt };
+    tasks[index] = updated;
+    return updated;
+  }
+
+  async updateTask(
+    tenantId: string,
+    taskId: string,
+    changes: UpdateTaskRecord,
+    _updatedBy: string,
+  ): Promise<Task | null> {
+    const tasks = this.tasksByTenant.get(tenantId) ?? [];
+    const index = tasks.findIndex(
+      (task) => task.id === taskId && task.status !== 'completed' && task.status !== 'cancelled',
+    );
+    if (index === -1) return null;
+    const existing = tasks[index];
+    if (!existing) return null;
+    const updated: Task = {
+      ...existing,
+      title: changes.title ?? existing.title,
+      description: changes.description !== undefined ? changes.description : existing.description,
+      priority: changes.priority ?? existing.priority,
+      dueAt: changes.dueAt !== undefined ? changes.dueAt : existing.dueAt,
+    };
+    tasks[index] = updated;
+    return updated;
+  }
+
+  async archiveTask(tenantId: string, taskId: string, _updatedBy: string): Promise<Task | null> {
+    const tasks = this.tasksByTenant.get(tenantId) ?? [];
+    const index = tasks.findIndex(
+      (task) => task.id === taskId && task.status !== 'completed' && task.status !== 'cancelled',
+    );
+    if (index === -1) return null;
+    const existing = tasks[index];
+    if (!existing) return null;
+    const updated: Task = { ...existing, status: 'cancelled' };
     tasks[index] = updated;
     return updated;
   }

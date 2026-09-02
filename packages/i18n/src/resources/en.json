@@ -423,7 +423,8 @@
     "licensedBureauContactPhone": "Bureau contact phone",
     "licensedBureauContactEmail": "Bureau contact email",
     "phone": "Phone number",
-    "startDate": "Employment start date"
+    "startDate": "Employment start date",
+    "employmentStartDate": "Employment start date"
   },
   "licensedBureau": {
     "choose": "Choose a licensed private bureau",
@@ -1189,7 +1190,47 @@
     "noReviews": "No review requests are open.",
     "manualReview": "Request a review",
     "reviewReason": "The case needs professional review",
-    "reviewSummary": "Please review the relevant case evidence. No professional has been assigned yet."
+    "reviewSummary": "Please review the relevant case evidence. No professional has been assigned yet.",
+    "healthLoadFailed": "Loading the case file failed. Nothing in the file was affected.",
+    "reviewsLoadFailed": "Loading the review requests failed. Nothing in the file was affected.",
+    "escalateFailed": "Creating the review request failed. Please try again.",
+    "historyLoadFailed": "Loading the history failed.",
+    "retry": "Try again"
+  },
+  "assistant": {
+    "groundingLabel": "Based on your CareDesk file",
+    "answer": {
+      "missingDocuments": "Your CareDesk file is missing valid evidence for: {{types}}.",
+      "documentsValid": "The stored case facts show valid core documents. {{count}} open task(s) remain."
+    },
+    "documentType": {
+      "passport": "passport",
+      "visa": "visa / authorization",
+      "medical_insurance": "medical insurance"
+    },
+    "fact": {
+      "caseStatus": "Case status: {{status}}",
+      "documentStatus": "Stored document {{index}} status",
+      "approvedRule": "Approved rule: {{title}}"
+    },
+    "caseStatus": {
+      "draft": "draft",
+      "active": "active",
+      "suspended": "suspended",
+      "ended": "ended",
+      "cancelled": "cancelled",
+      "archived": "archived"
+    },
+    "uncertainty": {
+      "missing_fact": "A fact needed to answer fully was not available in the case file.",
+      "conflicting_fact": "The case file contains conflicting facts on this topic.",
+      "no_approved_rule": "No approved rule was available for professional interpretation.",
+      "professional_interpretation": "This point requires a professional's interpretation."
+    },
+    "escalation": {
+      "reasonRulesApplied": "Approved rules were applied; professional validation is still required before reliance",
+      "reasonNoRule": "No approved rule covers professional interpretation"
+    }
   },
   "escalation": {
     "manualHandoffDisclaimer": "Review requests are handed off manually to a professional you record. CareDesk does not contact any provider and makes no fulfilment claim.",

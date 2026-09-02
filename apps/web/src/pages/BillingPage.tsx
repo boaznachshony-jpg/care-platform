@@ -52,11 +52,9 @@ export function BillingPage() {
       window.sessionStorage.getItem('caredesk.billing-onboarding') === '1',
   );
 
-  const isSponsored = Boolean(plan && plan.effectivePriceAgorot === 0);
-  // A failed recurring charge must never present as an active subscription:
-  // 'past_due' replaces the green "subscription active" note with a warning
-  // and a direct path back into the hosted card-setup flow.
-  const isPastDue = plan?.status === 'past_due';
+  // Every product_subscription.status value gets its own honest branch in
+  // renderPlanStatusNote() below, which reads plan.status directly — no
+  // isSponsored/isPastDue booleans here to keep in sync with it.
   const chargeDate = plan?.nextChargeOn ?? plan?.chargingStartsAt ?? null;
 
   const load = useCallback(async () => {
@@ -194,6 +192,115 @@ export function BillingPage() {
     }
   }
 
+  /**
+   * Every value `product_subscription.status` can hold (migration
+   * 0014_product_billing.sql) gets its own honest branch here. Before this,
+   * only 'past_due' had a dedicated note and everything else — including
+   * 'cancelled' — fell through to the "you will be charged X on Y" copy,
+   * reading `chargingStartsAt` as the date once `nextChargeOn` was nulled by
+   * cancellation. That date is in the past for a cancelled subscription, so a
+   * cancelled account was shown a charge date that had already gone by.
+   *
+   * `packages/i18n` is owned by another workstream mid-change, so the two
+   * branches this fix adds ('cancelled' and the unrecognised-status
+   * fallback) use inline Hebrew instead of new translation keys. Follow-up:
+   * move `billingCancelledTitle`/`billingCancelledBody` and
+   * `billingUnknownStatusTitle`/`billingUnknownStatusBody` into
+   * packages/i18n once that file is free to edit again.
+   */
+  function renderPlanStatusNote() {
+    if (!plan) return null;
+
+    if (plan.status === 'past_due') {
+      return (
+        <div className="billing-safety-note past-due" role="alert">
+          <strong>{t('billing.pastDueTitle')}</strong>
+          <p>{t('billing.pastDueBody')}</p>
+          {plan.canManage && plan.providerConfigured ? (
+            <button
+              className="primary-button billing-past-due-button"
+              type="button"
+              disabled={busy}
+              onClick={() => void reconnectCard()}
+            >
+              {busy ? t('billing.redirecting') : t('billing.pastDueCta')}
+            </button>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (plan.status === 'cancelled') {
+      // Deliberately does not read chargeDate: nextChargeOn is null (the
+      // repository clears it on cancellation) and chargingStartsAt is a
+      // historic date that has nothing to do with the current, cancelled
+      // state. No charge is scheduled — the honest statement is exactly that.
+      return (
+        <div className="billing-safety-note" role="status">
+          <strong>המנוי בוטל</strong>
+          <p>
+            המנוי בוטל ואמצעי התשלום הוסר — לא יבוצע חיוב נוסף. כדי להמשיך להשתמש בשירות יש לחבר
+            אמצעי תשלום מחדש בטופס שלמטה.
+          </p>
+        </div>
+      );
+    }
+
+    if (plan.status === 'sponsored') {
+      return (
+        <div className="billing-safety-note">
+          <strong>{t('billing.noChargeTitle')}</strong>
+          <p>{t('billing.noChargeBody')}</p>
+        </div>
+      );
+    }
+
+    if (plan.status === 'payment_method_pending') {
+      // No card on file yet: nothing can be charged, regardless of what
+      // chargingStartsAt says, so this must not borrow the "paid" wording.
+      return (
+        <div className="billing-safety-note">
+          <strong>טרם הוגדר אמצעי תשלום</strong>
+          <p>
+            לא בוצע ולא נקבע חיוב. יש להשלים את הגדרת אמצעי התשלום בטופס שלמטה כדי להפעיל את המנוי.
+          </p>
+        </div>
+      );
+    }
+
+    if (plan.status === 'payment_method_ready' || plan.status === 'active') {
+      // A real card is on file and a real charge is scheduled (or has
+      // already happened, for 'active') — the existing "paid" wording is
+      // accurate for both.
+      return (
+        <div className="billing-safety-note paid">
+          <strong>{t('billing.paidChargeTitle')}</strong>
+          <p>
+            {chargeDate
+              ? t('billing.paidChargeBody', {
+                  amount: money(plan.effectivePriceAgorot, i18n.language),
+                  date: date(chargeDate, i18n.language),
+                })
+              : t('billing.paidChargeDatePending', {
+                  amount: money(plan.effectivePriceAgorot, i18n.language),
+                })}
+          </p>
+        </div>
+      );
+    }
+
+    // A status this build does not recognise (e.g. a value added by a
+    // migration this deploy predates) must never default to "paid and
+    // active" wording — that is the exact bug this fix closes for
+    // 'cancelled'. Render a neutral, honest "unknown" note instead.
+    return (
+      <div className="billing-safety-note" role="status">
+        <strong>לא ניתן לקבוע את מצב המנוי</strong>
+        <p>אירעה תקלה בקריאת מצב המנוי. נסו לרענן את העמוד או פנו לתמיכה.</p>
+      </div>
+    );
+  }
+
   return (
     <main className="billing-page" id="main-content">
       <header className="family-access-header">
@@ -261,40 +368,7 @@ export function BillingPage() {
                 <dd>{money(plan.effectivePriceAgorot, i18n.language)}</dd>
               </div>
             </dl>
-            {isPastDue ? (
-              <div className="billing-safety-note past-due" role="alert">
-                <strong>{t('billing.pastDueTitle')}</strong>
-                <p>{t('billing.pastDueBody')}</p>
-                {plan.canManage && plan.providerConfigured ? (
-                  <button
-                    className="primary-button billing-past-due-button"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void reconnectCard()}
-                  >
-                    {busy ? t('billing.redirecting') : t('billing.pastDueCta')}
-                  </button>
-                ) : null}
-              </div>
-            ) : (
-              <div className={`billing-safety-note ${isSponsored ? '' : 'paid'}`}>
-                <strong>
-                  {isSponsored ? t('billing.noChargeTitle') : t('billing.paidChargeTitle')}
-                </strong>
-                <p>
-                  {isSponsored
-                    ? t('billing.noChargeBody')
-                    : chargeDate
-                      ? t('billing.paidChargeBody', {
-                          amount: money(plan.effectivePriceAgorot, i18n.language),
-                          date: date(chargeDate, i18n.language),
-                        })
-                      : t('billing.paidChargeDatePending', {
-                          amount: money(plan.effectivePriceAgorot, i18n.language),
-                        })}
-                </p>
-              </div>
-            )}
+            {renderPlanStatusNote()}
           </section>
 
           <section className="card billing-method-card">

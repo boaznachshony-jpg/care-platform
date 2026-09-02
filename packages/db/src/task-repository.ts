@@ -4,6 +4,7 @@ import type {
   TimelineEventInput,
   TimelineRepository,
   TimelineService,
+  UpdateTaskRecord,
 } from '@caredesk/application';
 import { brandId, type Task, type TimelineEvent } from '@caredesk/domain';
 import type { Pool } from 'pg';
@@ -21,6 +22,7 @@ interface TaskRow {
   due_at: Date | null;
   completed_at: Date | null;
   source_type: string;
+  legacy_local_id: string | null;
 }
 
 function toTask(row: TaskRow): Task {
@@ -36,11 +38,12 @@ function toTask(row: TaskRow): Task {
     dueAt: row.due_at ? row.due_at.toISOString() : null,
     completedAt: row.completed_at ? row.completed_at.toISOString() : null,
     sourceType: row.source_type as Task['sourceType'],
+    legacyLocalId: row.legacy_local_id,
   };
 }
 
 const TASK_COLUMNS = `id, tenant_id, employment_case_id, title, title_key, description,
-  status, priority, due_at, completed_at, source_type`;
+  status, priority, due_at, completed_at, source_type, legacy_local_id`;
 
 export class PgTaskRepository implements TaskRepository {
   constructor(private readonly pool: Pool) {}
@@ -49,8 +52,9 @@ export class PgTaskRepository implements TaskRepository {
     return withTenant(this.pool, input.tenantId, async (client) => {
       const result = await client.query<TaskRow>(
         `insert into task
-           (id, tenant_id, employment_case_id, title, description, priority, due_at, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8)
+           (id, tenant_id, employment_case_id, title, description, priority, due_at, created_by,
+            legacy_local_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          returning ${TASK_COLUMNS}`,
         [
           input.id,
@@ -61,6 +65,7 @@ export class PgTaskRepository implements TaskRepository {
           input.priority,
           input.dueAt,
           input.createdBy,
+          input.legacyLocalId ?? null,
         ],
       );
       const row = result.rows[0];
@@ -93,6 +98,22 @@ export class PgTaskRepository implements TaskRepository {
     });
   }
 
+  async findTaskByLegacyLocalId(
+    tenantId: string,
+    employmentCaseId: string,
+    legacyLocalId: string,
+  ): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TaskRow>(
+        `select ${TASK_COLUMNS} from task
+         where employment_case_id = $1 and legacy_local_id = $2`,
+        [employmentCaseId, legacyLocalId],
+      );
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+
   async completeTask(
     tenantId: string,
     taskId: string,
@@ -109,6 +130,56 @@ export class PgTaskRepository implements TaskRepository {
           where id = $1 and status <> 'completed'
          returning ${TASK_COLUMNS}`,
         [taskId, completedAt, completedBy],
+      );
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+
+  async updateTask(
+    tenantId: string,
+    taskId: string,
+    changes: UpdateTaskRecord,
+    updatedBy: string,
+  ): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      // coalesce($n, column) leaves a field untouched when the caller did not
+      // send it, so a partial PATCH body cannot blank out fields it never
+      // mentioned. Closed/cancelled tasks are excluded — editing a done task
+      // is not a supported operation, matching completeTask's own guard.
+      const result = await client.query<TaskRow>(
+        `update task
+            set title = coalesce($2, title),
+                description = case when $3::boolean then $4 else description end,
+                priority = coalesce($5, priority),
+                due_at = case when $6::boolean then $7 else due_at end,
+                updated_at = now(), updated_by = $8, version = version + 1
+          where id = $1 and status not in ('completed', 'cancelled')
+         returning ${TASK_COLUMNS}`,
+        [
+          taskId,
+          changes.title ?? null,
+          changes.description !== undefined,
+          changes.description ?? null,
+          changes.priority ?? null,
+          changes.dueAt !== undefined,
+          changes.dueAt ?? null,
+          updatedBy,
+        ],
+      );
+      const row = result.rows[0];
+      return row ? toTask(row) : null;
+    });
+  }
+
+  async archiveTask(tenantId: string, taskId: string, updatedBy: string): Promise<Task | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<TaskRow>(
+        `update task
+            set status = 'cancelled', updated_at = now(), updated_by = $2, version = version + 1
+          where id = $1 and status not in ('completed', 'cancelled')
+         returning ${TASK_COLUMNS}`,
+        [taskId, updatedBy],
       );
       const row = result.rows[0];
       return row ? toTask(row) : null;

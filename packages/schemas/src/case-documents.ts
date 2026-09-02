@@ -64,9 +64,36 @@ export const documentResponseSchema = z.object({
   mediaType: z.string().nullable(),
   sizeBytes: z.number().nullable(),
   uploadedAt: z.string().nullable(),
+  legacyLocalId: z.string().nullable(),
 });
 
 export type DocumentResponse = z.infer<typeof documentResponseSchema>;
+
+/**
+ * Upload of one browser-only document record (`MvpDocument` in
+ * mvp-storage.ts). `file` is absent when the local record had no scanned
+ * file (`dataUrl` was never set) — the import then creates the container with
+ * no version, exactly like any document nobody has uploaded a file to yet.
+ * `legacyLocalId` is what the server keys idempotency on (migration 0046).
+ */
+export const importDocumentRequestSchema = z.object({
+  legacyLocalId: z.string().trim().min(1).max(200),
+  documentType: z.enum(DOCUMENT_TYPES),
+  sensitivity: z.enum(SENSITIVITY_CLASSES).default('identity_sensitive'),
+  file: z
+    .object({
+      mediaType: z.enum(ALLOWED_DOCUMENT_MEDIA_TYPES),
+      content: z.string().min(1).max(MAX_BASE64_LENGTH),
+    })
+    .optional(),
+  expiresOn: z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v))
+    .pipe(isoDateSchema.optional()),
+});
+
+export type ImportDocumentRequest = z.infer<typeof importDocumentRequestSchema>;
 
 export const documentDownloadUrlResponseSchema = z.object({
   /** Short-lived signed link. Issued only after the authorization check passes. */

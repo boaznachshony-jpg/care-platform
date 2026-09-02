@@ -537,6 +537,20 @@ describe('national insurance wage base and amount', () => {
     expect(nationalInsuranceAmount(Number.NaN, 3.6)).toBe(0);
     expect(nationalInsuranceAmount(7_000, Number.NaN)).toBe(0);
   });
+
+  it('rounds the way the domain does on a case where plain float rounding gets the wrong agora', () => {
+    // Root 8. `wageBase * ratePercent / 100` for 215.5 and 1% is exactly 2.155,
+    // which halfway-away-from-zero rounds to ₪2.16. But
+    // `Math.round((215.5 * 1) / 100 * 100) / 100` — the shape of arithmetic
+    // this function used to do — computes on `215.49999999999997` (IEEE-754
+    // double, not 215.5) and rounds DOWN to ₪2.15: a National Insurance figure
+    // one agora short of what the domain's `percentOfAgorot`, and the CHECK
+    // constraint migration 0045 adds, both agree on. This is the same shape of
+    // divergence DOM-04 already documented for `roundMoney(8.165)` (rounds to
+    // 8.16 instead of 8.17) — here it is exactly the calculation this function
+    // exists to do.
+    expect(nationalInsuranceAmount(215.5, 1)).toBe(2.16);
+  });
 });
 
 describe('national insurance monthly reporting lines', () => {

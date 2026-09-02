@@ -198,6 +198,119 @@ export class UploadCaseDocument {
   }
 }
 
+export interface ImportDocumentInput {
+  documentType: DocumentType;
+  sensitivity: SensitivityClass;
+  /** Present when the browser record had a scanned file (MvpDocument.dataUrl); absent for metadata only. */
+  file?: { mediaType: string; content: string };
+  expiresOn?: string;
+  legacyLocalId: string;
+}
+
+/**
+ * Idempotent create for the UI cutover, mirroring ImportCaseTask. A device may
+ * hold a document record with no scanned file at all (the family only noted
+ * "we have a passport", never photographed it) — that case creates the
+ * container with no version, exactly like a document nobody has uploaded a
+ * file to yet, and the family can attach the scan later through the normal
+ * upload flow.
+ */
+export class ImportCaseDocument {
+  constructor(private readonly deps: CaseDocumentDeps) {}
+
+  async execute(
+    actor: Actor,
+    caseId: string,
+    input: ImportDocumentInput,
+  ): Promise<DocumentWithCurrentVersion> {
+    await authorizeOrThrow(this.deps, actor, {
+      resourceType: 'document',
+      action: 'create',
+      caseId,
+      sensitivity: input.sensitivity,
+    });
+
+    const existing = await this.deps.documents.findDocumentByLegacyLocalId(
+      actor.tenantId,
+      caseId,
+      input.legacyLocalId,
+    );
+    if (existing) return existing;
+
+    const now = this.deps.clock.now();
+    const documentId = this.deps.ids.next();
+    const expiresAt = input.expiresOn ? `${input.expiresOn}T00:00:00.000Z` : null;
+    const complianceStatus = deriveComplianceStatus(expiresAt, now);
+
+    let stored: DocumentWithCurrentVersion;
+    if (input.file) {
+      const versionId = this.deps.ids.next();
+      const bytes = decodeBase64(input.file.content);
+      const { storageKey } = await this.deps.storage.putObject({
+        tenantId: actor.tenantId,
+        key: `cases/${caseId}/documents/${documentId}/${versionId}`,
+        contentType: input.file.mediaType,
+        body: bytes,
+      });
+      stored = await this.deps.documents.createDocumentWithVersion({
+        documentId,
+        versionId,
+        tenantId: actor.tenantId,
+        employmentCaseId: caseId,
+        documentType: input.documentType,
+        ownerType: 'employment_case',
+        ownerId: null,
+        sensitivity: input.sensitivity,
+        complianceStatus,
+        expiresAt,
+        storageKey,
+        mediaType: input.file.mediaType,
+        sizeBytes: bytes.byteLength,
+        checksum: null,
+        createdBy: actor.userId,
+        legacyLocalId: input.legacyLocalId,
+      });
+    } else {
+      stored = await this.deps.documents.createDocument({
+        documentId,
+        tenantId: actor.tenantId,
+        employmentCaseId: caseId,
+        documentType: input.documentType,
+        ownerType: 'employment_case',
+        ownerId: null,
+        sensitivity: input.sensitivity,
+        complianceStatus,
+        expiresAt,
+        createdBy: actor.userId,
+        legacyLocalId: input.legacyLocalId,
+      });
+    }
+
+    await this.deps.audit.record({
+      tenantId: actor.tenantId,
+      actorId: actor.userId,
+      action: 'document.imported',
+      resourceType: 'document',
+      resourceId: documentId,
+      correlationId: actor.correlationId,
+      occurredAt: now.toISOString(),
+      changeSummary: `Document type ${input.documentType} imported from local device record.`,
+      sensitivity: input.sensitivity,
+    });
+
+    await this.deps.timeline.record({
+      tenantId: actor.tenantId,
+      employmentCaseId: caseId,
+      eventTypeKey: 'timeline.document.imported',
+      occurredAt: now.toISOString(),
+      summaryKey: 'timeline.document.imported.summary',
+      sensitivity: 'general',
+    });
+
+    return stored;
+  }
+}
+
 export class ListCaseDocuments {
   constructor(
     private readonly deps: Pick<

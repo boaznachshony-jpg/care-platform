@@ -7,6 +7,7 @@ import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@ca
 import {
   ApiRequestError,
   listVisaRenewals,
+  newIdempotencyKey,
   startVisaRenewal,
   type VisaRenewalWorkflowResponse,
 } from '../../api/client.js';
@@ -45,6 +46,7 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<StartFields>({
     resolver: zodResolver(
@@ -56,6 +58,42 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
     ),
     defaultValues: { asOf: today, stepKey: 'application_preparation' },
   });
+
+  // Defect: `startVisaRenewal` used to mint a fresh idempotency key inside
+  // the function, so a lost response followed by the user pressing "start"
+  // again sent a *different* key and the server created a second workflow.
+  // The key is now generated here, once per distinct set of form inputs, and
+  // reused across retries of the same attempt (a submit that fails leaves
+  // these fields unchanged, so the memoized key survives to the next click);
+  // it only changes once the user actually edits a field, which is correctly
+  // a new logical attempt.
+  const [
+    templateVersionId,
+    currentAuthorizationId,
+    asOfField,
+    stepKeyField,
+    responsibleId,
+    accountableId,
+  ] = watch([
+    'templateVersionId',
+    'currentAuthorizationId',
+    'asOf',
+    'stepKey',
+    'responsibleId',
+    'accountableId',
+  ]);
+  const startIdempotencyKey = useMemo(
+    () => newIdempotencyKey(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: newIdempotencyKey() doesn't read these values, but together they define "the same logical start attempt" for retry-safety.
+    [
+      templateVersionId,
+      currentAuthorizationId,
+      asOfField,
+      stepKeyField,
+      responsibleId,
+      accountableId,
+    ],
+  );
 
   const load = useCallback(() => {
     setState({ kind: 'loading' });
@@ -89,7 +127,7 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
       },
     ];
     try {
-      await startVisaRenewal(caseId, { ...fields, assignments });
+      await startVisaRenewal(caseId, { ...fields, assignments }, startIdempotencyKey);
       load();
     } catch (error) {
       if (error instanceof ApiRequestError) {

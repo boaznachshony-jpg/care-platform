@@ -9,6 +9,8 @@ import { denyByDefault } from './plugins/deny-by-default.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerCaseSubResourceRoutes } from './routes/case-contacts.js';
 import { registerCaseDocumentRoutes } from './routes/case-documents.js';
+import { registerCaseTaskRoutes } from './routes/case-tasks.js';
+import { registerCaseMedicationRoutes } from './routes/case-medications.js';
 import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerWorkspaceVersionRoutes } from './routes/workspace-versions.js';
 import { registerDataIntegrityRoutes } from './routes/data-integrity.js';
@@ -29,6 +31,7 @@ import { registerRegulationRuleRoutes } from './routes/regulation-rules.js';
 import { registerLeaveEntryRoutes } from './routes/leave-entries.js';
 import { registerEvidenceExportRoutes } from './routes/evidence-exports.js';
 import { registerScenarioExpenseRoutes } from './routes/scenario-expenses.js';
+import { makeAccountFreezeGuard } from './billing/freeze-guard.js';
 
 /**
  * No PII in logs (SECURITY.md): redact the common places a bearer token,
@@ -119,6 +122,12 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCorrelationId(app, env.CORRELATION_HEADER);
   registerSecurityHeaders(app, env);
   registerErrorHandler(app);
+  // Server-side billing freeze enforcement (see billing/freeze-guard.ts for
+  // the full design rationale). Registered once, globally, rather than per
+  // route: a control every route gets by default, with a short exemption
+  // list, is the fail-closed shape — a control every route has to remember
+  // to opt into is the one that eventually gets forgotten on a new route.
+  app.addHook('preHandler', makeAccountFreezeGuard(container, env).preHandler);
   const supportRateLimiter = new InMemoryRateLimiter();
   const productRateLimiter = new InMemoryRateLimiter();
   // Separate from the product limiter so a burst against the scheduler's bearer
@@ -169,6 +178,8 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerCaseRoutes(app, container);
   registerCaseSubResourceRoutes(app, container);
   registerCaseDocumentRoutes(app, container);
+  registerCaseTaskRoutes(app, container);
+  registerCaseMedicationRoutes(app, container);
   registerWorkspaceRoutes(app, container);
   registerWorkspaceVersionRoutes(app, container, env);
   registerDataIntegrityRoutes(app, container, env, cronRateLimiter);
