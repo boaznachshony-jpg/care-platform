@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearUploadMarkerForTests,
   getUploadedServerId,
+  markPendingAction,
+  readPendingActions,
   rememberUploadedServerId,
+  replayPendingActions,
   uploadUnsyncedRecords,
 } from './legacy-upload.js';
 
@@ -184,5 +187,51 @@ describe('legacy-upload', () => {
     // test only documents that the client-side marker being lost degrades to
     // "upload attempted again", never to "record forgotten".
     expect(importOne).toHaveBeenCalledTimes(2);
+  });
+
+  // Defect 5: a one-shot action (complete a task, archive a task or
+  // medication) must be retryable through the same sync path as uploads,
+  // instead of being fired once and forgotten on failure.
+  describe('pending actions (Defect 5)', () => {
+    it('replays a pending action for an already-uploaded record and clears the marker on success', async () => {
+      rememberUploadedServerId('tasks', CASE_ID, 'local-1', 'server-1');
+      markPendingAction('tasks', CASE_ID, 'local-1', 'complete');
+      const perform = vi.fn().mockResolvedValue(undefined);
+
+      const { failedIds } = await replayPendingActions('tasks', CASE_ID, perform);
+
+      expect(perform).toHaveBeenCalledWith('complete', 'server-1');
+      expect(failedIds).toEqual([]);
+      expect(readPendingActions('tasks', CASE_ID)).toEqual({});
+    });
+
+    it('keeps a failed action marked so the next sync pass retries it — not swallowed', async () => {
+      rememberUploadedServerId('tasks', CASE_ID, 'local-1', 'server-1');
+      markPendingAction('tasks', CASE_ID, 'local-1', 'archive');
+      const perform = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('network error'))
+        .mockResolvedValueOnce(undefined);
+
+      const first = await replayPendingActions('tasks', CASE_ID, perform);
+      expect(first.failedIds).toEqual(['local-1']);
+      expect(readPendingActions('tasks', CASE_ID)).toEqual({ 'local-1': 'archive' });
+
+      const retry = await replayPendingActions('tasks', CASE_ID, perform);
+      expect(retry.failedIds).toEqual([]);
+      expect(readPendingActions('tasks', CASE_ID)).toEqual({});
+      expect(perform).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves a pending action untouched until the record itself has an uploaded server id', async () => {
+      markPendingAction('tasks', CASE_ID, 'local-1', 'complete');
+      const perform = vi.fn().mockResolvedValue(undefined);
+
+      const { failedIds } = await replayPendingActions('tasks', CASE_ID, perform);
+
+      expect(perform).not.toHaveBeenCalled();
+      expect(failedIds).toEqual([]);
+      expect(readPendingActions('tasks', CASE_ID)).toEqual({ 'local-1': 'complete' });
+    });
   });
 });

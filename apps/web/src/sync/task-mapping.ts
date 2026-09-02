@@ -1,5 +1,5 @@
 import type { TaskPriority } from '@caredesk/domain';
-import type { TaskResponse } from '@caredesk/schemas';
+import type { TaskResponse, UpdateTaskRequest } from '@caredesk/schemas';
 import type { MvpTask, MvpTaskPriority } from '../storage/mvp-storage.js';
 
 /**
@@ -48,5 +48,37 @@ export function taskResponseToLocal(response: TaskResponse, fallbackCreatedAt: s
     // way to show.
     status: response.status === 'completed' ? 'completed' : 'open',
     createdAt: fallbackCreatedAt,
+  };
+}
+
+/**
+ * Defect 1 fix, half two: detects whether a local task that already has a
+ * server counterpart has since been edited on this device (title, due date
+ * or priority) so the sync effect knows whether an update is owed. `status`
+ * is deliberately excluded — status moves through `complete`/`archive`
+ * (Defect 5's pending-action path), never through this PATCH, because
+ * `UpdateTaskRequest` (packages/schemas/src/case-tasks.ts) has no status
+ * field at all.
+ */
+export function localTaskDivergesFromResponse(local: MvpTask, response: TaskResponse): boolean {
+  const responseDueDate = response.dueAt ? response.dueAt.slice(0, 10) : '';
+  if (local.title !== (response.title ?? '')) return true;
+  if (local.dueDate !== responseDueDate) return true;
+  if (localTaskPriorityToCanonical(local.priority) !== response.priority) return true;
+  return false;
+}
+
+/**
+ * Builds the PATCH body for pushing a local edit up to the canonical task.
+ * `dueDate: null` is sent explicitly (rather than omitted) when the local
+ * date was cleared, because `UpdateTaskRequest.dueDate` is `nullable` and
+ * distinguishes "not sent, don't touch it" from "clear it" — omitting it
+ * here would leave a cleared local due date stuck on the server forever.
+ */
+export function updateRequestForLocalTask(local: MvpTask): UpdateTaskRequest {
+  return {
+    title: local.title,
+    priority: localTaskPriorityToCanonical(local.priority),
+    dueDate: local.dueDate || null,
   };
 }

@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
 import {
@@ -10,6 +11,7 @@ import {
   saveMvpProfile,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
+import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
 import {
   DEFAULT_NATIONAL_INSURANCE_RATE_PERCENT,
   monthsInRange,
@@ -22,6 +24,35 @@ import {
   PayrollPage,
   recordedGrossWage,
 } from './PayrollPage.js';
+
+// `useCaseForLegacyClient` (used by TasksPage/DocumentsPage/MedicationsPage
+// for the same lookup) is mocked directly so the tests below can assert on
+// exactly which id PayrollIntelligence's API calls receive, without a real
+// network round trip through `findCanonicalCase`. Every other describe block
+// in this file renders `<PayrollPage />` with no route params at all — that
+// resolves to the "unscoped" legacy client id and reads 'found' from this
+// mock's default below, which keeps their existing assertions (none of which
+// touch the payroll-close APIs) unaffected.
+const mockUseCaseForLegacyClient = vi.fn<(legacyClientId: string) => CaseLookupState>();
+vi.mock('../sync/use-case-for-legacy-client.js', () => ({
+  useCaseForLegacyClient: (legacyClientId: string) => mockUseCaseForLegacyClient(legacyClientId),
+}));
+
+const mockListCanonicalPayrollCloses = vi.fn();
+const mockCloseCanonicalPayrollMonth = vi.fn();
+vi.mock('../api/client.js', () => ({
+  listCanonicalPayrollCloses: (...args: unknown[]) => mockListCanonicalPayrollCloses(...args),
+  closeCanonicalPayrollMonth: (...args: unknown[]) => mockCloseCanonicalPayrollMonth(...args),
+}));
+
+beforeEach(() => {
+  mockUseCaseForLegacyClient.mockReset().mockReturnValue({
+    status: 'found',
+    caseId: 'case-default-001',
+  });
+  mockListCanonicalPayrollCloses.mockReset().mockResolvedValue([]);
+  mockCloseCanonicalPayrollMonth.mockReset();
+});
 
 describe('PayrollPage retroactive sequence helpers', () => {
   it('creates an inclusive month range across a year boundary', () => {
@@ -1081,5 +1112,89 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     expect(totals.every((badge) => badge.getAttribute('data-value-origin') === 'calculated')).toBe(
       true,
     );
+  });
+});
+
+/**
+ * PayrollPage:508/1303 used to read the route's legacy CLIENT id and pass it
+ * straight to PayrollIntelligence as `caseId`, which sent it to
+ * `/cases/:caseId/...` — keyed on the canonical EMPLOYMENT CASE id. Every
+ * close-history fetch and every close-month POST 404'd, and neither had a
+ * `.catch`, so the close history stayed empty and the close button did
+ * nothing, silently, on the screen that finalises what a caregiver is paid.
+ */
+describe('PayrollPage — canonical case resolution for payroll close', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  function renderAtClient(clientId?: string) {
+    const entry = clientId ? `/clients/${clientId}/payroll` : '/payroll';
+    const routePath = clientId ? '/clients/:clientId/payroll' : '/payroll';
+    return render(
+      <I18nextProvider i18n={initI18n()}>
+        <MemoryRouter initialEntries={[entry]}>
+          <Routes>
+            <Route path={routePath} element={<PayrollPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+  }
+
+  it('resolves the canonical case from the route legacy client id and sends it to the close APIs', async () => {
+    mockUseCaseForLegacyClient.mockReturnValue({ status: 'found', caseId: 'case-canonical-42' });
+    renderAtClient('client-legacy-42');
+    await waitFor(() =>
+      expect(mockUseCaseForLegacyClient).toHaveBeenCalledWith('client-legacy-42'),
+    );
+    await waitFor(() =>
+      expect(mockListCanonicalPayrollCloses).toHaveBeenCalledWith('case-canonical-42'),
+    );
+  });
+
+  /**
+   * The unscoped `/payroll` route (single-client workspaces) has no clientId
+   * param at all. It must resolve through the shared unscoped-legacy-client
+   * identity rather than send `undefined` to the close API.
+   */
+  it('resolves a stable case lookup on the unscoped /payroll route with no clientId param', async () => {
+    mockUseCaseForLegacyClient.mockReturnValue({ status: 'found', caseId: 'case-unscoped-1' });
+    renderAtClient();
+    await waitFor(() => expect(mockUseCaseForLegacyClient).toHaveBeenCalled());
+    const [calledWith] = mockUseCaseForLegacyClient.mock.calls[0]!;
+    expect(calledWith).toBeTruthy();
+    expect(calledWith).not.toBe('undefined');
+    await waitFor(() =>
+      expect(mockListCanonicalPayrollCloses).toHaveBeenCalledWith('case-unscoped-1'),
+    );
+  });
+
+  it('does not call the close APIs, and disables the close button, when no canonical case exists yet', async () => {
+    saveMvpProfile({ ...emptyMvpProfile, baseSalary: 7_000, salaryEffectiveDate: '2025-01-01' });
+    saveMvpPayroll([
+      {
+        id: 'pay-2026-01',
+        month: '2026-01',
+        baseSalary: 7_000,
+        workDays: 26,
+        paidSaturdays: 0,
+        saturdayPay: 0,
+        pocketMoney: 0,
+        otherAddition: 0,
+        advances: 0,
+        agreedDeduction: 0,
+        total: 7_000,
+        savedAt: '2026-01-28T12:00:00.000Z',
+      },
+    ]);
+    mockUseCaseForLegacyClient.mockReturnValue({ status: 'none' });
+    renderAtClient('client-no-case');
+
+    const button = await screen.findByRole('button', { name: 'אישור שהחודש מוכן וסגירה' });
+    expect(button).toBeDisabled();
+    expect(mockListCanonicalPayrollCloses).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(mockCloseCanonicalPayrollMonth).not.toHaveBeenCalled();
   });
 });

@@ -109,22 +109,39 @@ export async function readDocumentFile(id: string): Promise<Blob | string | null
 }
 
 /**
- * Turns a Blob into the `{ mediaType, content }` shape the import endpoint
- * accepts. Returns null when the blob is larger than the server will ever
- * accept in one request (`MAX_DOCUMENT_BYTES`, packages/schemas): rejecting a
- * too-large `file` fails Zod validation for the *whole* import call,
- * including the metadata, which would turn "this scan is a bit too big" into
- * "this document never reaches the server at all". Falling back to a
- * metadata-only import is the same graceful shape the schema already uses
- * for a record that never had a file — the family can still see and manage
- * the document, and can attach the (now-too-big-for-import, but not for the
- * regular upload form's own 5 MiB check) file later through the normal
- * upload screen.
+ * Defect 3 fix: a locally-held file this browser knows exists but that is
+ * larger than the server will ever accept (`MAX_DOCUMENT_BYTES`,
+ * packages/schemas). This used to be treated exactly like "there is no file
+ * at all" — `blobToImportFile` returned `null`, the metadata imported
+ * successfully, `failedIds` stayed empty, and the sync banner said
+ * everything worked while the scan itself silently never left the device.
+ * That is the worst kind of bug for a backup feature: confident, wrong
+ * reassurance about a passport or visa scan the family believes is safe.
+ *
+ * Throwing instead of returning null makes this indistinguishable, from the
+ * caller's point of view, from any other "file exists but could not be
+ * fetched" failure that `readLocalDocumentFileForImport` already propagates
+ * (see its own comment) — `uploadUnsyncedRecords` catches it, the record
+ * lands in `failedIds`, and the existing upload-failed banner (with its
+ * existing retry button) reports it instead of a false "synced".
  */
-async function blobToImportFile(
-  blob: Blob,
-): Promise<{ mediaType: string; content: string } | null> {
-  if (blob.size > MAX_DOCUMENT_BYTES) return null;
+export class DocumentTooLargeForSyncError extends Error {
+  constructor(readonly sizeBytes: number) {
+    super(
+      `Local file is ${sizeBytes} bytes, larger than the server's ${MAX_DOCUMENT_BYTES}-byte limit, and cannot be synced.`,
+    );
+    this.name = 'DocumentTooLargeForSyncError';
+  }
+}
+
+/**
+ * Turns a Blob into the `{ mediaType, content }` shape the import endpoint
+ * accepts. Throws `DocumentTooLargeForSyncError` when the blob is larger
+ * than the server will ever accept in one request — see that class's own
+ * comment for why this is no longer a silent metadata-only fallback.
+ */
+async function blobToImportFile(blob: Blob): Promise<{ mediaType: string; content: string }> {
+  if (blob.size > MAX_DOCUMENT_BYTES) throw new DocumentTooLargeForSyncError(blob.size);
   return { mediaType: blob.type, content: toBase64(new Uint8Array(await blob.arrayBuffer())) };
 }
 

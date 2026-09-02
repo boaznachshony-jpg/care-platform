@@ -139,6 +139,21 @@ export interface UploadOutcome {
  * existing banner (rather than a spinner or toast elsewhere) keeps the one
  * "here is what this screen knows about syncing" mechanism instead of adding
  * a second, competing one.
+ *
+ * `'update-failed'` is distinct from `'upload-failed'`: an upload failure
+ * means a *new* record never reached the server at all; an update failure
+ * means a record the server already knows about (this browser's own earlier
+ * import, or one merged in from elsewhere) has since been edited locally and
+ * that edit could not be pushed. Both are "some records are not what the
+ * server has" states and both are retryable through the same button, but
+ * they are worth telling apart in the message so a family reading the banner
+ * knows roughly what is stuck.
+ *
+ * `'ambiguous'` covers the one case this sync layer refuses to guess at: see
+ * `useCaseForLegacyClient`'s handling of `LEGACY_UNSCOPED_CLIENT_ID` for why
+ * an account with more than one client cannot be synced from an unscoped
+ * route at all, rather than picking a case and possibly writing one
+ * household's edit into another's record.
  */
 export type SyncStatus =
   | { phase: 'no-case' }
@@ -146,7 +161,9 @@ export type SyncStatus =
   | { phase: 'offline' }
   | { phase: 'synced' }
   | { phase: 'uploading'; completed: number; total: number }
-  | { phase: 'upload-failed'; failedCount: number };
+  | { phase: 'upload-failed'; failedCount: number }
+  | { phase: 'update-failed'; failedCount: number }
+  | { phase: 'ambiguous' };
 
 /**
  * Uploads every record in `records` this browser has not already marked as
@@ -206,4 +223,107 @@ export async function uploadUnsyncedRecords<T extends { id: string }>(
 export function clearUploadMarkerForTests(kind: LegacyUploadKind, caseId: string): void {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(markerStorageKey(kind, caseId));
+}
+
+/**
+ * Defect 5 fix: a one-shot server action (complete a task, archive a task or
+ * medication) used to be fired with `.catch(() => undefined)` at the moment
+ * of the click and never tried again. Made offline, or against a server that
+ * happened to be briefly unreachable, that action then simply never
+ * happened — the local record kept its new status forever, but the server
+ * (and every other device reading it) never found out, so the two disagreed
+ * for good.
+ *
+ * The fix is to never let the action's own success or failure be the only
+ * record of whether it is still owed. The moment the user acts (the local
+ * status already changed — Constitution §13, local input is never rolled
+ * back), the intended action is written here durably, *before* the network
+ * call is attempted. It is cleared only on a confirmed server success. Every
+ * later pass through the same sync path this module already drives for
+ * uploads (mount, the existing retry button, a future automatic retry) can
+ * therefore ask "is anything still owed for this record?" and re-attempt it,
+ * exactly like `uploadUnsyncedRecords` re-attempts an import that previously
+ * failed — the same idempotent-retry shape, extended to actions instead of
+ * creates. The server-side endpoints this drives (`complete`/`archive`) are
+ * themselves idempotent status transitions, so replaying one that actually
+ * did land the first time is harmless.
+ */
+export type PendingLegacyAction = 'complete' | 'archive';
+
+type PendingActionsMap = Record<string, PendingLegacyAction>;
+
+function pendingActionsStorageKey(kind: LegacyUploadKind, caseId: string): string {
+  return `caredesk.sync.pendingActions.${kind}.${caseId}`;
+}
+
+export function readPendingActions(kind: LegacyUploadKind, caseId: string): PendingActionsMap {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(pendingActionsStorageKey(kind, caseId));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter(
+        (entry): entry is [string, PendingLegacyAction] =>
+          entry[1] === 'complete' || entry[1] === 'archive',
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writePendingActions(kind: LegacyUploadKind, caseId: string, map: PendingActionsMap): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(pendingActionsStorageKey(kind, caseId), JSON.stringify(map));
+}
+
+/** Records that `localId` still owes the server this action, until it is confirmed done. */
+export function markPendingAction(
+  kind: LegacyUploadKind,
+  caseId: string,
+  localId: string,
+  action: PendingLegacyAction,
+): void {
+  const map = readPendingActions(kind, caseId);
+  map[localId] = action;
+  writePendingActions(kind, caseId, map);
+}
+
+/** Clears the marker once the server has confirmed the action landed. */
+export function clearPendingAction(kind: LegacyUploadKind, caseId: string, localId: string): void {
+  const map = readPendingActions(kind, caseId);
+  if (!(localId in map)) return;
+  delete map[localId];
+  writePendingActions(kind, caseId, map);
+}
+
+/**
+ * Replays every action this browser still owes the server for `kind`,
+ * skipping any local id this browser has not (yet) uploaded — nothing to
+ * archive/complete server-side until the record itself exists there; the
+ * marker stays put and is retried on the next pass once the upload lands.
+ * Never throws: a per-record failure is collected in `failedIds`, mirroring
+ * `uploadUnsyncedRecords`, so one stuck action does not block the others or
+ * crash the calling sync effect.
+ */
+export async function replayPendingActions(
+  kind: LegacyUploadKind,
+  caseId: string,
+  perform: (action: PendingLegacyAction, serverId: string) => Promise<unknown>,
+): Promise<{ failedIds: string[] }> {
+  const pending = readPendingActions(kind, caseId);
+  const failedIds: string[] = [];
+  for (const [localId, action] of Object.entries(pending)) {
+    const serverId = getUploadedServerId(kind, caseId, localId);
+    if (!serverId) continue;
+    try {
+      await perform(action, serverId);
+      clearPendingAction(kind, caseId, localId);
+    } catch {
+      failedIds.push(localId);
+    }
+  }
+  return { failedIds };
 }

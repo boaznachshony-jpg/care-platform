@@ -15,7 +15,10 @@ vi.mock('../api/client.js', async () => {
   return { ...actual, getWorkspaceFileUrl: mocks.getWorkspaceFileUrl };
 });
 
-import { readLocalDocumentFileForImport } from './document-file-store.js';
+import {
+  DocumentTooLargeForSyncError,
+  readLocalDocumentFileForImport,
+} from './document-file-store.js';
 
 /**
  * Minimal stand-in for the one IndexedDB shape document-file-store.ts uses
@@ -87,14 +90,20 @@ describe('readLocalDocumentFileForImport', () => {
     expect(mocks.getWorkspaceFileUrl).not.toHaveBeenCalled();
   });
 
-  it('an oversized IndexedDB file degrades to "no file" rather than failing the whole import', async () => {
+  // Defect 3 fix: this file demonstrably exists — degrading it to "no file"
+  // (the old behaviour) is exactly how a family ends up believing a scan is
+  // backed up when it silently never left the device. It must fail visibly
+  // instead, the same way a genuine fetch failure already does below.
+  it('an oversized IndexedDB file is reported, not dropped — Defect 3', async () => {
     // MAX_DOCUMENT_BYTES is 5 MiB; this fake blob reports itself as larger
     // without actually allocating 5 MiB of memory in the test.
     const oversized = new Blob(['x'], { type: 'application/pdf' });
     Object.defineProperty(oversized, 'size', { value: 6 * 1024 * 1024 });
     stubIndexedDbGet(oversized);
 
-    await expect(readLocalDocumentFileForImport('doc-1', null)).resolves.toBeNull();
+    await expect(readLocalDocumentFileForImport('doc-1', null)).rejects.toBeInstanceOf(
+      DocumentTooLargeForSyncError,
+    );
   });
 
   it('falls back to null when there is no legacy client id or the browser is signed out', async () => {

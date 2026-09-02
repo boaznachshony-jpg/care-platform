@@ -10,16 +10,29 @@ import {
 } from '../storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
 import { NATIONAL_INSURANCE_PAYMENT_URL } from '../upcoming-payments.js';
-import { archiveCaseTask, completeCaseTask, importCaseTask, listCaseTasks } from '../api/client.js';
+import {
+  archiveCaseTask,
+  completeCaseTask,
+  importCaseTask,
+  listCaseTasks,
+  updateCaseTask,
+} from '../api/client.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
 import {
   getUploadedServerId,
+  markPendingAction,
   rememberUploadedServerId,
+  replayPendingActions,
   uploadUnsyncedRecords,
   type SyncStatus,
 } from '../sync/legacy-upload.js';
-import { localTaskPriorityToCanonical, taskResponseToLocal } from '../sync/task-mapping.js';
+import {
+  localTaskDivergesFromResponse,
+  localTaskPriorityToCanonical,
+  taskResponseToLocal,
+  updateRequestForLocalTask,
+} from '../sync/task-mapping.js';
 
 type TaskFilter = 'open' | 'week' | 'completed';
 
@@ -78,6 +91,10 @@ export function TasksPage({ today }: { today?: Date } = {}) {
       setSyncStatus({ phase: 'checking' });
       return;
     }
+    if (caseLookup.status === 'ambiguous') {
+      setSyncStatus({ phase: 'ambiguous' });
+      return;
+    }
     if (caseLookup.status !== 'found') {
       setSyncStatus({ phase: 'no-case' });
       return;
@@ -116,10 +133,51 @@ export function TasksPage({ today }: { today?: Date } = {}) {
             .filter((task) => task.legacyLocalId)
             .map((task) => [task.legacyLocalId as string, task] as const),
         );
-        const merged = readMvpTasks().map((task) => {
+
+        // Defect 1 fix, step one: local always wins. `merged` starts as the
+        // local list, completely unmodified — a matched server record is
+        // never spread over it (that was the silent-revert bug: an edit made
+        // here got overwritten by the server's older copy on the very next
+        // sync). Local is where the customer just typed; a server row —
+        // even this exact record's own earlier import — can be stale by the
+        // time this read-back lands.
+        const merged = readMvpTasks();
+
+        // Defect 1 fix, step two: push the local edit up instead of only
+        // protecting it locally. For every task this browser already knows
+        // is canonical, compare what's on screen to what the server has; a
+        // mismatch means an edit happened here since the last successful
+        // sync, and PATCHing `updateCaseTask` is what makes that edit
+        // survive on the server and on every other device, not just this
+        // one. Status is excluded — see localTaskDivergesFromResponse's own
+        // comment; it moves through the pending-action path below instead.
+        const updateFailedIds: string[] = [];
+        for (const task of merged) {
           const match = byLocalId.get(task.id);
-          return match ? taskResponseToLocal(match, task.createdAt) : task;
-        });
+          if (!match) continue;
+          if (!localTaskDivergesFromResponse(task, match)) continue;
+          try {
+            await updateCaseTask(caseId, match.id, updateRequestForLocalTask(task));
+          } catch {
+            updateFailedIds.push(task.id);
+          }
+        }
+
+        // Defect 5 fix: replay any complete/archive action a previous click
+        // could not confirm with the server (see markPendingAction's own
+        // comment). This runs through the exact same sync pass as uploads
+        // and updates — mount, the retry button, or a future automatic
+        // retry all drive it — rather than the old fire-and-forget call that
+        // was never seen again after a single failure.
+        const { failedIds: actionFailedIds } = await replayPendingActions(
+          'tasks',
+          caseId,
+          (action, serverId) =>
+            action === 'complete'
+              ? completeCaseTask(caseId, serverId)
+              : archiveCaseTask(caseId, serverId),
+        );
+
         // Tasks that exist on the server but were never created on this
         // device (legacyLocalId null — created on another device, or
         // directly via CaseTasksSection) are appended and pre-marked as
@@ -133,7 +191,10 @@ export function TasksPage({ today }: { today?: Date } = {}) {
         }
         saveMvpTasks(merged);
         setTasks(merged);
-        setSyncStatus({ phase: 'synced' });
+        const failedCount = updateFailedIds.length + actionFailedIds.length;
+        setSyncStatus(
+          failedCount > 0 ? { phase: 'update-failed', failedCount } : { phase: 'synced' },
+        );
       } catch {
         // Uploaded successfully but could not read the list back — the
         // local copy (already reflecting the upload attempt) stays on
@@ -199,10 +260,13 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     setShowForm(false);
     setFilter(saved.status === 'completed' ? 'completed' : 'open');
     setMessage(existing ? 'המשימה עודכנה ונשמרה.' : 'המשימה נוספה ונשמרה.');
-    // A brand-new task is not yet on the server; re-running the sync pass
-    // (rather than importing inline here) reuses the same idempotent,
-    // failure-visible path instead of a second, parallel upload codepath.
-    if (!existing && caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
+    // Re-running the sync pass (rather than uploading/updating inline here)
+    // reuses the same idempotent, failure-visible path instead of a second,
+    // parallel codepath — for a brand-new task that means the import; for an
+    // edit to an already-synced task (Defect 1) that is what pushes the edit
+    // to the server via updateCaseTask instead of leaving it stuck local-only
+    // until whatever next unrelated event happens to remount this screen.
+    if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
 
   function toggleTask(task: MvpTask) {
@@ -213,9 +277,19 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     // here cannot be mirrored server-side. The task stays reopened locally
     // regardless — Constitution §13, local input is never rolled back
     // because a server call has nowhere to go.
+    //
+    // Defect 5 fix: rather than firing `completeCaseTask` here and
+    // swallowing a failure (`.catch(() => undefined)`, the old code), the
+    // intended action is recorded durably first and the standard sync pass
+    // — the same one `uploadUnsyncedRecords` already drives — is what
+    // actually performs and, on failure, retries it. See
+    // markPendingAction/replayPendingActions in sync/legacy-upload.ts.
     if (nextStatus === 'completed' && caseLookup.status === 'found') {
       const serverId = getUploadedServerId('tasks', caseLookup.caseId, task.id);
-      if (serverId) void completeCaseTask(caseLookup.caseId, serverId).catch(() => undefined);
+      if (serverId) {
+        markPendingAction('tasks', caseLookup.caseId, task.id, 'complete');
+        setSyncAttempt((count) => count + 1);
+      }
     }
   }
 
@@ -226,12 +300,21 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     // delete route for tasks), which is the safer of the two possible
     // outcomes: a device removing its own local copy never erases the case's
     // history on the server or on any other device.
+    //
+    // Defect 5 fix: see toggleTask's matching comment — the archive request
+    // is recorded as a pending action and replayed by the sync pass instead
+    // of being fired once and forgotten on failure. It is marked by
+    // (now-vanishing) local id, which is why `getUploadedServerId` is looked
+    // up before the local record is removed below.
     if (caseLookup.status === 'found') {
       const serverId = getUploadedServerId('tasks', caseLookup.caseId, task.id);
-      if (serverId) void archiveCaseTask(caseLookup.caseId, serverId).catch(() => undefined);
+      if (serverId) {
+        markPendingAction('tasks', caseLookup.caseId, task.id, 'archive');
+      }
     }
     persist(tasks.filter((item) => item.id !== task.id));
     setMessage('המשימה נמחקה.');
+    if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
 
   return (
@@ -265,9 +348,24 @@ export function TasksPage({ today }: { today?: Date } = {}) {
         <p className="info-box" role="status">
           {t('tasks.sync.localCopy')}
         </p>
+      ) : syncStatus.phase === 'ambiguous' ? (
+        <p className="action-notice error" role="alert">
+          {t('tasks.sync.ambiguous')}
+        </p>
       ) : syncStatus.phase === 'upload-failed' ? (
         <p className="action-notice error" role="alert">
           {t('tasks.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => setSyncAttempt((count) => count + 1)}
+          >
+            {t('tasks.sync.retry')}
+          </button>
+        </p>
+      ) : syncStatus.phase === 'update-failed' ? (
+        <p className="action-notice error" role="alert">
+          {t('tasks.sync.updateFailed', { count: syncStatus.failedCount })}{' '}
           <button
             className="text-link"
             type="button"
