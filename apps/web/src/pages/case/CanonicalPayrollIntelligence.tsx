@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectFutureCost } from '@caredesk/application';
+import { newIdempotencyKey } from '../../api/idempotency.js';
 import {
   agorotFromShekels,
   calculateMonthlyPayroll,
@@ -377,7 +378,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
         caseId,
         month,
         { ...draft, total: calculatedTotal },
-        crypto.randomUUID(),
+        newIdempotencyKey(),
       );
       setState('saved');
       // Canonical persistence proven — unlock the purge step for legacy records.
@@ -451,7 +452,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           label: expenseDraft.label.trim(),
           endMonth: expenseDraft.kind === 'recurring' ? expenseDraft.endMonth : null,
         },
-        crypto.randomUUID(),
+        newIdempotencyKey(),
       );
       setExpenseDraft(blankExpense());
       await refresh();
@@ -463,7 +464,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   async function removeExpense(expense: ScenarioExpenseResponse) {
     setExpenseError('');
     try {
-      await deleteScenarioExpense(caseId, expense.id, expense.version, crypto.randomUUID());
+      await deleteScenarioExpense(caseId, expense.id, expense.version, newIdempotencyKey());
       await refresh();
     } catch {
       setExpenseError('הסרת הוצאת התרחיש נכשלה.');
@@ -481,7 +482,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     try {
       const migrated: string[] = [];
       for (const expense of legacyExpenses) {
-        await createScenarioExpense(caseId, legacyExpenseToScenario(expense), crypto.randomUUID());
+        await createScenarioExpense(caseId, legacyExpenseToScenario(expense), newIdempotencyKey());
         migrated.push(expense.id);
       }
       setMigratedExpenseIds(migrated);

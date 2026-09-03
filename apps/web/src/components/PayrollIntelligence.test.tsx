@@ -51,6 +51,7 @@ beforeEach(() => {
       additions: 0,
       deductions: 0,
       closedAt: `${CLOSED_MONTH}-10T08:00:00.000Z`,
+      closedBy: 'בועז בדיקה',
     },
   ]);
 });
@@ -210,5 +211,41 @@ describe('PayrollIntelligence — canonical case resolution', () => {
     mockListCanonicalPayrollCloses.mockRejectedValueOnce(new Error('network down'));
     renderIntelligence();
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+  });
+
+  /**
+   * R5-08. The person who closed the month was written to the database on
+   * every close and never returned, so the receipt could say what and when
+   * but not who. These two tests pin both halves of the rule: the name is
+   * shown when the server resolves it, and nothing is invented when it does
+   * not — in particular no raw identifier, which a family cannot read and
+   * which would look like data corruption on a money screen.
+   */
+  it('names the person who closed the month', async () => {
+    renderIntelligence();
+    await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
+    expect(await screen.findByText(/סגר\/ה בועז בדיקה/)).toBeInTheDocument();
+  });
+
+  it('omits the person when the server could not resolve one', async () => {
+    mockListCanonicalPayrollCloses.mockResolvedValueOnce([
+      {
+        id: 'close-1',
+        payrollReference: `pay-${CLOSED_MONTH}`,
+        month: CLOSED_MONTH,
+        paymentDate: `${CLOSED_MONTH}-09`,
+        paymentMethod: 'bank_transfer',
+        total: 7_000,
+        baseSalary: 7_000,
+        additions: 0,
+        deductions: 0,
+        closedAt: `${CLOSED_MONTH}-10T08:00:00.000Z`,
+        closedBy: null,
+      },
+    ]);
+    renderIntelligence();
+    await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
+    expect(await screen.findByText(new RegExp(`${CLOSED_MONTH} — הושלם`))).toBeInTheDocument();
+    expect(screen.queryByText(/סגר\/ה/)).toBeNull();
   });
 });

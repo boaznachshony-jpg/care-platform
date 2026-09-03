@@ -570,6 +570,7 @@
     "statusOk": "All in order",
     "statusLoading": "Loading data…",
     "scoreUnavailable": "The file health score is unavailable right now — we'll retry shortly.",
+    "caseNotLinked": "We could not find an employment case linked to this client. Nothing has been deleted — open the case from the employment cases screen, and contact us if it is there but not linked.",
     "okTitle": "No open actions",
     "okBody": "Everything saved has been checked and is in order. We'll flag anything that needs attention here.",
     "overallStatus": "Overall status",

@@ -155,6 +155,27 @@ describe('DashboardPage', () => {
     );
   });
 
+  /**
+   * R2-08. A lookup that *succeeded* and found no case is a different fact
+   * from a lookup that failed, and both are different from a clean file.
+   * Before this, "we could not find your case" fell through the same silent
+   * path as "everything is in order" — the two most opposite messages the
+   * screen can carry.
+   */
+  it('says the case could not be found, rather than showing a clean file', async () => {
+    mockFindCanonicalCase.mockResolvedValue(null);
+    renderPage('client-demo-001');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'לא מצאנו תיק העסקה המקושר ללקוח הזה',
+    );
+  });
+
+  it('does not claim the case is missing once one has been found', async () => {
+    renderPage('client-demo-001');
+    await waitFor(() => expect(mockFindCanonicalCase).toHaveBeenCalled());
+    expect(screen.queryByText(/לא מצאנו תיק העסקה המקושר/)).toBeNull();
+  });
+
   it('always shows the two upcoming payment obligations with the official payment link', () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'תשלומים קרובים' })).toBeInTheDocument();

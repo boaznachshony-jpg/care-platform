@@ -116,6 +116,22 @@ export function DocumentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
+  /**
+   * R1-07. Saving a document awaits an IndexedDB write (or, when signed in on
+   * a client-scoped route, a network upload). The submit button used to stay
+   * live for that whole time, and each press minted its own
+   * `crypto.randomUUID()` — so two presses produced two documents with two
+   * different ids. That is not a duplicate the sync can collapse later; it is
+   * two separate records of the same passport in the same case, and the family
+   * has no way to tell which one the file actually landed on.
+   *
+   * The ref is what blocks the second press: React state is committed
+   * asynchronously, so a second click arriving in the same tick would still
+   * read `saving === false` and get through. The state exists only so the
+   * button can render as disabled.
+   */
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const legacyClientIdParam = useLegacyClientId();
@@ -256,6 +272,9 @@ export function DocumentsPage() {
 
   async function saveDocument(event: React.FormEvent) {
     event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       const existing = documents.find((document) => document.id === editingId);
       if (!existing && !file) {
@@ -295,6 +314,12 @@ export function DocumentsPage() {
       setMessage(
         'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.',
       );
+    } finally {
+      // Released on every exit, including the three validation early-returns
+      // above — a rejected file size must not leave the form permanently
+      // locked with no way to correct it.
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
@@ -455,8 +480,8 @@ export function DocumentsPage() {
               ? 'PDF, JPG או PNG עד 5MB. הקובץ נשמר באחסון פרטי ומוצפן ונפתח באמצעות קישור זמני בלבד.'
               : 'PDF, JPG או PNG עד 5MB. בסביבה המקומית הקובץ נשמר רק במכשיר הנוכחי.'}
           </p>
-          <button className="primary-button" type="submit">
-            שמירת המסמך
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? 'שומר את המסמך…' : 'שמירת המסמך'}
           </button>
         </form>
       ) : null}

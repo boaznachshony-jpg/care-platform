@@ -8,6 +8,7 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
+import { newIdempotencyKey } from '../api/idempotency.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
 import { ValueOrigin, ValueOriginLegend } from './ValueOrigin.js';
@@ -29,7 +30,14 @@ export function PayrollIntelligence({
   caseLookup: CaseLookupState;
 }) {
   const { t } = useTranslation();
-  const [closes, setCloses] = useState<MvpMonthlyClose[]>([]);
+  /**
+   * R5-08. The canonical rows are still projected onto the legacy close shape
+   * that the rest of this component reads, but `closedBy` is added on top
+   * rather than pushed down into `MvpMonthlyClose`: the browser snapshot is a
+   * frozen transitional store (ADR-006), and a field that only ever comes from
+   * the server has no business being added to it.
+   */
+  const [closes, setCloses] = useState<Array<MvpMonthlyClose & { closedBy: string | null }>>([]);
   // Set when the close-history GET itself failed (not just "no case yet") —
   // distinct from an empty list, which is a legitimate state for a case that
   // has never closed a month.
@@ -40,7 +48,7 @@ export function PayrollIntelligence({
   // what happened, so the same click can be retried.
   const [closeError, setCloseError] = useState(false);
   const [closing, setClosing] = useState(false);
-  const closeKey = useRef(crypto.randomUUID());
+  const closeKey = useRef(newIdempotencyKey());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash' | 'check' | 'other'>(
     'bank_transfer',
@@ -62,7 +70,8 @@ export function PayrollIntelligence({
             paymentDate: row.paymentDate,
             paymentMethod: row.paymentMethod,
             closedAt: row.closedAt,
-            workerAcknowledgement: 'not_supported',
+            closedBy: row.closedBy,
+            workerAcknowledgement: 'not_supported' as const,
           })),
         ),
       )
@@ -423,14 +432,17 @@ export function PayrollIntelligence({
               .sort((a, b) => b.month.localeCompare(a.month))
               .map((c) => (
                 <li key={c.id}>
-                  {/* R5-03/R5-05. This is the only surface in the product where
-                      all three provenance parts nearly exist: the close record
-                      carries a payment date and the moment it was recorded. It
-                      carries no actor, so "מי" is omitted rather than guessed. */}
+                  {/* R5-03/R5-05/R5-08. This is now the one surface in the
+                      product where all three provenance parts exist: source,
+                      when, and — since the server started returning the actor
+                      it had been storing all along — who. `closedBy` is still
+                      optional, so a close whose person cannot be resolved
+                      omits "מי" instead of guessing or printing a uuid. */}
                   <ValueOrigin
                     kind="paid"
                     provenance={{
                       source: t('valueOrigin.source.monthlyClose'),
+                      who: c.closedBy ?? undefined,
                       when: formatDateOnly(c.paymentDate) ?? c.paymentDate,
                     }}
                   />{' '}
@@ -443,6 +455,7 @@ export function PayrollIntelligence({
                       </time>
                     </>
                   ) : null}
+                  {c.closedBy ? ` · סגר/ה ${c.closedBy}` : null}
                 </li>
               ))}
           </ul>
