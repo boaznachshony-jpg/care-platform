@@ -10,6 +10,10 @@ import type {
   VisaRuleEvaluation,
   VisaWorkflowAssignment,
   VisaRenewalWorkflow,
+  WorkflowTemplateRepository,
+  WorkflowTemplateOption,
+  CaseAuthorizationRepository,
+  CaseAuthorizationOption,
 } from '../index.js';
 import type { Actor } from './actor.js';
 import { authorizeOrThrow } from './authorize.js';
@@ -428,5 +432,37 @@ export class GetVisaRenewalWorkflow {
     });
     const workflow = await this.deps.workflows.find(actor.tenantId, workflowId);
     return workflow?.employmentCaseId === caseId ? workflow : null;
+  }
+}
+
+/**
+ * Backs the "start a renewal" template picker. No case scoping applies —
+ * `workflow_template*` is global regulatory reference data, like the visa
+ * rule tables (see visa-renewal-repository.ts) — but only `active` versions
+ * are ever returned, so nothing offered here can be picked and then
+ * rejected by `StartVisaRenewalWorkflow` for being unapproved.
+ */
+export class ListWorkflowTemplates {
+  constructor(private readonly deps: { templates: WorkflowTemplateRepository }) {}
+  async execute(): Promise<WorkflowTemplateOption[]> {
+    return this.deps.templates.listActive();
+  }
+}
+
+/** Backs the "start a renewal" current-authorization picker. */
+export class ListCaseAuthorizations {
+  constructor(
+    private readonly deps: Pick<StartDeps, 'authorization' | 'audit' | 'clock'> & {
+      authorizations: CaseAuthorizationRepository;
+    },
+  ) {}
+  async execute(actor: Actor, caseId: string): Promise<CaseAuthorizationOption[]> {
+    await authorizeOrThrow(this.deps, actor, {
+      resourceType: 'workflow',
+      action: 'read',
+      caseId,
+      sensitivity: 'identity_sensitive',
+    });
+    return this.deps.authorizations.listByCase(actor.tenantId, caseId);
   }
 }

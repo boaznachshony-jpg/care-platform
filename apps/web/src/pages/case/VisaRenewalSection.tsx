@@ -3,12 +3,26 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
 import { startVisaRenewalRequestSchema, type StartVisaRenewalRequest } from '@caredesk/schemas';
-import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  SelectField,
+  Skeleton,
+  StatusBadge,
+  TextField,
+} from '@caredesk/ui';
 import {
   ApiRequestError,
+  listCaseAuthorizations,
+  listCaseCollaborationMembers,
   listVisaRenewals,
+  listWorkflowTemplates,
   startVisaRenewal,
+  type CaseAuthorizationOptionResponse,
+  type CaseCollaborationMemberResponse,
   type VisaRenewalWorkflowResponse,
+  type WorkflowTemplateOptionResponse,
 } from '../../api/client.js';
 import { newIdempotencyKey } from '../../api/idempotency.js';
 
@@ -27,13 +41,74 @@ type StartFields = {
   accountableId: string;
 };
 
-const uuidMessage = 'visaRenewal.invalidIdentifier';
+const selectionRequiredMessage = 'visaRenewal.selectionRequired';
+
+// Each source the "start" form needs is fetched independently (own
+// loading/error state) so one slow or failing list never blocks the others
+// — see PickerState usage below. `loading` and `error` do not need to carry
+// the item type; only `loaded` does.
+type PickerState<T> = { kind: 'loading' } | { kind: 'loaded'; items: T[] } | { kind: 'error' };
+
+/**
+ * Resolves what the "start a renewal" form can show, in priority order: a
+ * still-loading source blocks everything, then a failed fetch, then each
+ * "nothing here yet" case in turn (Constitution: an empty picker must say
+ * what to do about it, never look like a broken form). Only when every
+ * source has real options does the form itself render.
+ */
+type StartGate =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'noTemplates' }
+  | { kind: 'noAuthorizations' }
+  | { kind: 'noMembers' }
+  | {
+      kind: 'ready';
+      templates: WorkflowTemplateOptionResponse[];
+      authorizations: CaseAuthorizationOptionResponse[];
+      members: CaseCollaborationMemberResponse[];
+    };
+
+function computeStartGate(
+  templates: PickerState<WorkflowTemplateOptionResponse>,
+  authorizations: PickerState<CaseAuthorizationOptionResponse>,
+  members: PickerState<CaseCollaborationMemberResponse>,
+): StartGate {
+  if (
+    templates.kind === 'loading' ||
+    authorizations.kind === 'loading' ||
+    members.kind === 'loading'
+  )
+    return { kind: 'loading' };
+  if (templates.kind === 'error' || authorizations.kind === 'error' || members.kind === 'error')
+    return { kind: 'error' };
+  if (templates.items.length === 0) return { kind: 'noTemplates' };
+  if (authorizations.items.length === 0) return { kind: 'noAuthorizations' };
+  if (members.items.length === 0) return { kind: 'noMembers' };
+  return {
+    kind: 'ready',
+    templates: templates.items,
+    authorizations: authorizations.items,
+    members: members.items,
+  };
+}
 
 function badgeTone(status: string): 'success' | 'warning' | 'neutral' | 'danger' {
   if (status === 'completed' || status === 'active') return 'success';
   if (status === 'blocked' || status === 'unverified' || status === 'conflicting') return 'warning';
   if (status === 'cancelled' || status === 'unavailable') return 'danger';
   return 'neutral';
+}
+
+/** A recognisable label for one employment_authorization row — status and validity dates, never the id. */
+function authorizationLabel(
+  authorization: CaseAuthorizationOptionResponse,
+  t: (key: string) => string,
+): string {
+  const status = t(`visaRenewal.authorizationStatus.${authorization.status}`);
+  const from = authorization.validFrom ?? t('visaRenewal.dateUnknown');
+  const until = authorization.validUntil ?? t('visaRenewal.dateUnknown');
+  return `${status} · ${from} – ${until}`;
 }
 
 export function VisaRenewalSection({ caseId }: { caseId: string }) {
@@ -47,6 +122,7 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<StartFields>({
     resolver: zodResolver(
@@ -56,8 +132,52 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
         accountableId: startVisaRenewalRequestSchema.shape.assignments.element.shape.assigneeId,
       }),
     ),
-    defaultValues: { asOf: today, stepKey: 'application_preparation' },
+    // stepKey has no safe hardcoded default any more (see ListWorkflowTemplates
+    // research: the previous 'application_preparation' literal matched no real
+    // template step). It is set once the chosen template's own steps are known
+    // — see the effect below.
+    defaultValues: { asOf: today },
   });
+
+  const [templatesState, setTemplatesState] = useState<PickerState<WorkflowTemplateOptionResponse>>(
+    { kind: 'loading' },
+  );
+  const [authorizationsState, setAuthorizationsState] = useState<
+    PickerState<CaseAuthorizationOptionResponse>
+  >({ kind: 'loading' });
+  const [membersState, setMembersState] = useState<PickerState<CaseCollaborationMemberResponse>>({
+    kind: 'loading',
+  });
+
+  const loadTemplates = useCallback(() => {
+    setTemplatesState({ kind: 'loading' });
+    listWorkflowTemplates()
+      .then((items) => setTemplatesState({ kind: 'loaded', items }))
+      .catch(() => setTemplatesState({ kind: 'error' }));
+  }, []);
+  const loadAuthorizations = useCallback(() => {
+    setAuthorizationsState({ kind: 'loading' });
+    listCaseAuthorizations(caseId)
+      .then((items) => setAuthorizationsState({ kind: 'loaded', items }))
+      .catch(() => setAuthorizationsState({ kind: 'error' }));
+  }, [caseId]);
+  const loadMembers = useCallback(() => {
+    setMembersState({ kind: 'loading' });
+    listCaseCollaborationMembers(caseId)
+      .then(({ members }) => setMembersState({ kind: 'loaded', items: members }))
+      .catch(() => setMembersState({ kind: 'error' }));
+  }, [caseId]);
+  const loadStartPickers = useCallback(() => {
+    loadTemplates();
+    loadAuthorizations();
+    loadMembers();
+  }, [loadTemplates, loadAuthorizations, loadMembers]);
+
+  useEffect(loadTemplates, [loadTemplates]);
+  useEffect(loadAuthorizations, [loadAuthorizations]);
+  useEffect(loadMembers, [loadMembers]);
+
+  const startGate = computeStartGate(templatesState, authorizationsState, membersState);
 
   // Defect: `startVisaRenewal` used to mint a fresh idempotency key inside
   // the function, so a lost response followed by the user pressing "start"
@@ -94,6 +214,24 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
       accountableId,
     ],
   );
+
+  // Keeps `templateVersionId` and `stepKey` pointed at a real, currently
+  // selected template's own step: defaults both to the first option once the
+  // template list loads, and re-picks `stepKey` whenever the chosen template
+  // changes to a version whose steps don't include the previous value. This
+  // is what replaces the old hardcoded, unverifiable stepKey default.
+  useEffect(() => {
+    if (startGate.kind !== 'ready') return;
+    const selected = startGate.templates.find((tpl) => tpl.templateVersionId === templateVersionId);
+    const template = selected ?? startGate.templates[0];
+    if (!template) return;
+    if (!selected) setValue('templateVersionId', template.templateVersionId);
+    const steps = [...template.steps].sort((a, b) => a.position - b.position);
+    if (!steps.some((step) => step.stepKey === stepKeyField)) {
+      const firstStep = steps[0];
+      if (firstStep) setValue('stepKey', firstStep.stepKey);
+    }
+  }, [startGate, templateVersionId, stepKeyField, setValue]);
 
   const load = useCallback(() => {
     setState({ kind: 'loading' });
@@ -280,54 +418,107 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
               title={t(`visaRenewal.startError.${startError}`)}
             />
           ) : null}
-          <form onSubmit={(event) => void submit(event)} noValidate>
-            <TextField
-              label={t('visaRenewal.templateVersion')}
-              inputDir="ltr"
-              required
-              error={errors.templateVersionId ? t(uuidMessage) : undefined}
-              {...register('templateVersionId')}
+          {startGate.kind === 'loading' ? (
+            <Skeleton loadingLabel={t('visaRenewal.startLoading')} height="12rem" />
+          ) : null}
+          {startGate.kind === 'error' ? (
+            <Alert variant="error" title={t('visaRenewal.startLoadFailed')}>
+              <Button variant="secondary" size="sm" onClick={loadStartPickers}>
+                {t('visaRenewal.retry')}
+              </Button>
+            </Alert>
+          ) : null}
+          {startGate.kind === 'noTemplates' ? (
+            <EmptyState
+              title={t('visaRenewal.noTemplatesTitle')}
+              body={t('visaRenewal.noTemplatesBody')}
             />
-            <TextField
-              label={t('visaRenewal.currentAuthorization')}
-              inputDir="ltr"
-              required
-              error={errors.currentAuthorizationId ? t(uuidMessage) : undefined}
-              {...register('currentAuthorizationId')}
+          ) : null}
+          {startGate.kind === 'noAuthorizations' ? (
+            <EmptyState
+              title={t('visaRenewal.noAuthorizationsTitle')}
+              body={t('visaRenewal.noAuthorizationsBody')}
             />
-            <TextField
-              label={t('visaRenewal.asOf')}
-              type="date"
-              inputDir="ltr"
-              required
-              error={errors.asOf ? t('visaRenewal.invalidDate') : undefined}
-              {...register('asOf')}
+          ) : null}
+          {startGate.kind === 'noMembers' ? (
+            <EmptyState
+              title={t('visaRenewal.noMembersTitle')}
+              body={t('visaRenewal.noMembersBody')}
             />
-            <TextField
-              label={t('visaRenewal.stepKey')}
-              inputDir="ltr"
-              required
-              error={errors.stepKey ? t('case.fieldRequired') : undefined}
-              {...register('stepKey')}
-            />
-            <TextField
-              label={t('visaRenewal.responsible')}
-              inputDir="ltr"
-              required
-              error={errors.responsibleId ? t(uuidMessage) : undefined}
-              {...register('responsibleId')}
-            />
-            <TextField
-              label={t('visaRenewal.accountable')}
-              inputDir="ltr"
-              required
-              error={errors.accountableId ? t(uuidMessage) : undefined}
-              {...register('accountableId')}
-            />
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? t('visaRenewal.starting') : t('visaRenewal.start')}
-            </Button>
-          </form>
+          ) : null}
+          {startGate.kind === 'ready' ? (
+            <form onSubmit={(event) => void submit(event)} noValidate>
+              <SelectField
+                label={t('visaRenewal.templateVersion')}
+                required
+                options={startGate.templates.map((template) => ({
+                  value: template.templateVersionId,
+                  label: `${t(template.nameKey, { defaultValue: template.templateKey })} · v${template.version}`,
+                }))}
+                error={errors.templateVersionId ? t(selectionRequiredMessage) : undefined}
+                {...register('templateVersionId')}
+              />
+              <SelectField
+                label={t('visaRenewal.stepKey')}
+                required
+                options={(
+                  startGate.templates.find((tpl) => tpl.templateVersionId === templateVersionId)
+                    ?.steps ??
+                  startGate.templates[0]?.steps ??
+                  []
+                )
+                  .slice()
+                  .sort((a, b) => a.position - b.position)
+                  .map((step) => ({
+                    value: step.stepKey,
+                    label: t(step.titleKey, { defaultValue: step.stepKey }),
+                  }))}
+                error={errors.stepKey ? t(selectionRequiredMessage) : undefined}
+                {...register('stepKey')}
+              />
+              <SelectField
+                label={t('visaRenewal.currentAuthorization')}
+                required
+                options={startGate.authorizations.map((authorization) => ({
+                  value: authorization.id,
+                  label: authorizationLabel(authorization, t),
+                }))}
+                error={errors.currentAuthorizationId ? t(selectionRequiredMessage) : undefined}
+                {...register('currentAuthorizationId')}
+              />
+              <TextField
+                label={t('visaRenewal.asOf')}
+                type="date"
+                inputDir="ltr"
+                required
+                error={errors.asOf ? t('visaRenewal.invalidDate') : undefined}
+                {...register('asOf')}
+              />
+              <SelectField
+                label={t('visaRenewal.responsible')}
+                required
+                options={startGate.members.map((member) => ({
+                  value: member.id,
+                  label: member.display_name,
+                }))}
+                error={errors.responsibleId ? t(selectionRequiredMessage) : undefined}
+                {...register('responsibleId')}
+              />
+              <SelectField
+                label={t('visaRenewal.accountable')}
+                required
+                options={startGate.members.map((member) => ({
+                  value: member.id,
+                  label: member.display_name,
+                }))}
+                error={errors.accountableId ? t(selectionRequiredMessage) : undefined}
+                {...register('accountableId')}
+              />
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? t('visaRenewal.starting') : t('visaRenewal.start')}
+              </Button>
+            </form>
+          ) : null}
         </details>
       ) : null}
     </section>

@@ -10,6 +10,10 @@ import type {
   VisaRuleEvaluation,
   VisaWorkflowAssignment,
   VisaWorkflowBlocker,
+  WorkflowTemplateRepository,
+  WorkflowTemplateOption,
+  CaseAuthorizationRepository,
+  CaseAuthorizationOption,
 } from '@caredesk/application';
 import type { Pool, PoolClient } from 'pg';
 import { withTenant } from './pool.js';
@@ -247,6 +251,89 @@ export class PgVisaRenewalEvaluationRepository implements VisaRenewalEvaluationR
         .map((row) => row.source_reference),
       reviewRequired: !first || versionIds.size !== 1,
     };
+  }
+}
+
+/**
+ * Reads only `active` template versions — the exact status the start use
+ * case requires (see `start()` above, `where id = $4 and status = 'active'`)
+ * — so a template offered here can never be picked and then rejected.
+ * db-path-exception: `workflow_template`, `workflow_template_version` and
+ * `workflow_template_step` are global regulatory reference data, exactly
+ * like `visa_rule_*` above (migration 0021's grant comment) — no tenant_id
+ * column exists, no RLS policy applies, and caredesk_app holds select-only
+ * on all three, so there is no tenant to scope this query to (Root 6).
+ */
+export class PgWorkflowTemplateRepository implements WorkflowTemplateRepository {
+  constructor(private readonly pool: Pool) {}
+  async listActive(): Promise<WorkflowTemplateOption[]> {
+    const versions = await this.pool.query<{
+      id: string;
+      template_key: string;
+      name_key: string;
+      version: number;
+    }>(
+      `select wtv.id, wt.template_key, wt.name_key, wtv.version
+         from workflow_template_version wtv
+         join workflow_template wt on wt.id = wtv.workflow_template_id
+        where wtv.status = 'active'
+        order by wt.name_key, wtv.version desc`,
+    );
+    if (versions.rowCount === 0) return [];
+    // db-path-exception: workflow_template_step is the same global,
+    // tenant-less reference data as workflow_template_version above.
+    const steps = await this.pool.query<{
+      workflow_template_version_id: string;
+      step_key: string;
+      title_key: string;
+      position: number;
+    }>(
+      `select workflow_template_version_id, step_key, title_key, position
+         from workflow_template_step
+        where workflow_template_version_id = any($1::uuid[])
+        order by position`,
+      [versions.rows.map((row) => row.id)],
+    );
+    const stepsByVersion = new Map<string, WorkflowTemplateOption['steps'][number][]>();
+    for (const step of steps.rows) {
+      const list = stepsByVersion.get(step.workflow_template_version_id) ?? [];
+      list.push({ stepKey: step.step_key, titleKey: step.title_key, position: step.position });
+      stepsByVersion.set(step.workflow_template_version_id, list);
+    }
+    return versions.rows.map((row) => ({
+      templateVersionId: row.id,
+      templateKey: row.template_key,
+      nameKey: row.name_key,
+      version: row.version,
+      steps: stepsByVersion.get(row.id) ?? [],
+    }));
+  }
+}
+
+/** Reads a case's employment_authorization rows — the picker source for "current authorization". */
+export class PgCaseAuthorizationRepository implements CaseAuthorizationRepository {
+  constructor(private readonly pool: Pool) {}
+  async listByCase(tenantId: string, employmentCaseId: string): Promise<CaseAuthorizationOption[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<{
+        id: string;
+        status: CaseAuthorizationOption['status'];
+        valid_from: string | null;
+        valid_until: string | null;
+      }>(
+        `select id, status, valid_from, valid_until
+           from employment_authorization
+          where employment_case_id = $1
+          order by coalesce(valid_until, 'infinity'::date) desc, created_at desc`,
+        [employmentCaseId],
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        status: row.status,
+        validFrom: row.valid_from,
+        validUntil: row.valid_until,
+      }));
+    });
   }
 }
 

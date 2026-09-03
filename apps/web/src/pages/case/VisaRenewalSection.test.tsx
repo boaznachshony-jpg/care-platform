@@ -1,12 +1,26 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
-import { ApiRequestError, listVisaRenewals, startVisaRenewal } from '../../api/client.js';
+import {
+  ApiRequestError,
+  listCaseAuthorizations,
+  listCaseCollaborationMembers,
+  listVisaRenewals,
+  listWorkflowTemplates,
+  startVisaRenewal,
+} from '../../api/client.js';
 import { VisaRenewalSection } from './VisaRenewalSection.js';
 
 vi.mock('../../api/client.js', async (loadOriginal) => {
   const original = await loadOriginal<typeof import('../../api/client.js')>();
-  return { ...original, listVisaRenewals: vi.fn(), startVisaRenewal: vi.fn() };
+  return {
+    ...original,
+    listVisaRenewals: vi.fn(),
+    startVisaRenewal: vi.fn(),
+    listWorkflowTemplates: vi.fn(),
+    listCaseAuthorizations: vi.fn(),
+    listCaseCollaborationMembers: vi.fn(),
+  };
 });
 
 const workflow = {
@@ -44,11 +58,61 @@ const workflow = {
   completedAt: null,
 };
 
+// Deliberately unregistered i18n keys — proves the template/step name falls
+// back to something readable (the key itself) instead of disappearing when a
+// server-added template hasn't been translated yet.
+const template = {
+  templateVersionId: '20000000-0000-4000-8000-000000000001',
+  templateKey: 'work_visa_renewal',
+  nameKey: 'template.work_visa_renewal.name',
+  version: 3,
+  steps: [
+    { stepKey: 'prepare_application', titleKey: 'step.prepare_application.title', position: 1 },
+    { stepKey: 'submit_to_bureau', titleKey: 'step.submit_to_bureau.title', position: 2 },
+  ],
+};
+
+const authorization = {
+  id: '20000000-0000-4000-8000-000000000002',
+  status: 'current' as const,
+  validFrom: '2025-01-01',
+  validUntil: '2026-01-01',
+};
+
+const memberOne = {
+  id: '20000000-0000-4000-8000-000000000003',
+  display_name: 'דנה לוי',
+  role: 'owner',
+  status: 'active',
+};
+const memberTwo = {
+  id: '20000000-0000-4000-8000-000000000004',
+  display_name: 'יוסי כהן',
+  role: 'manager',
+  status: 'active',
+};
+
+/** Resolves all three "start" picker sources with one template, one authorization, two members. */
+function mockPickersReady() {
+  vi.mocked(listWorkflowTemplates).mockResolvedValue([template]);
+  vi.mocked(listCaseAuthorizations).mockResolvedValue([authorization]);
+  vi.mocked(listCaseCollaborationMembers).mockResolvedValue({ members: [memberOne, memberTwo] });
+}
+
+async function openStartForm() {
+  fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
+  return screen.findByRole('combobox', { name: 'תבנית התהליך' });
+}
+
 describe('VisaRenewalSection', () => {
   beforeEach(() => {
     initI18n();
     vi.mocked(listVisaRenewals).mockReset();
     vi.mocked(startVisaRenewal).mockReset();
+    vi.mocked(listWorkflowTemplates).mockReset();
+    vi.mocked(listCaseAuthorizations).mockReset();
+    vi.mocked(listCaseCollaborationMembers).mockReset();
+    mockPickersReady();
   });
 
   it('lists status, current step, evidence, RACI, blockers and authorization linkage', async () => {
@@ -88,6 +152,74 @@ describe('VisaRenewalSection', () => {
     expect(screen.getByText('נדרשת בדיקה מקצועית לפני המשך התהליך.')).toBeInTheDocument();
   });
 
+  it('offers the real options for every picker instead of a raw-id text box', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    const templateSelect = await openStartForm();
+
+    // Template: name-key fallback and version number, not a uuid input.
+    expect(
+      within(templateSelect).getByText('template.work_visa_renewal.name · v3'),
+    ).toBeInTheDocument();
+
+    // Step: populated from the selected template's own steps, title-key fallback.
+    const stepSelect = screen.getByRole('combobox', { name: 'שלב הפתיחה' });
+    expect(within(stepSelect).getByText('step.prepare_application.title')).toBeInTheDocument();
+    expect(within(stepSelect).getByText('step.submit_to_bureau.title')).toBeInTheDocument();
+
+    // Current authorization: status label and validity dates, never the id.
+    const authSelect = screen.getByRole('combobox', { name: 'היתר העבודה הנוכחי' });
+    expect(within(authSelect).getByText('בתוקף · 2025-01-01 – 2026-01-01')).toBeInTheDocument();
+    expect(screen.queryByText(authorization.id)).not.toBeInTheDocument();
+
+    // Responsible/accountable: family member names, never their ids.
+    const responsibleSelect = screen.getByRole('combobox', { name: 'אחראי לביצוע' });
+    expect(within(responsibleSelect).getByText('דנה לוי')).toBeInTheDocument();
+    expect(within(responsibleSelect).getByText('יוסי כהן')).toBeInTheDocument();
+    expect(screen.queryByText(memberOne.id)).not.toBeInTheDocument();
+  });
+
+  it('sends the selected ids — not typed text — to the start API', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    vi.mocked(startVisaRenewal).mockResolvedValue({ ...workflow });
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    await openStartForm();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'שלב הפתיחה' }), {
+      target: { value: 'submit_to_bureau' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'אחראי לביצוע' }), {
+      target: { value: memberOne.id },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'בעל האחריות הכוללת' }), {
+      target: { value: memberTwo.id },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'התחלת התהליך' }));
+    await waitFor(() => expect(startVisaRenewal).toHaveBeenCalledOnce());
+
+    const [sentCaseId, sentBody] = vi.mocked(startVisaRenewal).mock.calls[0]!;
+    expect(sentCaseId).toBe('case-1');
+    expect(sentBody.templateVersionId).toBe(template.templateVersionId);
+    expect(sentBody.currentAuthorizationId).toBe(authorization.id);
+    expect(sentBody.assignments).toEqual([
+      {
+        stepKey: 'submit_to_bureau',
+        raciRole: 'responsible',
+        assigneeType: 'user',
+        assigneeId: memberOne.id,
+      },
+      {
+        stepKey: 'submit_to_bureau',
+        raciRole: 'accountable',
+        assigneeType: 'user',
+        assigneeId: memberTwo.id,
+      },
+    ]);
+  });
+
   it('starts through the API and handles conflict feedback', async () => {
     vi.mocked(listVisaRenewals).mockResolvedValue([]);
     vi.mocked(startVisaRenewal).mockRejectedValue(
@@ -95,25 +227,7 @@ describe('VisaRenewalSection', () => {
     );
     render(<VisaRenewalSection caseId="case-1" />);
     await screen.findByText('טרם התחיל תהליך חידוש');
-    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
-    const ids = [
-      '10000000-0000-4000-8000-000000000002',
-      '10000000-0000-4000-8000-000000000003',
-      '10000000-0000-4000-8000-000000000004',
-      '10000000-0000-4000-8000-000000000005',
-    ];
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה גרסת תבנית/ }), {
-      target: { value: ids[0] },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה האישור הנוכחי/ }), {
-      target: { value: ids[1] },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה האחראי לביצוע/ }), {
-      target: { value: ids[2] },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה בעל האחריות הכוללת/ }), {
-      target: { value: ids[3] },
-    });
+    await openStartForm();
     fireEvent.click(screen.getByRole('button', { name: 'התחלת התהליך' }));
     await waitFor(() => expect(startVisaRenewal).toHaveBeenCalledOnce());
     expect(await screen.findByText(/הבקשה מתנגשת/)).toBeInTheDocument();
@@ -129,25 +243,7 @@ describe('VisaRenewalSection', () => {
     vi.mocked(startVisaRenewal).mockRejectedValue(new Error('network error'));
     render(<VisaRenewalSection caseId="case-1" />);
     await screen.findByText('טרם התחיל תהליך חידוש');
-    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
-    const ids = [
-      '10000000-0000-4000-8000-000000000002',
-      '10000000-0000-4000-8000-000000000003',
-      '10000000-0000-4000-8000-000000000004',
-      '10000000-0000-4000-8000-000000000005',
-    ];
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה גרסת תבנית/ }), {
-      target: { value: ids[0] },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה האישור הנוכחי/ }), {
-      target: { value: ids[1] },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה האחראי לביצוע/ }), {
-      target: { value: ids[2] },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /מזהה בעל האחריות הכוללת/ }), {
-      target: { value: ids[3] },
-    });
+    await openStartForm();
 
     fireEvent.click(screen.getByRole('button', { name: 'התחלת התהליך' }));
     await waitFor(() => expect(startVisaRenewal).toHaveBeenCalledTimes(1));
@@ -161,5 +257,51 @@ describe('VisaRenewalSection', () => {
     const [, , secondKey] = vi.mocked(startVisaRenewal).mock.calls[1]!;
     expect(secondKey).toBe(firstKey);
     expect(typeof secondKey).toBe('string');
+  });
+
+  it('hides the form and explains what to do when no template is approved yet', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    vi.mocked(listWorkflowTemplates).mockResolvedValue([]);
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
+    expect(await screen.findByText('אין עדיין תבנית חידוש מאושרת')).toBeInTheDocument();
+    expect(screen.getByText(/פנו לצוות התמיכה של CareDesk כדי להפעיל תבנית/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('hides the form and explains what to do when the case has no authorization on file', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    vi.mocked(listCaseAuthorizations).mockResolvedValue([]);
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
+    expect(await screen.findByText('אין היתר עבודה רשום בתיק')).toBeInTheDocument();
+    expect(screen.getByText(/פנו למנהל\/ת התיק להוספת ההיתר הנוכחי/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('hides the form and explains what to do when the case has no family members yet', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    vi.mocked(listCaseCollaborationMembers).mockResolvedValue({ members: [] });
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
+    expect(await screen.findByText('אין עדיין בני משפחה רשומים בתיק')).toBeInTheDocument();
+    expect(screen.getByText(/להזמין בן משפחה לתיק/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('shows a retry action when the picker sources fail to load, and refetches on retry', async () => {
+    vi.mocked(listVisaRenewals).mockResolvedValue([]);
+    vi.mocked(listWorkflowTemplates).mockRejectedValueOnce(new Error('network error'));
+    render(<VisaRenewalSection caseId="case-1" />);
+    await screen.findByText('טרם התחיל תהליך חידוש');
+    fireEvent.click(screen.getByText('התחלת תהליך חידוש'));
+    expect(await screen.findByText('לא ניתן לטעון את אפשרויות הבחירה כרגע.')).toBeInTheDocument();
+
+    vi.mocked(listWorkflowTemplates).mockResolvedValue([template]);
+    fireEvent.click(screen.getByRole('button', { name: 'ניסיון נוסף' }));
+    expect(await screen.findByRole('combobox', { name: 'תבנית התהליך' })).toBeInTheDocument();
   });
 });

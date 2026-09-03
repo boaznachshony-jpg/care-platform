@@ -228,6 +228,52 @@ export function startVisaRenewal(
   });
 }
 
+/** A workflow template version a family can actually start a renewal from — only `active` ones. */
+export interface WorkflowTemplateOptionResponse {
+  templateVersionId: string;
+  templateKey: string;
+  nameKey: string;
+  version: number;
+  steps: readonly { stepKey: string; titleKey: string; position: number }[];
+}
+
+export function listWorkflowTemplates(): Promise<WorkflowTemplateOptionResponse[]> {
+  return apiRequest('/workflow-templates');
+}
+
+/** One `employment_authorization` row on the case — the picker source for "current authorization". */
+export interface CaseAuthorizationOptionResponse {
+  id: string;
+  status: 'current' | 'renewed' | 'expired' | 'cancelled';
+  validFrom: string | null;
+  validUntil: string | null;
+}
+
+export function listCaseAuthorizations(caseId: string): Promise<CaseAuthorizationOptionResponse[]> {
+  return apiRequest(`${casePath(caseId)}/authorizations`);
+}
+
+/**
+ * `tenant_membership` rows for the case's tenant — this is the id kind the
+ * visa renewal API's `assigneeId` actually resolves against for
+ * `assigneeType: 'user'` (see `workflow_assignment_membership_same_tenant`
+ * in migration 0021), not a `family member` invite record. Reuses the same
+ * `GET /cases/:caseId/collaboration` endpoint CollaborationPanel already
+ * calls, rather than adding a new one.
+ */
+export interface CaseCollaborationMemberResponse {
+  id: string;
+  display_name: string;
+  role: string;
+  status: string;
+}
+
+export function listCaseCollaborationMembers(
+  caseId: string,
+): Promise<{ members: CaseCollaborationMemberResponse[] }> {
+  return apiRequest(`${casePath(caseId)}/collaboration`);
+}
+
 export function listCaseContacts(caseId: string): Promise<CaseContactResponse[]> {
   return apiRequest(`${casePath(caseId)}/contacts`);
 }
