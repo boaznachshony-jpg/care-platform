@@ -127,8 +127,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@hookform/resolvers':
-        specifier: ^5.9.0
-        version: 5.9.0(ajv@8.20.0)(react-hook-form@7.82.0(react@18.3.1))(zod@3.25.76)
+        specifier: ^5.9.1
+        version: 5.9.1(ajv@8.20.0)(react-hook-form@7.82.0(react@18.3.1))(zod@3.25.76)
       '@noble/ciphers':
         specifier: ^2.2.0
         version: 2.2.0
@@ -910,8 +910,8 @@ packages:
   '@fastify/proxy-addr@5.1.0':
     resolution: {integrity: sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw==}
 
-  '@hookform/resolvers@5.9.0':
-    resolution: {integrity: sha512-8sNo1IklGaONrsKzXjwZJNsPbccAXLXGX//G+VFEcQOviMtbvR8/fM6HWyA0qrjgpOYauwoodda53CQIWOZ7Ag==}
+  '@hookform/resolvers@5.9.1':
+    resolution: {integrity: sha512-7b7vsbraJxKgjVSA1Nur9tLwj539WGJUBLA7QNvXnFoT2pM5Z7G+6rlukk4B2/QrTZy6huRtH6wKeESPKuIr6w==}
     peerDependencies:
       '@sinclair/typebox': '>=0.25.24'
       '@standard-schema/spec': ^1.0.0
@@ -3319,7 +3319,7 @@ snapshots:
       '@fastify/forwarded': 3.0.1
       ipaddr.js: 2.4.0
 
-  '@hookform/resolvers@5.9.0(ajv@8.20.0)(react-hook-form@7.82.0(react@18.3.1))(zod@3.25.76)':
+  '@hookform/resolvers@5.9.1(ajv@8.20.0)(react-hook-form@7.82.0(react@18.3.1))(zod@3.25.76)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.82.0(react@18.3.1)
