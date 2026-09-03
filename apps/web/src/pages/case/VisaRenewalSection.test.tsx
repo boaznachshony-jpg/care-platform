@@ -167,8 +167,11 @@ describe('VisaRenewalSection', () => {
 
     // Step: populated from the selected template's own steps, title-key fallback.
     const stepSelect = screen.getByRole('combobox', { name: 'שלב הפתיחה' });
-    expect(within(stepSelect).getByText('step.prepare_application.title')).toBeInTheDocument();
-    expect(within(stepSelect).getByText('step.submit_to_bureau.title')).toBeInTheDocument();
+    // Same fallback rule as the template label: with no locale entry for the
+    // title key, the option shows the step key itself — a readable word, not
+    // an identifier the family would have had to know.
+    expect(within(stepSelect).getByText('prepare_application')).toBeInTheDocument();
+    expect(within(stepSelect).getByText('submit_to_bureau')).toBeInTheDocument();
 
     // Current authorization: status label and validity dates, never the id.
     const authSelect = screen.getByRole('combobox', { name: 'היתר העבודה הנוכחי' });
