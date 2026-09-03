@@ -40,6 +40,17 @@ async function seedCompletedProfile(page: Page) {
   return { ...canonical, clientHome };
 }
 
+/**
+ * The same seeded family, but before its canonical case was ever opened —
+ * the only state in which the case-creation form is the screen the product
+ * shows. A client that already has a case is redirected to it instead.
+ */
+async function seedProfileWithoutCase(page: Page) {
+  const canonical = await installCanonicalProductIntelligence(page, { cases: 'none' });
+  const clientHome = await enterSeededClient(page, completedProfile, { clearStorage: true });
+  return { ...canonical, clientHome };
+}
+
 test.describe('launch readiness interactions', () => {
   test('completes every onboarding field and supports backward navigation', async ({ page }) => {
     await page.goto('/app');
@@ -465,10 +476,24 @@ test.describe('launch readiness interactions', () => {
     // the product could create an EmploymentCase and every canonical screen was
     // a dead end. This asserts the route exists and is private, which is the
     // whole of that finding.
-    const { clientHome } = await seedCompletedProfile(page);
+    const { clientHome } = await seedProfileWithoutCase(page);
 
     await page.goto(`${clientHome}/cases/new`);
     await expect(page).not.toHaveURL('/');
     await expect(page.getByRole('heading', { name: 'פתיחת תיק העסקה' })).toBeVisible();
+  });
+
+  test('a client that already has a case is sent to it, not offered a second one', async ({
+    page,
+  }) => {
+    // The other half of the same rule: opening a second employment case for one
+    // household would split a family's record in two, and every screen keyed by
+    // case id would then show half the truth. The form is only ever the right
+    // answer when there is nothing to send the user to.
+    const { clientHome } = await seedCompletedProfile(page);
+
+    await page.goto(`${clientHome}/cases/new`);
+    await expect(page).toHaveURL(/\/cases\/[^/]+$/);
+    await expect(page).not.toHaveURL(/\/cases\/new$/);
   });
 });

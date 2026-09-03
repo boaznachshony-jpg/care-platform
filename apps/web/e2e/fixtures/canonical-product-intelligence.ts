@@ -22,7 +22,28 @@ const json = (route: Route, body: unknown, status = 200) =>
  * State lives in this server-side fixture closure, never in browser storage,
  * so reload and idempotent replay exercise the same semantics as PostgreSQL.
  */
-export async function installCanonicalProductIntelligence(page: Page) {
+export interface CanonicalProductIntelligenceOptions {
+  /**
+   * Whether the canonical case list already contains a case for the legacy
+   * client under test.
+   *
+   * `'seeded'` (the default) is the ordinary state of a family that finished
+   * onboarding, and it is what every screen assertion needs — a payroll close,
+   * a timeline and a health score all hang off that case id.
+   *
+   * `'none'` is the state of a client whose case was never opened, which is
+   * the only state in which the case-creation form is the correct screen to
+   * show: a client that already has a case is sent to it instead of being
+   * offered a second one. A test about that form has to ask for this
+   * explicitly, or it is asserting on a screen the product would never show.
+   */
+  cases?: 'seeded' | 'none';
+}
+
+export async function installCanonicalProductIntelligence(
+  page: Page,
+  { cases = 'seeded' }: CanonicalProductIntelligenceOptions = {},
+) {
   const closes = new Map<string, CanonicalClose>();
   const responsesByKey = new Map<string, CanonicalClose>();
   let closeMutations = 0;
@@ -46,6 +67,7 @@ export async function installCanonicalProductIntelligence(page: Page) {
 
   await page.route(/\/cases(?:\?.*)?$/, (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
+    if (cases === 'none') return json(route, []);
     return json(route, [
       {
         id: '30000000-0000-4000-8000-000000000001',
