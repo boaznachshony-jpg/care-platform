@@ -19,7 +19,7 @@
     "@caredesk/infrastructure": "workspace:*",
     "@caredesk/schemas": "workspace:*",
     "@fastify/cors": "^11.3.0",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.1",
     "pg": "^8.13.1",
     "zod": "^3.24.1"
   },
