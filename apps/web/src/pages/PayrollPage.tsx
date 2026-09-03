@@ -1,7 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
 import {
   addAgorot,
   agorotFromShekels,
@@ -14,6 +13,8 @@ import {
 } from '@caredesk/domain';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
+import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
+import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
 import { quarterlyInsuranceScheduleForPayrollMonth } from '../quarterly-national-insurance.js';
@@ -505,7 +506,20 @@ function isUsableDraft(draft: unknown): draft is PayrollWizardDraft {
 
 export function PayrollPage() {
   const { t } = useTranslation();
-  const { clientId } = useParams<{ clientId: string }>();
+  // The payroll close API is keyed by the canonical EMPLOYMENT CASE id, and
+  // the route only ever gives a legacy CLIENT id. Passing the client id
+  // straight through (as this screen used to) made every close-history fetch
+  // and every close-month POST 404 against `/cases/:caseId`, resolved on
+  // `employment_case.id`. With no `.catch` on either call, the rejection was
+  // swallowed: the close history stayed permanently empty and the "אישור
+  // שהחודש מוכן וסגירה" button did nothing at all — on the screen that
+  // finalises what a caregiver is paid. Resolve the canonical case first, via
+  // the same hook TasksPage/DocumentsPage/MedicationsPage already use for
+  // this exact lookup, and pass PayrollIntelligence the full lookup state so
+  // it can refuse to pretend a close happened when there is no case to close
+  // it against.
+  const legacyClientId = useLegacyClientId();
+  const caseLookup = useCaseForLegacyClient(legacyClientId);
   const path = useClientPath();
   const [profile, setProfile] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
@@ -1300,7 +1314,7 @@ export function PayrollPage() {
         records={records}
         expenses={expenses}
         baseSalary={profile.baseSalary}
-        caseId={clientId}
+        caseLookup={caseLookup}
       />
       <section className="card payroll-sequence-card" aria-labelledby="payroll-sequence-title">
         <div className="section-heading">

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   importCaseDocument: vi.fn(),
   listCaseDocuments: vi.fn(),
   readLocalDocumentFileForImport: vi.fn(),
+  listEmploymentCases: vi.fn(),
 }));
 
 vi.mock('../canonical-case.js', () => ({
@@ -26,6 +27,8 @@ vi.mock('../canonical-case.js', () => ({
 vi.mock('../api/client.js', () => ({
   importCaseDocument: mocks.importCaseDocument,
   listCaseDocuments: mocks.listCaseDocuments,
+  // Defect 4: see the matching comment in TasksPage.sync.test.tsx.
+  listEmploymentCases: mocks.listEmploymentCases,
 }));
 
 // This is what actually reads bytes out of IndexedDB / workspace storage —
@@ -86,8 +89,10 @@ describe('DocumentsPage file sync', () => {
     mocks.importCaseDocument.mockReset();
     mocks.listCaseDocuments.mockReset();
     mocks.readLocalDocumentFileForImport.mockReset();
+    mocks.listEmploymentCases.mockReset();
     mocks.findCanonicalCase.mockResolvedValue(DEMO_CASE);
     mocks.listCaseDocuments.mockResolvedValue([]);
+    mocks.listEmploymentCases.mockResolvedValue([DEMO_CASE]);
   });
 
   it('sends a device-cached file (IndexedDB/workspace storage) alongside the metadata, exactly once', async () => {
@@ -158,5 +163,51 @@ describe('DocumentsPage file sync', () => {
     fireEvent.click(screen.getByRole('button', { name: /נסו שוב|נסה שוב/ }));
 
     await waitFor(() => expect(mocks.importCaseDocument).toHaveBeenCalledTimes(1));
+  });
+
+  // Defect 1 & 2: a category with no canonical twin ("אישור בנק" folds into
+  // the server's generic `other` documentType — see CATEGORY_TO_DOCUMENT_TYPE
+  // in sync/document-mapping.ts) must keep the customer's own label after a
+  // sync round-trip, not come back as the generic "מסמך אחר".
+  it("preserves the customer's own category label through a sync round-trip, even when the canonical type is generic 'other'", async () => {
+    saveMvpDocuments([{ ...localDocumentFixture(), category: 'אישור בנק', name: 'אישור בנק' }]);
+    mocks.readLocalDocumentFileForImport.mockResolvedValue(null);
+    mocks.importCaseDocument.mockResolvedValue(
+      serverDocumentFixture({ documentType: 'other', currentVersionNumber: null }),
+    );
+    mocks.listCaseDocuments.mockResolvedValue([
+      serverDocumentFixture({ documentType: 'other', currentVersionNumber: null }),
+    ]);
+
+    renderPage();
+
+    await waitFor(() => expect(mocks.importCaseDocument).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.listCaseDocuments).toHaveBeenCalled());
+    // Never replaced with the server's generic label for `other`.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'אישור בנק' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('מסמך אחר')).not.toBeInTheDocument();
+    expect(readMvpDocuments()[0]?.category).toBe('אישור בנק');
+  });
+
+  // Defect 3: a file this browser already knows exists locally, but that is
+  // larger than the server accepts, must be reported as a failure — never
+  // silently dropped while the metadata "succeeds" and the banner says synced.
+  it('reports an oversized locally-cached file as a failure instead of silently dropping it', async () => {
+    saveMvpDocuments([localDocumentFixture()]);
+    mocks.readLocalDocumentFileForImport.mockRejectedValue(
+      new Error('local file is larger than the server accepts'),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // The metadata import must never have been attempted with a dropped
+    // file standing in for a real one — resolveDocumentImportFile throws
+    // before importCaseDocument is even called.
+    expect(mocks.importCaseDocument).not.toHaveBeenCalled();
+    // The local record (and its file reference) are untouched.
+    expect(readMvpDocuments()).toHaveLength(1);
   });
 });

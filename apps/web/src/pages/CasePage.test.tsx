@@ -30,6 +30,14 @@ vi.mock('../api/client.js', () => {
     listCaseTimeline: () => Promise.resolve([]),
     listCaseDocuments: () => Promise.resolve([]),
     listVisaRenewals: () => Promise.resolve([]),
+    // VisaRenewalSection's "start a renewal" pickers (added when hand-typed
+    // uuids were replaced by real selects) — without these three the section
+    // throws "No export is defined" during render and takes the whole
+    // CasePage suite down with it. Empty arrays are enough: each picker's
+    // gate then renders its own empty state instead of an error state.
+    listWorkflowTemplates: () => Promise.resolve([]),
+    listCaseAuthorizations: () => Promise.resolve([]),
+    listCaseCollaborationMembers: () => Promise.resolve({ members: [] }),
     getCaseHealth: () => Promise.resolve({ score: 0, actionsRemaining: 0, factors: [] }),
     listProfessionalReviews: () => Promise.resolve([]),
     apiRequest: () =>

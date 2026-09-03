@@ -8,7 +8,10 @@ import {
   MAX_DOCUMENT_BYTES,
   type DocumentResponse,
 } from '@caredesk/schemas';
-import { readLocalDocumentFileForImport } from '../storage/document-file-store.js';
+import {
+  DocumentTooLargeForSyncError,
+  readLocalDocumentFileForImport,
+} from '../storage/document-file-store.js';
 import type { MvpDocument, MvpDocumentStatus } from '../storage/mvp-storage.js';
 
 /**
@@ -113,15 +116,20 @@ const MAX_BASE64_CONTENT_LENGTH = Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4;
  *     (see `readLocalDocumentFileForImport` in document-file-store.ts for why
  *     both exist and which documents end up in which one).
  *
- * A media type outside `ALLOWED_DOCUMENT_MEDIA_TYPES` or a payload over the
- * server's size cap degrades to "no file" (`undefined`) rather than blocking
- * the metadata import — the same "not an error" treatment as a document that
- * never had a file at all. A genuine fetch failure while retrieving bytes
- * that ARE known to exist is not swallowed here: it propagates so the
- * caller's `importOne` throws and the whole record (metadata included) is
- * marked failed and retryable, rather than silently importing metadata-only
- * when a real file was sitting right there and simply could not be reached
- * this time.
+ * A media type outside `ALLOWED_DOCUMENT_MEDIA_TYPES` degrades to "no file"
+ * (`undefined`) rather than blocking the metadata import — the same "not an
+ * error" treatment as a document that never had a file at all (this cutover
+ * has no way to convert between formats, and the legacy screen's own file
+ * picker already restricts to allowed types, so this only ever affects a
+ * very old record). A payload over the server's size cap is a different
+ * case (Defect 3): the file demonstrably exists, so pretending there is none
+ * would silently drop it while the sync banner reports success — instead
+ * this throws `DocumentTooLargeForSyncError`, which propagates through
+ * `importOne` exactly like the genuine-fetch-failure case below, so the
+ * record lands in the caller's `failedIds` and the existing upload-failed
+ * banner (with its existing retry) reports it truthfully instead of a false
+ * "synced". A genuine fetch failure while retrieving bytes that ARE known to
+ * exist is not swallowed here either: it propagates for the same reason.
  */
 export async function resolveDocumentImportFile(
   localDocument: Pick<MvpDocument, 'id' | 'dataUrl'>,
@@ -130,11 +138,12 @@ export async function resolveDocumentImportFile(
   { mediaType: (typeof ALLOWED_DOCUMENT_MEDIA_TYPES)[number]; content: string } | undefined
 > {
   const inline = localDocument.dataUrl ? parseDataUrl(localDocument.dataUrl) : null;
-  if (
-    inline &&
-    isAllowedDocumentMediaType(inline.mediaType) &&
-    inline.content.length <= MAX_BASE64_CONTENT_LENGTH
-  ) {
+  if (inline && isAllowedDocumentMediaType(inline.mediaType)) {
+    if (inline.content.length > MAX_BASE64_CONTENT_LENGTH) {
+      // Base64 length back to raw bytes: content.length is 4/3 of the raw
+      // size (see MAX_BASE64_CONTENT_LENGTH's own derivation above).
+      throw new DocumentTooLargeForSyncError(Math.ceil((inline.content.length * 3) / 4));
+    }
     // Rebuilt as a fresh literal, not returned as `inline` directly: the type
     // guard above narrows the *access* `inline.mediaType`, not the static
     // type of the `inline` object itself, so returning `inline` verbatim
@@ -143,16 +152,14 @@ export async function resolveDocumentImportFile(
   }
 
   const cached = await readLocalDocumentFileForImport(localDocument.id, legacyClientId);
-  if (
-    cached &&
-    isAllowedDocumentMediaType(cached.mediaType) &&
-    cached.content.length <= MAX_BASE64_CONTENT_LENGTH
-  ) {
+  if (cached && isAllowedDocumentMediaType(cached.mediaType)) {
     return { mediaType: cached.mediaType, content: cached.content };
   }
 
   return undefined;
 }
+
+export { DocumentTooLargeForSyncError };
 
 /**
  * `complianceStatus` is computed server-side from `expiresAt`; the local

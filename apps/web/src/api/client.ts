@@ -228,6 +228,52 @@ export function startVisaRenewal(
   });
 }
 
+/** A workflow template version a family can actually start a renewal from — only `active` ones. */
+export interface WorkflowTemplateOptionResponse {
+  templateVersionId: string;
+  templateKey: string;
+  nameKey: string;
+  version: number;
+  steps: readonly { stepKey: string; titleKey: string; position: number }[];
+}
+
+export function listWorkflowTemplates(): Promise<WorkflowTemplateOptionResponse[]> {
+  return apiRequest('/workflow-templates');
+}
+
+/** One `employment_authorization` row on the case — the picker source for "current authorization". */
+export interface CaseAuthorizationOptionResponse {
+  id: string;
+  status: 'current' | 'renewed' | 'expired' | 'cancelled';
+  validFrom: string | null;
+  validUntil: string | null;
+}
+
+export function listCaseAuthorizations(caseId: string): Promise<CaseAuthorizationOptionResponse[]> {
+  return apiRequest(`${casePath(caseId)}/authorizations`);
+}
+
+/**
+ * `tenant_membership` rows for the case's tenant — this is the id kind the
+ * visa renewal API's `assigneeId` actually resolves against for
+ * `assigneeType: 'user'` (see `workflow_assignment_membership_same_tenant`
+ * in migration 0021), not a `family member` invite record. Reuses the same
+ * `GET /cases/:caseId/collaboration` endpoint CollaborationPanel already
+ * calls, rather than adding a new one.
+ */
+export interface CaseCollaborationMemberResponse {
+  id: string;
+  display_name: string;
+  role: string;
+  status: string;
+}
+
+export function listCaseCollaborationMembers(
+  caseId: string,
+): Promise<{ members: CaseCollaborationMemberResponse[] }> {
+  return apiRequest(`${casePath(caseId)}/collaboration`);
+}
+
 export function listCaseContacts(caseId: string): Promise<CaseContactResponse[]> {
   return apiRequest(`${casePath(caseId)}/contacts`);
 }
@@ -572,14 +618,24 @@ export interface CanonicalPayrollClose {
   additions: number | null;
   deductions: number | null;
   closedAt: string;
+  /**
+   * R5-08. The display name of whoever closed the month. Null when the server
+   * cannot resolve it (a member who has since left the household, or a close
+   * recorded before the id was returned) — the screen then omits the line
+   * rather than showing an identifier no reader can interpret.
+   */
+  closedBy: string | null;
 }
 export const listCanonicalPayrollCloses = (caseId: string) =>
   apiRequest<CanonicalPayrollClose[]>(`${casePath(caseId)}/payroll-month-closes`);
 export const closeCanonicalPayrollMonth = (
   caseId: string,
+  // `closedBy` is derived by the server from the authenticated actor and is
+  // never accepted from the client — a caller must not be able to name someone
+  // else as the person who signed off on a month's pay.
   input: Omit<
     CanonicalPayrollClose,
-    'id' | 'closedAt' | 'total' | 'baseSalary' | 'additions' | 'deductions'
+    'id' | 'closedAt' | 'closedBy' | 'total' | 'baseSalary' | 'additions' | 'deductions'
   > & { total: number; baseSalary: number; additions: number; deductions: number },
   idempotencyKey: string,
 ) =>

@@ -22,12 +22,81 @@ const json = (route: Route, body: unknown, status = 200) =>
  * State lives in this server-side fixture closure, never in browser storage,
  * so reload and idempotent replay exercise the same semantics as PostgreSQL.
  */
-export async function installCanonicalProductIntelligence(page: Page) {
+export interface CanonicalProductIntelligenceOptions {
+  /**
+   * Whether the canonical case list already contains a case for the legacy
+   * client under test.
+   *
+   * `'seeded'` (the default) is the ordinary state of a family that finished
+   * onboarding, and it is what every screen assertion needs — a payroll close,
+   * a timeline and a health score all hang off that case id.
+   *
+   * `'none'` is the state of a client whose case was never opened, which is
+   * the only state in which the case-creation form is the correct screen to
+   * show: a client that already has a case is sent to it instead of being
+   * offered a second one. A test about that form has to ask for this
+   * explicitly, or it is asserting on a screen the product would never show.
+   */
+  cases?: 'seeded' | 'none';
+}
+
+export async function installCanonicalProductIntelligence(
+  page: Page,
+  { cases = 'seeded' }: CanonicalProductIntelligenceOptions = {},
+) {
   const closes = new Map<string, CanonicalClose>();
   const responsesByKey = new Map<string, CanonicalClose>();
   let closeMutations = 0;
   let lastCloseRequest:
     { url: string; key: string; input: Omit<CanonicalClose, 'id' | 'closedAt'> } | undefined;
+
+  // The canonical case list. Every screen that talks to a `/cases/:caseId`
+  // route now resolves the case id from the legacy client id first (payroll
+  // closes, the timeline, the health score) instead of passing the client id
+  // straight through, which is what made those requests 404 in production.
+  // Without this stub that lookup fails here, and the screens correctly show
+  // "could not reach the server" — so the fixture has to answer it.
+  //
+  // The legacy client id is read out of the page URL rather than passed in:
+  // `enterSeededClient` only learns the id *after* the routes are installed,
+  // and every screen under test is reached from `/clients/:clientId/...`.
+  // Unscoped screens (`/documents`, `/tasks`) use the same sentinel the app
+  // does, so a single case still matches there.
+  const legacyClientIdOf = (frameUrl: string): string =>
+    /\/clients\/([^/?#]+)/.exec(frameUrl)?.[1] ?? 'legacy:unscoped';
+
+  await page.route(/\/cases(?:\?.*)?$/, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    if (cases === 'none') return json(route, []);
+    return json(route, [
+      {
+        id: '30000000-0000-4000-8000-000000000001',
+        status: 'active',
+        startDate: '2026-01-15',
+        endDate: null,
+        legacyClientId: legacyClientIdOf(route.request().frame().url()),
+        careRecipient: {
+          id: '30000000-0000-4000-8000-0000000000a1',
+          fullName: 'מטופל בדיקה',
+          careLevel: null,
+          city: null,
+        },
+        employer: {
+          id: '30000000-0000-4000-8000-0000000000b1',
+          fullName: 'מעסיק בדיקה',
+          relationshipToRecipient: 'מעסיק',
+          city: null,
+        },
+        caregiver: {
+          id: '30000000-0000-4000-8000-0000000000c1',
+          legalName: 'Dilnoza',
+          preferredName: null,
+          nationality: 'אוזבקיסטן',
+          primaryLanguage: 'אוזבקית',
+        },
+      },
+    ]);
+  });
 
   await page.route(/\/cases\/[^/]+\/timeline(?:\?.*)?$/, (route) =>
     json(route, [

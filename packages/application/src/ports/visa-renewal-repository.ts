@@ -156,3 +156,41 @@ export interface VisaRenewalSideEffects {
 export interface VisaRenewalEvaluationRepository {
   evaluate(asOf: string): Promise<VisaRuleEvaluation>;
 }
+
+/** One selectable step belonging to an approved-and-active template version. */
+export interface WorkflowTemplateStepOption {
+  stepKey: string;
+  titleKey: string;
+  position: number;
+}
+
+/**
+ * A workflow template version a family can actually start a renewal from —
+ * only `status = 'active'` versions are returned (the same status the start
+ * use case itself requires; see visa-renewal-repository.ts `start()`), so
+ * nothing shown here can be rejected by the server for being unapproved.
+ */
+export interface WorkflowTemplateOption {
+  templateVersionId: string;
+  templateKey: string;
+  nameKey: string;
+  version: number;
+  steps: readonly WorkflowTemplateStepOption[];
+}
+
+/** Global regulatory reference data (no tenant_id — same shape as visa rule tables). */
+export interface WorkflowTemplateRepository {
+  listActive(): Promise<WorkflowTemplateOption[]>;
+}
+
+/** One `employment_authorization` row a family can point a renewal at. */
+export interface CaseAuthorizationOption {
+  id: string;
+  status: 'current' | 'renewed' | 'expired' | 'cancelled';
+  validFrom: string | null;
+  validUntil: string | null;
+}
+
+export interface CaseAuthorizationRepository {
+  listByCase(tenantId: string, employmentCaseId: string): Promise<CaseAuthorizationOption[]>;
+}

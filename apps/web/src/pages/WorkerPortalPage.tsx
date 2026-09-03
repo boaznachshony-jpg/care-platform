@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, getWorkerPreferences, type WorkerPreferencesResponse } from '../api/client.js';
+import { newIdempotencyKey } from '../api/idempotency.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 type Portal = {
@@ -212,7 +213,7 @@ export function WorkerPortalPage() {
               e.preventDefault();
               await apiRequest('/worker/requests', {
                 method: 'POST',
-                headers: { 'idempotency-key': crypto.randomUUID() },
+                headers: { 'idempotency-key': newIdempotencyKey() },
                 body: JSON.stringify({ type: 'general', message }),
               });
               setMessage('');
@@ -269,7 +270,7 @@ export function WorkerPortalPage() {
               event.preventDefault();
               await apiRequest('/worker/preferences', {
                 method: 'PUT',
-                headers: { 'idempotency-key': crypto.randomUUID() },
+                headers: { 'idempotency-key': newIdempotencyKey() },
                 body: JSON.stringify({
                   locale,
                   channel: 'email',

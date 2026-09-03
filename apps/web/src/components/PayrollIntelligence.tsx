@@ -8,7 +8,9 @@ import {
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
+import { newIdempotencyKey } from '../api/idempotency.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
 import { ValueOrigin, ValueOriginLegend } from './ValueOrigin.js';
 
 const money = new Intl.NumberFormat('he-IL', {
@@ -20,38 +22,68 @@ export function PayrollIntelligence({
   records,
   expenses,
   baseSalary,
-  caseId,
+  caseLookup,
 }: {
   records: MvpPayrollRecord[];
   expenses: MvpEmploymentExpense[];
   baseSalary: number | null;
-  caseId?: string;
+  caseLookup: CaseLookupState;
 }) {
   const { t } = useTranslation();
-  const [closes, setCloses] = useState<MvpMonthlyClose[]>([]);
-  const closeKey = useRef(crypto.randomUUID());
+  /**
+   * R5-08. The canonical rows are still projected onto the legacy close shape
+   * that the rest of this component reads, but `closedBy` is added on top
+   * rather than pushed down into `MvpMonthlyClose`: the browser snapshot is a
+   * frozen transitional store (ADR-006), and a field that only ever comes from
+   * the server has no business being added to it.
+   */
+  const [closes, setCloses] = useState<Array<MvpMonthlyClose & { closedBy: string | null }>>([]);
+  // Set when the close-history GET itself failed (not just "no case yet") —
+  // distinct from an empty list, which is a legitimate state for a case that
+  // has never closed a month.
+  const [closesError, setClosesError] = useState(false);
+  // Set only on a failed close POST. Constitution §13: the user's typed
+  // payment date/method must not be discarded because the request failed —
+  // this flag never clears the form, it only re-enables the button and says
+  // what happened, so the same click can be retried.
+  const [closeError, setCloseError] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeKey = useRef(newIdempotencyKey());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash' | 'check' | 'other'>(
     'bank_transfer',
   );
   const year = new Date().getUTCFullYear().toString();
   const startMonth = new Date().toISOString().slice(0, 7);
+  const caseId = caseLookup.status === 'found' ? caseLookup.caseId : undefined;
   const refreshCloses = () => {
     if (!caseId) return Promise.resolve();
-    return listCanonicalPayrollCloses(caseId).then((rows) =>
-      setCloses(
-        rows.map((row) => ({
-          id: row.id,
-          payrollRecordId: row.payrollReference,
-          month: row.month,
-          status: 'closed',
-          paymentDate: row.paymentDate,
-          paymentMethod: row.paymentMethod,
-          closedAt: row.closedAt,
-          workerAcknowledgement: 'not_supported',
-        })),
-      ),
-    );
+    setClosesError(false);
+    return listCanonicalPayrollCloses(caseId)
+      .then((rows) =>
+        setCloses(
+          rows.map((row) => ({
+            id: row.id,
+            payrollRecordId: row.payrollReference,
+            month: row.month,
+            status: 'closed',
+            paymentDate: row.paymentDate,
+            paymentMethod: row.paymentMethod,
+            closedAt: row.closedAt,
+            closedBy: row.closedBy,
+            workerAcknowledgement: 'not_supported' as const,
+          })),
+        ),
+      )
+      .catch(() => {
+        // Previously uncaught: the close-history GET failing (network error,
+        // a stale case id, anything) left `closes` at its initial `[]` with
+        // no signal that anything went wrong — indistinguishable on screen
+        // from a real case that simply has no closed months yet. That silence
+        // is exactly what let a 404 from the client/case id mismatch go
+        // unnoticed for as long as it did.
+        setClosesError(true);
+      });
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void refreshCloses(), [caseId]);
@@ -67,6 +99,20 @@ export function PayrollIntelligence({
   const open = [...records]
     .sort((a, b) => b.month.localeCompare(a.month))
     .find((r) => !closes.some((c) => c.month === r.month));
+  // Why the close button can be disabled beyond "no open month"/"no payment
+  // date": a case id resolved from stale/undefined route params used to be
+  // sent straight to the close API. The request 404'd, nothing caught it, and
+  // the button looked and behaved like it worked while nothing closed. The
+  // button must now say, in Hebrew, exactly why it cannot be pressed instead
+  // of pretending the close succeeded.
+  const caseBlockedReason =
+    caseLookup.status === 'checking'
+      ? 'מאתרים את התיק המקושר…'
+      : caseLookup.status === 'none'
+        ? 'לא נפתח עדיין תיק העסקה קנוני עבור לקוח זה — לא ניתן לסגור חודש שכר.'
+        : caseLookup.status === 'unavailable'
+          ? 'לא ניתן להתחבר לשרת כדי לאתר את התיק כרגע. נסו שוב בעוד רגע.'
+          : null;
   async function closeMonth() {
     if (!caseId || !open || !paymentDate || open.total <= 0) return;
     const deductions =
@@ -75,21 +121,34 @@ export function PayrollIntelligence({
       open.advances +
       open.agreedDeduction;
     const actualBase = open.baseSalary;
-    await closeCanonicalPayrollMonth(
-      caseId,
-      {
-        payrollReference: open.id,
-        month: open.month,
-        paymentDate,
-        paymentMethod,
-        total: open.total,
-        baseSalary: actualBase,
-        additions: Math.max(0, open.total - actualBase + deductions),
-        deductions,
-      },
-      closeKey.current,
-    );
-    await refreshCloses();
+    setClosing(true);
+    setCloseError(false);
+    try {
+      await closeCanonicalPayrollMonth(
+        caseId,
+        {
+          payrollReference: open.id,
+          month: open.month,
+          paymentDate,
+          paymentMethod,
+          total: open.total,
+          baseSalary: actualBase,
+          additions: Math.max(0, open.total - actualBase + deductions),
+          deductions,
+        },
+        closeKey.current,
+      );
+      await refreshCloses();
+    } catch {
+      // The whole point of this fix: a close that failed must never look like
+      // a close that happened. Previously there was no `.catch` here at all,
+      // so a rejected request left the button's onClick promise silently
+      // dropped — the month stayed open server-side with zero on-screen
+      // indication, and a caregiver's payment record never closed.
+      setCloseError(true);
+    } finally {
+      setClosing(false);
+    }
   }
   return (
     <>
@@ -334,13 +393,27 @@ export function PayrollIntelligence({
               />
             </p>
             <p className="legal-note">{t('liability.calculation')}</p>
+            {caseBlockedReason ? (
+              // The reason the button is disabled has to be visible, not just
+              // implied by a greyed-out button — a caregiver's employer must
+              // not conclude "nothing to do here" when in fact the case is
+              // still resolving or does not exist yet.
+              <p className="info-box" role="status">
+                {caseBlockedReason}
+              </p>
+            ) : null}
+            {closeError ? (
+              <p className="error-box" role="alert">
+                הסגירה נכשלה ולא נרשמה. הנתונים שהזנתם לא נמחקו — בדקו את החיבור ונסו לסגור שוב.
+              </p>
+            ) : null}
             <button
               className="primary-button"
               type="button"
-              disabled={!paymentDate || open.total <= 0}
+              disabled={!paymentDate || open.total <= 0 || !caseId || closing}
               onClick={() => void closeMonth()}
             >
-              אישור שהחודש מוכן וסגירה
+              {closing ? 'סוגר את החודש…' : 'אישור שהחודש מוכן וסגירה'}
             </button>
             <small>אישור עובד אינו נתמך עדיין ולא יירשם כאילו התקבל.</small>
           </>
@@ -348,20 +421,28 @@ export function PayrollIntelligence({
           <p className="success-box">אין חודש שכר שמור שממתין לסגירה.</p>
         )}
         <h3>היסטוריית סגירות</h3>
+        {closesError ? (
+          <p className="error-box" role="alert">
+            לא ניתן לטעון את היסטוריית הסגירות כרגע. ייתכן שיש סגירות קודמות שאינן מוצגות כאן.
+          </p>
+        ) : null}
         {closes.length ? (
           <ul aria-label="היסטוריית סגירות קנונית">
             {[...closes]
               .sort((a, b) => b.month.localeCompare(a.month))
               .map((c) => (
                 <li key={c.id}>
-                  {/* R5-03/R5-05. This is the only surface in the product where
-                      all three provenance parts nearly exist: the close record
-                      carries a payment date and the moment it was recorded. It
-                      carries no actor, so "מי" is omitted rather than guessed. */}
+                  {/* R5-03/R5-05/R5-08. This is now the one surface in the
+                      product where all three provenance parts exist: source,
+                      when, and — since the server started returning the actor
+                      it had been storing all along — who. `closedBy` is still
+                      optional, so a close whose person cannot be resolved
+                      omits "מי" instead of guessing or printing a uuid. */}
                   <ValueOrigin
                     kind="paid"
                     provenance={{
                       source: t('valueOrigin.source.monthlyClose'),
+                      who: c.closedBy ?? undefined,
                       when: formatDateOnly(c.paymentDate) ?? c.paymentDate,
                     }}
                   />{' '}
@@ -374,6 +455,7 @@ export function PayrollIntelligence({
                       </time>
                     </>
                   ) : null}
+                  {c.closedBy ? ` · סגר/ה ${c.closedBy}` : null}
                 </li>
               ))}
           </ul>

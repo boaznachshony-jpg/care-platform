@@ -103,6 +103,31 @@ export function registerVisaRenewalRoutes(app: FastifyInstance, container: Conta
     },
   );
 
+  // Backs the "start a renewal" form's template picker. Global reference
+  // data (see ListWorkflowTemplates) — any authenticated tenant member may
+  // read it, same as GET /regulation-rules.
+  app.get('/workflow-templates', options, async (request, reply) => {
+    const actor = request.actor;
+    if (!actor) return;
+    reply.send(await container.listWorkflowTemplates.execute());
+  });
+
+  // Backs the "start a renewal" form's current-authorization picker.
+  app.get<{ Params: CaseParams }>(
+    '/cases/:caseId/authorizations',
+    options,
+    async (request, reply) => {
+      const actor = request.actor;
+      if (!actor) return;
+      try {
+        reply.send(await container.listCaseAuthorizations.execute(actor, request.params.caseId));
+      } catch (error) {
+        if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
+        throw error;
+      }
+    },
+  );
+
   app.get<{ Params: WorkflowParams }>(
     '/cases/:caseId/visa-renewals/:workflowId',
     options,

@@ -11,16 +11,27 @@ import {
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { ReminderRecipientsSection } from '../components/ReminderRecipientsSection.js';
-import { archiveCaseMedication, importCaseMedication, listCaseMedications } from '../api/client.js';
+import {
+  archiveCaseMedication,
+  importCaseMedication,
+  listCaseMedications,
+  updateCaseMedication,
+} from '../api/client.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
 import {
   getUploadedServerId,
+  markPendingAction,
   rememberUploadedServerId,
+  replayPendingActions,
   uploadUnsyncedRecords,
   type SyncStatus,
 } from '../sync/legacy-upload.js';
-import { medicationResponseToLocal } from '../sync/medication-mapping.js';
+import {
+  localMedicationDivergesFromResponse,
+  medicationResponseToLocal,
+  updateRequestForLocalMedication,
+} from '../sync/medication-mapping.js';
 
 /**
  * Standing medications, kept for handover.
@@ -63,6 +74,10 @@ export function MedicationsPage() {
   const [syncAttempt, setSyncAttempt] = useState(0);
 
   useEffect(() => {
+    if (caseLookup.status === 'ambiguous') {
+      setSyncStatus({ phase: 'ambiguous' });
+      return;
+    }
     if (caseLookup.status !== 'found') {
       setSyncStatus(
         caseLookup.status === 'checking' ? { phase: 'checking' } : { phase: 'no-case' },
@@ -100,12 +115,43 @@ export function MedicationsPage() {
             .filter((medication) => medication.legacyLocalId)
             .map((medication) => [medication.legacyLocalId as string, medication] as const),
         );
-        const merged = readMvpMedications().map((medication) => {
+
+        // Defect 1 fix, step one: local always wins — see the matching
+        // comment in TasksPage.tsx. `merged` starts as the unmodified local
+        // list; a matched server record is never spread over it, which is
+        // what used to silently revert an edit on the very next sync (this
+        // screen is the emergency-binder source of truth, so that bug here
+        // was the most dangerous of the three).
+        const merged = readMvpMedications();
+
+        // Defect 1 fix, step two: push a local edit up via updateCaseMedication
+        // when it has diverged from what the server last confirmed, instead
+        // of only protecting it locally forever.
+        const updateFailedIds: string[] = [];
+        for (const medication of merged) {
           const match = byLocalId.get(medication.id);
-          return match
-            ? { ...medicationResponseToLocal(match), updatedAt: medication.updatedAt }
-            : medication;
-        });
+          if (!match) continue;
+          if (!localMedicationDivergesFromResponse(medication, match)) continue;
+          try {
+            await updateCaseMedication(
+              caseId,
+              match.id,
+              updateRequestForLocalMedication(medication),
+            );
+          } catch {
+            updateFailedIds.push(medication.id);
+          }
+        }
+
+        // Defect 5 fix: replay any `remove` (archive) this browser could not
+        // previously confirm with the server — see the matching comment in
+        // TasksPage.tsx and markPendingAction/replayPendingActions.
+        const { failedIds: actionFailedIds } = await replayPendingActions(
+          'medications',
+          caseId,
+          (_action, serverId) => archiveCaseMedication(caseId, serverId),
+        );
+
         for (const serverMedication of serverMedications) {
           if (serverMedication.legacyLocalId) continue;
           if (merged.some((medication) => medication.id === serverMedication.id)) continue;
@@ -114,7 +160,10 @@ export function MedicationsPage() {
         }
         saveMvpMedications(merged);
         setMedications(merged);
-        setSyncStatus({ phase: 'synced' });
+        const failedCount = updateFailedIds.length + actionFailedIds.length;
+        setSyncStatus(
+          failedCount > 0 ? { phase: 'update-failed', failedCount } : { phase: 'synced' },
+        );
       } catch {
         setSyncStatus({ phase: 'offline' });
       }
@@ -196,9 +245,19 @@ export function MedicationsPage() {
     // never deleted — see database/migrations/0046), so a stand-in reading
     // an already-printed or previously-synced binder on another device is
     // never left with a medication that silently vanished.
+    //
+    // Defect 5 fix: the archive request used to be fired once and forgotten
+    // on failure (`.catch(() => undefined)`), which is exactly how two
+    // devices end up disagreeing forever about whether a medication is still
+    // active — the emergency binder this feeds is the one place that
+    // disagreement is most dangerous. It is now recorded as a pending action
+    // and replayed by the same sync pass `uploadUnsyncedRecords` already
+    // runs (see markPendingAction/replayPendingActions), so a failed attempt
+    // is retried on the next mount, the retry button, or this bumped
+    // `syncAttempt`, rather than silently never tried again.
     if (caseLookup.status === 'found') {
       const serverId = getUploadedServerId('medications', caseLookup.caseId, id);
-      if (serverId) void archiveCaseMedication(caseLookup.caseId, serverId).catch(() => undefined);
+      if (serverId) markPendingAction('medications', caseLookup.caseId, id, 'archive');
     }
     persist(medications.filter((item) => item.id !== id));
     if (editingId === id) {
@@ -229,9 +288,24 @@ export function MedicationsPage() {
         <p className="info-box" role="status">
           {t('medications.sync.localCopy')}
         </p>
+      ) : syncStatus.phase === 'ambiguous' ? (
+        <p className="action-notice error" role="status">
+          {t('medications.sync.ambiguous')}
+        </p>
       ) : syncStatus.phase === 'upload-failed' ? (
         <p className="action-notice error" role="status">
           {t('medications.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => setSyncAttempt((count) => count + 1)}
+          >
+            {t('medications.sync.retry')}
+          </button>
+        </p>
+      ) : syncStatus.phase === 'update-failed' ? (
+        <p className="action-notice error" role="status">
+          {t('medications.sync.updateFailed', { count: syncStatus.failedCount })}{' '}
           <button
             className="text-link"
             type="button"

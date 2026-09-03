@@ -12,6 +12,7 @@ import {
   type MvpDocument,
   type MvpDocumentStatus,
 } from '../storage/mvp-storage.js';
+import { MAX_DOCUMENT_BYTES } from '@caredesk/schemas';
 import { useAuth } from '../auth/auth-context.js';
 import { importCaseDocument, listCaseDocuments } from '../api/client.js';
 import { LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
@@ -34,7 +35,25 @@ import {
   type ExpiryClassification,
 } from '../date-diff.js';
 
-const MAX_FILE_SIZE = 10_000_000;
+/**
+ * Defect 3 fix: this used to be a hardcoded 10 MB, twice the server's real
+ * cap (`MAX_DOCUMENT_BYTES`, packages/schemas — 5 MiB). A file between the
+ * two limits passed this screen's own check, got "recorded" locally, and
+ * then silently lost its scan on the next sync (see resolveDocumentImportFile
+ * in sync/document-mapping.ts for the other half of that fix). Importing the
+ * same constant the server enforces means this screen can never again accept
+ * a file the server will not.
+ *
+ * Rejected here, at selection/save time, rather than only reported after a
+ * failed background sync: the family is looking at the form right now with
+ * the file already picked, which is the cheapest possible moment to say
+ * "pick a smaller file" — before a base64 read/encode, before a network
+ * round trip, and before the record even exists locally with a promise this
+ * screen cannot keep. A background-only rejection (letting the too-large
+ * file save locally and failing it during sync) is a strictly worse version
+ * of the same information delivered later and further from the fix.
+ */
+const MAX_FILE_SIZE = MAX_DOCUMENT_BYTES;
 const ALLOWED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
 const toDateInputValue = dateLabelToIsoDate;
@@ -97,6 +116,22 @@ export function DocumentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
+  /**
+   * R1-07. Saving a document awaits an IndexedDB write (or, when signed in on
+   * a client-scoped route, a network upload). The submit button used to stay
+   * live for that whole time, and each press minted its own
+   * `crypto.randomUUID()` — so two presses produced two documents with two
+   * different ids. That is not a duplicate the sync can collapse later; it is
+   * two separate records of the same passport in the same case, and the family
+   * has no way to tell which one the file actually landed on.
+   *
+   * The ref is what blocks the second press: React state is committed
+   * asynchronously, so a second click arriving in the same tick would still
+   * read `saving === false` and get through. The state exists only so the
+   * button can render as disabled.
+   */
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const legacyClientIdParam = useLegacyClientId();
@@ -107,7 +142,11 @@ export function DocumentsPage() {
   useEffect(() => {
     if (caseLookup.status !== 'found') {
       setSyncStatus(
-        caseLookup.status === 'checking' ? { phase: 'checking' } : { phase: 'no-case' },
+        caseLookup.status === 'checking'
+          ? { phase: 'checking' }
+          : caseLookup.status === 'ambiguous'
+            ? { phase: 'ambiguous' }
+            : { phase: 'no-case' },
       );
       return;
     }
@@ -159,26 +198,31 @@ export function DocumentsPage() {
       try {
         const serverDocuments = await listCaseDocuments(caseId);
         if (!active) return;
-        const byLocalId = new Map(
-          serverDocuments
-            .filter((document) => document.legacyLocalId)
-            .map((document) => [document.legacyLocalId as string, document] as const),
-        );
-        const merged = readMvpDocuments().map((document) => {
-          const match = byLocalId.get(document.id);
-          // The server response never carries the file bytes or name back
-          // (Constitution §16), so an already-known local record keeps its
-          // own fileName/fileType/dataUrl — only the fields the server can
-          // actually confirm (category/date/status) are refreshed.
-          return match
-            ? {
-                ...document,
-                ...documentResponseToLocal(match),
-                fileName: document.fileName,
-                fileType: document.fileType,
-              }
-            : document;
-        });
+        // Defect 1 & 2 fix: a matched local record is left exactly as it is.
+        // This used to spread `documentResponseToLocal(match)` over the local
+        // record — category, name, date and status all got overwritten with
+        // whatever the server happened to hold. The server copy can be
+        // *older* than what is on screen (this browser's own earlier import,
+        // possibly seconds stale by the time the read-back lands, or another
+        // device's copy) — local is where the customer just typed, and
+        // overwriting it with an older value is exactly the silent-revert bug
+        // this fixes. It also doubled as Defect 2: "אישור בנק" (a category
+        // this cutover has no canonical twin for — see CATEGORY_TO_DOCUMENT_TYPE
+        // in sync/document-mapping.ts) round-tripped through the server's
+        // generic `other` type and came back as "מסמך אחר", quietly replacing
+        // the family's own wording. Never applying the server copy over an
+        // existing local one fixes both at once: the canonical `documentType`
+        // can still legitimately be `other`, but the label the customer typed
+        // is local data and stays local, unconditionally.
+        //
+        // There is currently no document *update* endpoint (see the PR
+        // report), so an edit made here after the first successful import has
+        // no way to reach the server at all — this only guarantees the local
+        // edit is never destroyed, not that it propagates. That is the
+        // correct trade-off per Constitution §13/"never delete or overwrite
+        // local data": showing a stale-but-honest local copy beats silently
+        // reverting to what the server has.
+        const merged = readMvpDocuments();
         for (const serverDocument of serverDocuments) {
           if (serverDocument.legacyLocalId) continue;
           if (merged.some((document) => document.id === serverDocument.id)) continue;
@@ -228,6 +272,9 @@ export function DocumentsPage() {
 
   async function saveDocument(event: React.FormEvent) {
     event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       const existing = documents.find((document) => document.id === editingId);
       if (!existing && !file) {
@@ -235,7 +282,7 @@ export function DocumentsPage() {
         return;
       }
       if (file && file.size > MAX_FILE_SIZE) {
-        setMessage('הקובץ גדול מדי. ניתן להעלות PDF או תמונה עד 10MB.');
+        setMessage('הקובץ גדול מדי. ניתן להעלות PDF או תמונה עד 5MB.');
         return;
       }
       if (file && !ALLOWED_FILE_TYPES.includes(file.type)) {
@@ -267,6 +314,12 @@ export function DocumentsPage() {
       setMessage(
         'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.',
       );
+    } finally {
+      // Released on every exit, including the three validation early-returns
+      // above — a rejected file size must not leave the form permanently
+      // locked with no way to correct it.
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
@@ -328,6 +381,10 @@ export function DocumentsPage() {
       ) : syncStatus.phase === 'offline' ? (
         <p className="info-box" role="status">
           {t('documents.sync.localCopy')}
+        </p>
+      ) : syncStatus.phase === 'ambiguous' ? (
+        <p className="action-notice error" role="alert">
+          {t('documents.sync.ambiguous')}
         </p>
       ) : syncStatus.phase === 'upload-failed' ? (
         <p className="action-notice error" role="alert">
@@ -420,11 +477,11 @@ export function DocumentsPage() {
           </div>
           <p className="form-note">
             {auth.enabled
-              ? 'PDF, JPG או PNG עד 10MB. הקובץ נשמר באחסון פרטי ומוצפן ונפתח באמצעות קישור זמני בלבד.'
-              : 'PDF, JPG או PNG עד 10MB. בסביבה המקומית הקובץ נשמר רק במכשיר הנוכחי.'}
+              ? 'PDF, JPG או PNG עד 5MB. הקובץ נשמר באחסון פרטי ומוצפן ונפתח באמצעות קישור זמני בלבד.'
+              : 'PDF, JPG או PNG עד 5MB. בסביבה המקומית הקובץ נשמר רק במכשיר הנוכחי.'}
           </p>
-          <button className="primary-button" type="submit">
-            שמירת המסמך
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? 'שומר את המסמך…' : 'שמירת המסמך'}
           </button>
         </form>
       ) : null}

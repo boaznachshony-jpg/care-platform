@@ -4,11 +4,23 @@ const mocks = vi.hoisted(() => ({
   readLocalDocumentFileForImport: vi.fn(),
 }));
 
-vi.mock('../storage/document-file-store.js', () => ({
-  readLocalDocumentFileForImport: mocks.readLocalDocumentFileForImport,
-}));
+// Only `readLocalDocumentFileForImport` needs mocking (its device-cache read
+// is what these tests control). `DocumentTooLargeForSyncError` must stay the
+// *real* class: document-mapping.ts does `throw new DocumentTooLargeForSyncError(...)`
+// and this file constructs it directly (see "Defect 3" tests below) — a mock
+// factory that omits it makes the import `undefined`, and `new undefined(...)`
+// throws a plain TypeError before any test body runs, taking the whole suite
+// down. Spreading the real module keeps the class real while still
+// substituting the one function under test.
+vi.mock('../storage/document-file-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../storage/document-file-store.js')>();
+  return {
+    ...actual,
+    readLocalDocumentFileForImport: mocks.readLocalDocumentFileForImport,
+  };
+});
 
-import { resolveDocumentImportFile } from './document-mapping.js';
+import { DocumentTooLargeForSyncError, resolveDocumentImportFile } from './document-mapping.js';
 
 describe('resolveDocumentImportFile', () => {
   beforeEach(() => {
@@ -59,16 +71,38 @@ describe('resolveDocumentImportFile', () => {
     expect(result).toBeUndefined();
   });
 
-  it('an oversized cached file is dropped — metadata-only, not an error', async () => {
-    mocks.readLocalDocumentFileForImport.mockResolvedValue({
-      mediaType: 'application/pdf',
-      // Longer than MAX_DOCUMENT_BYTES (5 MiB) once accounting for base64 inflation.
-      content: 'A'.repeat(8_000_000),
-    });
+  // Defect 3: an oversized file that genuinely exists must never be treated
+  // like "no file" — that was the bug (metadata imports, banner says
+  // "synced", the scan itself never leaves the device). The size check
+  // itself lives in document-file-store.ts's blobToImportFile (it is the
+  // one holding the actual bytes); this test only proves the resulting
+  // DocumentTooLargeForSyncError propagates through this function exactly
+  // like the "genuine fetch failure" case just below, instead of being
+  // swallowed into `undefined`.
+  it('an oversized cached file is reported, not dropped — Defect 3', async () => {
+    mocks.readLocalDocumentFileForImport.mockRejectedValue(
+      new DocumentTooLargeForSyncError(9_000_000),
+    );
 
-    const result = await resolveDocumentImportFile({ id: 'doc-1' }, 'legacy-client-1');
+    await expect(
+      resolveDocumentImportFile({ id: 'doc-1' }, 'legacy-client-1'),
+    ).rejects.toBeInstanceOf(DocumentTooLargeForSyncError);
+  });
 
-    expect(result).toBeUndefined();
+  it('an oversized inline dataUrl is reported, not dropped — Defect 3', async () => {
+    mocks.readLocalDocumentFileForImport.mockResolvedValue(null);
+    const oversizedContent = 'A'.repeat(8_000_000);
+
+    await expect(
+      resolveDocumentImportFile(
+        { id: 'doc-1', dataUrl: `data:application/pdf;base64,${oversizedContent}` },
+        null,
+      ),
+    ).rejects.toBeInstanceOf(DocumentTooLargeForSyncError);
+    // A known-too-large inline file must not silently fall through to the
+    // file cache and end up "resolved" some other way that hides the size
+    // problem.
+    expect(mocks.readLocalDocumentFileForImport).not.toHaveBeenCalled();
   });
 
   it('passes the legacy client id through to the file cache lookup', async () => {

@@ -25,6 +25,11 @@ export interface CanonicalClose {
   additions: number | null;
   deductions: number | null;
   closedAt: string;
+  /**
+   * R5-08. The display name of the person who closed the month, or null when
+   * it cannot be resolved. Never a raw user id — see `response` below.
+   */
+  closedBy: string | null;
 }
 
 interface CloseRow {
@@ -38,9 +43,32 @@ interface CloseRow {
   additions_amount: string | null;
   deductions_amount: string | null;
   closed_at: Date;
+  /** R5-08. Selected so the receipt can name a person; see `response`. */
+  closed_by: string | null;
 }
 
-const response = (row: CloseRow): CanonicalClose => ({
+/**
+ * R5-08. `closed_by` has been written on every close since this route existed,
+ * and was never returned — so the money screen could say what was closed and
+ * when, but not by whom, and the Backlog recorded "no source carries an actor"
+ * when in fact one did.
+ *
+ * The id alone is not an answer a family can read, so it is resolved to a
+ * display name through `list_caredesk_family_members`, the existing
+ * `security definer` function that is already scoped to the current tenant.
+ * `app_user` itself has RLS forced with no policy for the application role, so
+ * joining it directly would return nothing at all — silently, which is exactly
+ * the failure mode this project keeps having to undo.
+ *
+ * When the name cannot be resolved (a member removed from the household since
+ * the close, or a close recorded before this code) the field is `null` and the
+ * screen omits the line. It never renders a raw uuid: an identifier the reader
+ * cannot interpret is worse than an honest absence.
+ */
+export const closeResponse = (
+  row: CloseRow,
+  namesByUserId: Map<string, string>,
+): CanonicalClose => ({
   id: row.id,
   payrollReference: row.payroll_reference,
   month: row.payroll_month.slice(0, 7),
@@ -51,7 +79,23 @@ const response = (row: CloseRow): CanonicalClose => ({
   additions: row.additions_amount === null ? null : Number(row.additions_amount),
   deductions: row.deductions_amount === null ? null : Number(row.deductions_amount),
   closedAt: row.closed_at.toISOString(),
+  closedBy: (row.closed_by && namesByUserId.get(row.closed_by)) || null,
 });
+
+const CLOSE_COLUMNS = `id,payroll_reference,payroll_month::text,payment_date::text,payment_method,
+          total_amount::text,base_salary_amount::text,additions_amount::text,
+          deductions_amount::text,closed_at,closed_by`;
+
+/** Display names for the current tenant's members, keyed by user id. */
+async function memberNames(client: {
+  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[] }>;
+}): Promise<Map<string, string>> {
+  const members = (await client.query(
+    `select user_id, display_name from list_caredesk_family_members(
+       nullif(current_setting('app.tenant_id', true), '')::uuid)`,
+  )) as { rows: Array<{ user_id: string; display_name: string }> };
+  return new Map(members.rows.map((row) => [row.user_id, row.display_name]));
+}
 
 /** One transaction owns the close receipt, human Timeline, Audit and replay. */
 export class CanonicalIntelligenceService {
@@ -75,13 +119,12 @@ export class CanonicalIntelligenceService {
   async list(actor: Actor, caseId: string): Promise<CanonicalClose[]> {
     return this.tenantTx(actor.tenantId, async (client) => {
       const rows = await client.query<CloseRow>(
-        `select id,payroll_reference,payroll_month::text,payment_date::text,payment_method,
-          total_amount::text,base_salary_amount::text,additions_amount::text,
-          deductions_amount::text,closed_at from payroll_month_close
+        `select ${CLOSE_COLUMNS} from payroll_month_close
           where employment_case_id=$1 order by payroll_month desc`,
         [caseId],
       );
-      return rows.rows.map(response);
+      const names = await memberNames(client);
+      return rows.rows.map((row) => closeResponse(row, names));
     });
   }
 
@@ -131,9 +174,7 @@ export class CanonicalIntelligenceService {
           payroll_month,payment_date,payment_method,timeline_event_id,audit_event_id,closed_by,
           closed_at,correlation_id,total_amount,base_salary_amount,additions_amount,deductions_amount)
          values ($1,$2,$3,$4,($5||'-01')::date,$6,$7,$8,$9,$10,now(),$11,$12,$13,$14,$15)
-         returning id,payroll_reference,payroll_month::text,payment_date::text,payment_method,
-          total_amount::text,base_salary_amount::text,additions_amount::text,
-          deductions_amount::text,closed_at`,
+         returning ${CLOSE_COLUMNS}`,
         [
           closeId,
           actor.tenantId,
@@ -152,7 +193,7 @@ export class CanonicalIntelligenceService {
           input.deductions,
         ],
       );
-      const close = response(inserted.rows[0]!);
+      const close = closeResponse(inserted.rows[0]!, await memberNames(client));
       await client.query(
         `insert into idempotency_record (tenant_id,operation,idempotency_key,request_hash,response)
          values ($1,'product_intelligence.month_close',$2,$3,$4)`,

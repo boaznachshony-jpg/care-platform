@@ -273,7 +273,8 @@
     "statusSuspended": "Suspended",
     "statusEnded": "Ended",
     "statusCancelled": "Cancelled",
-    "statusArchived": "Archived"
+    "statusArchived": "Archived",
+    "backToCases": "← Back to cases"
   },
   "contacts": {
     "heading": "Contacts",
@@ -345,7 +346,9 @@
     "sync": {
       "localCopy": "Showing this device's local copy — could not reach the server.",
       "uploadFailed": "{{count}} tasks failed to upload.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "updateFailed": "{{count}} task updates could not be sent to the server.",
+      "ambiguous": "Cannot sync tasks: this account has more than one client, so it is not possible to tell which one these records belong to. Open this screen from the client's own page."
     },
     "legacyUploadFailed": "{{count}} existing tasks from this device failed to upload.",
     "seeded": {
@@ -399,7 +402,8 @@
       "localCopy": "Showing this device's local copy — could not reach the server.",
       "uploadFailed": "{{count}} documents failed to upload.",
       "retry": "Retry",
-      "uploading": "Uploading documents from this device to the server ({{completed}} of {{total}})…"
+      "uploading": "Uploading documents from this device to the server ({{completed}} of {{total}})…",
+      "ambiguous": "Cannot sync documents: this account has more than one client, so it is not possible to tell which one these records belong to. Open this screen from the client's own page."
     },
     "legacyUploadFailed": "{{count}} existing documents from this device failed to upload."
   },
@@ -566,6 +570,7 @@
     "statusOk": "All in order",
     "statusLoading": "Loading data…",
     "scoreUnavailable": "The file health score is unavailable right now — we'll retry shortly.",
+    "caseNotLinked": "We could not find an employment case linked to this client. Nothing has been deleted — open the case from the employment cases screen, and contact us if it is there but not linked.",
     "okTitle": "No open actions",
     "okBody": "Everything saved has been checked and is in order. We'll flag anything that needs attention here.",
     "overallStatus": "Overall status",
@@ -1138,15 +1143,30 @@
     "notLinked": "No renewed authorization has been linked yet.",
     "notAvailable": "Not available",
     "startHeading": "Start a renewal workflow",
-    "startHelp": "Use only approved identifiers provided for this case. Rules are evaluated by the server; no legal deadline is calculated in the browser.",
-    "templateVersion": "Template version ID",
-    "currentAuthorization": "Current authorization ID",
+    "startHelp": "Choose from the lists below. Rules are evaluated by the server; no legal deadline is calculated in the browser.",
+    "startLoading": "Loading the available choices…",
+    "startLoadFailed": "The available choices cannot be loaded right now.",
+    "noTemplatesTitle": "No approved renewal template yet",
+    "noTemplatesBody": "No active renewal template is configured. Contact CareDesk support to activate a template before opening a workflow.",
+    "noAuthorizationsTitle": "No work authorization on file for this case",
+    "noAuthorizationsBody": "Starting a renewal requires an existing work authorization on the case first. Ask the case manager to add the current authorization.",
+    "noMembersTitle": "No family members on this case yet",
+    "noMembersBody": "Assigning owners for this workflow requires inviting a family member to the case first, from the Collaboration screen.",
+    "templateVersion": "Renewal template",
+    "currentAuthorization": "Current work authorization",
     "asOf": "Rule evaluation date",
-    "stepKey": "Initial step key",
-    "responsible": "Responsible user ID",
-    "accountable": "Accountable user ID",
-    "invalidIdentifier": "Enter a valid UUID",
+    "stepKey": "Opening step",
+    "responsible": "Responsible for execution",
+    "accountable": "Overall accountable",
+    "selectionRequired": "Choose an option from the list",
     "invalidDate": "Enter a valid date",
+    "dateUnknown": "Not specified",
+    "authorizationStatus": {
+      "current": "Current",
+      "renewed": "Renewed",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
     "start": "Start workflow",
     "starting": "Starting…",
     "status": {
@@ -1497,7 +1517,9 @@
     "sync": {
       "localCopy": "Showing this device's local copy — could not reach the server.",
       "uploadFailed": "{{count}} medications failed to upload.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "updateFailed": "{{count}} medication updates could not be sent to the server.",
+      "ambiguous": "Cannot sync medications: this account has more than one client, so it is not possible to tell which one these records belong to. Open this screen from the client's own page."
     }
   },
   "reminderRecipients": {

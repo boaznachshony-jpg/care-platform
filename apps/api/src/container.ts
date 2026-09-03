@@ -20,6 +20,8 @@ import type {
   TenantCensusRepository,
   DataLossAlertSink,
   VisaRenewalEvaluationRepository,
+  WorkflowTemplateRepository,
+  CaseAuthorizationRepository,
 } from '@caredesk/application';
 import {
   AddContactToCase,
@@ -68,6 +70,8 @@ import {
   LinkRenewedVisaAuthorization,
   ResolveVisaAuthorizationOverlap,
   CompleteVisaRenewalWorkflow,
+  ListWorkflowTemplates,
+  ListCaseAuthorizations,
 } from '@caredesk/application';
 import {
   createPool,
@@ -91,6 +95,8 @@ import {
   PgVisaRenewalEvaluationRepository,
   PgIdempotencyRepository,
   PgVisaRenewalProgressRepository,
+  PgWorkflowTemplateRepository,
+  PgCaseAuthorizationRepository,
   missingMigrations,
   REQUIRED_MIGRATIONS,
 } from '@caredesk/db';
@@ -334,6 +340,10 @@ export interface Container {
   resolveVisaAuthorizationOverlap: ResolveVisaAuthorizationOverlap;
   completeVisaRenewal: CompleteVisaRenewalWorkflow;
   visaRenewalEvaluation: VisaRenewalEvaluationRepository;
+  /** Backs the "start a renewal" form's template picker (see VisaRenewalSection.tsx). */
+  listWorkflowTemplates: ListWorkflowTemplates;
+  /** Backs the "start a renewal" form's current-authorization picker. */
+  listCaseAuthorizations: ListCaseAuthorizations;
   readiness(): Promise<{
     ready: boolean;
     reasons: string[];
@@ -406,6 +416,23 @@ export function buildContainer(env: Env): Container {
             sourceReferences: [],
             reviewRequired: true,
           };
+        },
+      };
+  // No pool means no database at all — the picker's honest empty state
+  // (`visaRenewal.noTemplates` / `visaRenewal.noAuthorizations`) covers this
+  // path exactly the same way it covers a real tenant with nothing seeded yet.
+  const workflowTemplates: WorkflowTemplateRepository = pool
+    ? new PgWorkflowTemplateRepository(pool)
+    : {
+        async listActive() {
+          return [];
+        },
+      };
+  const caseAuthorizations: CaseAuthorizationRepository = pool
+    ? new PgCaseAuthorizationRepository(pool)
+    : {
+        async listByCase() {
+          return [];
         },
       };
 
@@ -769,6 +796,13 @@ export function buildContainer(env: Env): Container {
     resolveVisaAuthorizationOverlap: new ResolveVisaAuthorizationOverlap(visaDeps),
     completeVisaRenewal: new CompleteVisaRenewalWorkflow(visaDeps),
     visaRenewalEvaluation,
+    listWorkflowTemplates: new ListWorkflowTemplates({ templates: workflowTemplates }),
+    listCaseAuthorizations: new ListCaseAuthorizations({
+      authorization,
+      audit,
+      clock,
+      authorizations: caseAuthorizations,
+    }),
     async readiness() {
       const checks: Record<string, 'ok' | 'unconfigured' | 'unreachable' | 'migration-required'> = {
         database: pool ? 'ok' : 'unconfigured',
