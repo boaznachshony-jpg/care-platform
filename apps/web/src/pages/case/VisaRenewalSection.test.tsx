@@ -160,7 +160,9 @@ describe('VisaRenewalSection', () => {
 
     // Template: name-key fallback and version number, not a uuid input.
     expect(
-      within(templateSelect).getByText('template.work_visa_renewal.name · v3'),
+      // The label falls back to the template key when the locale has no name
+      // for it — a human-readable word plus the version, never the uuid.
+      within(templateSelect).getByText('work_visa_renewal · v3'),
     ).toBeInTheDocument();
 
     // Step: populated from the selected template's own steps, title-key fallback.

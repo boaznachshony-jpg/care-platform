@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
@@ -179,41 +179,30 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
 
   const startGate = computeStartGate(templatesState, authorizationsState, membersState);
 
-  // Defect: `startVisaRenewal` used to mint a fresh idempotency key inside
-  // the function, so a lost response followed by the user pressing "start"
-  // again sent a *different* key and the server created a second workflow.
-  // The key is now generated here, once per distinct set of form inputs, and
-  // reused across retries of the same attempt (a submit that fails leaves
-  // these fields unchanged, so the memoized key survives to the next click);
-  // it only changes once the user actually edits a field, which is correctly
-  // a new logical attempt.
-  const [
-    templateVersionId,
-    currentAuthorizationId,
-    asOfField,
-    stepKeyField,
-    responsibleId,
-    accountableId,
-  ] = watch([
-    'templateVersionId',
-    'currentAuthorizationId',
-    'asOf',
-    'stepKey',
-    'responsibleId',
-    'accountableId',
-  ]);
-  const startIdempotencyKey = useMemo(
-    () => newIdempotencyKey(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: newIdempotencyKey() doesn't read these values, but together they define "the same logical start attempt" for retry-safety.
-    [
-      templateVersionId,
-      currentAuthorizationId,
-      asOfField,
-      stepKeyField,
-      responsibleId,
-      accountableId,
-    ],
-  );
+  // Only the two the default-selection effect below needs to observe. The
+  // idempotency key used to be memoized over all six, which is why they were
+  // all watched; it is now derived from the values actually being submitted
+  // (see `idempotencyKeyFor`), so watching the rest only caused re-renders.
+  const [templateVersionId, stepKeyField] = watch(['templateVersionId', 'stepKey']);
+  /**
+   * One key per set of answers, decided at submit time rather than at render
+   * time.
+   *
+   * `useMemo` over the field values looked equivalent and was not: the pickers
+   * populate their defaults through effects, so a value could still settle
+   * between the first press and the retry, mint a second key, and let the
+   * server create a second renewal from what the customer experienced as one
+   * button pressed twice. Comparing a signature of the answers actually being
+   * submitted has no such window — the same answers always produce the same
+   * key, and changed answers are a genuinely new attempt.
+   */
+  const startAttemptRef = useRef<{ signature: string; key: string } | null>(null);
+  const idempotencyKeyFor = (signature: string): string => {
+    if (startAttemptRef.current?.signature !== signature) {
+      startAttemptRef.current = { signature, key: newIdempotencyKey() };
+    }
+    return startAttemptRef.current.key;
+  };
 
   // Keeps `templateVersionId` and `stepKey` pointed at a real, currently
   // selected template's own step: defaults both to the first option once the
@@ -265,7 +254,11 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
       },
     ];
     try {
-      await startVisaRenewal(caseId, { ...fields, assignments }, startIdempotencyKey);
+      await startVisaRenewal(
+        caseId,
+        { ...fields, assignments },
+        idempotencyKeyFor(JSON.stringify(fields)),
+      );
       load();
     } catch (error) {
       if (error instanceof ApiRequestError) {
