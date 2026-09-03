@@ -1126,6 +1126,15 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
 describe('PayrollPage — canonical case resolution for payroll close', () => {
   beforeEach(() => {
     localStorage.clear();
+    // PayrollPage renders the salary-setup step (step 0) — not the wizard
+    // containing PayrollIntelligence — whenever profile.baseSalary is null,
+    // which it always is right after `localStorage.clear()`. Without a saved
+    // base salary here, PayrollIntelligence never mounts and
+    // listCanonicalPayrollCloses is never called, regardless of how
+    // useCaseForLegacyClient is mocked below — which is what made these
+    // "resolves the canonical case..." tests fail: they were pinning the
+    // right API calls against a screen state that can't reach them.
+    saveMvpProfile({ ...emptyMvpProfile, baseSalary: 7_000, salaryEffectiveDate: '2025-01-01' });
   });
 
   function renderAtClient(clientId?: string) {

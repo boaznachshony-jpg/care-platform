@@ -4,9 +4,21 @@ const mocks = vi.hoisted(() => ({
   readLocalDocumentFileForImport: vi.fn(),
 }));
 
-vi.mock('../storage/document-file-store.js', () => ({
-  readLocalDocumentFileForImport: mocks.readLocalDocumentFileForImport,
-}));
+// Only `readLocalDocumentFileForImport` needs mocking (its device-cache read
+// is what these tests control). `DocumentTooLargeForSyncError` must stay the
+// *real* class: document-mapping.ts does `throw new DocumentTooLargeForSyncError(...)`
+// and this file constructs it directly (see "Defect 3" tests below) — a mock
+// factory that omits it makes the import `undefined`, and `new undefined(...)`
+// throws a plain TypeError before any test body runs, taking the whole suite
+// down. Spreading the real module keeps the class real while still
+// substituting the one function under test.
+vi.mock('../storage/document-file-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../storage/document-file-store.js')>();
+  return {
+    ...actual,
+    readLocalDocumentFileForImport: mocks.readLocalDocumentFileForImport,
+  };
+});
 
 import { DocumentTooLargeForSyncError, resolveDocumentImportFile } from './document-mapping.js';
 

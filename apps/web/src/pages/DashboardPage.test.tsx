@@ -41,6 +41,10 @@ const mockProfile = {
 const originalProfile = { ...mockProfile };
 
 const mockGetCaseHealth = vi.fn();
+// The health API is keyed by the canonical employment-case id, not the
+// legacy client id the route carries — DashboardPage now resolves the
+// canonical case first (see canonical-case.ts) before asking for health.
+const mockFindCanonicalCase = vi.fn();
 
 // A vi.fn() (not a bare arrow function) so a single test can swap in a
 // realistic /clients/:clientId-prefixing implementation to prove the
@@ -57,6 +61,10 @@ vi.mock('../hooks/use-client-path.js', () => ({
 
 vi.mock('../api/client.js', () => ({
   getCaseHealth: (...args: unknown[]) => mockGetCaseHealth(...args),
+}));
+
+vi.mock('../canonical-case.js', () => ({
+  findCanonicalCase: (...args: unknown[]) => mockFindCanonicalCase(...args),
 }));
 
 function renderPage(clientId = 'client-001') {
@@ -76,6 +84,12 @@ describe('DashboardPage', () => {
     vi.clearAllMocks();
     mockClientPath.mockImplementation((path: string = '/') => path);
     Object.assign(mockProfile, originalProfile);
+    // Resolves whatever legacy client id the route passed to its canonical
+    // case, keyed off that id so different tests (client-001, client-demo-001)
+    // each get a distinguishable case id back.
+    mockFindCanonicalCase.mockImplementation((legacyClientId: string) =>
+      Promise.resolve({ id: `case-for-${legacyClientId}`, legacyClientId }),
+    );
     mockGetCaseHealth.mockResolvedValue({
       score: 90,
       actionsRemaining: 1,
@@ -107,9 +121,38 @@ describe('DashboardPage', () => {
     );
   });
 
-  it('calls getCaseHealth with the clientId from params', async () => {
+  // Was: "calls getCaseHealth with the clientId from params" — that pinned the
+  // defect where the legacy client id from the route was sent straight to a
+  // health API keyed by the canonical employment-case id, so every request
+  // 404'd. The screen now resolves the canonical case first and only then
+  // asks for its health, using the *case* id, not the client id.
+  it('resolves the canonical case for the route clientId, then calls getCaseHealth with the case id', async () => {
     renderPage('client-demo-001');
-    await waitFor(() => expect(mockGetCaseHealth).toHaveBeenCalledWith('client-demo-001'));
+    await waitFor(() => expect(mockFindCanonicalCase).toHaveBeenCalledWith('client-demo-001'));
+    await waitFor(() => expect(mockGetCaseHealth).toHaveBeenCalledWith('case-for-client-demo-001'));
+    expect(mockGetCaseHealth).not.toHaveBeenCalledWith('client-demo-001');
+  });
+
+  // Was silently swallowed: getCaseHealth's rejection had no `.catch`, so a
+  // failure just meant the score never appeared — indistinguishable from "no
+  // issues". The screen must now say loading failed instead of hiding it.
+  it('surfaces a health-load failure instead of swallowing it', async () => {
+    mockGetCaseHealth.mockRejectedValue(new Error('network error'));
+    renderPage('client-demo-001');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'טעינת נתוני התיק נכשלה. שום נתון בתיק לא נפגע.',
+    );
+  });
+
+  // The canonical-case lookup itself can also fail (not just getCaseHealth) —
+  // that must surface the same way, not leave the score tile stuck on its
+  // loading fallback forever.
+  it('surfaces a failure when the canonical case lookup itself fails', async () => {
+    mockFindCanonicalCase.mockRejectedValue(new Error('network error'));
+    renderPage('client-demo-001');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'טעינת נתוני התיק נכשלה. שום נתון בתיק לא נפגע.',
+    );
   });
 
   it('always shows the two upcoming payment obligations with the official payment link', () => {
