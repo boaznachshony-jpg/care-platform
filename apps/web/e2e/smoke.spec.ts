@@ -337,6 +337,9 @@ test('connects every primary screen through visible navigation and action links'
       ['ציר זמן', '/timeline', 'מה קרה בתיק'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה ויצירת קשר', '/contact', 'יצירת קשר ועזרה'],
+      // UI-NAV-11: account-level screens, reachable from the phone menu.
+      ['בני משפחה', '/family', 'מי יכול להיכנס לתיק?'],
+      ['מנוי וחיוב', '/billing', 'המנוי של CareDesk'],
     ] as const;
     for (const [linkName, route, expectedText] of moreConnections) {
       await page.goto(clientHome);
@@ -358,6 +361,9 @@ test('connects every primary screen through visible navigation and action links'
       ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה', '/contact', 'יצירת קשר ועזרה'],
+      // UI-NAV-11: account-level screens, linked next to the settings entry.
+      ['בני משפחה', '/family', 'מי יכול להיכנס לתיק?'],
+      ['מנוי וחיוב', '/billing', 'המנוי של CareDesk'],
     ] as const;
     for (const [linkName, route, expectedText] of connections) {
       await page.goto(clientHome);

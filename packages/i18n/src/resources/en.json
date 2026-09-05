@@ -207,7 +207,29 @@
     "configurationRequiredBody": "The application is locked until the authentication provider is configured. No data can be viewed.",
     "storageUnavailableTitle": "Secure data could not be loaded",
     "storageUnavailableBody": "The data service is currently unavailable. The application remains locked to prevent work on a partial or stale copy.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "signOutBlocked": "Some changes have not been saved to the cloud yet, so sign-out was stopped.",
+    "signOutRetry": "Try again",
+    "signOutDiscard": "Sign out anyway — unsaved changes will be lost",
+    "signOutFailed": "Sign-out did not complete. Check your connection and try again.",
+    "accessRevokedTitle": "Access to this workspace was removed",
+    "accessRevokedBody": "Your account is no longer allowed to view this family workspace. The local copy was deleted from this device to protect the family's privacy. If you believe this is a mistake, contact the person who manages the workspace.",
+    "localFilesNotCleared": "Local files were not deleted — close other CareDesk tabs and press Clear again",
+    "clearLocalFilesAgain": "Clear again",
+    "localFilesCleared": "Local files were deleted."
+  },
+  "sync": {
+    "conflictTitle": "The workspace was updated from another device, and this device also has unsaved changes. Which version should be kept?",
+    "keepRemote": "Load the server version",
+    "keepRemoteHint": "Changes made on this device will be discarded.",
+    "keepLocal": "Keep this device's version",
+    "keepLocalHint": "The other device's version will be replaced. Earlier versions are kept on the server.",
+    "shrinkBlocked": "The server stopped a save that deletes most of the workspace. Delete from every device in the family?",
+    "shrinkConfirm": "Yes, delete from every device",
+    "shrinkUndo": "Cancel and restore from the server",
+    "unauthorized": "You no longer have access to this workspace.",
+    "readOnlySave": "You do not have edit permission for this workspace. The change was not saved and the server copy was restored.",
+    "viewOnly": "View only — you do not have permission to edit this workspace."
   },
   "shell": {
     "loading": "Loading…",
