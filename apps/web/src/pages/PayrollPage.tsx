@@ -37,6 +37,7 @@ import {
   DraftStorageError,
 } from '../storage/form-draft-store.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { newEntityId } from '../api/idempotency.js';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
@@ -349,7 +350,7 @@ interface AdditionalPaymentDraft {
 }
 
 function newAdditionalPaymentDraft(): AdditionalPaymentDraft {
-  return { id: crypto.randomUUID(), description: '', amount: '' };
+  return { id: newEntityId(), description: '', amount: '' };
 }
 
 function additionalPaymentDrafts(record: MvpPayrollRecord | undefined): AdditionalPaymentDraft[] {
@@ -572,7 +573,16 @@ export function PayrollPage() {
   /** true means the customer typed an amount that replaces the computed one. */
   const [expenseAmountOverridden, setExpenseAmountOverridden] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
+  // A failed or refused save is not information — it is an interruption. The
+  // tone decides both the live role (alert vs. polite status) and the styling,
+  // so a validation refusal never reads as a friendly blue confirmation.
+  const [message, setMessageState] = useState<{
+    tone: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  function setMessage(text: string, tone: 'success' | 'error' = 'success') {
+    setMessageState(text ? { tone, text } : null);
+  }
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
@@ -1011,7 +1021,7 @@ export function PayrollPage() {
   function startPayrollSequence() {
     const months = monthsInRange(sequenceDraft.startMonth, sequenceDraft.endMonth);
     if (months.length === 0 || sequenceDraft.endMonth > currentMonth) {
-      setMessage('יש לבחור טווח חודשים תקין שאינו מסתיים בעתיד.');
+      setMessage('יש לבחור טווח חודשים תקין שאינו מסתיים בעתיד.', 'error');
       return;
     }
     const existingMonths = new Set(records.map((record) => record.month));
@@ -1039,7 +1049,7 @@ export function PayrollPage() {
     event.preventDefault();
     const baseSalary = numeric(values.baseSalary);
     if (baseSalary <= 0 || !profile.salaryEffectiveDate) {
-      setMessage('יש להזין שכר בסיס ותאריך תחולה.');
+      setMessage('יש להזין שכר בסיס ותאריך תחולה.', 'error');
       return;
     }
     setProfile({ ...profile, baseSalary, salaryEffectiveDate: profile.salaryEffectiveDate });
@@ -1068,6 +1078,7 @@ export function PayrollPage() {
     if (sequence && existing) {
       setMessage(
         'החודש כבר קיים ולא נדרס. עריכת חודש קיים זמינה רק מפעולת העריכה המפורשת בהיסטוריה.',
+        'error',
       );
       return;
     }
@@ -1079,7 +1090,7 @@ export function PayrollPage() {
         amount: numeric(payment.amount),
       }));
     const saved: MvpPayrollRecord = {
-      id: existing?.id ?? crypto.randomUUID(),
+      id: existing?.id ?? newEntityId(),
       month: values.month,
       baseSalary: proratedBaseSalary.amount,
       contractBaseSalary: numeric(values.baseSalary),
@@ -1160,12 +1171,12 @@ export function PayrollPage() {
   function saveExpense(event: React.FormEvent) {
     event.preventDefault();
     if (!expenseDraft.category || !expenseDraft.dueDate) {
-      setMessage('יש לבחור סוג תשלום ותאריך יעד.');
+      setMessage('יש לבחור סוג תשלום ותאריך יעד.', 'error');
       return;
     }
     const existingExpense = expenses.find((expense) => expense.id === editingExpenseId);
     const saved: MvpEmploymentExpense = {
-      id: existingExpense?.id ?? crypto.randomUUID(),
+      id: existingExpense?.id ?? newEntityId(),
       category: expenseDraft.category,
       frequency: expenseDraft.frequency,
       amount: numeric(expenseAmountValue),
@@ -1237,8 +1248,11 @@ export function PayrollPage() {
           <span className="pill amber">טרם הוגדר</span>
         </header>
         {message ? (
-          <p className="info-box" role="alert">
-            {message}
+          <p
+            className={message.tone === 'error' ? 'action-notice error' : 'info-box'}
+            role={message.tone === 'error' ? 'alert' : 'status'}
+          >
+            {message.text}
           </p>
         ) : null}
         <form className="wizard-card readable-form wizard-content" onSubmit={saveSalarySettings}>
@@ -1296,8 +1310,11 @@ export function PayrollPage() {
         </button>
       </header>
       {message ? (
-        <p className="info-box" role="status">
-          {message}
+        <p
+          className={message.tone === 'error' ? 'action-notice error' : 'info-box'}
+          role={message.tone === 'error' ? 'alert' : 'status'}
+        >
+          {message.text}
         </p>
       ) : null}
       {validationErrors.length > 0 ? (
