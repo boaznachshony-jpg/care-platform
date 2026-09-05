@@ -178,7 +178,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
 
   registerCaseRoutes(app, container);
   registerCaseSubResourceRoutes(app, container);
-  registerCaseDocumentRoutes(app, container);
+  registerCaseDocumentRoutes(app, container, productRateLimiter);
   registerCaseTaskRoutes(app, container);
   registerCaseMedicationRoutes(app, container);
   registerWorkspaceRoutes(app, container);

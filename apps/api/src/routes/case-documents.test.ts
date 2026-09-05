@@ -9,6 +9,7 @@ import type {
 import { buildContainer, DEV_TOKEN } from '../container.js';
 import { loadEnv } from '../env.js';
 import { buildServer } from '../create-server.js';
+import { INTAKE_REVIEW_RATE_LIMIT } from './case-documents.js';
 
 const AUTH = { authorization: `Bearer ${DEV_TOKEN}` };
 
@@ -241,6 +242,22 @@ describe('document intake review confirmation (audit evidence)', () => {
     expect(created.statusCode).toBe(201);
     return created.json().id as string;
   }
+
+  it('rate-limits review receipts per signed-in person (CodeQL js/missing-rate-limiting)', async () => {
+    const { app } = makeApp();
+    const caseId = await openCase(app);
+    const documentId = await uploadDocument(app, caseId);
+    const url = `/cases/${caseId}/documents/${documentId}/intake-reviews`;
+
+    for (let attempt = 0; attempt < INTAKE_REVIEW_RATE_LIMIT.max; attempt += 1) {
+      const ok = await app.inject({ method: 'POST', url, headers: AUTH, payload: REVIEW_BODY });
+      expect(ok.statusCode).toBe(201);
+    }
+    const refused = await app.inject({ method: 'POST', url, headers: AUTH, payload: REVIEW_BODY });
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().code).toBe('RATE_LIMITED');
+    expect(refused.headers['retry-after']).toBeDefined();
+  });
 
   it('records a confirmed review with an audit event and a timeline event', async () => {
     const { app, container } = makeApp();

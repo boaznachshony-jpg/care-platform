@@ -17,6 +17,17 @@ import {
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { sendError, sendValidationError } from './http-errors.js';
+import { makePrincipalRateLimit, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
+
+/**
+ * A review receipt is a human decision, so a person needs a handful per minute
+ * and a script needs none. Keyed by tenant:user through makePrincipalRateLimit.
+ */
+export const INTAKE_REVIEW_RATE_LIMIT = {
+  max: 20,
+  timeWindow: 60_000,
+  bucket: 'intake-review',
+} as const satisfies RouteRateLimit;
 
 interface CaseParams {
   caseId: string;
@@ -114,7 +125,11 @@ function toResponse(entry: DocumentWithCurrentVersion): DocumentResponse {
  * Case documents. Every route authenticates, then the use case runs the
  * deny-by-default authorization check — the route never decides access itself.
  */
-export function registerCaseDocumentRoutes(app: FastifyInstance, container: Container): void {
+export function registerCaseDocumentRoutes(
+  app: FastifyInstance,
+  container: Container,
+  rateLimiter: RateLimiter,
+): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
 
@@ -238,7 +253,12 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
    */
   app.post<{ Params: DocumentParams }>(
     '/cases/:caseId/documents/:documentId/intake-reviews',
-    options,
+    {
+      preHandler: [
+        authenticate,
+        makePrincipalRateLimit(rateLimiter, 'case-documents', INTAKE_REVIEW_RATE_LIMIT),
+      ],
+    },
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
