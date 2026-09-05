@@ -46,6 +46,7 @@ import { OpenIssuesPage } from './pages/OpenIssuesPage.js';
 import { OpenCasePage } from './pages/OpenCasePage.js';
 import { DemoOverviewPage } from './pages/DemoOverviewPage.js';
 import { AccountFrozenGate } from './components/AccountFrozenGate.js';
+import { LegalConsentGate } from './components/LegalConsentGate.js';
 
 const authenticatedEntrypoints = new Set([
   '/app',
@@ -63,6 +64,7 @@ const authenticatedEntrypoints = new Set([
   '/contact',
   '/worker',
   '/binder',
+  '/medications',
 ]);
 
 function ClientHome() {
@@ -114,236 +116,243 @@ function AuthenticatedApp() {
       sessionRecovering={<span>{t('errors.sessionRecovering')}</span>}
     >
       <AccountFrozenGate>
-        <Routes>
-          <Route path="/worker" element={<WorkerPortalPage />} />
-          <Route
-            path="/binder"
-            element={
-              <ClientApp>
-                <EmergencyBinderPage />
-              </ClientApp>
-            }
-          />
-          <Route path="/app" element={<ClientsPage />} />
-          <Route path="/family" element={<FamilyAccessPage />} />
-          <Route path="/billing" element={<BillingPage />} />
-          {/* Declared before /cases/:caseId so "new" is a route, not a case id. */}
-          <Route path="/cases/new" element={<OpenCasePage />} />
-          <Route path="/cases/:caseId" element={<CasePage />} />
-          <Route
-            path="/clients/:clientId"
-            element={
-              <ClientApp>
-                <ClientHome />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/overview"
-            element={
-              <ClientApp>
-                <OpenIssuesPage />
-              </ClientApp>
-            }
-          />
-          {/* The client-scoped entry point to case creation. OpenCasePage reads
+        {/* GAP-5-01: every signed-in user - including an invited manager or
+            viewer, who never sees onboarding or billing - accepts the terms and
+            the privacy policy once, at the current versions, before the product
+            renders. Exempts /worker (the caregiver is the data subject, not a
+            party who accepts). */}
+        <LegalConsentGate>
+          <Routes>
+            <Route path="/worker" element={<WorkerPortalPage />} />
+            <Route
+              path="/binder"
+              element={
+                <ClientApp>
+                  <EmergencyBinderPage />
+                </ClientApp>
+              }
+            />
+            <Route path="/app" element={<ClientsPage />} />
+            <Route path="/family" element={<FamilyAccessPage />} />
+            <Route path="/billing" element={<BillingPage />} />
+            {/* Declared before /cases/:caseId so "new" is a route, not a case id. */}
+            <Route path="/cases/new" element={<OpenCasePage />} />
+            <Route path="/cases/:caseId" element={<CasePage />} />
+            <Route
+              path="/clients/:clientId"
+              element={
+                <ClientApp>
+                  <ClientHome />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/overview"
+              element={
+                <ClientApp>
+                  <OpenIssuesPage />
+                </ClientApp>
+              }
+            />
+            {/* The client-scoped entry point to case creation. OpenCasePage reads
               the active client from the path, so the case it opens is linked to
               this client rather than to whichever workspace happened to be
               loaded. */}
-          <Route
-            path="/clients/:clientId/cases/new"
-            element={
-              <ClientApp>
-                <OpenCasePage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/onboarding"
-            element={
-              <ClientApp>
-                <OnboardingPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/tasks"
-            element={
-              <ClientApp>
-                <TasksPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/employee"
-            element={
-              <ClientApp>
-                <EmployeePage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/medications"
-            element={
-              <ClientApp>
-                <MedicationsPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/trust"
-            element={
-              <ClientApp>
-                <TrustMessagesPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/glossary"
-            element={
-              <ClientApp>
-                <GlossaryPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/documents"
-            element={
-              <ClientApp>
-                <DocumentsPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/timeline"
-            element={
-              <ClientApp>
-                <TimelinePage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/payroll"
-            element={
-              <ClientApp>
-                <PayrollPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/settings"
-            element={
-              <ClientApp>
-                <SettingsPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/binder"
-            element={
-              <ClientApp>
-                <EmergencyBinderPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/clients/:clientId/contact"
-            element={
-              <ClientApp>
-                <ContactPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/onboarding"
-            element={
-              <ClientApp>
-                <OnboardingPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/tasks"
-            element={
-              <ClientApp>
-                <TasksPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/employee"
-            element={
-              <ClientApp>
-                <EmployeePage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/medications"
-            element={
-              <ClientApp>
-                <MedicationsPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/trust"
-            element={
-              <ClientApp>
-                <TrustMessagesPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/glossary"
-            element={
-              <ClientApp>
-                <GlossaryPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/documents"
-            element={
-              <ClientApp>
-                <DocumentsPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/timeline"
-            element={
-              <ClientApp>
-                <TimelinePage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/payroll"
-            element={
-              <ClientApp>
-                <PayrollPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ClientApp>
-                <SettingsPage />
-              </ClientApp>
-            }
-          />
-          <Route
-            path="/contact"
-            element={
-              <ClientApp>
-                <ContactPage />
-              </ClientApp>
-            }
-          />
-          <Route path="*" element={<Navigate to="/app" replace />} />
-        </Routes>
+            <Route
+              path="/clients/:clientId/cases/new"
+              element={
+                <ClientApp>
+                  <OpenCasePage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/onboarding"
+              element={
+                <ClientApp>
+                  <OnboardingPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/tasks"
+              element={
+                <ClientApp>
+                  <TasksPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/employee"
+              element={
+                <ClientApp>
+                  <EmployeePage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/medications"
+              element={
+                <ClientApp>
+                  <MedicationsPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/trust"
+              element={
+                <ClientApp>
+                  <TrustMessagesPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/glossary"
+              element={
+                <ClientApp>
+                  <GlossaryPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/documents"
+              element={
+                <ClientApp>
+                  <DocumentsPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/timeline"
+              element={
+                <ClientApp>
+                  <TimelinePage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/payroll"
+              element={
+                <ClientApp>
+                  <PayrollPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/settings"
+              element={
+                <ClientApp>
+                  <SettingsPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/binder"
+              element={
+                <ClientApp>
+                  <EmergencyBinderPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/clients/:clientId/contact"
+              element={
+                <ClientApp>
+                  <ContactPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/onboarding"
+              element={
+                <ClientApp>
+                  <OnboardingPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/tasks"
+              element={
+                <ClientApp>
+                  <TasksPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/employee"
+              element={
+                <ClientApp>
+                  <EmployeePage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/medications"
+              element={
+                <ClientApp>
+                  <MedicationsPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/trust"
+              element={
+                <ClientApp>
+                  <TrustMessagesPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/glossary"
+              element={
+                <ClientApp>
+                  <GlossaryPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                <ClientApp>
+                  <DocumentsPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/timeline"
+              element={
+                <ClientApp>
+                  <TimelinePage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/payroll"
+              element={
+                <ClientApp>
+                  <PayrollPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ClientApp>
+                  <SettingsPage />
+                </ClientApp>
+              }
+            />
+            <Route
+              path="/contact"
+              element={
+                <ClientApp>
+                  <ContactPage />
+                </ClientApp>
+              }
+            />
+            <Route path="*" element={<Navigate to="/app" replace />} />
+          </Routes>
+        </LegalConsentGate>
       </AccountFrozenGate>
     </AuthProvider>
   );

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -108,6 +108,48 @@ describe('AppShell text size controls', () => {
   });
 });
 
+describe('AppShell account-level navigation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  /**
+   * UI-NAV-11. Family access and billing are account-scoped screens. They were
+   * reachable only from the client picker, three taps deep on a phone. They are
+   * linked as-is, never through the employer-scoped path() helper.
+   */
+  it('links family access and billing from the sidebar and the mobile menu without an employer scope', () => {
+    render(
+      <MemoryRouter initialEntries={['/clients/client-1/']}>
+        <AppShell>
+          <p>תוכן בדיקה</p>
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    const sidebar = screen.getByRole('complementary', { name: 'ניווט ראשי' });
+    expect(within(sidebar).getByRole('link', { name: /בני משפחה/ })).toHaveAttribute(
+      'href',
+      '/family',
+    );
+    expect(within(sidebar).getByRole('link', { name: /מנוי וחיוב/ })).toHaveAttribute(
+      'href',
+      '/billing',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
+    const more = screen.getByRole('navigation', { name: 'ניווט נוסף' });
+    expect(within(more).getByRole('link', { name: /בני משפחה/ })).toHaveAttribute(
+      'href',
+      '/family',
+    );
+    expect(within(more).getByRole('link', { name: /מנוי וחיוב/ })).toHaveAttribute(
+      'href',
+      '/billing',
+    );
+  });
+});
+
 describe('AppShell theme toggle', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -132,9 +174,10 @@ describe('AppShell theme toggle', () => {
     const { unmount } = renderShell();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     unmount();
+    // Sign-out unmounts the shell; the attribute must not survive it.
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
 
     localStorage.clear();
-    document.documentElement.removeAttribute('data-theme');
     renderShell();
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });

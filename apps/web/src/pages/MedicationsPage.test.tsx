@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { initI18n } from '@caredesk/i18n';
@@ -7,8 +7,8 @@ import { readMvpMedications, saveMvpMedications } from '../storage/mvp-storage.j
 import type { MvpMedication } from '../storage/mvp-storage.js';
 
 const DAILY_LABEL = 'נלקחת כל יום';
-const NO_DAYS_NOTICE =
-  'לא סומן אף יום, ולכן לא תישלח תזכורת על התרופה הזו. סמנו לפחות יום אחד כדי שתזכורות יתחילו להישלח.';
+// GAP-3-03: describes the schedule, not a send - nothing sends a reminder yet.
+const NO_DAYS_NOTICE = 'לא סומן אף יום. סמנו לפחות יום אחד כדי שהתרופה תיכלל בלוח התזכורות.';
 
 const i18n = initI18n();
 
@@ -43,6 +43,34 @@ function addMedication({
 describe('MedicationsPage', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * BACKLOG-13 / UI-WRITE-10. On plain http (the phone at 192.168.x.x)
+   * `crypto.randomUUID` does not exist, and the raw call used to throw before
+   * the record was written — "add" did nothing, silently. Only
+   * `getRandomValues` is available there, and that has to be enough.
+   */
+  it('records a medication when crypto.randomUUID is unavailable (insecure context)', () => {
+    const real = globalThis.crypto;
+    vi.stubGlobal('crypto', {
+      getRandomValues: (array: Uint8Array) => real.getRandomValues(array),
+    });
+    expect(typeof crypto.randomUUID).toBe('undefined');
+
+    renderPage();
+    addMedication({ name: 'אקמול' });
+
+    const stored = readMvpMedications();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(screen.getByText('אקמול')).toBeInTheDocument();
   });
 
   it('states plainly that the record is not medical advice, before any data is entered', () => {

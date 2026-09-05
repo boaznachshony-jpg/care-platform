@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -20,7 +20,7 @@ interface Rewrite {
  * The walk upward keeps the test working if it is ever run from the repository
  * root instead, which is the other way this file gets executed.
  */
-async function readWebConfig(): Promise<{ rewrites: Rewrite[] }> {
+async function readWebConfig(): Promise<{ path: string; rewrites: Rewrite[] }> {
   let directory = process.cwd();
   for (let depth = 0; depth < 5; depth += 1) {
     for (const candidate of [
@@ -36,7 +36,7 @@ async function readWebConfig(): Promise<{ rewrites: Rewrite[] }> {
         // presence of `rewrites` alone would silently assert against the wrong
         // deployment. The web build command is what identifies this one.
         if (parsed.rewrites && parsed.buildCommand?.includes('@caredesk/web')) {
-          return { rewrites: parsed.rewrites };
+          return { path: candidate, rewrites: parsed.rewrites };
         }
       } catch {
         // Not here; keep looking rather than failing on the first miss.
@@ -69,5 +69,16 @@ describe('Vercel web routing contract', () => {
   it('keeps the SPA fallback', async () => {
     const { rewrites } = await readWebConfig();
     expect(rewrites).toContainEqual({ source: '/(.*)', destination: '/index.html' });
+  });
+
+  it('ships nothing from public/ except the two crawler files', async () => {
+    // SEC-WEB-04. Everything in apps/web/public is copied verbatim into the
+    // production origin, outside the bundle, the CSP's script-src and every
+    // test. A 116 KB development prototype loading three cdnjs scripts sat
+    // there for months. New static files are a review decision: add them to
+    // this list on purpose, not to the directory by accident.
+    const { path } = await readWebConfig();
+    const entries = await readdir(resolve(dirname(path), 'public'));
+    expect(entries.sort()).toEqual(['robots.txt', 'sitemap.xml']);
   });
 });

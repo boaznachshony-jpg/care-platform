@@ -174,6 +174,27 @@ describe('DashboardPage', () => {
     renderPage('client-demo-001');
     await waitFor(() => expect(mockFindCanonicalCase).toHaveBeenCalled());
     expect(screen.queryByText(/לא מצאנו תיק העסקה המקושר/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'פתיחת תיק העסקה' })).toBeNull();
+  });
+
+  // The alert used to send the customer to the clients screen, which has no
+  // case action. The step it names is now the button next to it.
+  it('offers to open the case when none is linked', async () => {
+    mockClientPath.mockImplementation((path: string = '/') =>
+      path === '/' ? '/clients/client-001' : `/clients/client-001${path}`,
+    );
+    mockFindCanonicalCase.mockResolvedValue(null);
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'פתיחת תיק העסקה' })).toHaveAttribute(
+      'href',
+      '/clients/client-001/cases/new',
+    );
+  });
+
+  it('shows the employment start date day-first, not as the raw ISO string', () => {
+    renderPage();
+    expect(screen.getByText('15.01.2026')).toBeInTheDocument();
+    expect(screen.queryByText('2026-01-15')).toBeNull();
   });
 
   it('always shows the two upcoming payment obligations with the official payment link', () => {

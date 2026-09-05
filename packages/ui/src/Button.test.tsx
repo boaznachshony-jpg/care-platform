@@ -25,4 +25,39 @@ describe('Button', () => {
     const { container } = render(<Button>Save</Button>);
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  describe('busy', () => {
+    it('does not call onClick while busy', () => {
+      const onClick = vi.fn();
+      render(
+        <Button busy onClick={onClick}>
+          שמור
+        </Button>,
+      );
+      screen.getByRole('button').click();
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('keeps its accessible name and is not disabled while busy', () => {
+      render(<Button busy>שמור</Button>);
+      const button = screen.getByRole('button', { name: 'שמור' });
+      expect(button).toBeEnabled();
+      expect(button).not.toHaveAttribute('aria-disabled');
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      expect(button).toHaveAttribute('data-busy', 'true');
+      expect(button.querySelector('.cd-button__spinner')).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('renders no spinner and no aria-busy when idle', () => {
+      render(<Button>שמור</Button>);
+      const button = screen.getByRole('button');
+      expect(button).not.toHaveAttribute('aria-busy');
+      expect(button.querySelector('.cd-button__spinner')).toBeNull();
+    });
+
+    it('has no detectable accessibility violations while busy', async () => {
+      const { container } = render(<Button busy>Save</Button>);
+      expect(await axe(container)).toHaveNoViolations();
+    });
+  });
 });

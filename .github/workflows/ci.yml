@@ -84,6 +84,11 @@ jobs:
         run: pnpm format:check
       - name: Lint
         run: pnpm lint
+      - name: Dependency audit
+        # SECURITY.md promises a dependency audit in CI; this is it. Only
+        # production dependencies, and only high/critical advisories fail the
+        # build - moderate ones arrive as Dependabot PRs and are fixed there.
+        run: pnpm audit --prod --audit-level=high
 
   compile:
     name: Build and typecheck
@@ -160,6 +165,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Run migrations and RLS security integration tests
         run: pnpm --filter @caredesk/db rls-test:ci
+      - name: Build workspace packages
+        run: pnpm -r --filter './packages/*' build
+      - name: Collaboration query against the application role (SEC-DB-01)
+        env:
+          DATABASE_URL: ${{ env.DATABASE_ADMIN_URL }}
+          RLS_TEST_MODE: ci-role-switch
+        run: pnpm --filter @caredesk/api exec vitest run src/collaboration/wave5-collaboration.integration.test.ts
 
   migration-idempotency:
     # The check that would have caught REL-01. Applying migrations once to an

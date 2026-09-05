@@ -239,6 +239,47 @@ describe('CollaborationPanel', () => {
     });
   });
 
+  describe('in-flight write', () => {
+    /**
+     * UI-WRITE-15: nothing was disabled while a PUT was in flight, so a second
+     * change on the same row before the first resolved raced it and the
+     * winner was arbitrary.
+     */
+    it('disables the busy row, announces saving, and ignores a second change until the PUT settles', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(LOADED_COLLABORATION) })
+        .mockReturnValue(new Promise(() => undefined)); // the PUT never resolves
+      vi.stubGlobal('fetch', fetchMock);
+      renderPanel();
+      const select = await screen.findByRole('combobox', { name: 'אחראי/ת על שכר ותשלומים' });
+
+      fireEvent.change(select, { target: { value: '' } });
+      await waitFor(() => expect(select).toBeDisabled());
+      expect(screen.getByRole('status')).toHaveTextContent('שומרים…');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      fireEvent.change(select, { target: { value: 'mem-001' } });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // Only the busy row is locked; another row is still editable.
+      expect(screen.getByRole('combobox', { name: 'אחראי/ת על חידוש אשרה' })).toBeEnabled();
+    });
+
+    it('re-enables the row once the write settles', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(LOADED_COLLABORATION) })
+        .mockRejectedValue(new Error('network error'));
+      vi.stubGlobal('fetch', fetchMock);
+      renderPanel();
+      const select = await screen.findByRole('combobox', { name: 'אחראי/ת על שכר ותשלומים' });
+      fireEvent.change(select, { target: { value: '' } });
+      await screen.findByRole('alert');
+      await waitFor(() => expect(select).toBeEnabled());
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
+
   describe('with no active members', () => {
     beforeEach(() => {
       vi.stubGlobal(

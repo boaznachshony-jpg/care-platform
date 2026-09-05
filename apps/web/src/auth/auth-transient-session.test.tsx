@@ -32,9 +32,15 @@ vi.mock('../storage/workspace-sync.js', () => ({
   flushWorkspaceSync: mocks.flushWorkspaceSync,
   pauseWorkspaceSync: mocks.pauseWorkspaceSync,
   stopWorkspaceSync: mocks.stopWorkspaceSync,
+  getWorkspaceSyncState: () => 'saved',
+  isWorkspaceAccessDeniedError: () => false,
+  WORKSPACE_SYNC_CHANGED: 'caredesk:workspace-sync-changed',
 }));
 
-vi.mock('../api/client.js', () => ({ prewarmApi: mocks.prewarmApi }));
+vi.mock('../api/client.js', () => ({
+  prewarmApi: mocks.prewarmApi,
+  listFamilyMembers: async () => ({ canManage: true, members: [] }),
+}));
 
 vi.mock('./client.js', () => ({
   getBrowserAuthClient: () => ({

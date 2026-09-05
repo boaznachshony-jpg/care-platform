@@ -11,9 +11,19 @@ const mockListCaseContacts = vi.fn();
 const mockAddCaseContact = vi.fn();
 
 vi.mock('../../api/client.js', () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    constructor(
+      readonly status: number,
+      readonly code: string,
+    ) {
+      super(code);
+    }
+  },
   listCaseContacts: (...args: unknown[]) => mockListCaseContacts(...args),
   addCaseContact: (...args: unknown[]) => mockAddCaseContact(...args),
 }));
+
+import { ApiRequestError } from '../../api/client.js';
 
 function renderSection(caseId = DEMO_CASE_ID) {
   return render(
@@ -77,6 +87,23 @@ describe('CaseContactsSection', () => {
     it('displays the primary contact badge', async () => {
       renderSection();
       await waitFor(() => expect(screen.getByText('ראשי')).toBeInTheDocument());
+    });
+  });
+
+  /**
+   * A failed fetch used to be caught as `setContacts([])`, so a 500 or a 403
+   * rendered "עדיין לא נוספו אנשי קשר לתיק." — the emergency contacts looked
+   * deleted rather than temporarily unreachable.
+   */
+  describe('when the list cannot be loaded', () => {
+    const LOAD_FAILED = 'לא ניתן היה לטעון את אנשי הקשר. הנתונים לא נפגעו — נסו לרענן את הדף.';
+
+    it.each([500, 403])('shows an error, never the empty state, on HTTP %i', async (status) => {
+      mockListCaseContacts.mockRejectedValue(new ApiRequestError(status, 'REQUEST_ERROR'));
+      renderSection();
+      expect(await screen.findByText(LOAD_FAILED)).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(LOAD_FAILED);
+      expect(screen.queryByText('עדיין לא נוספו אנשי קשר לתיק.')).toBeNull();
     });
   });
 });

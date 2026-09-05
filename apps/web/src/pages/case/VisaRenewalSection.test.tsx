@@ -175,7 +175,8 @@ describe('VisaRenewalSection', () => {
 
     // Current authorization: status label and validity dates, never the id.
     const authSelect = screen.getByRole('combobox', { name: 'היתר העבודה הנוכחי' });
-    expect(within(authSelect).getByText('בתוקף · 2025-01-01 – 2026-01-01')).toBeInTheDocument();
+    // Validity dates day-first, not as raw ISO strings.
+    expect(within(authSelect).getByText('בתוקף · 01.01.2025 – 01.01.2026')).toBeInTheDocument();
     expect(screen.queryByText(authorization.id)).not.toBeInTheDocument();
 
     // Responsible/accountable: family member names, never their ids.

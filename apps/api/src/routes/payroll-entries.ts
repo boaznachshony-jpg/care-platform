@@ -5,7 +5,7 @@ import { PayrollComponentError } from '@caredesk/domain';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { PayrollEntryService } from '../payroll-entry-service.js';
-import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
+import { clientAddress, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const params = z.object({
@@ -61,7 +61,7 @@ function makePayrollRateLimit(limiter: RateLimiter, policy: RouteRateLimit): pre
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
-      : `unauthenticated:${request.ip}`;
+      : `unauthenticated:${clientAddress(request)}`;
     const decision = await limiter.consume(
       `payroll-entry:${policy.bucket}:${principal}`,
       policy.max,

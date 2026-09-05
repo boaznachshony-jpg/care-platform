@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { createPool, withTenant } from './pool.js';
+import { REQUIRED_MIGRATIONS } from './required-migrations.js';
 import { assertRlsTestTargetIsSafe } from './rls-check-target.js';
 
 const NORMALIZED_TABLES = [
@@ -361,6 +362,48 @@ async function main(): Promise<void> {
       }
     });
 
+    // SEC-DB-01. `app_user` is global identity data: no grant to the
+    // application role, forced RLS, no policy. The collaboration panel used to
+    // join it and failed on every case page. The first probe pins the table as
+    // unreadable so nobody quietly "fixes" that by granting on it; the second
+    // runs the exact pair of statements Wave5Service.collaboration now issues
+    // and expects the seeded owner back with a resolved name.
+    await expectRejected('app_user is not readable by the application role', () =>
+      withTenant(pool, a.tenant, (client) => client.query('select 1 from app_user')),
+    );
+    await withTenant(pool, a.tenant, async (client) => {
+      const memberships = await client.query<{ id: string; role: string; status: string }>(
+        'select id, role, status from tenant_membership where tenant_id=$1',
+        [a.tenant],
+      );
+      const names = await client.query<{
+        membership_id: string;
+        display_name: string | null;
+        email: string | null;
+      }>('select membership_id, display_name, email from list_caredesk_family_members($1)', [
+        a.tenant,
+      ]);
+      const nameByMembership = new Map(names.rows.map((row) => [row.membership_id, row]));
+      const members = memberships.rows.map((membership) => ({
+        ...membership,
+        display_name:
+          nameByMembership.get(membership.id)?.display_name ??
+          nameByMembership.get(membership.id)?.email ??
+          '—',
+      }));
+      const owner = members.find((member) => member.id === a.membership);
+      if (
+        members.length === 1 &&
+        owner?.role === 'owner' &&
+        owner.status === 'active' &&
+        owner.display_name === 'Synthetic User A'
+      ) {
+        pass('collaboration member queries resolve the seeded membership with its display name');
+      } else {
+        fail(`collaboration member queries returned ${JSON.stringify(members)}`);
+      }
+    });
+
     await withTenant(pool, a.tenant, async (client) => {
       const reviewId = randomUUID();
       const planId = randomUUID();
@@ -440,6 +483,34 @@ async function main(): Promise<void> {
         // policies reject that value, which is also a safe fail-closed result.
         pass(`${table}: missing tenant context is rejected`);
       }
+    }
+
+    // SEC-DB-02. 0044 granted SELECT on the ledger, but a table with forced RLS
+    // and no policy returns zero rows to the grantee - so `/ready` reported
+    // every migration missing on any migrations-built database. Migration 0049
+    // adds the read policy; this probe fails whenever the ledger is unreadable
+    // (or empty) as the application role, which is the exact way `/ready` broke.
+    try {
+      const ledger = await withAppRoleWithoutTenant(pool, (client) =>
+        client.query<{ count: number }>(
+          'select count(*)::int as count from public.schema_migrations',
+        ),
+      );
+      const count = ledger.rows[0]?.count ?? 0;
+      if (count >= REQUIRED_MIGRATIONS.length) {
+        pass(`schema_migrations: application role reads the ledger (${count} rows)`);
+      } else {
+        fail(
+          `schema_migrations: application role sees ${count} ledger rows, ` +
+            `expected at least ${REQUIRED_MIGRATIONS.length}`,
+        );
+      }
+    } catch (error) {
+      fail(
+        `schema_migrations: application role cannot read the ledger (${
+          error instanceof Error ? error.message : String(error)
+        })`,
+      );
     }
 
     for (const table of MUTABLE_TABLES) {

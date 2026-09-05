@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import type { EmploymentCaseResponse } from '@caredesk/schemas';
 import { ErrorState, Skeleton, StatusBadge, type StatusTone } from '@caredesk/ui';
 import { ApiRequestError, getEmploymentCase } from '../api/client.js';
+import { formatDateOnly } from '../format-timestamp.js';
 import { CaseContactsSection } from './case/CaseContactsSection.js';
 import { CaseDocumentsSection } from './case/CaseDocumentsSection.js';
 import { CaseTasksSection } from './case/CaseTasksSection.js';
@@ -40,6 +41,7 @@ const CASE_STATUS_PRESENTATION: Record<string, { labelKey: string; tone: StatusT
 export function CasePage() {
   const { t } = useTranslation();
   const { caseId } = useParams<{ caseId: string }>();
+  const { hash } = useLocation();
   const [state, setState] = useState<CaseState>({ kind: 'loading' });
 
   useEffect(() => {
@@ -65,14 +67,33 @@ export function CasePage() {
     };
   }, [caseId]);
 
+  // Health-factor actions link to `/cases/{id}#documents` and `#tasks`. The
+  // sections only exist once the case has loaded, so the browser's own hash
+  // handling (which runs on navigation, against an empty skeleton) never found
+  // them and every such link landed at the top of the page. Scroll once the
+  // target is actually in the document.
+  useEffect(() => {
+    if (state.kind !== 'loaded' || !hash) return;
+    const target = document.getElementById(hash.slice(1));
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'start' });
+    }
+  }, [state.kind, hash]);
+
+  // Same reason as the loaded-state link below: this route renders outside
+  // the app shell, so a 404 or a failed load with no link is a dead end.
+  const backLink = <Link to="/app">{t('case.backToCases')}</Link>;
+
   if (state.kind === 'loading') {
     return <Skeleton loadingLabel={t('shell.loading')} height="2rem" width="20rem" />;
   }
   if (state.kind === 'not_found') {
-    return <ErrorState kind="validation" title={t('case.caseNotFound')} body="" />;
+    return (
+      <ErrorState kind="validation" title={t('case.caseNotFound')} body="" action={backLink} />
+    );
   }
   if (state.kind === 'error') {
-    return <ErrorState kind="retryable" title={t('case.loadFailed')} body="" />;
+    return <ErrorState kind="retryable" title={t('case.loadFailed')} body="" action={backLink} />;
   }
 
   const { data } = state;
@@ -118,7 +139,7 @@ export function CasePage() {
         <dd>{data.caregiver.nationality}</dd>
 
         <dt>{t('case.startDate')}</dt>
-        <dd dir="ltr">{data.startDate}</dd>
+        <dd dir="ltr">{formatDateOnly(data.startDate) ?? data.startDate}</dd>
       </dl>
 
       <AutomationPanel caseId={data.id} />

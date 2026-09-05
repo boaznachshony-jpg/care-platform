@@ -74,8 +74,9 @@ describe('CaseDocumentsSection', () => {
       expect(within(item).getByText('דרכון')).toBeInTheDocument();
       expect(within(item).getByText('מתקרב לתפוגה')).toBeInTheDocument();
       expect(within(item).getByText('ממתין לאימות')).toBeInTheDocument();
-      // Shown as the stored calendar day, not a timezone-shifted rendering.
-      expect(within(item).getByText('2026-09-01')).toBeInTheDocument();
+      // Day-first Israel-time rendering, not the raw ISO string.
+      expect(within(item).getByText('01.09.2026')).toBeInTheDocument();
+      expect(within(item).queryByText(/2026-09-01/)).toBeNull();
     });
 
     it('offers an open action rather than exposing a link to the file', async () => {
@@ -91,5 +92,35 @@ describe('CaseDocumentsSection', () => {
       await screen.findByRole('listitem');
       expect(await axe(container)).toHaveNoViolations();
     });
+  });
+
+  /**
+   * A failed fetch used to be caught as `setDocuments([])`, so a 500 or an
+   * expired session rendered "עדיין לא הועלו מסמכים לתיק." — as if the passport
+   * and visa scans were simply not there.
+   */
+  describe('when the list cannot be loaded', () => {
+    const LOAD_FAILED = 'לא ניתן היה לטעון את המסמכים. הנתונים לא נפגעו — נסו לרענן את הדף.';
+
+    it.each([500, 403])('shows an error, never the empty state, on HTTP %i', async (status) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: false, status, json: () => Promise.resolve({}) }),
+      );
+      renderSection();
+      expect(await screen.findByText(LOAD_FAILED)).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(LOAD_FAILED);
+      expect(screen.queryByText('עדיין לא הועלו מסמכים לתיק.')).toBeNull();
+    });
+  });
+
+  it('anchors the section as #documents so health-factor links can land on it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }),
+    );
+    renderSection();
+    await screen.findByText('עדיין לא הועלו מסמכים לתיק.');
+    expect(document.getElementById('documents')).not.toBeNull();
   });
 });

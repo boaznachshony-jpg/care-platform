@@ -6,6 +6,7 @@ import type {
   BillingRepository,
   CaseContactRepository,
   CaseFoundationRepository,
+  Clock,
   DocumentRepository,
   FamilyMembershipRepository,
   IdentityInvitationService,
@@ -258,6 +259,14 @@ const DEV_TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const DEV_USER_ID = '00000000-0000-4000-8000-000000000002';
 
 export interface Container {
+  /**
+   * The deny-by-default permission check the use cases run. Exposed so a route
+   * that performs a write without a dedicated use case (the intake-review
+   * receipt, SEC-AUTHZ-04) authorizes through the same audited helper rather
+   * than deciding access itself.
+   */
+  authorization: AuthorizationService;
+  clock: Clock;
   wave5?: Wave5Service;
   auth: AuthService;
   actorResolver: ActorResolver;
@@ -711,6 +720,8 @@ export function buildContainer(env: Env): Container {
 
   return {
     ...(pool ? { wave5: new Wave5Service(pool, storage) } : {}),
+    authorization,
+    clock,
     auth,
     actorResolver,
     audit,
@@ -822,6 +833,15 @@ export function buildContainer(env: Env): Container {
       if (!env.DATA_LOSS_ALERT_EMAIL)
         reasons.push(
           'DATA_LOSS_ALERT_EMAIL is not configured; a suspected data loss would be logged and nobody told',
+        );
+      // SEC-INPUT-03 / SEC-INFRA-03. Both scheduled jobs authenticate with this
+      // secret and nothing else; without it every nightly run is a 401 that
+      // nobody sees. A readiness reason rather than a parse-time refusal on
+      // purpose: an operator locked out of Vercel must not find production
+      // turned into a 503-everything app to protect a nightly job.
+      if (!env.CRON_SECRET)
+        reasons.push(
+          'CRON_SECRET is not configured; the nightly data-integrity scan and billing collection are refused with 401',
         );
 
       // R0-08. Until now these two checks ended here, at "the variable is set".

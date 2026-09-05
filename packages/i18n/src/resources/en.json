@@ -71,6 +71,7 @@
     "sendInvite": "Send invitation",
     "sendingInvite": "Sending invitation…",
     "inviteSent": "Invitation sent. The user signs in through the link in their email.",
+    "existingAccountError": "This address already has a CareDesk account, so no invitation was sent. Ask the family member to sign in with that address; if the case does not appear for them, contact support so we can link the account to the case.",
     "membersTitle": "People with access",
     "currentUser": "This is me",
     "statusInvited": "Invited — not signed in yet",
@@ -207,7 +208,29 @@
     "configurationRequiredBody": "The application is locked until the authentication provider is configured. No data can be viewed.",
     "storageUnavailableTitle": "Secure data could not be loaded",
     "storageUnavailableBody": "The data service is currently unavailable. The application remains locked to prevent work on a partial or stale copy.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "signOutBlocked": "Some changes have not been saved to the cloud yet, so sign-out was stopped.",
+    "signOutRetry": "Try again",
+    "signOutDiscard": "Sign out anyway — unsaved changes will be lost",
+    "signOutFailed": "Sign-out did not complete. Check your connection and try again.",
+    "accessRevokedTitle": "Access to this workspace was removed",
+    "accessRevokedBody": "Your account is no longer allowed to view this family workspace. The local copy was deleted from this device to protect the family's privacy. If you believe this is a mistake, contact the person who manages the workspace.",
+    "localFilesNotCleared": "Local files were not deleted — close other CareDesk tabs and press Clear again",
+    "clearLocalFilesAgain": "Clear again",
+    "localFilesCleared": "Local files were deleted."
+  },
+  "sync": {
+    "conflictTitle": "The workspace was updated from another device, and this device also has unsaved changes. Which version should be kept?",
+    "keepRemote": "Load the server version",
+    "keepRemoteHint": "Changes made on this device will be discarded.",
+    "keepLocal": "Keep this device's version",
+    "keepLocalHint": "The other device's version will be replaced. Earlier versions are kept on the server.",
+    "shrinkBlocked": "The server stopped a save that deletes most of the workspace. Delete from every device in the family?",
+    "shrinkConfirm": "Yes, delete from every device",
+    "shrinkUndo": "Cancel and restore from the server",
+    "unauthorized": "You no longer have access to this workspace.",
+    "readOnlySave": "You do not have edit permission for this workspace. The change was not saved and the server copy was restored.",
+    "viewOnly": "View only — you do not have permission to edit this workspace."
   },
   "shell": {
     "loading": "Loading…",
@@ -279,6 +302,7 @@
   "contacts": {
     "heading": "Contacts",
     "empty": "No contacts have been added to this case yet.",
+    "loadFailed": "The contacts could not be loaded. Nothing was lost — try refreshing the page.",
     "addHeading": "Add a contact",
     "fullName": "Full name",
     "roleType": "Role on the case",
@@ -318,6 +342,7 @@
   "tasks": {
     "heading": "Tasks",
     "empty": "No open tasks on this case.",
+    "loadFailed": "The tasks could not be loaded. Nothing was lost — try refreshing the page.",
     "addHeading": "New task",
     "title": "Task title",
     "dueDate": "Due date",
@@ -360,6 +385,7 @@
   "documents": {
     "heading": "Documents",
     "empty": "No documents have been uploaded to this case yet.",
+    "loadFailed": "The documents could not be loaded. Nothing was lost — try refreshing the page.",
     "addHeading": "Upload a document",
     "privacyNote": "Files are held in private storage. Viewing one uses a short-lived link created only after a permission check.",
     "documentType": "Document type",
@@ -525,7 +551,8 @@
     "legalConsentTerms": "the terms of service",
     "legalConsentAnd": "and",
     "legalConsentPrivacy": "the privacy policy",
-    "legalConsentNote": "The acceptance is recorded with the document name, its version and the moment of approval. Entering the caregiver's details requires a lawful basis, as explained in the privacy policy."
+    "legalConsentNote": "The acceptance is recorded with the document name, its version and the moment of approval. Entering the caregiver's details requires a lawful basis, as explained in the privacy policy.",
+    "legalConsentRequired": "To complete setup, tick the box accepting the terms of service and the privacy policy."
   },
   "clients": {
     "backupPlaintextWarning": "The backup file is not encrypted and contains ID numbers, passport numbers and payroll data. Keep it somewhere protected and do not send it by email or message.",
@@ -570,7 +597,7 @@
     "statusOk": "All in order",
     "statusLoading": "Loading data…",
     "scoreUnavailable": "The file health score is unavailable right now — we'll retry shortly.",
-    "caseNotLinked": "We could not find an employment case linked to this client. Nothing has been deleted — open the case from the employment cases screen, and contact us if it is there but not linked.",
+    "caseNotLinked": "We could not find an employment case linked to this client. Nothing has been deleted — you can open a case with the button below, and contact us if the case already exists but is not linked.",
     "okTitle": "No open actions",
     "okBody": "Everything saved has been checked and is in order. We'll flag anything that needs attention here.",
     "overallStatus": "Overall status",
@@ -1051,6 +1078,7 @@
   "timeline": {
     "heading": "Timeline",
     "empty": "No events on this case yet.",
+    "loadFailed": "The timeline could not be loaded. Nothing was lost — try refreshing the page.",
     "case": {
       "opened": {
         "summary": "Employment case opened"
@@ -1269,7 +1297,11 @@
     "reviewsLoadFailed": "Loading the review requests failed. Nothing in the file was affected.",
     "escalateFailed": "Creating the review request failed. Please try again.",
     "historyLoadFailed": "Loading the history failed.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "askFailed": "The assistant could not answer right now. Your question was kept — try again.",
+    "checklistSaving": "Creating the tasks…",
+    "checklistSaved": "The tasks were created and saved to the file.",
+    "checklistFailed": "Creating the tasks failed. No task was created — try again."
   },
   "assistant": {
     "groundingLabel": "Based on your CareDesk file",
@@ -1370,7 +1402,12 @@
     "savePreferences": "Save preferences",
     "sentByYou": "Sent by you",
     "sentAt": "Sent",
-    "answeredAt": "Answered"
+    "answeredAt": "Answered",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "requestSent": "Your request was sent.",
+    "saveFailed": "Saving failed and nothing was recorded. Check your connection and try again.",
+    "retry": "Try again"
   },
   "regulation": {
     "title": "Regulation rules — reviewed content",
@@ -1412,6 +1449,7 @@
     "handledAt": "Handled",
     "title": "Family collaboration",
     "loading": "Loading the responsibility split...",
+    "saving": "Saving…",
     "loadFailed": "The responsibility split could not be loaded. No data was affected.",
     "retry": "Try again",
     "saveFailed": "The update was not saved. You can try again.",
@@ -1490,8 +1528,8 @@
     "notDaily": "Not every day",
     "dailyLabel": "Taken every day",
     "daysLegend": "On which days it is taken",
-    "daysHint": "More than one day may be selected. A reminder is sent only on the selected days.",
-    "daysMissing": "No day is selected, so no reminder will be sent for this medication. Select at least one day for reminders to start.",
+    "daysHint": "More than one day may be selected. The reminder applies only to the selected days.",
+    "daysMissing": "No day is selected. Select at least one day for this medication to be included in the reminder schedule.",
     "day": {
       "sunday": "Sunday",
       "monday": "Monday",
@@ -1524,10 +1562,10 @@
   },
   "reminderRecipients": {
     "title": "Who receives reminders",
-    "intro": "The people who are told when a dose is due. Each one has their own channel - someone abroad on a data-only plan will not receive an SMS, so pick WhatsApp or email for them.",
+    "intro": "The people who will be told when a dose is due, once reminder delivery is switched on. Each one has their own channel - someone abroad on a data-only plan will not receive an SMS, so pick WhatsApp or email for them.",
     "privacyNotice": "A medication reminder is health information about another person. Do not add anyone who has not explicitly agreed, and every recipient can remove themselves at any time. The message body never names the medication.",
     "listTitle": "Recipients",
-    "empty": "No recipients yet. Without one, no reminder is sent.",
+    "empty": "No recipients yet. Once delivery is switched on, reminders reach only the people on this list.",
     "addTitle": "Add a recipient",
     "editTitle": "Edit recipient",
     "name": "Name",
@@ -1546,7 +1584,7 @@
     "consentLabel": "This person agreed to receive reminders",
     "consentHint": "Nothing is sent without agreement. The time it was given is recorded.",
     "activeLabel": "Active",
-    "statusReady": "Will receive reminders",
+    "statusReady": "Will receive reminders once delivery is switched on",
     "statusNoConsent": "Waiting for their agreement",
     "statusPaused": "Paused",
     "statusNoContact": "Missing contact details for the chosen channel",
@@ -1557,6 +1595,19 @@
     "remove": "Remove recipient",
     "removeConfirm": "Remove this person from the reminder list?",
     "savedNotice": "Recipients saved.",
-    "updatedAt": "Updated"
+    "updatedAt": "Updated",
+    "notYetDelivered": "Sending reminders to recipients is not yet active in this version. The details entered here are not used for sending until a notice here says otherwise."
+  },
+  "consent": {
+    "gateTitle": "Accept the terms of service and the privacy policy",
+    "gateBody": "Before entering the case we ask you to accept the terms of service and the privacy policy. The workspace holds information about another person — the caregiver — so every user's acceptance is recorded: the document name, its version and the moment of approval.",
+    "gateCheckboxPrefix": "I have read and accept",
+    "gateTermsLink": "the terms of service",
+    "gateAnd": "and",
+    "gatePrivacyLink": "the privacy policy",
+    "gateSubmit": "Accept and enter",
+    "gateSubmitting": "Recording your acceptance…",
+    "gateRecordFailed": "We could not record your acceptance, so you have not been let in yet. Check your connection and try again.",
+    "gateSignOut": "Sign out without accepting"
   }
 }

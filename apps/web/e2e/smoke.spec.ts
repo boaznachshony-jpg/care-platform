@@ -81,6 +81,7 @@ async function completeClientOnboarding(
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
   await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
+  await page.getByRole('checkbox', { name: /בהשלמת ההקמה/ }).check();
   await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
   await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
   await expect(page.getByText('שלב ההקמה האחרון: חיבור אמצעי תשלום מאובטח')).toBeVisible();
@@ -158,6 +159,7 @@ test('completes onboarding, persists data and updates settings', async ({ page }
   await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
   await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
   await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
+  await page.getByRole('checkbox', { name: /בהשלמת ההקמה/ }).check();
   await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
 
   await expect(page).toHaveURL(/\/billing\?from=onboarding$/);
@@ -337,6 +339,9 @@ test('connects every primary screen through visible navigation and action links'
       ['ציר זמן', '/timeline', 'מה קרה בתיק'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה ויצירת קשר', '/contact', 'יצירת קשר ועזרה'],
+      // UI-NAV-11: account-level screens, reachable from the phone menu.
+      ['בני משפחה', '/family', 'מי יכול להיכנס לתיק?'],
+      ['מנוי וחיוב', '/billing', 'המנוי של CareDesk'],
     ] as const;
     for (const [linkName, route, expectedText] of moreConnections) {
       await page.goto(clientHome);
@@ -358,6 +363,9 @@ test('connects every primary screen through visible navigation and action links'
       ['שכר', '/payroll', 'רישום שכר חודשי'],
       ['הגדרות', '/settings', 'פרטים והעדפות'],
       ['עזרה', '/contact', 'יצירת קשר ועזרה'],
+      // UI-NAV-11: account-level screens, linked next to the settings entry.
+      ['בני משפחה', '/family', 'מי יכול להיכנס לתיק?'],
+      ['מנוי וחיוב', '/billing', 'המנוי של CareDesk'],
     ] as const;
     for (const [linkName, route, expectedText] of connections) {
       await page.goto(clientHome);
@@ -642,7 +650,7 @@ test('requires an explicit salary source before payroll', async ({ page }) => {
 test('saves Uzbekistan as caregiver country and shows Uzbek trust messages', async ({ page }) => {
   const clientHome = await seedCompletedProfile(page);
   await page.goto(`${clientHome}/employee`);
-  await expect(page.getByText('אוזבקיסטן · תחילת העסקה 2026-01-15')).toBeVisible();
+  await expect(page.getByText('אוזבקיסטן · תחילת העסקה 15.01.2026')).toBeVisible();
   await page.getByRole('link', { name: 'מסרים לבניית אמון' }).click();
   await expect(page.getByText('ארץ מוצא: אוזבקיסטן · שפה שנבחרה: אוזבקית')).toBeVisible();
   await expect(page.getByText('Rahmat. Yordamingizni qadrlayman.')).toBeVisible();

@@ -5,7 +5,7 @@ import { withTenant } from '@caredesk/db';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { ScenarioExpenseService } from '../scenario-expense-service.js';
-import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
+import { clientAddress, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -83,7 +83,7 @@ function makeScenarioRateLimit(
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
-      : `unauthenticated:${request.ip}`;
+      : `unauthenticated:${clientAddress(request)}`;
     const decision = await limiter.consume(
       `scenario-expense:${policy.bucket}:${principal}`,
       policy.max,

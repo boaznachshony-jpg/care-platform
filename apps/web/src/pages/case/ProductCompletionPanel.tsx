@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@caredesk/ui';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import {
   askCaseAssistant,
   confirmAssistantChecklist,
@@ -15,6 +16,7 @@ import {
   type ProfessionalReviewStatus,
   type ProfessionalReviewTransitionResponse,
 } from '../../api/client.js';
+import { newIdempotencyKey } from '../../api/idempotency.js';
 import { formatDateTime, toIsoAttribute } from '../../format-timestamp.js';
 import {
   healthFactorAction,
@@ -59,6 +61,23 @@ interface AssistantResponse extends Omit<ApiAssistantResponse, 'factsUsed' | 'es
 }
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+type WriteState = 'idle' | 'saving' | 'saved' | 'error';
+
+/**
+ * One idempotency key per logical attempt (the VisaRenewalSection pattern):
+ * the same payload keeps the same key so a lost response plus a second press
+ * is replayed by the server instead of duplicated; a changed payload is a new
+ * attempt and gets a new key. Callers clear the ref after success so a later,
+ * deliberate repeat of the same request is not swallowed as a replay.
+ */
+type WriteAttempt = { signature: string; key: string } | null;
+function keyForAttempt(ref: { current: WriteAttempt }, signature: string): string {
+  if (ref.current?.signature !== signature) {
+    ref.current = { signature, key: newIdempotencyKey() };
+  }
+  return ref.current.key;
+}
 
 function translateOrFallback(
   t: Translate,
@@ -121,6 +140,18 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AssistantResponse>();
   const [busy, setBusy] = useState(false);
+  // UI-STATES-08: a rejected question used to leave the button re-enabled and
+  // nothing else — indistinguishable from "the assistant had no answer".
+  const [askError, setAskError] = useState(false);
+  // UI-WRITE-03: "create tasks" was fire-and-forget — no await, no catch, no
+  // lock, a fresh key per click — so every press created the checklist's tasks
+  // again and a failure was invisible.
+  const [checklistState, setChecklistState] = useState<WriteState>('idle');
+  const checklistInFlight = useRef(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: newIdempotencyKey() reads nothing, but the proposed checklist is what defines "the same logical plan" for retry-safety (AutomationPanel pattern).
+  const checklistKey = useMemo(() => newIdempotencyKey(), [answer?.proposedChecklist]);
+  const escalateAttempt = useRef<WriteAttempt>(null);
+  const transitionAttempt = useRef<WriteAttempt>(null);
   useEffect(() => {
     // The two calls are independent (case health vs. review list), so one
     // failing must not hide the other, and a retry (loadAttempt) must not
@@ -149,6 +180,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
   }, [caseId, loadAttempt]);
   async function ask() {
     setBusy(true);
+    setAskError(false);
     try {
       setAnswer(
         await askCaseAssistant(
@@ -157,8 +189,32 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
           question.includes('travel') ? 'travel_check' : 'checklist',
         ),
       );
+      // A new answer is a new proposed checklist; the previous confirmation's
+      // saved/error state no longer describes it.
+      setChecklistState('idle');
+    } catch {
+      setAskError(true);
     } finally {
       setBusy(false);
+    }
+  }
+  async function confirmChecklist(items: string[]) {
+    // The ref, not the state, is the lock: two clicks in the same tick both
+    // see `checklistState === 'idle'` because the re-render has not happened.
+    if (checklistInFlight.current) return;
+    checklistInFlight.current = true;
+    setChecklistState('saving');
+    try {
+      await confirmAssistantChecklist(caseId, items, checklistKey);
+      setChecklistState('saved');
+      // The task list is rendered by CaseTasksSection, which owns its own
+      // fetch; this announces that tasks were created so that section can
+      // refetch once it subscribes to the event (not wired in this change).
+      window.dispatchEvent(new CustomEvent('caredesk:case-tasks-changed', { detail: { caseId } }));
+    } catch {
+      setChecklistState('error');
+    } finally {
+      checklistInFlight.current = false;
     }
   }
   const [escalateError, setEscalateError] = useState(false);
@@ -166,12 +222,18 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
     setEscalateError(false);
     setBusy(true);
     try {
-      const row = await createProfessionalReview(caseId, {
+      const input = {
         category: 'general',
         reason: assistantEscalationReason(answer?.escalation, t) ?? t('completion.reviewReason'),
         summary: t('completion.reviewSummary'),
         source: answer ? 'case_ai' : 'manual',
-      });
+      };
+      const row = await createProfessionalReview(
+        caseId,
+        input,
+        keyForAttempt(escalateAttempt, JSON.stringify(input)),
+      );
+      escalateAttempt.current = null;
       setReviews((current) => [row, ...current]);
     } catch {
       // No confirmation on failure looked identical to "it worked" — an
@@ -194,11 +256,18 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
     try {
       const assignedTo = assignments[review.id]?.trim();
       const resolutionNote = notes[review.id]?.trim();
-      const updated = await transitionProfessionalReview(caseId, review.id, {
+      const input = {
         status,
         ...(assignedTo ? { assignedTo } : {}),
         ...(status === 'resolved' && resolutionNote ? { resolutionNote } : {}),
-      });
+      };
+      const updated = await transitionProfessionalReview(
+        caseId,
+        review.id,
+        input,
+        keyForAttempt(transitionAttempt, JSON.stringify({ reviewId: review.id, ...input })),
+      );
+      transitionAttempt.current = null;
       setReviews((current) => current.map((row) => (row.id === updated.id ? updated : row)));
       setHistories((current) => ({ ...current, [review.id]: [] }));
     } catch {
@@ -243,7 +312,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                   // link ran together as "0/25Upload or review the document".
                   <>
                     {' · '}
-                    <a href={factor.actionTarget}>{healthFactorAction(factor, t)}</a>
+                    <Link to={factor.actionTarget}>{healthFactorAction(factor, t)}</Link>
                   </>
                 ) : null}
               </li>
@@ -259,7 +328,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
           </Button>
         </p>
       ) : (
-        <p>{t('shell.loading')}</p>
+        <p role="status">{t('shell.loading')}</p>
       )}
       <hr />
       <h2>{t('completion.assistant')}</h2>
@@ -270,6 +339,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       <Button disabled={busy || question.trim().length < 3} onClick={() => void ask()}>
         {t('completion.ask')}
       </Button>
+      {askError ? <p role="alert">{t('completion.askFailed')}</p> : null}
       {answer ? (
         <article aria-label={t('completion.aiLabel')}>
           <strong>{assistantGroundingLabel(answer, t)}</strong>
@@ -288,13 +358,26 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
             </p>
           ))}
           {answer.proposedChecklist ? (
-            <Button
-              onClick={() => void confirmAssistantChecklist(caseId, answer.proposedChecklist!)}
-            >
-              {t('completion.createTasks')}
-            </Button>
+            <>
+              <Button
+                disabled={checklistState === 'saving' || checklistState === 'saved'}
+                aria-busy={checklistState === 'saving' || undefined}
+                onClick={() => void confirmChecklist(answer.proposedChecklist!)}
+              >
+                {t('completion.createTasks')}
+              </Button>
+              {checklistState === 'saving' ? (
+                <p role="status">{t('completion.checklistSaving')}</p>
+              ) : null}
+              {checklistState === 'saved' ? (
+                <p role="status">{t('completion.checklistSaved')}</p>
+              ) : null}
+              {checklistState === 'error' ? (
+                <p role="alert">{t('completion.checklistFailed')}</p>
+              ) : null}
+            </>
           ) : null}
-          <Button variant="secondary" onClick={() => void escalate()}>
+          <Button variant="secondary" disabled={busy} onClick={() => void escalate()}>
             {t('completion.createReview')}
           </Button>
         </article>
@@ -434,7 +517,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
       ) : (
         <p>{t('completion.noReviews')}</p>
       )}
-      <Button variant="secondary" onClick={() => void escalate()}>
+      <Button variant="secondary" disabled={busy} onClick={() => void escalate()}>
         {t('completion.manualReview')}
       </Button>
     </section>
