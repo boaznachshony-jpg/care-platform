@@ -166,7 +166,7 @@ button {
 }
 .auth-card input:focus {
   border-color: #2867d8;
-  outline: 3px solid #dceaff;
+  outline: 3px solid var(--cd-focus);
 }
 .auth-error {
   padding: 12px 14px;
@@ -282,7 +282,9 @@ button {
   margin-block: 8px;
 }
 .legal-note {
-  font-size: 0.88rem;
+  /* em, not rem: the A+/A- control scales .app-frame's font-size, and only
+     em-sized text inherits that. rem is pinned to the root and ignores it. */
+  font-size: 0.88em;
   color: #536174;
 }
 /* R5-01..R5-04 — provenance badge for the four kinds of number.
@@ -481,10 +483,12 @@ button {
 .record-timestamp {
   display: block;
   color: #64748b;
-  /* 10px by decision: the stamp must be legible but must never compete with the
-     amount it annotates. Tabular figures keep the columns aligned at this size,
-     where proportional digits would start to look ragged. */
-  font-size: 10px;
+  /* 0.6em (10px at the 18px base) by decision: the stamp must be legible but
+     must never compete with the amount it annotates — and it must still grow
+     with the A+/A- control, which a px value would ignore. Tabular figures
+     keep the columns aligned at this size, where proportional digits would
+     start to look ragged. */
+  font-size: 0.6em;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
@@ -633,9 +637,14 @@ a {
   text-decoration: none;
   border-radius: 14px;
 }
-.brand-home-link:hover,
-.brand-home-link:focus-visible {
+.brand-home-link:hover {
   outline: 3px solid rgba(33, 89, 199, 0.2);
+  outline-offset: 4px;
+}
+/* Keyboard focus uses the one app-wide ring; the soft hover tint above is a
+   1.2:1 ring and would be invisible as a focus indicator. */
+.brand-home-link:focus-visible {
+  outline: 3px solid var(--cd-focus);
   outline-offset: 4px;
 }
 .brand-mark {
@@ -739,24 +748,25 @@ a {
 }
 .sync-status {
   min-height: 32px;
-  display: inline-flex !important;
+  display: inline-flex;
   align-items: center;
   border-radius: 999px;
   padding: 5px 10px;
-  color: #1d663f !important;
-  background: #e8f6ee;
-  font-size: 12px !important;
+  color: var(--cd-success-on-soft);
+  background: var(--cd-success-soft);
+  /* em so the A+/A- control reaches the save indicator too. */
+  font-size: 0.7em;
   font-weight: 800;
   white-space: nowrap;
 }
 .sync-status-saving,
 .sync-status-loading {
-  color: #675117 !important;
-  background: #fff5d8;
+  color: var(--cd-warning-on-soft);
+  background: var(--cd-warning-soft);
 }
 .sync-status-error {
-  color: #9d241c !important;
-  background: #ffebe9;
+  color: var(--cd-danger-on-soft);
+  background: var(--cd-danger-soft);
 }
 .sync-retry-button {
   min-height: 32px;
@@ -938,6 +948,15 @@ a {
   width: auto;
   height: auto;
 }
+/* Same trap for the save-failure retry link inside .sync-status: the 44px icon
+   box and grey fill from `.top-actions button` (0,1,1) beat `.sync-retry-button`
+   (0,1,0), leaving a 32px control on the one path where the user must act. */
+.top-actions .sync-retry-button {
+  width: auto;
+  height: auto;
+  min-height: 48px;
+  background: transparent;
+}
 .avatar {
   width: 44px;
   height: 44px;
@@ -1037,7 +1056,7 @@ a {
   font-weight: 800;
 }
 .status-card span {
-  font-size: 14px;
+  font-size: 0.8em;
   color: #668070;
 }
 .status-card h2 {
@@ -1346,7 +1365,7 @@ a {
   justify-content: center;
   border-radius: 999px;
   padding: 5px 11px;
-  font-size: 13px;
+  font-size: 0.75em;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1612,8 +1631,8 @@ a {
   margin: 0;
 }
 .list-task p {
-  font-size: 14px;
-  color: #7b8593;
+  font-size: 0.8em;
+  color: var(--cd-text-secondary);
 }
 .task-editor {
   display: grid;
@@ -1814,7 +1833,7 @@ a {
 }
 .form-note {
   color: #657286;
-  font-size: 0.95rem;
+  font-size: 0.95em;
   grid-column: 1 / -1;
 }
 .empty-panel {
@@ -1833,25 +1852,27 @@ a {
   justify-content: space-between;
   gap: 16px;
   min-height: 76px;
-  border: 2px solid #b8d2ff;
+  /* Tokens with dark values, so the payroll total no longer stays a light
+     card on a dark page. */
+  border: 2px solid var(--cd-accent-soft);
   border-radius: 18px;
   padding: 14px 18px;
-  background: #f1f6ff;
+  background: var(--cd-accent-soft);
 }
 .payroll-live-total span,
 .payroll-live-total small {
   display: block;
 }
 .payroll-live-total strong {
-  color: #0b57d0;
+  color: var(--cd-accent-on-soft);
   font-size: 1.35rem;
 }
 .payroll-live-total.deduction {
-  border-color: #f2c7c2;
-  background: #fff5f3;
+  border-color: var(--cd-danger-soft);
+  background: var(--cd-danger-soft);
 }
 .payroll-live-total.deduction strong {
-  color: #a52f27;
+  color: var(--cd-danger-on-soft);
 }
 
 /* National Insurance monthly report — the Institute's own six-column table.
@@ -2162,8 +2183,8 @@ a {
   margin: 0;
 }
 .document-card p {
-  color: #778292;
-  font-size: 14px;
+  color: var(--cd-text-secondary);
+  font-size: 0.8em;
 }
 .timeline {
   position: relative;
@@ -3216,12 +3237,6 @@ body {
   padding: 0 16px;
   background: var(--cd-surface);
 }
-.readable-form input:focus,
-.readable-form select:focus {
-  outline: 3px solid #bcd3ff;
-  outline-offset: 2px;
-  border-color: #2b63ba;
-}
 .licensed-bureau-selector {
   display: grid;
   gap: 18px;
@@ -3528,6 +3543,35 @@ body {
   --cd-gold-edge-strong: transparent;
   --cd-card-gradient: var(--cd-surface);
   --cd-card-gradient-hover: var(--cd-surface);
+
+  /* Token bridge for @caredesk/ui. packages/design-tokens/tokens.css declares
+     the --color-* / --font-family-base / --radius-input values that Button,
+     TextField, Alert, StatusBadge, EmptyState and ErrorState read — as light
+     literals with no dark counterpart, in a typeface the app never loads.
+     This file is bundled after tokens.css (main.tsx import order), so on the
+     same :root these aliases win the tie and every shared component follows
+     the app palette, its Heebo stack, its focus ring and its control geometry.
+     No dark restatement is needed: they resolve through var() against
+     whatever --cd-* value the [data-theme='dark'] block sets, exactly as
+     --cd-text-primary does. */
+  --color-bg-canvas: var(--cd-canvas);
+  --color-bg-surface: var(--cd-surface);
+  --color-text-primary: var(--cd-ink);
+  --color-text-secondary: var(--cd-muted);
+  --color-border: var(--cd-border);
+  --color-action: var(--cd-primary);
+  --color-action-hover: var(--cd-primary-hover);
+  --color-focus: var(--cd-focus);
+  --color-success: var(--cd-success);
+  --color-warning: var(--cd-warning);
+  --color-danger: var(--cd-danger);
+  --color-info: var(--cd-primary);
+  --font-family-base: var(--cd-font-family);
+  --radius-input: var(--cd-control-radius);
+  /* One primary button, not two: .cd-button reads these so it matches
+     .primary-button (60px via --cd-control-height, 18px, 800). */
+  --cd-button-font-size: 18px;
+  --cd-button-font-weight: 800;
 }
 
 body {
@@ -3685,6 +3729,7 @@ select:focus-visible {
 
 .readable-form .field-input-error,
 .wizard-content .field-input-error,
+.readable-form input[aria-invalid='true'],
 .field-input-error {
   border: 3px solid #c62828;
   background: #fff5f5;
@@ -3698,6 +3743,7 @@ select:focus-visible {
   outline: 4px solid rgb(198 40 40 / 24%);
 }
 
+.field-error,
 .field-error-message {
   display: block;
   margin-top: 8px;
@@ -3705,6 +3751,25 @@ select:focus-visible {
   font-size: 16px;
   font-weight: 750;
   line-height: 1.45;
+}
+
+/* Inline outcome boxes. Used at 16 call sites (dashboard, medications, settings,
+   reminder recipients) and, until now, styled nowhere — a saved-notice or a
+   failure rendered as plain paragraph text. */
+.success-box,
+.error-box {
+  margin: 16px 0;
+  padding: 14px 18px;
+  border-radius: var(--cd-control-radius);
+  font-weight: 700;
+}
+.success-box {
+  background: var(--cd-success-soft);
+  color: var(--cd-success-on-soft);
+}
+.error-box {
+  background: var(--cd-danger-soft);
+  color: var(--cd-danger-on-soft);
 }
 
 .info-box {
@@ -3980,7 +4045,7 @@ input[type='number'] {
 }
 .public-site a:focus-visible,
 .public-site summary:focus-visible {
-  outline: 4px solid #f0b429;
+  outline: 4px solid var(--cd-focus);
   outline-offset: 4px;
 }
 .public-header {
@@ -4675,7 +4740,7 @@ input[type='number'] {
 .contact-request-form input:focus,
 .contact-request-form textarea:focus {
   border-color: #2368cf;
-  outline: 3px solid rgb(35 104 207 / 20%);
+  outline: 3px solid var(--cd-focus);
   outline-offset: 1px;
 }
 .contact-request-form small,
@@ -5178,12 +5243,12 @@ input[type='number'] {
   font-weight: 900;
 }
 .action-notice.success {
-  background: #eaf8f0;
-  color: #17653a;
+  background: var(--cd-success-soft);
+  color: var(--cd-success-on-soft);
 }
 .action-notice.error {
-  background: #fff0f0;
-  color: #a51d25;
+  background: var(--cd-danger-soft);
+  color: var(--cd-danger-on-soft);
 }
 .family-ownership-notice {
   margin-top: 24px;
@@ -6878,6 +6943,39 @@ input[type='number'] {
   border-color: rgba(255, 255, 255, 0.14);
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
+}
+/* The rule above (0,4,1) would otherwise paint over the invalid-field border
+   in dark mode, so a failed validation showed the same faint white edge as a
+   healthy field. */
+[data-theme='dark']
+  input[aria-invalid='true']:not([type='checkbox']):not([type='radio']):not([type='file']),
+[data-theme='dark'] select[aria-invalid='true'],
+[data-theme='dark'] textarea[aria-invalid='true'],
+[data-theme='dark'] .cd-text-field__input[aria-invalid='true'],
+[data-theme='dark'] .cd-select-field__input[aria-invalid='true'] {
+  border-color: var(--cd-danger);
+}
+/* .sync-status carries the save state in the topbar; its light -soft/-on-soft
+   tokens are restated here because the -saving/-error modifiers (0,1,0) would
+   otherwise lose to a bare [data-theme='dark'] .sync-status (0,2,0) rule. */
+[data-theme='dark'] .sync-status {
+  color: var(--cd-success-on-soft);
+  background: var(--cd-success-soft);
+}
+[data-theme='dark'] .sync-status-saving,
+[data-theme='dark'] .sync-status-loading {
+  color: var(--cd-warning-on-soft);
+  background: var(--cd-warning-soft);
+}
+[data-theme='dark'] .sync-status-error {
+  color: var(--cd-danger-on-soft);
+  background: var(--cd-danger-soft);
+}
+/* `[data-theme='dark'] .top-actions button` (0,2,1) would give the retry link a
+   raised fill and ink text inside the red pill; it stays a bare text link. */
+[data-theme='dark'] .top-actions .sync-retry-button {
+  background: transparent;
+  color: inherit;
 }
 [data-theme='dark'] .save-bar {
   border-color: var(--cd-border);
