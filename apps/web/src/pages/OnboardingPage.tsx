@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
 import type { LegalAcceptanceRequest } from '@caredesk/schemas';
 import { ApiRequestError, getBillingSubscription, recordLegalAcceptance } from '../api/client.js';
+import { useAuth } from '../auth/auth-context.js';
 import {
   caregiverCountries,
   caregiverLanguages,
@@ -69,12 +70,24 @@ function stepStorageKey(clientId: string): string {
  * regains connectivity. The record is idempotent per (user, document,
  * version), so a retry after the billing flow already recorded it, or a
  * retry firing twice, is a harmless no-op.
+ *
+ * SEC-WEB-05: the key is scoped to the signed-in user's id. The queue used to
+ * live under one shared key, survived sign-out, and was replayed by the next
+ * account to open this page under THAT account's identity - an acceptance
+ * record for somebody who never ticked anything. Now a queued request is only
+ * written when a user id exists, and only the current user's own queue is ever
+ * read. Keys of other users left on a shared device are never flushed here;
+ * removing that residue at sign-out belongs to workspace-sync.
  */
-const PENDING_LEGAL_ACCEPTANCE_KEY = 'caredesk.onboarding.pending-legal-acceptance.v1';
+const PENDING_LEGAL_ACCEPTANCE_KEY_PREFIX = 'caredesk.onboarding.pending-legal-acceptance.v1';
 
-function readPendingLegalAcceptance(): LegalAcceptanceRequest | null {
+function pendingLegalAcceptanceKey(userId: string): string {
+  return `${PENDING_LEGAL_ACCEPTANCE_KEY_PREFIX}.${userId}`;
+}
+
+function readPendingLegalAcceptance(userId: string): LegalAcceptanceRequest | null {
   try {
-    const raw = window.localStorage.getItem(PENDING_LEGAL_ACCEPTANCE_KEY);
+    const raw = window.localStorage.getItem(pendingLegalAcceptanceKey(userId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LegalAcceptanceRequest>;
     return Array.isArray(parsed.documents) && parsed.documents.length > 0 && parsed.context
@@ -85,20 +98,25 @@ function readPendingLegalAcceptance(): LegalAcceptanceRequest | null {
   }
 }
 
-function writePendingLegalAcceptance(input: LegalAcceptanceRequest): void {
-  window.localStorage.setItem(PENDING_LEGAL_ACCEPTANCE_KEY, JSON.stringify(input));
+function writePendingLegalAcceptance(userId: string, input: LegalAcceptanceRequest): void {
+  window.localStorage.setItem(pendingLegalAcceptanceKey(userId), JSON.stringify(input));
 }
 
-function clearPendingLegalAcceptance(): void {
-  window.localStorage.removeItem(PENDING_LEGAL_ACCEPTANCE_KEY);
+function clearPendingLegalAcceptance(userId: string): void {
+  window.localStorage.removeItem(pendingLegalAcceptanceKey(userId));
 }
 
-/** Retries a queued acceptance; leaves it queued for the next attempt on failure. */
-function flushPendingLegalAcceptance(): void {
-  const pending = readPendingLegalAcceptance();
+/**
+ * Retries the current user's queued acceptance; leaves it queued for the next
+ * attempt on failure. Without a user id there is no queue to read: the legacy
+ * unscoped key and other users' keys are deliberately not consulted.
+ */
+function flushPendingLegalAcceptance(userId: string | null): void {
+  if (!userId) return;
+  const pending = readPendingLegalAcceptance(userId);
   if (!pending) return;
   void recordLegalAcceptance(pending)
-    .then(() => clearPendingLegalAcceptance())
+    .then(() => clearPendingLegalAcceptance(userId))
     .catch(() => undefined);
 }
 
@@ -163,6 +181,18 @@ export function OnboardingPage() {
     return draft.representativeName || draft.representativePhone ? 'yes' : '';
   });
   const [touched, setTouched] = useState<Set<string>>(() => new Set());
+  /**
+   * GAP-5-02: the acceptance used to be a passive paragraph ("by completing
+   * setup I accept...") beside the submit button. Consent that is never
+   * actively given is not consent, so the last step now carries a required
+   * checkbox and the button that completes setup stays disabled until it is
+   * ticked. Not persisted in the draft on purpose: the tick belongs to the
+   * click it authorises, not to a form value restored on a later visit.
+   */
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  // SEC-WEB-05: the pending-acceptance queue is keyed by this id. Null in a
+  // local, unauthenticated run, where nothing is queued at all.
+  const userId = useAuth().user?.id ?? null;
   const checklistComplete = employmentSetupCompletedCount(draft);
 
   useEffect(() => {
@@ -173,10 +203,11 @@ export function OnboardingPage() {
   // flushPendingLegalAcceptance above), both on mount and whenever the
   // browser regains connectivity while this page is open.
   useEffect(() => {
-    flushPendingLegalAcceptance();
-    window.addEventListener('online', flushPendingLegalAcceptance);
-    return () => window.removeEventListener('online', flushPendingLegalAcceptance);
-  }, []);
+    const flush = () => flushPendingLegalAcceptance(userId);
+    flush();
+    window.addEventListener('online', flush);
+    return () => window.removeEventListener('online', flush);
+  }, [userId]);
 
   // Debounced draft auto-save: in-progress (possibly invalid) values are kept
   // out of the committed profile but survive leaving the page mid-step.
@@ -403,17 +434,26 @@ export function OnboardingPage() {
     // just retry the same failure forever). ApiRequestError with a 4xx status
     // is the latter; anything else - a network failure, a timeout, a 5xx - is
     // queued for flushPendingLegalAcceptance to retry.
-    const legalAcceptanceInput: LegalAcceptanceRequest = {
-      documents: [
-        { document: 'terms', version: TERMS_DOCUMENT_VERSION },
-        { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
-      ],
-      context: 'onboarding',
-    };
-    void recordLegalAcceptance(legalAcceptanceInput).catch((error: unknown) => {
-      if (error instanceof ApiRequestError && error.status >= 400 && error.status < 500) return;
-      writePendingLegalAcceptance(legalAcceptanceInput);
-    });
+    //
+    // Only recorded when the checkbox was actually ticked (GAP-5-02). The
+    // submit button is disabled until it is, so this guard is always true
+    // here; it exists so that no future call path can record an acceptance
+    // nobody gave.
+    if (legalAccepted) {
+      const legalAcceptanceInput: LegalAcceptanceRequest = {
+        documents: [
+          { document: 'terms', version: TERMS_DOCUMENT_VERSION },
+          { document: 'privacy', version: PRIVACY_DOCUMENT_VERSION },
+        ],
+        context: 'onboarding',
+      };
+      void recordLegalAcceptance(legalAcceptanceInput).catch((error: unknown) => {
+        if (error instanceof ApiRequestError && error.status >= 400 && error.status < 500) return;
+        // SEC-WEB-05: queued under this user's own key only. With no signed-in
+        // id there is no identity to replay it under later, so nothing is kept.
+        if (userId) writePendingLegalAcceptance(userId, legalAcceptanceInput);
+      });
+    }
 
     // "First run" is a property of the ACCOUNT's subscription, not of any one
     // client record. `profile.onboardingCompleted` (useMvpProfile) is scoped
@@ -480,6 +520,9 @@ export function OnboardingPage() {
           onSubmit={(event) => {
             event.preventDefault();
             if (!currentValid) return;
+            // The form is noValidate, so the checkbox's `required` is not
+            // browser-enforced; the disabled button and this guard are.
+            if (step === LAST_STEP && !legalAccepted) return;
             if (step === LAST_STEP) {
               void complete();
             } else {
@@ -969,18 +1012,34 @@ export function OnboardingPage() {
               belongs beside the thing it qualifies. */}
           {step === LAST_STEP ? (
             <div className="onboarding-legal-consent legal-note">
-              <p>
-                {t('onboarding.legalConsentPrefix')}{' '}
-                <Link to="/terms" target="_blank">
-                  {t('onboarding.legalConsentTerms')}
-                </Link>{' '}
-                {t('onboarding.legalConsentAnd')}{' '}
-                <Link to="/privacy" target="_blank">
-                  {t('onboarding.legalConsentPrivacy')}
-                </Link>
-                .
-              </p>
+              {/* GAP-5-02: an affirmative control, the BillingPage pattern.
+                  The sentence stays first-person and the links stay inline so
+                  the tick and what it approves are one thing. */}
+              <label className="billing-consent">
+                <input
+                  type="checkbox"
+                  required
+                  checked={legalAccepted}
+                  onChange={(event) => setLegalAccepted(event.target.checked)}
+                />
+                <span>
+                  {t('onboarding.legalConsentPrefix')}{' '}
+                  <Link to="/terms" target="_blank">
+                    {t('onboarding.legalConsentTerms')}
+                  </Link>{' '}
+                  {t('onboarding.legalConsentAnd')}{' '}
+                  <Link to="/privacy" target="_blank">
+                    {t('onboarding.legalConsentPrivacy')}
+                  </Link>
+                  .
+                </span>
+              </label>
               <p>{t('onboarding.legalConsentNote')}</p>
+              {currentValid && !legalAccepted ? (
+                <p id="onboarding-consent-help" role="status">
+                  {t('onboarding.legalConsentRequired')}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -996,8 +1055,14 @@ export function OnboardingPage() {
             <button
               className="primary-button"
               type="submit"
-              disabled={!currentValid}
-              aria-describedby={!currentValid ? 'onboarding-blocked-help' : undefined}
+              disabled={!currentValid || (step === LAST_STEP && !legalAccepted)}
+              aria-describedby={
+                !currentValid
+                  ? 'onboarding-blocked-help'
+                  : step === LAST_STEP && !legalAccepted
+                    ? 'onboarding-consent-help'
+                    : undefined
+              }
             >
               {step === LAST_STEP ? t('onboarding.paymentNext') : t('common.continue')}
             </button>
