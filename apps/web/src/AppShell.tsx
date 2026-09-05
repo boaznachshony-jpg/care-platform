@@ -112,6 +112,12 @@ export function AppShell({ children }: AppShellProps) {
       document.documentElement.removeAttribute('data-theme');
     }
     window.localStorage.setItem(THEME_KEY, theme);
+    // The attribute belongs to the shell. Without this cleanup it outlives
+    // sign-out, and the login page — which has no dark rules of its own —
+    // renders light text on a dark canvas.
+    return () => {
+      document.documentElement.removeAttribute('data-theme');
+    };
   }, [theme]);
 
   useEffect(() => {

@@ -132,9 +132,10 @@ describe('AppShell theme toggle', () => {
     const { unmount } = renderShell();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     unmount();
+    // Sign-out unmounts the shell; the attribute must not survive it.
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
 
     localStorage.clear();
-    document.documentElement.removeAttribute('data-theme');
     renderShell();
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });
