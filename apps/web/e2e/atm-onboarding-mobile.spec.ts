@@ -188,6 +188,9 @@ test.describe('ATM onboarding field validation', () => {
     await page.getByLabel('מועד חידוש הוויזה').fill('2026-08-15');
     await expect(baseSalary).toHaveValue('6450.50');
     await expect(saturdayRate).toHaveValue('440.25');
+    // GAP-5-02: the last step also needs the affirmative terms/privacy tick.
+    await expect(continueButton(page)).toBeDisabled();
+    await page.getByRole('checkbox', { name: /בהשלמת ההקמה/ }).check();
     await expect(continueButton(page)).toBeEnabled();
   });
 
