@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { openEmploymentCaseRequestSchema, type OpenEmploymentCaseRequest } from '@caredesk/schemas';
 import { Alert, Button, SelectField, TextField } from '@caredesk/ui';
 import { openEmploymentCase } from '../api/client.js';
@@ -100,6 +100,12 @@ export function OpenCasePage() {
 
   return (
     <div>
+      {/* `/cases/new` renders outside the app shell (see CasePage.tsx): with
+          no navigation of its own, a customer who changes their mind here had
+          nowhere to go but the browser's Back button. */}
+      <p className="case-back-link">
+        <Link to="/app">{t('case.backToCases')}</Link>
+      </p>
       <h1>{t('case.openTitle')}</h1>
       <p>{t('case.openIntro')}</p>
 
