@@ -31,6 +31,9 @@ vi.mock('../canonical-case.js', () => ({
 }));
 
 vi.mock('../api/client.js', () => ({
+  // DocumentsPage tells a cloud-upload failure from a device-storage one by
+  // `instanceof ApiRequestError`; the mock has to export the class.
+  ApiRequestError: class ApiRequestError extends Error {},
   importCaseDocument: mocks.importCaseDocument,
   listCaseDocuments: mocks.listCaseDocuments,
   listEmploymentCases: mocks.listEmploymentCases,

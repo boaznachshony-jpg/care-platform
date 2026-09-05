@@ -9,6 +9,7 @@ import {
   Alert,
   Button,
   EmptyState,
+  ErrorState,
   SelectField,
   Skeleton,
   StatusBadge,
@@ -63,6 +64,9 @@ type ContactFormValues = z.infer<typeof contactFormSchema>;
 export function CaseContactsSection({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
   const [contacts, setContacts] = useState<CaseContactResponse[] | null>(null);
+  // A fetch that failed is not a case with no contacts. Kept apart from
+  // `contacts` (which stays null) so the empty state never stands in for it.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const {
@@ -77,12 +81,13 @@ export function CaseContactsSection({ caseId }: { caseId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    setLoadFailed(false);
     listCaseContacts(caseId)
       .then((rows) => {
         if (!cancelled) setContacts(rows);
       })
       .catch(() => {
-        if (!cancelled) setContacts([]);
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
@@ -123,7 +128,9 @@ export function CaseContactsSection({ caseId }: { caseId: string }) {
     <section>
       <h2>{t('contacts.heading')}</h2>
 
-      {contacts === null ? (
+      {loadFailed ? (
+        <ErrorState kind="retryable" title={t('contacts.loadFailed')} body="" />
+      ) : contacts === null ? (
         <Skeleton loadingLabel={t('shell.loading')} height="1.5rem" width="14rem" />
       ) : contacts.length === 0 ? (
         <EmptyState title={t('contacts.empty')} body="" />

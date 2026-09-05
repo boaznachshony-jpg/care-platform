@@ -46,7 +46,8 @@ vi.mock('../api/client.js', () => ({
   listCaseDocuments: vi.fn().mockResolvedValue([
     {
       id: 'doc-demo-001',
-      documentType: 'דרכון',
+      // Enum tokens, exactly as the API returns them.
+      documentType: 'passport',
       status: 'valid',
       verificationStatus: 'verified',
     },
@@ -78,7 +79,10 @@ vi.mock('../api/client.js', () => ({
   createBinderExport: mocks.createBinderExport,
 }));
 
-vi.mock('../api/idempotency.js', () => ({ newIdempotencyKey: () => 'idem-test-token' }));
+vi.mock('../api/idempotency.js', () => ({
+  newIdempotencyKey: () => 'idem-test-token',
+  newEntityId: () => 'entity-test-id',
+}));
 
 import { listEmploymentCases } from '../api/client.js';
 import { saveMvpMedications } from '../storage/mvp-storage.js';
@@ -277,6 +281,31 @@ describe('EmergencyBinderPage', () => {
     expect(screen.getByText(/חידוש ביטוח/)).toBeInTheDocument();
   });
 
+  // The API answers with enum tokens; a stand-in reading this under stress
+  // must never see "passport (verified)" on a Hebrew page.
+  it('names the document type and verification status in Hebrew, not as enum tokens', async () => {
+    renderPage();
+    await selectDemoCase();
+
+    expect(screen.getByRole('checkbox', { name: 'דרכון (מאומת)' })).toBeInTheDocument();
+    expect(screen.queryByText(/passport/)).toBeNull();
+    expect(screen.queryByText(/verified/)).toBeNull();
+
+    // And the printed list uses the same words once the document is picked.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'דרכון (מאומת)' }));
+    expect(screen.getByText('דרכון — מאומת')).toBeInTheDocument();
+  });
+
+  it('prints dates day-first in Israel time, not as raw ISO strings', async () => {
+    renderPage();
+    await selectDemoCase();
+    // startDate '2025-01-14' and the task's dueAt '2026-09-01'.
+    expect(screen.getByText('14.01.2025')).toBeInTheDocument();
+    expect(screen.getByText(/01\.09\.2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/2025-01-14/)).toBeNull();
+    expect(screen.queryByText(/2026-09-01/)).toBeNull();
+  });
+
   it('records the export server-side and shows the receipt id and hash before printing', async () => {
     renderPage();
     await selectDemoCase();
@@ -349,6 +378,9 @@ describe('EmergencyBinderPage', () => {
 
     expect(await screen.findByText('תרופה מהשרת (הדגמה)')).toBeInTheDocument();
     expect(screen.queryByText(/העותק המקומי/)).not.toBeInTheDocument();
+    // Time-of-day tokens come through the shared medications.time.* labels.
+    expect(screen.getByText(/בוקר/)).toBeInTheDocument();
+    expect(screen.queryByText(/morning/)).toBeNull();
   });
 
   it("falls back to this device's local medications, clearly labelled, when the server call fails", async () => {

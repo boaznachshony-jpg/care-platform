@@ -153,6 +153,20 @@ describe('MedicationsPage sync', () => {
     expect(mocks.archiveCaseMedication).toHaveBeenNthCalledWith(2, 'case-demo-001', 'server-1');
   });
 
+  // UI-STATES-06: a failed upload is an interruption, not information. It used
+  // to be announced as a polite status inside the same styling as "showing the
+  // local copy".
+  it('announces a failed upload as an alert, not a polite status', async () => {
+    saveMvpMedications([localMedicationFixture()]);
+    mocks.importCaseMedication.mockRejectedValue(new Error('offline'));
+
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/לא הועלו לשרת/);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   // Defect 4: an unscoped route must never guess which of an account's
   // multiple clients its records belong to.
   it('refuses to sync at all on the unscoped route when the account has more than one client', async () => {

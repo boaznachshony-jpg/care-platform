@@ -61,6 +61,16 @@ describe('App', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
+  // UI-NAV-07. `/medications` is a declared private route, but ApplicationEntry
+  // did not list it, so the sidebar's legacy link bounced signed-in users to
+  // the marketing page.
+  it('keeps /medications private instead of redirecting to the landing page', () => {
+    renderApp('/medications');
+    expect(
+      screen.queryByRole('heading', { name: 'העסקה ישירה של מטפל סיעודי, בראש שקט' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('has no detectable accessibility violations', async () => {
     const { container } = renderApp();
     expect(await axe(container)).toHaveNoViolations();

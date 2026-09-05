@@ -64,6 +64,7 @@ const authenticatedEntrypoints = new Set([
   '/contact',
   '/worker',
   '/binder',
+  '/medications',
 ]);
 
 function ClientHome() {

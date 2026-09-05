@@ -279,6 +279,7 @@
   "contacts": {
     "heading": "Contacts",
     "empty": "No contacts have been added to this case yet.",
+    "loadFailed": "The contacts could not be loaded. Nothing was lost — try refreshing the page.",
     "addHeading": "Add a contact",
     "fullName": "Full name",
     "roleType": "Role on the case",
@@ -318,6 +319,7 @@
   "tasks": {
     "heading": "Tasks",
     "empty": "No open tasks on this case.",
+    "loadFailed": "The tasks could not be loaded. Nothing was lost — try refreshing the page.",
     "addHeading": "New task",
     "title": "Task title",
     "dueDate": "Due date",
@@ -360,6 +362,7 @@
   "documents": {
     "heading": "Documents",
     "empty": "No documents have been uploaded to this case yet.",
+    "loadFailed": "The documents could not be loaded. Nothing was lost — try refreshing the page.",
     "addHeading": "Upload a document",
     "privacyNote": "Files are held in private storage. Viewing one uses a short-lived link created only after a permission check.",
     "documentType": "Document type",
@@ -571,7 +574,7 @@
     "statusOk": "All in order",
     "statusLoading": "Loading data…",
     "scoreUnavailable": "The file health score is unavailable right now — we'll retry shortly.",
-    "caseNotLinked": "We could not find an employment case linked to this client. Nothing has been deleted — open the case from the employment cases screen, and contact us if it is there but not linked.",
+    "caseNotLinked": "We could not find an employment case linked to this client. Nothing has been deleted — you can open a case with the button below, and contact us if the case already exists but is not linked.",
     "okTitle": "No open actions",
     "okBody": "Everything saved has been checked and is in order. We'll flag anything that needs attention here.",
     "overallStatus": "Overall status",
@@ -1052,6 +1055,7 @@
   "timeline": {
     "heading": "Timeline",
     "empty": "No events on this case yet.",
+    "loadFailed": "The timeline could not be loaded. Nothing was lost — try refreshing the page.",
     "case": {
       "opened": {
         "summary": "Employment case opened"

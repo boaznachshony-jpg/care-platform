@@ -10,7 +10,7 @@ import {
   type DocumentResponse,
   type UploadDocumentRequest,
 } from '@caredesk/schemas';
-import { Alert, Button, EmptyState, Skeleton, StatusBadge } from '@caredesk/ui';
+import { Alert, Button, EmptyState, ErrorState, Skeleton, StatusBadge } from '@caredesk/ui';
 import {
   getCaseDocumentDownloadUrl,
   getEmploymentCase,
@@ -19,6 +19,7 @@ import {
   uploadCaseDocument,
 } from '../../api/client.js';
 import { LEGACY_UNSCOPED_CLIENT_ID } from '../../canonical-case.js';
+import { formatDateOnly } from '../../format-timestamp.js';
 import { readMvpDocumentsForClient } from '../../storage/mvp-storage.js';
 import {
   uploadUnsyncedRecords,
@@ -56,6 +57,9 @@ async function toBase64(file: File): Promise<string> {
 export function CaseDocumentsSection({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
   const [documents, setDocuments] = useState<DocumentResponse[] | null>(null);
+  // A fetch that failed is not a case with no documents. Kept apart from
+  // `documents` (which stays null) so the empty state never stands in for it.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
@@ -78,12 +82,13 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    setLoadFailed(false);
     listCaseDocuments(caseId)
       .then((rows) => {
         if (!cancelled) setDocuments(rows);
       })
       .catch(() => {
-        if (!cancelled) setDocuments([]);
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
@@ -200,7 +205,7 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
   }
 
   return (
-    <section>
+    <section id="documents">
       <h2>{t('documents.heading')}</h2>
       {downloadFailed ? <Alert variant="error" title={t('documents.downloadFailed')} /> : null}
       {legacyUploadProgress ? (
@@ -227,7 +232,9 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
         </Alert>
       ) : null}
 
-      {documents === null ? (
+      {loadFailed ? (
+        <ErrorState kind="retryable" title={t('documents.loadFailed')} body="" />
+      ) : documents === null ? (
         <Skeleton loadingLabel={t('shell.loading')} height="1.5rem" width="14rem" />
       ) : documents.length === 0 ? (
         <EmptyState title={t('documents.empty')} body="" />
@@ -247,7 +254,8 @@ export function CaseDocumentsSection({ caseId }: { caseId: string }) {
               {document.expiresAt ? (
                 <span>
                   {' '}
-                  {t('documents.expires')}: <span dir="ltr">{document.expiresAt.slice(0, 10)}</span>
+                  {t('documents.expires')}:{' '}
+                  <span dir="ltr">{formatDateOnly(document.expiresAt) ?? document.expiresAt}</span>
                 </span>
               ) : null}
               <Button
