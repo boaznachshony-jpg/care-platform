@@ -1,6 +1,8 @@
 /* eslint-disable no-restricted-syntax -- Hebrew-first canonical timeline surface */
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
@@ -8,6 +10,7 @@ import { listCaseTimeline, type CanonicalTimelineEvent } from '../api/client.js'
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 
 export function TimelinePage() {
+  const { t } = useTranslation();
   const path = useClientPath();
   // The timeline API is keyed by the canonical EMPLOYMENT CASE id, and the
   // route only ever gives a legacy CLIENT id. Passing the client id straight
@@ -42,7 +45,7 @@ export function TimelinePage() {
       {failed ? (
         <p role="alert">לא ניתן לטעון את ציר הזמן הקנוני.</p>
       ) : caseLookup.status === 'checking' ? (
-        <p>טוען…</p>
+        <p role="status">{t('shell.loading')}</p>
       ) : caseLookup.status === 'unavailable' ? (
         // Distinguish "the network failed while looking up the case" from
         // "this customer genuinely has no case yet" — the customer with no
@@ -50,9 +53,15 @@ export function TimelinePage() {
         // whose lookup failed should not see the plain empty state.
         <p role="alert">לא ניתן להתחבר לשרת כדי לאתר את התיק כרגע. נסו שוב בעוד רגע.</p>
       ) : caseLookup.status === 'none' ? (
-        <p className="success-box">עדיין לא נפתח תיק העסקה קנוני — ציר הזמן יופיע לאחר פתיחתו.</p>
+        <div className="card">
+          <p className="success-box">עדיין לא נפתח תיק העסקה קנוני — ציר הזמן יופיע לאחר פתיחתו.</p>
+          {/* The sentence names the missing step; the button is the step. */}
+          <Link className="primary-button" to={path('/cases/new')}>
+            {t('case.openTitle')}
+          </Link>
+        </div>
       ) : events === undefined ? (
-        <p>טוען…</p>
+        <p role="status">{t('shell.loading')}</p>
       ) : events.length === 0 ? (
         <p className="success-box">אין כרגע אירועים להצגה.</p>
       ) : (
@@ -60,13 +69,21 @@ export function TimelinePage() {
           <div className="timeline">
             {events.map((event) => (
               <article key={event.id}>
-                <time className="timeline-date" dateTime={event.occurredAt}>
-                  {event.occurredAt.slice(0, 10)}
+                <time
+                  className="timeline-date"
+                  dateTime={toIsoAttribute(event.occurredAt) ?? event.occurredAt}
+                >
+                  {formatDateTime(event.occurredAt) ?? event.occurredAt}
                 </time>
                 <span className="timeline-dot info" aria-hidden="true" />
                 <div className="timeline-content">
-                  <h3>{event.summaryKey}</h3>
-                  <p>{event.eventTypeKey}</p>
+                  {/* summaryKey is a translation key (timeline.*.summary) for
+                      events the API writes today, and plain English prose for
+                      a few older ones. The default keeps the prose readable
+                      instead of printing a dotted key as a heading. No
+                      timeline.eventType.* namespace exists, so the machine
+                      token is not shown at all. */}
+                  <h3>{t(event.summaryKey, { defaultValue: event.summaryKey })}</h3>
                   {event.actorDisplay ? <small>{event.actorDisplay}</small> : null}
                   {event.actionTarget ? (
                     <Link to={path(event.actionTarget)}>פתיחת הפעולה</Link>

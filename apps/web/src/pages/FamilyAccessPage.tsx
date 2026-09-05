@@ -10,6 +10,7 @@ import {
   updateFamilyMemberRole,
 } from '../api/client.js';
 import { useAuth } from '../auth/auth-context.js';
+import { formatDateTime } from '../format-timestamp.js';
 
 type EditableRole = 'manager' | 'viewer';
 
@@ -24,7 +25,7 @@ export function readableFamilyMemberName(
 }
 
 export function FamilyAccessPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const auth = useAuth();
   const [access, setAccess] = useState<FamilyAccessResponse | null>(null);
   const [loadingError, setLoadingError] = useState(false);
@@ -244,10 +245,11 @@ export function FamilyAccessPage() {
                           {' · '}
                           {member.lastAuthenticatedAt
                             ? t('familyAccess.lastSeen', {
-                                date: new Intl.DateTimeFormat(i18n.language, {
-                                  dateStyle: 'short',
-                                  timeStyle: 'short',
-                                }).format(new Date(member.lastAuthenticatedAt)),
+                                // Israel wall clock, day-first, for every
+                                // viewer — see format-timestamp.ts.
+                                date:
+                                  formatDateTime(member.lastAuthenticatedAt) ??
+                                  member.lastAuthenticatedAt,
                               })
                             : t('familyAccess.neverSignedIn')}
                         </small>

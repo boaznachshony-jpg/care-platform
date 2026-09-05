@@ -22,6 +22,10 @@ export function OpenIssuesPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [health, setHealth] = useState<CaseHealthResponse>();
   const [healthError, setHealthError] = useState(false);
+  // R2-08, second half. The lookup *succeeded* and found no case — a different
+  // fact from a failed lookup, and from a clean file. DashboardPage already
+  // says so; this screen used to fall through to "nothing to report".
+  const [caseMissing, setCaseMissing] = useState(false);
   useEffect(() => {
     // The health API is keyed by the canonical EMPLOYMENT CASE id, and the
     // route gives a legacy CLIENT id. Passing the client id straight through
@@ -32,8 +36,13 @@ export function OpenIssuesPage() {
     if (!clientId) return;
     let cancelled = false;
     setHealthError(false);
+    setCaseMissing(false);
     findCanonicalCase(clientId)
-      .then((found) => (found ? getCaseHealth(found.id) : undefined))
+      .then((found) => {
+        if (found) return getCaseHealth(found.id);
+        if (!cancelled) setCaseMissing(true);
+        return undefined;
+      })
       .then((result) => {
         if (!cancelled && result) setHealth(result);
       })
@@ -55,6 +64,17 @@ export function OpenIssuesPage() {
       severity: 'soon',
       title: t('completion.healthLoadFailed'),
       explanation: '',
+    });
+  }
+
+  if (caseMissing) {
+    issues.push({
+      id: 'case-not-linked',
+      severity: 'urgent',
+      title: t('dashboard.caseNotLinked'),
+      explanation: '',
+      actionLabel: t('case.openTitle'),
+      actionTo: path('/cases/new'),
     });
   }
 
