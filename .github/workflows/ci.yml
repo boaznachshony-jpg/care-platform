@@ -84,6 +84,11 @@ jobs:
         run: pnpm format:check
       - name: Lint
         run: pnpm lint
+      - name: Dependency audit
+        # SECURITY.md promises a dependency audit in CI; this is it. Only
+        # production dependencies, and only high/critical advisories fail the
+        # build - moderate ones arrive as Dependabot PRs and are fixed there.
+        run: pnpm audit --prod --audit-level=high
 
   compile:
     name: Build and typecheck
