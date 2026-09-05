@@ -20,12 +20,12 @@ reference material.
    implementation or milestone text differs. Later decisions must be recorded
    through the same change-control process; informal prompts do not override.
 2. **CareDesk Product Specification v1.0**
-   File: `/CareDesk_Product_Specification_v1.0.docx`
+   File: `/docs/product/legacy/CareDesk_Product_Specification_v1.0.docx`
    Governs product scope, personas, modules, journeys, permissions, and general
    acceptance criteria.
 3. **AI Coding Constitution v1.0**
-   Files: `/CareDesk_AI_Coding_Constitution_v1.0.docx` and the equivalent
-   `/CareDesk_AI_Coding_Constitution_v1.0 (1).md`
+   Files: `/docs/product/legacy/CareDesk_AI_Coding_Constitution_v1.0.docx` and
+   the equivalent `/CareDesk_AI_Coding_Constitution_v1.0 (1).md`
    Governs engineering constraints, security, testing, and AI-agent behavior.
    If the two formats differ, the DOCX is authoritative until a controlled
    parity check is completed.
@@ -57,15 +57,20 @@ reference material.
 ## Historical references
 
 The following files retain useful discovery work but are not independently
-binding:
+binding. The documents live in `docs/product/legacy/` (moved from the
+repository root on 05.09.2026), the prototype in `docs/reference/prototype/`:
 
-- `CareDesk_Israel_אפיון_מוצר_שלב_1_מודל_נתונים.docx`
-- `CareDesk_Israel_Product_Bible_UX_שלב_2.docx`
-- `CareDesk_Israel_שלב_3_ארכיטקטורה_עסקי_אב_טיפוס_AI.docx`
-- `CareDesk_Israel_Strategic_Review.docx`
-- `CareDesk_Master_Prompt.*`
-- `CareDesk_Israel_Master_Prompt_Claude_Prototype.*`
-- `caredesk_prototype.html`
+- `docs/product/legacy/CareDesk_Israel_אפיון_מוצר_שלב_1_מודל_נתונים.docx`
+- `docs/product/legacy/CareDesk_Israel_Product_Bible_UX_שלב_2.docx`
+- `docs/product/legacy/CareDesk_Israel_שלב_3_ארכיטקטורה_עסקי_אב_טיפוס_AI.docx`
+- `docs/product/legacy/CareDesk_Israel_Strategic_Review.docx`
+- `docs/product/legacy/CareDesk_Master_Prompt.*`
+- `docs/product/legacy/CareDesk_Israel_Master_Prompt_Claude_Prototype.*`
+- `docs/product/legacy/CareDesk_Legal_Validation_P0.docx`,
+  `CareDesk_User_Testing_Plan.docx`, `CAREDESK_FIX_DONE.txt`
+- `docs/reference/prototype/caredesk_prototype.html`
+- `docs/reference/caregiving_private_branches.pdf` — the gov.il list of
+  licensed manpower agencies that `apps/web/src/licensed-bureaus.ts` cites
 
 Conflicts found in historical material are resolved in the Database Blueprint
 and recorded in the Gap Analysis.

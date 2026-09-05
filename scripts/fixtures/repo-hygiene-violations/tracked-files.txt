@@ -7,6 +7,11 @@ apps/web/src/main.tsx
 packages/i18n/src/resources/he.json
 apps/web/src/components/copy-button.tsx
 docs/governance/copy-review.md
+# binary documents INSIDE the allowlist are fine
+docs/reference/caregiving_private_branches.pdf
+docs/product/legacy/CareDesk_Product_Specification_v1.0.docx
+apps/web/public/og-image.png
+packages/ui/assets/logo.png
 
 # --- rule 1: files inside an archived directory ------------------------
 # (the Hebrew directory name is the same one the guard matches, UTF-8)
@@ -18,3 +23,11 @@ docs/governance/copy-review.md
 eslint.config - Copy.js
 README - Copy.md
 notes - Copy (2).txt
+
+# --- rule 1 again: a static export tracked at the root ------------------
+netlify-deploy/index.html
+
+# --- rule 4: binary documents outside docs/, apps/web/public/, packages/ui/
+payslip.pdf
+bug db/1.png
+apps/api/handoff.zip
