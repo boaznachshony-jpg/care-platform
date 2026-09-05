@@ -27,3 +27,34 @@ export function newIdempotencyKey(): string {
   }
   return `idem-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
 }
+
+/**
+ * Ids for new records (tasks, medications, documents, payroll rows, reminder
+ * recipients, local clients). Same secure-context problem as above, but a
+ * record id has to look like a UUID everywhere it is later sent — the import
+ * endpoints and the storage keys were written against `crypto.randomUUID()`
+ * output — so the fallback is a real RFC 4122 version-4 UUID built from
+ * `crypto.getRandomValues`, which is available in insecure contexts too.
+ *
+ * Every raw `crypto.randomUUID()` used for a record id used to throw on the
+ * plain-http phone path before any write happened, so "save" silently did
+ * nothing (R1-08 fixed the idempotency keys; this closes the same gap for ids).
+ */
+export function newEntityId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  // Version 4, variant 10xx — the two nibbles a UUID validator checks.
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

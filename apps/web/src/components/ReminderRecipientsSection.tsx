@@ -10,6 +10,7 @@ import {
   type MvpReminderRecipient,
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { newEntityId } from '../api/idempotency.js';
 
 /**
  * The recipient list behind medication reminders.
@@ -89,7 +90,7 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
         ),
       );
     } else {
-      persist([...recipients, { ...draft, id: crypto.randomUUID(), updatedAt: now }]);
+      persist([...recipients, { ...draft, id: newEntityId(), updatedAt: now }]);
     }
     setDraft(emptyDraft());
     setEditingId(null);
