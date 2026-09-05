@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AuthorizationError, type DocumentWithCurrentVersion } from '@caredesk/application';
+import {
+  AuthorizationError,
+  authorizeOrThrow,
+  type DocumentWithCurrentVersion,
+} from '@caredesk/application';
 import { withTenant } from '@caredesk/db';
 import {
   MAX_DOCUMENT_BYTES,
@@ -22,8 +26,16 @@ interface DocumentParams extends CaseParams {
   documentId: string;
 }
 
-const documentParamsSchema = z.object({
-  caseId: z.string().uuid(),
+/**
+ * SEC-INPUT-01. `:caseId` used to flow unvalidated from the URL into the use
+ * case and from there into the storage object key (`<tenant>/cases/<caseId>/…`),
+ * so a caller could place `..` segments in it and write objects under another
+ * prefix. Every case-scoped route now proves the id is a UUID before any use
+ * case runs; the storage adapter refuses traversal segments as a second line.
+ */
+const caseParamsSchema = z.object({ caseId: z.string().uuid() });
+
+const documentParamsSchema = caseParamsSchema.extend({
   documentId: z.string().uuid(),
 });
 
@@ -120,8 +132,10 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
   app.get<{ Params: CaseParams }>('/cases/:caseId/documents', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
     try {
-      const rows = await container.listDocuments.execute(actor, request.params.caseId);
+      const rows = await container.listDocuments.execute(actor, params.data.caseId);
       reply.send(rows.map(toResponse));
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
@@ -136,6 +150,8 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
       const actor = request.actor;
       if (!actor) return;
 
+      const params = caseParamsSchema.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
       const parsed = uploadDocumentRequestSchema.safeParse(request.body);
       // The failing body is never echoed back or logged: it contains file bytes.
       if (!parsed.success) return sendValidationError(request, reply, parsed.error);
@@ -143,7 +159,7 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
       try {
         const created = await container.uploadDocument.execute(
           actor,
-          request.params.caseId,
+          params.data.caseId,
           parsed.data,
         );
         reply.status(201).send(toResponse(created));
@@ -165,12 +181,14 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
+      const params = caseParamsSchema.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
       const parsed = importDocumentRequestSchema.safeParse(request.body);
       if (!parsed.success) return sendValidationError(request, reply, parsed.error);
       try {
         const imported = await container.importDocument.execute(
           actor,
-          request.params.caseId,
+          params.data.caseId,
           parsed.data,
         );
         reply.status(200).send(toResponse(imported));
@@ -187,11 +205,13 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
+      const params = documentParamsSchema.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
       try {
         const link = await container.getDocumentDownloadUrl.execute(
           actor,
-          request.params.caseId,
-          request.params.documentId,
+          params.data.caseId,
+          params.data.documentId,
         );
         // null means unknown, other tenant, other case, or no file yet — all
         // reported identically so no caller can probe for document ids.
@@ -233,6 +253,19 @@ export function registerCaseDocumentRoutes(app: FastifyInstance, container: Cont
         const entry = rows.find((row) => row.document.id === params.data.documentId);
         if (!entry || !entry.currentVersion) return sendError(request, reply, 404, 'NOT_FOUND');
         const currentVersion = entry.currentVersion;
+
+        // SEC-AUTHZ-04. The list read above only proves `document:read`, which
+        // a viewer holds. Confirming a review is a write - it inserts a
+        // receipt, an audit event and a timeline event - so it is gated on the
+        // same permission as uploading the document, through the audited
+        // helper every use case uses (a refusal is recorded, not just thrown).
+        await authorizeOrThrow(container, actor, {
+          resourceType: 'document',
+          action: 'create',
+          caseId: params.data.caseId,
+          resourceId: params.data.documentId,
+          sensitivity: entry.document.sensitivity,
+        });
 
         const now = new Date().toISOString();
         const confirmed = body.data.reviewState === 'user_confirmed';

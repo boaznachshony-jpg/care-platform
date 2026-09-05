@@ -16,6 +16,9 @@ interface CaseParams {
   caseId: string;
 }
 
+/** SEC-INPUT-01: a malformed case id is a 400, never a Postgres 22P02 turned 500. */
+const caseParamsSchema = z.object({ caseId: z.string().uuid() });
+
 interface TaskParams extends CaseParams {
   taskId: string;
 }
@@ -55,8 +58,10 @@ export function registerCaseTaskRoutes(app: FastifyInstance, container: Containe
   app.get<{ Params: CaseParams }>('/cases/:caseId/tasks', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
     try {
-      const tasks = await container.listTasks.execute(actor, request.params.caseId);
+      const tasks = await container.listTasks.execute(actor, params.data.caseId);
       reply.send(tasks.map(toResponse));
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
@@ -67,10 +72,12 @@ export function registerCaseTaskRoutes(app: FastifyInstance, container: Containe
   app.post<{ Params: CaseParams }>('/cases/:caseId/tasks', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
     const parsed = createTaskRequestSchema.safeParse(request.body);
     if (!parsed.success) return sendValidationError(request, reply, parsed.error);
     try {
-      const created = await container.createTask.execute(actor, request.params.caseId, parsed.data);
+      const created = await container.createTask.execute(actor, params.data.caseId, parsed.data);
       reply.status(201).send(toResponse(created));
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
@@ -90,14 +97,12 @@ export function registerCaseTaskRoutes(app: FastifyInstance, container: Containe
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
+      const params = caseParamsSchema.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
       const parsed = importTaskRequestSchema.safeParse(request.body);
       if (!parsed.success) return sendValidationError(request, reply, parsed.error);
       try {
-        const imported = await container.importTask.execute(
-          actor,
-          request.params.caseId,
-          parsed.data,
-        );
+        const imported = await container.importTask.execute(actor, params.data.caseId, parsed.data);
         reply.status(200).send(toResponse(imported));
       } catch (error) {
         if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
