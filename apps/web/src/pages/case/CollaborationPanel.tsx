@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../api/client.js';
 import { newIdempotencyKey } from '../../api/idempotency.js';
@@ -62,6 +62,17 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
    * replace the panel the user is working in with a load-failure screen.
    */
   const [writeError, setWriteError] = useState('');
+  /**
+   * UI-WRITE-15. Nothing was disabled while a PUT/PATCH was in flight, so a
+   * second change on the same row before the first resolved raced it and the
+   * winner was arbitrary. Each row is keyed (responsibility kind, task id,
+   * request id); a row with a pending write is disabled and ignores further
+   * changes until that write settles. The ref is the lock — two changes in
+   * the same tick both see the pre-render state — and the state array is
+   * what the render reads.
+   */
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
+  const pendingRef = useRef(new Set<string>());
   const load = useCallback(
     () =>
       apiRequest<Collaboration>(`/cases/${caseId}/collaboration`)
@@ -110,23 +121,31 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
   };
   const memberOptionLabel = (member: Member): string =>
     member.status === 'active' ? member.display_name : `${member.display_name} (לא פעיל)`;
-  const put = async (path: string, body: unknown) => {
-    setWriteError('');
-    await apiRequest(path, {
+  const put = (path: string, body: unknown) =>
+    apiRequest(path, {
       method: 'PUT',
       headers: { 'idempotency-key': key() },
       body: JSON.stringify(body),
     });
-    await load();
-  };
+  const isPending = (rowKey: string) => pendingKeys.includes(rowKey);
   /**
    * A failed PUT/PATCH used to make the `<select>` snap back to its old value
    * with no message at all, which reads as "the app ignored my click". The
    * message is separate from the load error above so a failed write never
    * replaces the panel the user is working in (WEB-16 shape).
    */
-  const runWrite = (work: Promise<unknown>) => {
-    void work.catch(() => setWriteError(t('collaboration.saveFailed')));
+  const runWrite = (rowKey: string, work: () => Promise<unknown>) => {
+    if (pendingRef.current.has(rowKey)) return;
+    pendingRef.current.add(rowKey);
+    setPendingKeys([...pendingRef.current]);
+    setWriteError('');
+    void work()
+      .then(() => load())
+      .catch(() => setWriteError(t('collaboration.saveFailed')))
+      .finally(() => {
+        pendingRef.current.delete(rowKey);
+        setPendingKeys([...pendingRef.current]);
+      });
   };
   return (
     <section className="collaboration-panel">
@@ -137,6 +156,7 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
         const assigneeId =
           data.responsibilities.find((a) => a.responsibility === kind)?.assignee_membership_id ??
           '';
+        const rowKey = `responsibility:${kind}`;
         return (
           <label key={kind}>
             {enumLabel('responsibility', kind)}
@@ -145,13 +165,14 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
                 subject: enumLabel('responsibility', kind),
               })}
               value={assigneeId}
-              onChange={(e) =>
-                runWrite(
-                  put(`/cases/${caseId}/responsibilities/${kind}`, {
-                    assigneeMembershipId: e.target.value || null,
-                  }),
-                )
-              }
+              disabled={isPending(rowKey)}
+              aria-busy={isPending(rowKey) || undefined}
+              onChange={(e) => {
+                const assigneeMembershipId = e.target.value || null;
+                runWrite(rowKey, () =>
+                  put(`/cases/${caseId}/responsibilities/${kind}`, { assigneeMembershipId }),
+                );
+              }}
             >
               <option value="">{t('collaboration.unassigned')}</option>
               {optionsFor(assigneeId).map((m) => (
@@ -160,33 +181,39 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
                 </option>
               ))}
             </select>
+            {isPending(rowKey) ? <span role="status">{t('collaboration.saving')}</span> : null}
           </label>
         );
       })}
       <h3>{t('collaboration.taskAssignments')}</h3>
-      {data.tasks.map((task) => (
-        <label key={task.id}>
-          {task.title}
-          <select
-            aria-label={t('collaboration.assigneeLabel', { subject: task.title })}
-            value={task.assignee_membership_id ?? ''}
-            onChange={(e) =>
-              runWrite(
-                put(`/cases/${caseId}/tasks/${task.id}/assignee`, {
-                  assigneeMembershipId: e.target.value || null,
-                }),
-              )
-            }
-          >
-            <option value="">{t('collaboration.unassigned')}</option>
-            {optionsFor(task.assignee_membership_id).map((m) => (
-              <option key={m.id} value={m.id}>
-                {memberOptionLabel(m)}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
+      {data.tasks.map((task) => {
+        const rowKey = `task:${task.id}`;
+        return (
+          <label key={task.id}>
+            {task.title}
+            <select
+              aria-label={t('collaboration.assigneeLabel', { subject: task.title })}
+              value={task.assignee_membership_id ?? ''}
+              disabled={isPending(rowKey)}
+              aria-busy={isPending(rowKey) || undefined}
+              onChange={(e) => {
+                const assigneeMembershipId = e.target.value || null;
+                runWrite(rowKey, () =>
+                  put(`/cases/${caseId}/tasks/${task.id}/assignee`, { assigneeMembershipId }),
+                );
+              }}
+            >
+              <option value="">{t('collaboration.unassigned')}</option>
+              {optionsFor(task.assignee_membership_id).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {memberOptionLabel(m)}
+                </option>
+              ))}
+            </select>
+            {isPending(rowKey) ? <span role="status">{t('collaboration.saving')}</span> : null}
+          </label>
+        );
+      })}
       <h3>{t('collaboration.workerRequests')}</h3>
       {data.requests.length === 0 ? (
         <p>{t('collaboration.noRequests')}</p>
@@ -225,15 +252,18 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
                   subject: enumLabel('requestType', request.request_type),
                 })}
                 value={request.status}
-                onChange={(e) =>
-                  runWrite(
+                disabled={isPending(`request:${request.id}`)}
+                aria-busy={isPending(`request:${request.id}`) || undefined}
+                onChange={(e) => {
+                  const status = e.target.value;
+                  runWrite(`request:${request.id}`, () =>
                     apiRequest(`/worker-requests/${request.id}`, {
                       method: 'PATCH',
                       headers: { 'idempotency-key': key() },
-                      body: JSON.stringify({ status: e.target.value }),
-                    }).then(() => load()),
-                  )
-                }
+                      body: JSON.stringify({ status }),
+                    }),
+                  );
+                }}
               >
                 <option value={request.status}>{enumLabel('status', request.status)}</option>
                 {['in_review', 'approved', 'rejected', 'resolved']
@@ -244,6 +274,9 @@ export function CollaborationPanel({ caseId }: { caseId: string }) {
                     </option>
                   ))}
               </select>
+              {isPending(`request:${request.id}`) ? (
+                <span role="status">{t('collaboration.saving')}</span>
+              ) : null}
             </label>
           </article>
         ))

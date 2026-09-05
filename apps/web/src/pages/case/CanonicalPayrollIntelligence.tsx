@@ -159,6 +159,36 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   );
   const [error, setError] = useState('');
   const [expenseError, setExpenseError] = useState('');
+  /**
+   * UI-WRITE-08. The add / remove / migrate buttons were never disabled while
+   * their request was in flight and minted a fresh idempotency key per call,
+   * so a double tap duplicated a planning expense or double-deleted one. One
+   * busy flag covers all three (they share one list and one `refresh()`); the
+   * ref is the actual lock because two taps in the same tick both see the
+   * pre-render state. Keys are held per intent (signature → key) so a retry
+   * of the same add/delete/migration reuses its key and the server replays,
+   * while a genuinely new intent gets a new key.
+   */
+  const [expenseBusy, setExpenseBusy] = useState(false);
+  const expenseBusyRef = useRef(false);
+  const expenseKeys = useRef(new Map<string, string>());
+  const expenseKeyFor = (signature: string): string => {
+    const existing = expenseKeys.current.get(signature);
+    if (existing) return existing;
+    const key = newIdempotencyKey();
+    expenseKeys.current.set(signature, key);
+    return key;
+  };
+  const beginExpenseWrite = (): boolean => {
+    if (expenseBusyRef.current) return false;
+    expenseBusyRef.current = true;
+    setExpenseBusy(true);
+    return true;
+  };
+  const endExpenseWrite = () => {
+    expenseBusyRef.current = false;
+    setExpenseBusy(false);
+  };
   const [migrationConfirmed, setMigrationConfirmed] = useState(false);
   /** True once a legacy→canonical migration save has been confirmed by the server. */
   const [migrationSaved, setMigrationSaved] = useState(false);
@@ -444,30 +474,50 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       setExpenseError('נדרשים תיאור וסכום תקין להוצאת תרחיש.');
       return;
     }
+    const input: SaveScenarioExpenseRequest = {
+      ...expenseDraft,
+      label: expenseDraft.label.trim(),
+      endMonth: expenseDraft.kind === 'recurring' ? expenseDraft.endMonth : null,
+    };
+    const signature = JSON.stringify({
+      intent: 'add',
+      label: input.label,
+      amount: input.amount,
+      kind: input.kind,
+      startMonth: input.startMonth,
+      endMonth: input.endMonth,
+    });
+    if (!beginExpenseWrite()) return;
     try {
-      await createScenarioExpense(
-        caseId,
-        {
-          ...expenseDraft,
-          label: expenseDraft.label.trim(),
-          endMonth: expenseDraft.kind === 'recurring' ? expenseDraft.endMonth : null,
-        },
-        newIdempotencyKey(),
-      );
+      await createScenarioExpense(caseId, input, expenseKeyFor(signature));
+      // Done with this intent; an identical expense added later on purpose is
+      // a new one and must not be replayed as this one.
+      expenseKeys.current.delete(signature);
       setExpenseDraft(blankExpense());
       await refresh();
     } catch {
       setExpenseError('שמירת הוצאת התרחיש נכשלה.');
+    } finally {
+      endExpenseWrite();
     }
   }
 
   async function removeExpense(expense: ScenarioExpenseResponse) {
     setExpenseError('');
+    const signature = JSON.stringify({
+      intent: 'delete',
+      id: expense.id,
+      version: expense.version,
+    });
+    if (!beginExpenseWrite()) return;
     try {
-      await deleteScenarioExpense(caseId, expense.id, expense.version, newIdempotencyKey());
+      await deleteScenarioExpense(caseId, expense.id, expense.version, expenseKeyFor(signature));
+      expenseKeys.current.delete(signature);
       await refresh();
     } catch {
       setExpenseError('הסרת הוצאת התרחיש נכשלה.');
+    } finally {
+      endExpenseWrite();
     }
   }
 
@@ -479,16 +529,26 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   async function migrateLegacyExpenses() {
     if (!expenseMigrationConfirmed || legacyExpenses.length === 0) return;
     setExpenseError('');
+    if (!beginExpenseWrite()) return;
     try {
       const migrated: string[] = [];
       for (const expense of legacyExpenses) {
-        await createScenarioExpense(caseId, legacyExpenseToScenario(expense), newIdempotencyKey());
+        // Keyed on the legacy row: a retry after a mid-list failure replays
+        // the rows already created instead of creating them a second time.
+        const signature = JSON.stringify({ intent: 'migrate', legacyId: expense.id });
+        await createScenarioExpense(
+          caseId,
+          legacyExpenseToScenario(expense),
+          expenseKeyFor(signature),
+        );
         migrated.push(expense.id);
       }
       setMigratedExpenseIds(migrated);
       await refresh();
     } catch {
       setExpenseError('העברת ההוצאות לשרת נכשלה. הרישום המקומי לא נמחק.');
+    } finally {
+      endExpenseWrite();
     }
   }
 
@@ -778,7 +838,11 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
               {expense.kind === 'recurring'
                 ? `חודשי מ-${expense.startMonth}${expense.endMonth ? ` עד ${expense.endMonth}` : ''}`
                 : `חד-פעמי ב-${expense.startMonth}`}{' '}
-              <button type="button" onClick={() => void removeExpense(expense)}>
+              <button
+                type="button"
+                disabled={expenseBusy}
+                onClick={() => void removeExpense(expense)}
+              >
                 הסרת הוצאת תרחיש
               </button>
             </li>
@@ -842,7 +906,12 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           </label>
         ) : null}
       </div>
-      <button type="button" onClick={() => void addExpense()}>
+      <button
+        type="button"
+        disabled={expenseBusy}
+        aria-busy={expenseBusy || undefined}
+        onClick={() => void addExpense()}
+      >
         הוספת הוצאת תרחיש
       </button>
       {legacyExpenses.length > 0 && migratedExpenseIds.length === 0 ? (
@@ -862,7 +931,8 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
           </label>{' '}
           <button
             type="button"
-            disabled={!expenseMigrationConfirmed}
+            disabled={!expenseMigrationConfirmed || expenseBusy}
+            aria-busy={expenseBusy || undefined}
             onClick={() => void migrateLegacyExpenses()}
           >
             העברת ההוצאות לשרת
