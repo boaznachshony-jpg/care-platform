@@ -44,6 +44,45 @@ interface PaymentAcknowledgementRow {
   acknowledged_at: Date;
 }
 
+export interface MembershipRow {
+  id: string;
+  role: string;
+  status: string;
+}
+
+export interface MemberNameRow {
+  membership_id: string;
+  display_name: string | null;
+  email: string | null;
+}
+
+export interface CollaborationMember extends MembershipRow {
+  display_name: string;
+}
+
+/**
+ * Joins tenant memberships to the names `list_caredesk_family_members`
+ * resolves for them. The function only returns *active* memberships, so a
+ * revoked member keeps its row (and its real `status`) from the membership
+ * query and falls back to the placeholder name - the same fallback the old
+ * SQL `coalesce(display_name, email, '—')` produced.
+ */
+export function mergeCollaborationMembers(
+  memberships: readonly MembershipRow[],
+  names: readonly MemberNameRow[],
+): CollaborationMember[] {
+  const nameByMembership = new Map(names.map((row) => [row.membership_id, row]));
+  return memberships.map((membership) => {
+    const named = nameByMembership.get(membership.id);
+    return {
+      id: membership.id,
+      role: membership.role,
+      status: membership.status,
+      display_name: named?.display_name ?? named?.email ?? '—',
+    };
+  });
+}
+
 /**
  * PostgreSQL-backed Wave 5 application boundary. Every statement runs after
  * setting the canonical RLS transaction context. Worker ids and case ids are
@@ -149,10 +188,20 @@ export class Wave5Service {
         [actor.tenantId, actor.userId],
       );
       if (!allowed.rowCount) throw new Error('manager_required');
-      const [members, responsibilities, tasks, requests] = await Promise.all([
-        client.query(
-          `select tm.id, tm.role, tm.status, coalesce(au.display_name, au.email, '—') display_name
-          from tenant_membership tm join app_user au on au.id=tm.user_id where tm.tenant_id=$1`,
+      const [memberships, names, responsibilities, tasks, requests] = await Promise.all([
+        // Two queries, not one join. The global identity table is data the
+        // application role holds no grant on and that carries forced RLS with
+        // no policy, so joining it here failed on every case page (SEC-DB-01).
+        // Memberships come from the tenant-scoped table the role can read -
+        // including revoked rows, whose real `status` CollaborationPanel needs
+        // for the inactive-assignee label - and names come from the
+        // SECURITY DEFINER function migration 0013 created for exactly this.
+        client.query<MembershipRow>(
+          `select id, role, status from tenant_membership where tenant_id=$1`,
+          [actor.tenantId],
+        ),
+        client.query<MemberNameRow>(
+          `select membership_id, display_name, email from list_caredesk_family_members($1)`,
           [actor.tenantId],
         ),
         client.query(
@@ -172,7 +221,7 @@ export class Wave5Service {
         ),
       ]);
       return {
-        members: members.rows,
+        members: mergeCollaborationMembers(memberships.rows, names.rows),
         responsibilities: responsibilities.rows,
         tasks: tasks.rows,
         requests: requests.rows,

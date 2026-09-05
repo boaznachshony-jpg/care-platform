@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hashInvitationToken,
   invitationTokenMatches,
+  mergeCollaborationMembers,
   Wave5Service,
   WORKER_REQUEST_TRANSITIONS,
 } from './wave5-service.js';
@@ -98,5 +99,39 @@ describe('Wave 5 worker consent preservation contract', () => {
     expect(source).toContain('communication_preference.sms_consent');
     expect(source).toContain("excluded.whatsapp_consent='revoked'");
     expect(source).toContain("excluded.sms_consent='revoked'");
+  });
+});
+
+/**
+ * SEC-DB-01. The collaboration read used to join `app_user`, which the
+ * application role cannot see (no grant, forced RLS, no policy), so every case
+ * page reported a load failure. Memberships and names now arrive from two
+ * statements the role *can* run and are merged here.
+ */
+describe('Wave 5 collaboration members', () => {
+  it('reads memberships from tenant_membership and names from the security-definer function', () => {
+    const source = String(Wave5Service.prototype.collaboration);
+    expect(source).not.toContain('app_user');
+    expect(source).toContain('select id, role, status from tenant_membership');
+    expect(source).toContain('from list_caredesk_family_members($1)');
+  });
+
+  it('keeps a revoked membership with its real status and a placeholder name', () => {
+    const members = mergeCollaborationMembers(
+      [
+        { id: 'm-owner', role: 'owner', status: 'active' },
+        { id: 'm-revoked', role: 'manager', status: 'revoked' },
+        { id: 'm-email-only', role: 'viewer', status: 'active' },
+      ],
+      [
+        { membership_id: 'm-owner', display_name: 'Synthetic Owner', email: 'owner@example.test' },
+        { membership_id: 'm-email-only', display_name: null, email: 'viewer@example.test' },
+      ],
+    );
+    expect(members).toEqual([
+      { id: 'm-owner', role: 'owner', status: 'active', display_name: 'Synthetic Owner' },
+      { id: 'm-revoked', role: 'manager', status: 'revoked', display_name: '—' },
+      { id: 'm-email-only', role: 'viewer', status: 'active', display_name: 'viewer@example.test' },
+    ]);
   });
 });

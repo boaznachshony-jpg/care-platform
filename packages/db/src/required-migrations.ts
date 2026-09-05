@@ -70,6 +70,7 @@ export const REQUIRED_MIGRATIONS: readonly string[] = [
   '0046_mvp_local_data_server_migration',
   '0047_case_born_active_and_task_source_key',
   '0048_backfill_seeded_task_completion',
+  '0049_schema_migrations_app_read_policy',
 ];
 
 /**
