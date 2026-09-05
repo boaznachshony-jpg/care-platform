@@ -164,7 +164,12 @@ describe('MedicationsPage sync', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/לא הועלו לשרת/);
-    expect(screen.queryByRole('status')).toBeNull();
+    // The page may carry standing status notices (for example the reminder
+    // recipients section saying delivery is not active yet); what must not exist
+    // is the failure itself announced politely.
+    for (const status of screen.queryAllByRole('status')) {
+      expect(status).not.toHaveTextContent(/לא הועלו לשרת/);
+    }
   });
 
   // Defect 4: an unscoped route must never guess which of an account's
