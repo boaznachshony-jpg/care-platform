@@ -441,6 +441,85 @@ describe('CanonicalPayrollIntelligence — Future Cost canonical inputs', () => 
   });
 });
 
+/**
+ * UI-WRITE-08. The add / remove / migrate buttons were never disabled while
+ * their request was in flight and minted a fresh idempotency key per call, so
+ * a double tap duplicated a planning expense (or double-deleted one) and a
+ * retry after a failure could never be replayed by the server.
+ */
+describe('CanonicalPayrollIntelligence — scenario-expense write contract', () => {
+  async function fillExpenseForm() {
+    renderPanel();
+    await waitFor(() => screen.getByRole('region', { name: /רישום שכר חודשי/ }));
+    fireEvent.change(screen.getByLabelText('תיאור ההוצאה'), { target: { value: 'ביטוח רפואי' } });
+    fireEvent.change(screen.getByLabelText('סכום חודשי'), { target: { value: '250' } });
+    return screen.getByRole('button', { name: 'הוספת הוצאת תרחיש' });
+  }
+
+  it('creates one expense for two clicks while the first call is pending', async () => {
+    mockCreateScenarioExpense.mockReturnValue(new Promise(() => undefined));
+    const button = await fillExpenseForm();
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(mockCreateScenarioExpense).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'הוספת הוצאת תרחיש' })).toBeDisabled();
+  });
+
+  it('reuses the idempotency key when a rejected add is retried, and keeps the draft', async () => {
+    mockCreateScenarioExpense
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ expense: SCENARIO_EXPENSE, replayed: false });
+    const button = await fillExpenseForm();
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByText(/שמירת הוצאת התרחיש נכשלה/)).toBeInTheDocument());
+    expect(screen.getByLabelText('תיאור ההוצאה')).toHaveValue('ביטוח רפואי');
+
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת הוצאת תרחיש' }));
+    await waitFor(() => expect(mockCreateScenarioExpense).toHaveBeenCalledTimes(2));
+    const keys = mockCreateScenarioExpense.mock.calls.map((call) => call[2] as string);
+    expect(typeof keys[0]).toBe('string');
+    expect(keys[1]).toBe(keys[0]);
+    // A successful add clears the draft, so the next add is a new intent.
+    await waitFor(() => expect(screen.getByLabelText('תיאור ההוצאה')).toHaveValue(''));
+  });
+
+  it('deletes once and disables the row while the delete is pending', async () => {
+    mockListScenarioExpenses.mockResolvedValue([SCENARIO_EXPENSE]);
+    mockDeleteScenarioExpense.mockReturnValue(new Promise(() => undefined));
+    renderPanel();
+    const button = await screen.findByRole('button', { name: /הסרת הוצאת תרחיש/ });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(mockDeleteScenarioExpense).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: /הסרת הוצאת תרחיש/ })).toBeDisabled();
+  });
+
+  it('migrates each legacy expense exactly once when the button is pressed twice', async () => {
+    mockReadMvpEmploymentExpenses.mockReturnValue([
+      LEGACY_EXPENSE,
+      { ...LEGACY_EXPENSE, id: 'legacy-expense-002', category: 'נסיעות' },
+    ]);
+    renderPanel();
+    await waitFor(() => screen.getByText(/התאמת הוצאות MVP קיימות/));
+    fireEvent.click(screen.getByRole('checkbox', { name: /בדקתי שההוצאות שייכות לתיק זה/ }));
+    const migrate = screen.getByRole('button', { name: /העברת ההוצאות לשרת/ });
+    fireEvent.click(migrate);
+    fireEvent.click(migrate);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /הסרת ההוצאות הישנות מהדפדפן/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(mockCreateScenarioExpense).toHaveBeenCalledTimes(2);
+    const labels = mockCreateScenarioExpense.mock.calls.map(
+      (call) => (call[1] as { label: string }).label,
+    );
+    expect(labels).toEqual(['ביטוח רפואי', 'נסיעות']);
+    const keys = mockCreateScenarioExpense.mock.calls.map((call) => call[2] as string);
+    expect(new Set(keys).size).toBe(2);
+  });
+});
+
 describe('CanonicalPayrollIntelligence — legacy expense reconciliation', () => {
   it('shows no expense migration notice without legacy expenses', async () => {
     renderPanel();
