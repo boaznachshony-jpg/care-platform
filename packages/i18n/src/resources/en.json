@@ -525,7 +525,8 @@
     "legalConsentTerms": "the terms of service",
     "legalConsentAnd": "and",
     "legalConsentPrivacy": "the privacy policy",
-    "legalConsentNote": "The acceptance is recorded with the document name, its version and the moment of approval. Entering the caregiver's details requires a lawful basis, as explained in the privacy policy."
+    "legalConsentNote": "The acceptance is recorded with the document name, its version and the moment of approval. Entering the caregiver's details requires a lawful basis, as explained in the privacy policy.",
+    "legalConsentRequired": "To complete setup, tick the box accepting the terms of service and the privacy policy."
   },
   "clients": {
     "backupPlaintextWarning": "The backup file is not encrypted and contains ID numbers, passport numbers and payroll data. Keep it somewhere protected and do not send it by email or message.",
@@ -1490,8 +1491,8 @@
     "notDaily": "Not every day",
     "dailyLabel": "Taken every day",
     "daysLegend": "On which days it is taken",
-    "daysHint": "More than one day may be selected. A reminder is sent only on the selected days.",
-    "daysMissing": "No day is selected, so no reminder will be sent for this medication. Select at least one day for reminders to start.",
+    "daysHint": "More than one day may be selected. The reminder applies only to the selected days.",
+    "daysMissing": "No day is selected. Select at least one day for this medication to be included in the reminder schedule.",
     "day": {
       "sunday": "Sunday",
       "monday": "Monday",
@@ -1524,10 +1525,10 @@
   },
   "reminderRecipients": {
     "title": "Who receives reminders",
-    "intro": "The people who are told when a dose is due. Each one has their own channel - someone abroad on a data-only plan will not receive an SMS, so pick WhatsApp or email for them.",
+    "intro": "The people who will be told when a dose is due, once reminder delivery is switched on. Each one has their own channel - someone abroad on a data-only plan will not receive an SMS, so pick WhatsApp or email for them.",
     "privacyNotice": "A medication reminder is health information about another person. Do not add anyone who has not explicitly agreed, and every recipient can remove themselves at any time. The message body never names the medication.",
     "listTitle": "Recipients",
-    "empty": "No recipients yet. Without one, no reminder is sent.",
+    "empty": "No recipients yet. Once delivery is switched on, reminders reach only the people on this list.",
     "addTitle": "Add a recipient",
     "editTitle": "Edit recipient",
     "name": "Name",
@@ -1546,7 +1547,7 @@
     "consentLabel": "This person agreed to receive reminders",
     "consentHint": "Nothing is sent without agreement. The time it was given is recorded.",
     "activeLabel": "Active",
-    "statusReady": "Will receive reminders",
+    "statusReady": "Will receive reminders once delivery is switched on",
     "statusNoConsent": "Waiting for their agreement",
     "statusPaused": "Paused",
     "statusNoContact": "Missing contact details for the chosen channel",
@@ -1557,6 +1558,19 @@
     "remove": "Remove recipient",
     "removeConfirm": "Remove this person from the reminder list?",
     "savedNotice": "Recipients saved.",
-    "updatedAt": "Updated"
+    "updatedAt": "Updated",
+    "notYetDelivered": "Sending reminders to recipients is not yet active in this version. The details entered here are not used for sending until a notice here says otherwise."
+  },
+  "consent": {
+    "gateTitle": "Accept the terms of service and the privacy policy",
+    "gateBody": "Before entering the case we ask you to accept the terms of service and the privacy policy. The workspace holds information about another person — the caregiver — so every user's acceptance is recorded: the document name, its version and the moment of approval.",
+    "gateCheckboxPrefix": "I have read and accept",
+    "gateTermsLink": "the terms of service",
+    "gateAnd": "and",
+    "gatePrivacyLink": "the privacy policy",
+    "gateSubmit": "Accept and enter",
+    "gateSubmitting": "Recording your acceptance…",
+    "gateRecordFailed": "We could not record your acceptance, so you have not been let in yet. Check your connection and try again.",
+    "gateSignOut": "Sign out without accepting"
   }
 }
