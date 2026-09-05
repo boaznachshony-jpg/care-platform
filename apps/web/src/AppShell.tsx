@@ -13,9 +13,12 @@ import {
 import { RELEASE_LABEL } from './release.js';
 import { useAuth } from './auth/auth-context.js';
 import { SectionErrorBoundary } from './components/ErrorBoundary.js';
+import { SignOutButton } from './components/SignOutButton.js';
 import { apiBaseUrlIsMisconfigured } from './api/client.js';
 import {
   getWorkspaceSyncState,
+  resolveWorkspaceConflict,
+  resolveWorkspaceShrink,
   retryWorkspaceSync,
   WORKSPACE_SYNC_CHANGED,
   type WorkspaceSyncState,
@@ -57,6 +60,15 @@ const mobileMoreNav = [
   ['/contact', '✉', 'עזרה ויצירת קשר'],
 ] as const;
 
+/**
+ * UI-NAV-11: account-level screens. They are not scoped to an employer, so
+ * they are linked as-is and never go through path().
+ */
+const accountNav = [
+  ['/family', '👥', 'בני משפחה'],
+  ['/billing', '💳', 'מנוי וחיוב'],
+] as const;
+
 const FONT_SCALE_KEY = 'caredesk.ui.font-scale.v1';
 const fontScales = [1, 1.15, 1.3] as const;
 
@@ -79,6 +91,118 @@ function currentHebrewDate(): string {
     day: 'numeric',
     month: 'long',
   }).format(new Date());
+}
+
+/**
+ * The cloud-save indicator. Every state that needs the customer to act is an
+ * alert with its options inline; a state that is merely informative is a
+ * status. There is no state in which the truth is hidden.
+ */
+function SyncStatus({ syncState }: { syncState: WorkspaceSyncState }) {
+  const { t } = useTranslation();
+  const [resolving, setResolving] = useState(false);
+
+  async function resolve(action: () => Promise<void>) {
+    setResolving(true);
+    try {
+      await action();
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  if (syncState === 'disabled') return null;
+
+  if (syncState === 'error') {
+    return (
+      <span className="sync-status sync-status-error" role="alert">
+        השמירה בענן נכשלה
+        <button
+          className="sync-retry-button"
+          type="button"
+          onClick={() => void retryWorkspaceSync()}
+        >
+          נסו שוב
+        </button>
+      </span>
+    );
+  }
+
+  if (syncState === 'conflict') {
+    // UI-WRITE-01: a retry can never succeed here. Only a choice can.
+    return (
+      <span className="sync-status sync-status-error" role="alert">
+        {t('sync.conflictTitle')}
+        <button
+          className="sync-retry-button"
+          type="button"
+          disabled={resolving}
+          title={t('sync.keepRemoteHint')}
+          onClick={() => void resolve(() => resolveWorkspaceConflict('keep-remote'))}
+        >
+          {t('sync.keepRemote')}
+        </button>
+        <button
+          className="sync-retry-button"
+          type="button"
+          disabled={resolving}
+          title={t('sync.keepLocalHint')}
+          onClick={() => void resolve(() => resolveWorkspaceConflict('keep-local'))}
+        >
+          {t('sync.keepLocal')}
+        </button>
+      </span>
+    );
+  }
+
+  if (syncState === 'shrink-blocked') {
+    // UI-WRITE-05: the server refused a near-empty save. Confirm or undo.
+    return (
+      <span className="sync-status sync-status-error" role="alert">
+        {t('sync.shrinkBlocked')}
+        <button
+          className="sync-retry-button"
+          type="button"
+          disabled={resolving}
+          onClick={() => void resolve(() => resolveWorkspaceShrink('undo'))}
+        >
+          {t('sync.shrinkUndo')}
+        </button>
+        <button
+          className="sync-retry-button"
+          type="button"
+          disabled={resolving}
+          onClick={() => void resolve(() => resolveWorkspaceShrink('confirm'))}
+        >
+          {t('sync.shrinkConfirm')}
+        </button>
+      </span>
+    );
+  }
+
+  if (syncState === 'unauthorized') {
+    // GAP-2-01: no retry button. Access is gone; the auth gate takes over.
+    return (
+      <span className="sync-status sync-status-error" role="alert">
+        {t('sync.unauthorized')}
+      </span>
+    );
+  }
+
+  if (syncState === 'read-only') {
+    // GAP-2-03: the edit was refused and the server copy was re-applied.
+    return (
+      <span className="sync-status sync-status-error" role="alert">
+        {t('sync.readOnlySave')}
+      </span>
+    );
+  }
+
+  return (
+    <span className={`sync-status sync-status-${syncState}`} role="status">
+      {syncState === 'saving' ? 'שומר…' : syncState === 'loading' ? 'טוען…' : 'נשמר בענן'}
+    </span>
+  );
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -149,6 +273,11 @@ export function AppShell({ children }: AppShellProps) {
         <NavLink className="settings-link" to={path('/settings')}>
           ⚙ הגדרות
         </NavLink>
+        {accountNav.map(([to, icon, label]) => (
+          <NavLink key={to} className="settings-link" to={to}>
+            {icon} {label}
+          </NavLink>
+        ))}
         <NavLink className="settings-link client-switch-link" to="/app">
           ⇄ החלפת מעסיק
         </NavLink>
@@ -172,27 +301,15 @@ export function AppShell({ children }: AppShellProps) {
                 {t('errors.apiUnreachable')}
               </span>
             ) : null}
-            {auth.enabled && syncState === 'error' ? (
-              <span className="sync-status sync-status-error" role="alert">
-                השמירה בענן נכשלה
-                <button
-                  className="sync-retry-button"
-                  type="button"
-                  onClick={() => void retryWorkspaceSync()}
-                >
-                  נסו שוב
-                </button>
-              </span>
-            ) : auth.enabled && syncState !== 'disabled' ? (
-              <span className={`sync-status sync-status-${syncState}`} role="status">
-                {syncState === 'saving' ? 'שומר…' : syncState === 'loading' ? 'טוען…' : 'נשמר בענן'}
+            {auth.enabled ? <SyncStatus syncState={syncState} /> : null}
+            {/* GAP-2-03: a viewer sees the whole workspace but cannot change
+                it. Said once, persistently, instead of on every failed save. */}
+            {auth.enabled && auth.canWrite === false ? (
+              <span className="sync-status sync-status-loading" role="status">
+                {t('sync.viewOnly')}
               </span>
             ) : null}
-            {auth.enabled ? (
-              <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
-                {t('auth.signOut')}
-              </button>
-            ) : null}
+            {auth.enabled ? <SignOutButton /> : null}
             <Link className="top-client-switch" to="/app" aria-label="החלפת מעסיק">
               ⇄
             </Link>
@@ -298,6 +415,12 @@ export function AppShell({ children }: AppShellProps) {
                 {label}
               </NavLink>
             ))}
+            {accountNav.map(([to, icon, label]) => (
+              <Link key={to} to={to} onClick={() => setMobileMoreOpen(false)}>
+                <span aria-hidden="true">{icon}</span>
+                {label}
+              </Link>
+            ))}
             <Link to="/app" onClick={() => setMobileMoreOpen(false)}>
               <span aria-hidden="true">⇄</span>
               החלפת מעסיק
@@ -307,17 +430,13 @@ export function AppShell({ children }: AppShellProps) {
               חזרה לדף הנחיתה
             </Link>
             {auth.enabled ? (
-              <button
+              <SignOutButton
                 className="mobile-more-sign-out"
-                type="button"
-                onClick={() => {
-                  setMobileMoreOpen(false);
-                  void auth.signOut();
-                }}
+                onBeforeSignOut={() => setMobileMoreOpen(false)}
               >
                 <span aria-hidden="true">↪</span>
                 {t('auth.signOut')}
-              </button>
+              </SignOutButton>
             ) : null}
           </nav>
         ) : null}

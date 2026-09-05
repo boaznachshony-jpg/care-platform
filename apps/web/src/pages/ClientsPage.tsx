@@ -1,21 +1,35 @@
 /* eslint-disable no-restricted-syntax */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
+import { SignOutButton } from '../components/SignOutButton.js';
 import { formatDateOnly } from '../format-timestamp.js';
 import { clientPath } from '../hooks/use-client-path.js';
 import {
+  captureMvpWorkspace,
   createMvpClient,
   consumeMvpMigrationRedirect,
   deleteMvpClient,
   exportMvpClient,
   isNewEmployerLabel,
+  MVP_PROFILE_CHANGED,
   readMvpClients,
+  replaceMvpWorkspace,
   resetMvpClient,
   type MvpClient,
+  type MvpWorkspaceSnapshot,
 } from '../storage/mvp-storage.js';
 import { RELEASE_LABEL } from '../release.js';
+
+/** How long "בטל מחיקה" stays available after an employer is deleted. */
+export const CLIENT_DELETE_UNDO_MS = 10_000;
+
+interface PendingUndo {
+  label: string;
+  /** The whole workspace as it was the instant before the delete. */
+  previous: MvpWorkspaceSnapshot;
+}
 
 function downloadClient(client: MvpClient): void {
   const blob = new Blob([exportMvpClient(client.id)], { type: 'application/json;charset=utf-8' });
@@ -34,6 +48,8 @@ export function ClientsPage() {
   const [searchParams] = useSearchParams();
   const [clients, setClients] = useState(readMvpClients);
   const [migrationRedirect] = useState(consumeMvpMigrationRedirect);
+  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
+  const undoTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (migrationRedirect) navigate(clientPath(migrationRedirect, '/'), { replace: true });
@@ -49,16 +65,68 @@ export function ClientsPage() {
     navigate(clientPath(client.id, '/onboarding'), { replace: true });
   }, [clients.length, migrationRedirect, navigate, searchParams]);
 
+  // UI-NAV-01: this list is read once on mount. When the page mounts against
+  // an empty device cache and hydration fills it a moment later, the cards
+  // must appear without a reload.
+  useEffect(() => {
+    const refresh = () => setClients(readMvpClients());
+    window.addEventListener(MVP_PROFILE_CHANGED, refresh);
+    return () => window.removeEventListener(MVP_PROFILE_CHANGED, refresh);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (undoTimerRef.current !== undefined) window.clearTimeout(undoTimerRef.current);
+    },
+    [],
+  );
+
   function addClient() {
     const client = createMvpClient();
     navigate(clientPath(client.id, '/onboarding'));
   }
 
   function removeClient(client: MvpClient) {
-    if (!window.confirm(`למחוק את תיק ההעסקה “${client.label}” ואת כל הנתונים המקומיים שלו?`))
+    // UI-WRITE-05: the old text said "local data". The delete is pushed to
+    // the family workspace within a quarter of a second and reaches every
+    // device, so the confirmation says so - twice - and an undo follows.
+    if (
+      !window.confirm(
+        `למחוק את תיק ההעסקה “${client.label}”?\n\nהמחיקה תישמר בענן ותימחק מכל המכשירים של המשפחה, לא רק מהמכשיר הזה.`,
+      )
+    )
       return;
+    if (
+      !window.confirm(
+        `אישור אחרון: למחוק לצמיתות את “${client.label}” ואת כל המשימות, המסמכים ורשומות השכר שלו מכל המכשירים?`,
+      )
+    )
+      return;
+    const capture = captureMvpWorkspace();
+    const previous: MvpWorkspaceSnapshot = {
+      schemaVersion: capture.schemaVersion,
+      entries: capture.entries,
+    };
     deleteMvpClient(client.id);
     setClients(readMvpClients());
+    if (undoTimerRef.current !== undefined) window.clearTimeout(undoTimerRef.current);
+    setPendingUndo({ label: client.label, previous });
+    undoTimerRef.current = window.setTimeout(() => {
+      undoTimerRef.current = undefined;
+      setPendingUndo(null);
+    }, CLIENT_DELETE_UNDO_MS);
+  }
+
+  function undoRemove() {
+    if (!pendingUndo) return;
+    if (undoTimerRef.current !== undefined) window.clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = undefined;
+    // Restore-and-resave: the workspace is put back exactly as captured, and
+    // the sync layer saves that as the next version. If the delete already
+    // reached the server, the server keeps it in the version history.
+    replaceMvpWorkspace(pendingUndo.previous);
+    setClients(readMvpClients());
+    setPendingUndo(null);
   }
 
   function resetClient(client: MvpClient) {
@@ -95,16 +163,24 @@ export function ClientsPage() {
           <button className="secondary-button" type="button" onClick={() => navigate('/family')}>
             👥 {t('familyAccess.eyebrow')}
           </button>
-          {auth.enabled ? (
-            <button className="sign-out-button" type="button" onClick={() => void auth.signOut()}>
-              {t('auth.signOut')}
-            </button>
-          ) : null}
+          {auth.enabled ? <SignOutButton /> : null}
           <button className="primary-button clients-add-button" type="button" onClick={addClient}>
             ＋ {t('clients.add')}
           </button>
         </div>
       </header>
+
+      {pendingUndo ? (
+        <aside className="info-box" role="status">
+          <span>
+            תיק ההעסקה “{pendingUndo.label}” נמחק
+            {auth.enabled ? ' ונשלח לענן, ומכל המכשירים' : ''}.
+          </span>
+          <button className="secondary-button" type="button" onClick={undoRemove}>
+            בטל מחיקה
+          </button>
+        </aside>
+      ) : null}
 
       {clients.length === 0 ? (
         <section className="clients-empty card">
