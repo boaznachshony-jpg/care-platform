@@ -34,8 +34,11 @@ Last updated: 2026-07-23
 Preferred stack:
 
 ```css
-font-family: "Noto Sans Hebrew", "Arial Hebrew", Arial, sans-serif;
+font-family: "Heebo", "Rubik", "Segoe UI", Arial, sans-serif;
 ```
+
+Heebo is the face the app loads (`apps/web/src/global.css` `--cd-font-family`); `--font-family-base` in
+`packages/design-tokens` names the same stack so shared components never fall back to Arial.
 
 | Token | Size/line | Weight | Use |
 |---|---:|---:|---|
@@ -44,8 +47,11 @@ font-family: "Noto Sans Hebrew", "Arial Hebrew", Arial, sans-serif;
 | `text-h2` | 22/30 | 700 | section title |
 | `text-h3` | 18/26 | 600 | card/subsection |
 | `text-body` | 16/24 | 400 | default |
-| `text-small` | 14/20 | 400 | metadata |
-| `text-caption` | 12/18 | 500 | labels and timestamps |
+| `text-small` | 14/20 (`0.875em`) | 400 | metadata |
+| `text-caption` | 12/18 (`0.75em`) | 500 | labels and timestamps |
+
+`text-small` and `text-caption` are expressed in `em` in `tokens.css` so that the reader's A+/A- text
+scaling reaches metadata and captions; the px values above are what they resolve to at the 16px base.
 
 Text zoom to 200% must not cause loss of content or functionality.
 
