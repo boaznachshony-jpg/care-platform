@@ -20,7 +20,7 @@
   --color-info: #1769aa;
 
   /* Typography */
-  --font-family-base: 'Noto Sans Hebrew', 'Arial Hebrew', Arial, sans-serif;
+  --font-family-base: 'Heebo', 'Rubik', 'Segoe UI', Arial, sans-serif;
   --text-display-size: 32px;
   --text-display-line: 40px;
   --text-display-weight: 700;
@@ -36,10 +36,14 @@
   --text-body-size: 16px;
   --text-body-line: 24px;
   --text-body-weight: 400;
-  --text-small-size: 14px;
+  /* small and caption are relative (14/16, 12/16 of the body size) so the
+     reader's A+/A- text scaling — which changes the inherited base — reaches
+     metadata and captions too. Absolute px here would pin them at 14/12 no
+     matter what the user chose. */
+  --text-small-size: 0.875em;
   --text-small-line: 20px;
   --text-small-weight: 400;
-  --text-caption-size: 12px;
+  --text-caption-size: 0.75em;
   --text-caption-line: 18px;
   --text-caption-weight: 500;
 
