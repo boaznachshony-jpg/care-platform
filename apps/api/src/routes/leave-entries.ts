@@ -4,7 +4,7 @@ import { withTenant } from '@caredesk/db';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { LeaveEntryService } from '../leave-entry-service.js';
-import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
+import { clientAddress, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const params = z.object({
@@ -42,7 +42,7 @@ function makeLeaveRateLimit(limiter: RateLimiter, policy: RouteRateLimit): preHa
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
-      : `unauthenticated:${request.ip}`;
+      : `unauthenticated:${clientAddress(request)}`;
     const decision = await limiter.consume(
       `leave-entry:${policy.bucket}:${principal}`,
       policy.max,

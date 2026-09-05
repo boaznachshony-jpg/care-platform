@@ -11,14 +11,28 @@ import {
 } from '@caredesk/schemas';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { IdentityAlreadyRegisteredError } from '../auth/supabase-invitation-service.js';
 import type { Container } from '../container.js';
 import type { Env } from '../env.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { requireMfa } from '../plugins/mfa.js';
 import { safeErrorDetails } from '../plugins/safe-error.js';
+import { makePrincipalRateLimit, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const membershipParamsSchema = z.object({ membershipId: z.string().uuid() });
+
+/**
+ * SEC-AUTHZ-05. An invitation sends e-mail and mints an identity at the
+ * provider; it was the one outbound-mail write with no limiter. Ten per owner
+ * per ten minutes is far more than a family ever needs and far less than a
+ * mail-bombing run wants.
+ */
+export const FAMILY_INVITATION_RATE_LIMIT = {
+  max: 10,
+  timeWindow: 10 * 60_000,
+  bucket: 'family-invitation',
+} as const satisfies RouteRateLimit;
 
 function toResponse(
   member: {
@@ -56,10 +70,19 @@ export function registerFamilyAccessRoutes(
   app: FastifyInstance,
   container: Container,
   env: Env,
+  rateLimiter: RateLimiter,
 ): void {
   const authenticate = makeAuthenticate(container.auth, container.actorResolver);
   const options = { preHandler: authenticate };
   const manageOptions = { preHandler: [authenticate, requireMfa(env, 'membership.manage')] };
+  const inviteOptions = {
+    config: { rateLimit: FAMILY_INVITATION_RATE_LIMIT },
+    preHandler: [
+      authenticate,
+      requireMfa(env, 'membership.manage'),
+      makePrincipalRateLimit(rateLimiter, 'family-access', FAMILY_INVITATION_RATE_LIMIT),
+    ],
+  };
 
   app.get('/family/members', options, async (request, reply) => {
     const actor = request.actor;
@@ -77,7 +100,7 @@ export function registerFamilyAccessRoutes(
     }
   });
 
-  app.post('/family/invitations', manageOptions, async (request, reply) => {
+  app.post('/family/invitations', inviteOptions, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
     const parsed = inviteFamilyMemberRequestSchema.safeParse(request.body);
@@ -91,6 +114,12 @@ export function registerFamilyAccessRoutes(
         const code =
           error instanceof FamilyMemberConflictError ? 'FAMILY_MEMBER_EXISTS' : 'FORBIDDEN';
         return sendError(request, reply, known.statusCode, code);
+      }
+      // UI-NAV-02. The provider already holds an account for this e-mail. That
+      // is a fact about the person, not a delivery failure, and the client
+      // needs to tell the two apart to offer the right next step.
+      if (error instanceof IdentityAlreadyRegisteredError) {
+        return sendError(request, reply, 409, 'FAMILY_IDENTITY_EXISTS');
       }
       request.log.error(safeErrorDetails(error), 'Family invitation failed');
       return sendError(request, reply, 502, 'INVITATION_DELIVERY_FAILED');

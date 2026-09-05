@@ -8,7 +8,24 @@ interface FetchResponseLike {
 
 type FetchLike = (input: string, init?: Record<string, unknown>) => Promise<FetchResponseLike>;
 
+/**
+ * Defence in depth for SEC-INPUT-01. The routes validate every id that reaches
+ * a storage key, but this adapter is the last thing that sees the key before
+ * it becomes a URL path, so it refuses any segment that could move the object
+ * out of its tenant prefix (`..`, `.`) or collapse two segments into one (an
+ * empty segment from `//`). A key that fails here is a bug upstream, never a
+ * legitimate document.
+ */
+function assertSafeStorageKey(storageKey: string): void {
+  for (const segment of storageKey.split('/')) {
+    if (segment === '' || segment === '.' || segment === '..') {
+      throw new Error('Storage key contains a path traversal segment.');
+    }
+  }
+}
+
 function encodePath(path: string): string {
+  assertSafeStorageKey(path);
   return path
     .split('/')
     .map((segment) => encodeURIComponent(segment))

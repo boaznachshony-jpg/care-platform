@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadEnv } from './env.js';
 import { buildServer } from './create-server.js';
 
@@ -25,6 +25,10 @@ function productionEnv(overrides: Record<string, string> = {}): Record<string, s
 }
 
 describe('apps/api server', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('GET /health returns a schema-shaped 200', async () => {
     const app = buildServer(loadEnv({}));
     const response = await app.inject({ method: 'GET', url: '/health' });
@@ -78,6 +82,33 @@ describe('apps/api server', () => {
     ]) {
       expect(parseUnconfiguredProduction).toThrow(`${setting} is required in production`);
     }
+  });
+
+  it('names a missing CRON_SECRET as a readiness reason in production, and only then', async () => {
+    // SEC-INPUT-03 / SEC-INFRA-03. Both scheduled jobs are refused with 401
+    // without the secret, silently, every night. A readiness reason rather
+    // than a parse-time refusal: the recovery runbook's locked-out operator
+    // must not find production turned into a 503-everything app over a cron.
+    // Upstream probes are stubbed so the case exercises configuration only;
+    // the local DATABASE_URL still yields its own (unrelated) reason.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => new Response('{}', { status: 200 })),
+    );
+    const matchCron = expect.arrayContaining([expect.stringMatching(/CRON_SECRET/)]);
+
+    const without = buildServer(loadEnv(productionEnv()));
+    const notReady = await without.inject({ method: 'GET', url: '/ready' });
+    expect(notReady.statusCode).toBe(503);
+    expect(notReady.json().reasons).toEqual(matchCron);
+    await without.close();
+
+    const withSecret = buildServer(
+      loadEnv(productionEnv({ CRON_SECRET: 'synthetic-cron-secret-of-sufficient-length' })),
+    );
+    const response = await withSecret.inject({ method: 'GET', url: '/ready' });
+    expect(response.json().reasons ?? []).not.toEqual(matchCron);
+    await withSecret.close();
   });
 
   it('echoes a client-supplied correlation id and generates one otherwise', async () => {

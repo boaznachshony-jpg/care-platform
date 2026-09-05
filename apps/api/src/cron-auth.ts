@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import type { Env } from './env.js';
-import type { RateLimiter, RouteRateLimit } from './rate-limit.js';
+import { clientAddress, type RateLimiter, type RouteRateLimit } from './rate-limit.js';
 import { sendError } from './routes/http-errors.js';
 
 /**
@@ -35,6 +35,15 @@ export function rejectUnauthorizedCron(
   env: Env,
 ): boolean {
   if (isAuthorizedCronRequest(request, env)) return false;
+  // SEC-INPUT-03. Without the secret every scheduled run is refused, and the
+  // 401 line alone reads like a bad token. Name the cause where the operator
+  // will look for it; /ready also carries it as a readiness reason.
+  if (!env.CRON_SECRET) {
+    request.log.error(
+      { route: request.routeOptions.url, correlationId: request.correlationId },
+      'cron secret not configured',
+    );
+  }
   sendError(request, reply, 401, 'UNAUTHENTICATED');
   return true;
 }
@@ -67,7 +76,7 @@ export function makeCronRateLimit(
 ): preHandlerHookHandler {
   return async (request, reply) => {
     const decision = await limiter.consume(
-      `cron:${policy.bucket}:${request.ip}`,
+      `cron:${policy.bucket}:${clientAddress(request)}`,
       policy.max,
       policy.timeWindow,
     );
