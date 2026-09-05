@@ -104,6 +104,12 @@ describe('ProductCompletionPanel', () => {
     await waitFor(() => expect(screen.getByText('82')).toBeInTheDocument());
   });
 
+  it('announces the loading state with role=status until the health promise resolves', () => {
+    mockGetCaseHealth.mockReturnValue(new Promise(() => undefined));
+    renderPanel();
+    expect(screen.getByRole('status')).toHaveTextContent(tt('shell.loading'));
+  });
+
   it('shows the AI assistant section', async () => {
     renderPanel();
     await waitFor(() =>
@@ -193,8 +199,127 @@ describe('ProductCompletionPanel', () => {
         expect(mockCreateProfessionalReview).toHaveBeenCalledWith(
           DEMO_CASE_ID,
           expect.objectContaining({ reason: 'לא נמצא כלל מאושר לפרשנות מקצועית' }),
+          expect.any(String),
         ),
       );
+    });
+  });
+
+  /**
+   * UI-WRITE-03 / UI-STATES-08. "Create tasks" was `void confirmAssistantChecklist(...)`
+   * straight from onClick: no await, no catch, no lock, a fresh idempotency key
+   * per click. Every press created the checklist's tasks again on the server and
+   * a failure looked exactly like success. The question itself had no failure
+   * state either.
+   */
+  describe('assistant write contract', () => {
+    const CHECKLIST_RESPONSE = {
+      answer: 'Here is what to do next.',
+      groundingLabel: 'Based on your CareDesk file',
+      factsUsed: [],
+      uncertainties: [],
+      recommendedActions: [],
+      proposedChecklist: ['לחדש את האשרה', 'להעלות דרכון'],
+      escalation: { required: false, reason: '' },
+    };
+
+    async function askForChecklist() {
+      renderPanel();
+      await waitFor(() => screen.getByRole('heading', { name: 'מצב תיק ההעסקה' }));
+      fireEvent.change(screen.getByLabelText('מה תרצו לבדוק?'), {
+        target: { value: 'מה חסר בתיק?' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'בדיקה לפי תיק CareDesk' }));
+      return screen.findByRole('button', { name: tt('completion.createTasks') });
+    }
+
+    it('shows an alert when the assistant question fails', async () => {
+      mockAskCaseAssistant.mockRejectedValue(new Error('assistant down'));
+      renderPanel();
+      await waitFor(() => screen.getByRole('heading', { name: 'מצב תיק ההעסקה' }));
+      fireEvent.change(screen.getByLabelText('מה תרצו לבדוק?'), {
+        target: { value: 'מה חסר בתיק?' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'בדיקה לפי תיק CareDesk' }));
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(tt('completion.askFailed'));
+      // The question is kept and the button is usable again for a retry.
+      expect(screen.getByLabelText('מה תרצו לבדוק?')).toHaveValue('מה חסר בתיק?');
+      expect(screen.getByRole('button', { name: 'בדיקה לפי תיק CareDesk' })).toBeEnabled();
+    });
+
+    it('calls the confirmation API once for two clicks while it is pending, then reports saved', async () => {
+      mockAskCaseAssistant.mockResolvedValue(CHECKLIST_RESPONSE);
+      let resolveConfirm: (() => void) | undefined;
+      mockConfirmAssistantChecklist.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        }),
+      );
+      const button = await askForChecklist();
+      fireEvent.click(button);
+      fireEvent.click(button);
+      await waitFor(() => expect(mockConfirmAssistantChecklist).toHaveBeenCalledTimes(1));
+      expect(mockConfirmAssistantChecklist).toHaveBeenCalledWith(
+        DEMO_CASE_ID,
+        CHECKLIST_RESPONSE.proposedChecklist,
+        expect.any(String),
+      );
+      expect(screen.getByRole('button', { name: tt('completion.createTasks') })).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(tt('completion.checklistSaving'));
+
+      resolveConfirm?.();
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(tt('completion.checklistSaved')),
+      );
+      // Saved is terminal for this checklist: a third press must not create
+      // the same tasks again.
+      expect(screen.getByRole('button', { name: tt('completion.createTasks') })).toBeDisabled();
+    });
+
+    it('renders an alert when the confirmation is rejected and reuses the key on retry', async () => {
+      mockAskCaseAssistant.mockResolvedValue(CHECKLIST_RESPONSE);
+      mockConfirmAssistantChecklist
+        .mockRejectedValueOnce(new Error('server error'))
+        .mockResolvedValue(undefined);
+      const button = await askForChecklist();
+      fireEvent.click(button);
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(tt('completion.checklistFailed'));
+      expect(screen.getByRole('button', { name: tt('completion.createTasks') })).toBeEnabled();
+
+      fireEvent.click(screen.getByRole('button', { name: tt('completion.createTasks') }));
+      await waitFor(() => expect(mockConfirmAssistantChecklist).toHaveBeenCalledTimes(2));
+      const [first, second] = mockConfirmAssistantChecklist.mock.calls as Array<
+        [string, string[], string]
+      >;
+      expect(typeof first?.[2]).toBe('string');
+      expect(second?.[2]).toBe(first?.[2]);
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(tt('completion.checklistSaved')),
+      );
+    });
+
+    it('reuses the review idempotency key after a failed escalation and mints a new one after success', async () => {
+      mockCreateProfessionalReview
+        .mockRejectedValueOnce(new Error('server error'))
+        .mockResolvedValueOnce({ ...REQUESTED_REVIEW, id: 'rev-201' })
+        .mockResolvedValue({ ...REQUESTED_REVIEW, id: 'rev-202' });
+      renderPanel();
+      await waitFor(() => screen.getByRole('button', { name: 'בקשת בדיקה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'בקשת בדיקה' }));
+      await screen.findByText(tt('completion.escalateFailed'));
+      fireEvent.click(screen.getByRole('button', { name: 'בקשת בדיקה' }));
+      await waitFor(() => expect(mockCreateProfessionalReview).toHaveBeenCalledTimes(2));
+      const keys = mockCreateProfessionalReview.mock.calls.map((call) => call[2] as string);
+      expect(keys[1]).toBe(keys[0]);
+
+      // Deliberately asking for another review after a success is a new
+      // request, not a replay of the previous one.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'בקשת בדיקה' })).toBeEnabled());
+      fireEvent.click(screen.getByRole('button', { name: 'בקשת בדיקה' }));
+      await waitFor(() => expect(mockCreateProfessionalReview).toHaveBeenCalledTimes(3));
+      expect(mockCreateProfessionalReview.mock.calls[2]?.[2]).not.toBe(keys[0]);
     });
   });
 
@@ -286,10 +411,12 @@ describe('ProductCompletionPanel', () => {
         screen.getByRole('button', { name: tt('escalation.transition.acknowledged') }),
       );
       await waitFor(() =>
-        expect(mockTransitionProfessionalReview).toHaveBeenCalledWith(DEMO_CASE_ID, 'rev-100', {
-          status: 'acknowledged',
-          assignedTo: 'עו"ד רות כהן, 03-0000000',
-        }),
+        expect(mockTransitionProfessionalReview).toHaveBeenCalledWith(
+          DEMO_CASE_ID,
+          'rev-100',
+          { status: 'acknowledged', assignedTo: 'עו"ד רות כהן, 03-0000000' },
+          expect.any(String),
+        ),
       );
       await waitFor(() =>
         expect(screen.getByText(tt('escalation.status.acknowledged'))).toBeInTheDocument(),
@@ -317,10 +444,12 @@ describe('ProductCompletionPanel', () => {
       expect(resolveButton).toBeEnabled();
       fireEvent.click(resolveButton);
       await waitFor(() =>
-        expect(mockTransitionProfessionalReview).toHaveBeenCalledWith(DEMO_CASE_ID, 'rev-100', {
-          status: 'resolved',
-          resolutionNote: 'נבדק ידנית על ידי הגורם המקצועי.',
-        }),
+        expect(mockTransitionProfessionalReview).toHaveBeenCalledWith(
+          DEMO_CASE_ID,
+          'rev-100',
+          { status: 'resolved', resolutionNote: 'נבדק ידנית על ידי הגורם המקצועי.' },
+          expect.any(String),
+        ),
       );
     });
 
