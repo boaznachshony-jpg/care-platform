@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@caredesk/ui';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import {
   askCaseAssistant,
   confirmAssistantChecklist,
@@ -311,7 +312,7 @@ export function ProductCompletionPanel({ caseId }: { caseId: string }) {
                   // link ran together as "0/25Upload or review the document".
                   <>
                     {' · '}
-                    <a href={factor.actionTarget}>{healthFactorAction(factor, t)}</a>
+                    <Link to={factor.actionTarget}>{healthFactorAction(factor, t)}</Link>
                   </>
                 ) : null}
               </li>

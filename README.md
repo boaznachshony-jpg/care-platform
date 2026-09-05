@@ -20,8 +20,8 @@ and no real personal data may be used until every blocking gate in the
 Wave 2 delivers the full persisted Visa Renewal Workflow; see
 [issue #30](https://github.com/boaznachshony-jpg/care-platform/issues/30).
 
-`caredesk_prototype.html` is a visual reference only and must not be used as
-a production code base.
+`docs/reference/prototype/caredesk_prototype.html` is a visual reference only and
+must not be used as a production code base.
 
 ## Local development
 
@@ -166,7 +166,7 @@ and remaining decisions. Architecture decisions are under [docs/adr](docs/adr).
 
 ## Prototype
 
-`caredesk_prototype.html` is retained as a read-only visual reference. It may
+`docs/reference/prototype/caredesk_prototype.html` is retained as a read-only visual reference. It may
 inform information hierarchy and interaction ideas, but its JavaScript, CSS,
 state, validation, calculations, and hard-coded text must not be copied into
 production.

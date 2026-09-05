@@ -84,6 +84,21 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
     };
   }, [caseId]);
 
+  // The case assistant (ProductCompletionPanel) creates tasks through its own
+  // request and announces it with this event, so the list a family is looking
+  // at reflects the checklist it just confirmed without a reload.
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ caseId?: string }>).detail;
+      if (detail?.caseId !== caseId) return;
+      void listCaseTasks(caseId)
+        .then((rows) => setTasks(rows))
+        .catch(() => undefined);
+    };
+    window.addEventListener('caredesk:case-tasks-changed', refresh);
+    return () => window.removeEventListener('caredesk:case-tasks-changed', refresh);
+  }, [caseId]);
+
   // One-time upload of tasks this browser already holds locally under the
   // legacy client this case is linked to (employment_case.legacy_client_id,
   // migration 0042), for a family opening /cases/:caseId for the first time

@@ -268,7 +268,11 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
             {t('reminderRecipients.cancelEdit')}
           </button>
         ) : null}
-        {saved ? <p className="success-box">{t('reminderRecipients.savedNotice')}</p> : null}
+        {saved ? (
+          <p className="success-box" role="status">
+            {t('reminderRecipients.savedNotice')}
+          </p>
+        ) : null}
       </form>
     </section>
   );

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
 import { ProductCompletionPanel } from './ProductCompletionPanel.js';
@@ -64,7 +65,9 @@ const REQUESTED_REVIEW = {
 function renderPanel(caseId = DEMO_CASE_ID) {
   return render(
     <I18nextProvider i18n={i18n}>
-      <ProductCompletionPanel caseId={caseId} />
+      <MemoryRouter>
+        <ProductCompletionPanel caseId={caseId} />
+      </MemoryRouter>
     </I18nextProvider>,
   );
 }

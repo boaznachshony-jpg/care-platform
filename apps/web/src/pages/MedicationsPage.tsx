@@ -482,7 +482,11 @@ export function MedicationsPage() {
             {t('medications.cancelEdit')}
           </button>
         ) : null}
-        {saved ? <p className="success-box">{t('medications.savedNotice')}</p> : null}
+        {saved ? (
+          <p className="success-box" role="status">
+            {t('medications.savedNotice')}
+          </p>
+        ) : null}
       </form>
 
       {/* Kept on the same screen as the medication list on purpose: the person

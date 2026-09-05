@@ -25,6 +25,10 @@ repository owner directly and include:
     allowlist is `.gitleaks.toml`);
   - dependency audit: `pnpm audit --prod --audit-level=high` (`static` job) —
     a high or critical advisory in a production dependency fails CI;
+  - request rate limits are in-memory per serverless instance and keyed by
+    `x-real-ip` behind Vercel (`apps/api/src/rate-limit.ts`); they are a
+    best-effort brake, not a distributed control — the entropy of
+    `CRON_SECRET` and the authenticated principal are the real limits;
   - repository hygiene: `scripts/check-repo-hygiene.mjs` (`pnpm lint`) fails
     on tracked archive directories, Windows `- Copy` duplicates, undeclared
     lock-file overrides and any tracked `.pdf/.docx/.xlsx/.zip/.png/.jpg`

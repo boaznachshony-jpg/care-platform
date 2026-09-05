@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import type { BillingPlanResponse } from '@caredesk/schemas';
 import { getBillingSubscription } from '../api/client.js';
-import { useAuth } from '../auth/auth-context.js';
+import { SignOutButton } from './SignOutButton.js';
 
 /**
  * The billing status is fetched once per browser session and shared by every
@@ -47,7 +47,6 @@ function fetchBillingStatusOncePerSession(): Promise<BillingPlanResponse> {
 const BINDER_PATH = /^\/(clients\/[^/]+\/)?binder$/;
 export function AccountFrozenGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
-  const auth = useAuth();
   const { pathname } = useLocation();
   const [plan, setPlan] = useState<BillingPlanResponse | null>(null);
 
@@ -77,9 +76,7 @@ export function AccountFrozenGate({ children }: { children: ReactNode }) {
           <Link className="primary-button" to="/billing">
             {t('billing.frozenCta')}
           </Link>
-          <button className="secondary-button" type="button" onClick={() => void auth.signOut()}>
-            {t('billing.frozenSignOut')}
-          </button>
+          <SignOutButton className="secondary-button">{t('billing.frozenSignOut')}</SignOutButton>
         </section>
       </main>
     );

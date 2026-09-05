@@ -71,6 +71,7 @@
     "sendInvite": "Send invitation",
     "sendingInvite": "Sending invitation…",
     "inviteSent": "Invitation sent. The user signs in through the link in their email.",
+    "existingAccountError": "This address already has a CareDesk account, so no invitation was sent. Ask the family member to sign in with that address; if the case does not appear for them, contact support so we can link the account to the case.",
     "membersTitle": "People with access",
     "currentUser": "This is me",
     "statusInvited": "Invited — not signed in yet",

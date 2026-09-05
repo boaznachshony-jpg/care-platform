@@ -90,9 +90,10 @@ what to set.
 
 These do not stop the process. `DATA_LOSS_ALERT_EMAIL` makes `GET /ready`
 answer 503 with the reason until it is set, and a 503 on `/ready` is a
-deployment blocker. `CRON_SECRET` is not yet checked by `/ready` (tracked as
-audit finding SEC-INFRA-03), so its absence has to be caught by reading this
-table and by checking a cron invocation log for a 200:
+deployment blocker. A missing `CRON_SECRET` is reported the same way since the
+05.09.2026 hardening round: production `/ready` answers 503 with the reason
+`CRON_SECRET is not configured`. A 200 from `/ready` therefore proves both are
+set; a cron invocation log with a 200 proves the scan actually ran:
 
 | Variable                                               | Without it                                                                                                                                                |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
