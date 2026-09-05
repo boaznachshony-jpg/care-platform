@@ -7,8 +7,8 @@ import { readMvpMedications, saveMvpMedications } from '../storage/mvp-storage.j
 import type { MvpMedication } from '../storage/mvp-storage.js';
 
 const DAILY_LABEL = 'נלקחת כל יום';
-const NO_DAYS_NOTICE =
-  'לא סומן אף יום, ולכן לא תישלח תזכורת על התרופה הזו. סמנו לפחות יום אחד כדי שתזכורות יתחילו להישלח.';
+// GAP-3-03: describes the schedule, not a send - nothing sends a reminder yet.
+const NO_DAYS_NOTICE = 'לא סומן אף יום. סמנו לפחות יום אחד כדי שהתרופה תיכלל בלוח התזכורות.';
 
 const i18n = initI18n();
 

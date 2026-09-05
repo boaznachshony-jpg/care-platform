@@ -113,6 +113,14 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
   return (
     <section className="reminder-recipients" aria-labelledby="reminder-recipients-title">
       <h2 id="reminder-recipients-title">{t('reminderRecipients.title')}</h2>
+      {/* GAP-3-01: nothing in the product sends a reminder yet. The list is
+          kept so a family can prepare it, but the first thing the screen says
+          is that the details are not used for sending until it says otherwise.
+          role="status", not "alert": it is a standing fact about this version,
+          not an event. */}
+      <p className="action-notice" role="status">
+        {t('reminderRecipients.notYetDelivered')}
+      </p>
       <p>{t('reminderRecipients.intro')}</p>
 
       {/* Deliberately not role="note". The medical disclaimer on this page is
