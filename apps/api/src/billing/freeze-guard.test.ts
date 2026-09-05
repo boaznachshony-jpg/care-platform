@@ -94,6 +94,30 @@ describe('account freeze guard', () => {
     expect(response.statusCode).not.toBe(402);
   });
 
+  it('exempts legal acceptances — the card-setup form records consent before it can unfreeze', async () => {
+    // SEC-AUTHZ-01. BillingPage must POST the terms/privacy acceptance before
+    // it may start card setup; refusing that write made the freeze permanent.
+    const { app } = buildFrozenTenantServer();
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/legal/acceptances',
+      headers: AUTH,
+      payload: {
+        documents: [
+          { document: 'terms', version: '2026-08-31' },
+          { document: 'privacy', version: '2026-08-31' },
+        ],
+        context: 'billing',
+      },
+    });
+    expect(accepted.statusCode).toBe(201);
+
+    // The exemption is that one route only: the freeze still holds elsewhere.
+    const write = await app.inject({ method: 'POST', url: '/cases', headers: AUTH, payload: {} });
+    expect(write.statusCode).toBe(402);
+    expect(write.json()).toMatchObject({ code: 'ACCOUNT_FROZEN' });
+  });
+
   it('exempts emergency binder exports — the freeze must never trap this document', async () => {
     const { app } = buildFrozenTenantServer();
     const caseId = '00000000-0000-4000-8000-000000000099';

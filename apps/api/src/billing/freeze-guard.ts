@@ -95,6 +95,11 @@ const EXEMPT_ROUTE_PATTERNS: RegExp[] = [
   // Emergency binder exports (Blocker 3): must keep working while frozen,
   // including creating a fresh export, not just listing past ones.
   /^\/cases\/[^/]+\/binder-exports$/,
+  // SEC-AUTHZ-01. Recording a terms/privacy acceptance is append-only,
+  // tenant-scoped and on-conflict-do-nothing - and it is the mandatory first
+  // call of the card-setup form. Refusing it while frozen made the freeze
+  // permanent: the only way out required a write the guard would not allow.
+  /^\/legal\/acceptances$/,
 ];
 
 function isExemptRoute(routePattern: string | undefined): boolean {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { nodeEnvSchema, parseEnv } from '@caredesk/config';
-import { extractSupabaseProjectRef } from '@caredesk/db';
+import { extractSupabaseProjectRef, pointsAtProject } from '@caredesk/db';
 import { getDeploymentEnvironment } from './deployment-environment.js';
 
 /**
@@ -363,14 +363,33 @@ export function assertDatabaseMatchesDeployment(env: Env): void {
   if (!productionRef) return;
 
   const configuredRef = extractSupabaseProjectRef(env.DATABASE_URL);
-  if (configuredRef !== productionRef) return;
+  if (configuredRef === productionRef) {
+    throw new Error(
+      `Refusing to start: DATABASE_URL points at the production Supabase project (${productionRef}) ` +
+        `from a ${environment} deployment (VERCEL_ENV=${env.VERCEL_ENV ?? 'unset'}). ` +
+        'Scope DATABASE_URL per Vercel environment so this deployment gets its own database. ' +
+        'See docs/governance/ENVIRONMENT-SEPARATION.md.',
+    );
+  }
 
-  throw new Error(
-    `Refusing to start: DATABASE_URL points at the production Supabase project (${productionRef}) ` +
-      `from a ${environment} deployment (VERCEL_ENV=${env.VERCEL_ENV ?? 'unset'}). ` +
-      'Scope DATABASE_URL per Vercel environment so this deployment gets its own database. ' +
-      'See docs/governance/ENVIRONMENT-SEPARATION.md.',
-  );
+  // SEC-INFRA-04. The database is not the only customer-data target. A preview
+  // holding the production Supabase *API* URL reaches the production auth
+  // project (every customer identity) and the production private-documents
+  // bucket through the service-role key, and the backup URL is the same
+  // exposure for the mirror. Same rule, same fail-closed shape.
+  for (const [name, value] of [
+    ['SUPABASE_URL', env.SUPABASE_URL],
+    ['BACKUP_SUPABASE_URL', env.BACKUP_SUPABASE_URL],
+  ] as const) {
+    if (value && pointsAtProject(value, productionRef)) {
+      throw new Error(
+        `Refusing to start: ${name} points at the production Supabase project (${productionRef}) ` +
+          `from a ${environment} deployment (VERCEL_ENV=${env.VERCEL_ENV ?? 'unset'}). ` +
+          `Scope ${name} per Vercel environment so this deployment gets its own Supabase project. ` +
+          'See docs/governance/ENVIRONMENT-SEPARATION.md.',
+      );
+    }
+  }
 }
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
