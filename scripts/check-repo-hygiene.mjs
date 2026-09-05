@@ -1,7 +1,9 @@
 /* global console, process */
 /**
- * Guards three cleanup decisions that have all silently reverted before, and
- * that together account for 12 of the repository's 13 Dependabot alerts.
+ * Guards four cleanup decisions that have all silently reverted before. The
+ * first three together account for 12 of the repository's 13 Dependabot
+ * alerts; the fourth exists because a real customer's pay summary was found
+ * tracked at the root of the public repository.
  *
  *   1. ARCHIVED DIRECTORIES MUST NOT BE TRACKED.
  *      A full copy of an older release lives in the working folder. Nothing
@@ -26,6 +28,16 @@
  *      `package.json`. It compares versions exactly, so it also catches a
  *      declaration that has drifted away from what is actually installed.
  *
+ *   4. BINARY DOCUMENTS MUST NOT BE TRACKED OUTSIDE THE ALLOWLIST.
+ *      A PDF, Word document, spreadsheet, archive or screenshot at the root of
+ *      the tree is never source. In this repository it has been a customer's
+ *      pay summary, screenshots of a customer's workspace, a hand-off zip and
+ *      a Netlify export - and the repository is public. Such files may live
+ *      only under `docs/`, `apps/web/public/` (the site's own static assets)
+ *      and `packages/ui/` (design assets). Anywhere else they fail the build,
+ *      before the person adding them has to wonder whether "it is just a
+ *      screenshot" was true.
+ *
  * VERIFYING THE GUARD
  * -------------------
  * A check nobody has watched fail is not a check. Point CHECK_HYGIENE_FIXTURE
@@ -37,7 +49,7 @@
  *
  *   pnpm lint:hygiene:demo-failure
  *   node scripts/check-repo-hygiene.mjs --fixture scripts/fixtures/repo-hygiene-violations
- *     -> fails, reporting one violation of each of the three rules
+ *     -> fails, reporting one violation of each of the four rules
  *
  * (`CHECK_HYGIENE_FIXTURE=<dir>` does the same on a POSIX shell.)
  *
@@ -58,12 +70,30 @@ import { join, basename } from 'node:path';
 // Written as escapes so this file stays pure ASCII, in the same spirit as
 // check-source-encoding.mjs. U+05D2 U+05E8 U+05E1 U+05D4 is the Hebrew word
 // ("version") followed by "2.0", plus the self-nested export folder inside it.
-const ARCHIVED_DIR_NAMES = ['\u05D2\u05E8\u05E1\u05D4' + '2.0', 'care-platform-main'];
+// `netlify-deploy` is a hand-made static export of the prototype that was
+// tracked at the root and deployed nowhere the product runs.
+const ARCHIVED_DIR_NAMES = [
+  '\u05D2\u05E8\u05E1\u05D4' + '2.0',
+  'care-platform-main',
+  'netlify-deploy',
+];
 
 // Matches "README - Copy.md", "package - Copy.json", "notes - Copy (2).txt"
 // and an extensionless "config - Copy". Anchored on " - Copy" so a legitimate
 // name such as "copy-button.tsx" is never touched.
 const COPY_SUFFIX = /\s-\s[Cc]opy(\s\(\d+\))?(\..*)?$/;
+
+// Rule 4. Case-insensitive so `Scan.PDF` from a phone is caught too.
+const BINARY_DOCUMENT = /\.(pdf|docx|xlsx|zip|png|jpe?g)$/i;
+
+// The only directories in which a binary document is legitimately part of the
+// repository. Each entry is a path prefix ending in "/". Deliberately short:
+// a new allowlist entry is a review decision, not a convenience.
+const BINARY_DOCUMENT_ALLOWLIST = [
+  'docs/', // product, legal and reference material
+  'apps/web/public/', // static assets the site itself serves
+  'packages/ui/', // design assets
+];
 
 // `--fixture <dir>` and CHECK_HYGIENE_FIXTURE are equivalent. The flag exists
 // because `VAR=value cmd` is not valid syntax in cmd.exe or PowerShell, and
@@ -153,10 +183,11 @@ function packageJsonOverrides(text) {
 
 const failures = [];
 
-// --- Rule 1 + 2: tracked files -----------------------------------------
+// --- Rule 1 + 2 + 4: tracked files -------------------------------------
 const files = trackedFiles();
 const archived = [];
 const copies = [];
+const strayBinaries = [];
 
 for (const file of files) {
   const segments = file.split('/');
@@ -165,6 +196,12 @@ for (const file of files) {
     continue; // an archived file is one problem, not two
   }
   if (COPY_SUFFIX.test(basename(file))) copies.push(file);
+  if (
+    BINARY_DOCUMENT.test(file) &&
+    !BINARY_DOCUMENT_ALLOWLIST.some((prefix) => file.startsWith(prefix))
+  ) {
+    strayBinaries.push(file);
+  }
 }
 
 if (archived.length > 0) {
@@ -191,6 +228,23 @@ if (copies.length > 0) {
       (copies.length > 10 ? `\n      ... and ${copies.length - 10} more` : '') +
       `\n    Untrack them (git rm --cached) - a stale duplicate of a config file is\n` +
       `    edited by mistake sooner or later.`,
+  );
+}
+
+if (strayBinaries.length > 0) {
+  failures.push(
+    `${strayBinaries.length} tracked binary document(s) outside the allowlist ` +
+      `(${BINARY_DOCUMENT_ALLOWLIST.join(', ')}).\n` +
+      strayBinaries
+        .slice(0, 10)
+        .map((f) => `      ${f}`)
+        .join('\n') +
+      (strayBinaries.length > 10 ? `\n      ... and ${strayBinaries.length - 10} more` : '') +
+      `\n    This repository is public and has already carried a customer's pay\n` +
+      `    summary at its root. A PDF, document, spreadsheet, archive or image is\n` +
+      `    never source: move product material under docs/ (git mv), or untrack\n` +
+      `    it (git rm --cached) and add the path to .gitignore. If it contains\n` +
+      `    personal data, tell the owner - the file is still in history.`,
   );
 }
 
@@ -243,6 +297,7 @@ if (failures.length > 0) {
 
 console.log(
   `Repository hygiene check passed (${files.length} tracked files, ` +
-    `0 archived, 0 "- Copy" duplicates, ${lockOverrides.size} lock overrides all declared).` +
+    `0 archived, 0 "- Copy" duplicates, 0 stray binary documents, ` +
+    `${lockOverrides.size} lock overrides all declared).` +
     (fixtureDir ? ` [fixture: ${fixtureDir}]` : ''),
 );
