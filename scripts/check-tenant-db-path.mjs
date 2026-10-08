@@ -117,6 +117,8 @@ const EXEMPT_FILES = new Set([
   'packages/db/src/provision-app-role.ts',
   'packages/db/src/provision-pilot-account.ts',
   'packages/db/src/activate-product-subscription.ts',
+  // Operator command, owner connection, one tenant at a time, run by hand.
+  'packages/db/src/sponsor-tenant.ts',
   'packages/db/src/cli.ts',
 ]);
 
