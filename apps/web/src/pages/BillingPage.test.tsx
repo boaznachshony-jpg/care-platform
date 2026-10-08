@@ -605,5 +605,54 @@ describe('BillingPage', () => {
       expect(await screen.findByLabelText(/invoice name/i)).toBeInTheDocument();
       expect(screen.queryByLabelText(/same as care recipient details/i)).not.toBeInTheDocument();
     });
+
+    /**
+     * The regression: `useState(readMvpRecipientContact)` is a lazy initialiser,
+     * so it ran once, on the first render. That was correct while the MVP store
+     * was local-only. Once the workspace became server-canonical and
+     * asynchronously hydrated, the read happened before hydration landed and the
+     * component never looked again.
+     *
+     * On a warm device localStorage was already populated and the one-shot read
+     * succeeded, which is why it tested fine. On a cold cache — another device,
+     * a cleared cache, or a customer who had just signed up — the payer name
+     * defaulted to empty and the copy option vanished entirely, because it only
+     * renders when there is a contact to copy.
+     */
+    it('picks up the care recipient when the workspace arrives after the first render', async () => {
+      localStorage.clear();
+      await renderPage();
+
+      // Cold cache: nothing to copy from yet.
+      expect(await screen.findByLabelText(/invoice name/i)).toHaveValue('');
+      expect(screen.queryByLabelText(/same as care recipient details/i)).not.toBeInTheDocument();
+
+      // Hydration lands.
+      await act(async () => {
+        saveMvpProfile({
+          ...emptyMvpProfile,
+          recipientName: 'Ilana Cohen',
+          recipientEmail: 'ilana@example.test',
+        });
+      });
+
+      expect(await screen.findByLabelText(/same as care recipient details/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/invoice name/i)).toHaveValue('Ilana Cohen');
+    });
+
+    it('does not overwrite a payer name the customer already typed', async () => {
+      localStorage.clear();
+      await renderPage();
+
+      const nameInput = await screen.findByLabelText(/invoice name/i);
+      fireEvent.change(nameInput, { target: { value: 'Different Payer' } });
+
+      await act(async () => {
+        saveMvpProfile({ ...emptyMvpProfile, recipientName: 'Ilana Cohen' });
+      });
+
+      // Late hydration fills an empty field; it never takes one back.
+      expect(nameInput).toHaveValue('Different Payer');
+    });
   });
 });

@@ -11,7 +11,7 @@ import {
   startBillingPaymentMethodSetup,
 } from '../api/client.js';
 import { useAuth } from '../auth/auth-context.js';
-import { readMvpRecipientContact } from '../storage/mvp-storage.js';
+import { useMvpRecipientContact } from '../hooks/use-mvp-recipient-contact.js';
 
 const money = (agorot: number, language: string) =>
   new Intl.NumberFormat(language, { style: 'currency', currency: 'ILS' }).format(agorot / 100);
@@ -49,7 +49,10 @@ export function BillingPage() {
   const authEmail = auth.user?.email ?? '';
   const [searchParams] = useSearchParams();
   const [plan, setPlan] = useState<BillingPlanResponse | null>(null);
-  const [recipientContact] = useState(readMvpRecipientContact);
+  // Subscribed, not read once: the workspace is server-canonical and arrives
+  // after the first render, so a lazy initialiser here saw an empty store on
+  // any device with a cold cache — including a customer who had just signed up.
+  const recipientContact = useMvpRecipientContact();
   // The invoice is almost always issued to the care recipient, and the name is
   // already on file from the case setup. Starting empty made the customer
   // retype something the system already knew; it stays fully editable for the
@@ -111,6 +114,15 @@ export function BillingPage() {
       window.sessionStorage.setItem('caredesk.billing-onboarding', '1');
     }
   }, [searchParams]);
+
+  // The payer name the case already knows, applied when the workspace lands.
+  // `current ||` is the same rule `load()` uses for the values that come back
+  // from the subscription: fill a field that is still empty, never overwrite
+  // something the customer has typed.
+  useEffect(() => {
+    if (!recipientContact.name) return;
+    setBillingName((current) => current || recipientContact.name);
+  }, [recipientContact.name]);
 
   /**
    * The documents this screen's checkbox covers, each at the version the user
