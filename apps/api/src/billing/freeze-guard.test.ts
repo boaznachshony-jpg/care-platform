@@ -94,6 +94,37 @@ describe('account freeze guard', () => {
     expect(response.statusCode).not.toBe(402);
   });
 
+  /**
+   * Reported from production as "we could not record your acceptance": a
+   * frozen customer pressed the button on the billing screen and the API
+   * answered 402.
+   *
+   * `/billing` was exempt and `/legal/acceptances` was not, and the billing
+   * screen records the acceptance BEFORE it calls the billing route — so the
+   * flow stopped at the refusal and never reached the route this exemption
+   * list exists to keep open. The customer could not add a card, so the
+   * account could not be paid for, so it could never stop being frozen.
+   *
+   * This test fails with a 402 against the previous exemption list.
+   */
+  it('exempts the legal acceptance — a frozen tenant must be able to accept and then pay', async () => {
+    const { app } = buildFrozenTenantServer();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/legal/acceptances',
+      headers: AUTH,
+      payload: {
+        documents: [
+          { document: 'terms', version: '2026-08-31' },
+          { document: 'privacy', version: '2026-08-31' },
+        ],
+        context: 'billing',
+      },
+    });
+    expect(response.statusCode).not.toBe(402);
+    expect(response.statusCode).toBe(201);
+  });
+
   it('exempts emergency binder exports — the freeze must never trap this document', async () => {
     const { app } = buildFrozenTenantServer();
     const caseId = '00000000-0000-4000-8000-000000000099';
