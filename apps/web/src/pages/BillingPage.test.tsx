@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   startBillingPaymentMethodSetup: vi.fn(),
   cancelBillingSubscription: vi.fn(),
   recordLegalAcceptance: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 vi.mock('../api/client.js', async () => {
@@ -18,9 +19,10 @@ vi.mock('../api/client.js', async () => {
 });
 
 vi.mock('../auth/auth-context.js', () => ({
-  useAuth: () => ({ user: { email: 'owner@example.test' } }),
+  useAuth: () => ({ user: { email: 'owner@example.test' }, signOut: mocks.signOut }),
 }));
 
+import { ApiRequestError } from '../api/client.js';
 import { emptyMvpProfile, saveMvpProfile } from '../storage/mvp-storage.js';
 import { BillingPage } from './BillingPage.js';
 
@@ -367,6 +369,78 @@ describe('BillingPage', () => {
     // The button must come back, not stay stuck in its busy state.
     expect(screen.getByRole('button', { name: /securely connect a card/i })).toBeEnabled();
     vi.unstubAllGlobals();
+  });
+
+  /**
+   * Reported from production: the customer ticked the consent box, pressed the
+   * button, and read "we could not record your acceptance… please try again".
+   * Every retry produced the same sentence.
+   *
+   * The sentence was not true and the instruction could not work. Both failure
+   * paths were `catch {}` — the error was discarded unread — so an expired
+   * session reached the screen wearing the words of a consent failure, and
+   * left nothing in the console to tell the two apart. Hours went into looking
+   * for a defect in the acceptance code, which was working correctly the whole
+   * time.
+   */
+  describe('a failure says which failure it was', () => {
+    it('reports an expired session as an expired session, not as a consent failure', async () => {
+      mocks.getBillingSubscription.mockResolvedValue({
+        ...sponsoredPlan,
+        providerConfigured: true,
+      });
+      mocks.recordLegalAcceptance.mockRejectedValue(new ApiRequestError(401, 'UNAUTHENTICATED'));
+      const assignMock = vi.fn();
+      vi.stubGlobal('location', { ...window.location, assign: assignMock });
+      await renderPage();
+
+      await submitSetupForm();
+
+      expect(await screen.findByText(/your session has expired/i)).toBeInTheDocument();
+      // The old sentence blamed the acceptance and told the customer to retry.
+      // A retry carries the same dead token, so it can never succeed.
+      expect(screen.queryByText(/could not record your acceptance/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign in again/i })).toBeInTheDocument();
+      // Nothing was started, and the customer must not be told otherwise.
+      expect(mocks.startBillingPaymentMethodSetup).not.toHaveBeenCalled();
+      expect(assignMock).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+
+    it('carries the cause of a genuine consent failure instead of discarding it', async () => {
+      mocks.getBillingSubscription.mockResolvedValue({
+        ...sponsoredPlan,
+        providerConfigured: true,
+      });
+      mocks.recordLegalAcceptance.mockRejectedValue(new ApiRequestError(500, 'INTERNAL'));
+      vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+      await renderPage();
+
+      await submitSetupForm();
+
+      expect(await screen.findByText(/could not record your acceptance/i)).toBeInTheDocument();
+      // The status and code the API already returned, so a customer can quote
+      // it and a maintainer can act on it.
+      expect(screen.getByText('(500/INTERNAL)')).toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
+
+    it('reports an expired session from the payment-provider call too', async () => {
+      mocks.getBillingSubscription.mockResolvedValue({
+        ...sponsoredPlan,
+        providerConfigured: true,
+      });
+      mocks.startBillingPaymentMethodSetup.mockRejectedValue(
+        new ApiRequestError(401, 'UNAUTHENTICATED'),
+      );
+      vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+      await renderPage();
+
+      await submitSetupForm();
+
+      expect(await screen.findByText(/your session has expired/i)).toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
   });
 
   it('does not record an acceptance from the past-due reconnect flow', async () => {

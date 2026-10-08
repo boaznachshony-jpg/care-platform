@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { BILLING_TERMS_VERSION, type BillingPlanResponse } from '@caredesk/schemas';
 import { PRIVACY_DOCUMENT_VERSION, TERMS_DOCUMENT_VERSION } from '@caredesk/i18n';
 import {
+  ApiRequestError,
   cancelBillingSubscription,
   getBillingSubscription,
   recordLegalAcceptance,
@@ -22,6 +23,25 @@ const date = (value: string, language: string) =>
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${value}T00:00:00.000Z`));
+
+/**
+ * What actually went wrong, short enough to show on screen and to paste into a
+ * support message.
+ *
+ * Both failure paths below used to be `catch {}` — the error object was
+ * discarded unread. An expired session, a rejected payload and a 500 all
+ * reached the customer as the same sentence and left no trace in the console,
+ * so a failure reported from production could not be told apart from any other
+ * failure. That is the defect this function exists to close: the cause is now
+ * carried to the screen and to the log instead of being thrown away at the
+ * exact moment it is needed.
+ *
+ * It deliberately carries no response body and no token — only the status and
+ * the error code the API already returns.
+ */
+function describeFailure(error: unknown): string {
+  return error instanceof ApiRequestError ? `${error.status}/${error.code}` : 'network';
+}
 
 export function BillingPage() {
   const { t, i18n } = useTranslation();
@@ -46,6 +66,19 @@ export function BillingPage() {
    * failed" and needs its own sentence.
    */
   const [consentError, setConsentError] = useState(false);
+  /**
+   * The status/code behind `consentError`, shown beside it. Without this the
+   * screen cannot distinguish the causes and neither can anybody reading a
+   * report of it.
+   */
+  const [consentFailureCode, setConsentFailureCode] = useState<string | null>(null);
+  /**
+   * Distinct again: the session is gone, so nothing was recorded and nothing
+   * was started — but "try again" is the one instruction that cannot work,
+   * because every retry carries the same dead token. This state exists to stop
+   * the screen giving that instruction.
+   */
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [onboardingFlow] = useState(
     () =>
       searchParams.get('from') === 'onboarding' ||
@@ -101,6 +134,8 @@ export function BillingPage() {
     setBusy(true);
     setError(false);
     setConsentError(false);
+    setConsentFailureCode(null);
+    setSessionExpired(false);
     // The acceptance is recorded BEFORE the subscription is created, and the
     // failure path is a refusal rather than a warning.
     //
@@ -113,8 +148,17 @@ export function BillingPage() {
     // acceptance cannot be stored, no subscription is started.
     try {
       await recordLegalAcceptance({ documents: [...acceptedDocuments], context: 'billing' });
-    } catch {
+    } catch (failure) {
       setBusy(false);
+      if (failure instanceof ApiRequestError && failure.status === 401) {
+        setSessionExpired(true);
+        return;
+      }
+      console.error('[billing] recording the legal acceptance failed', {
+        path: '/legal/acceptances',
+        detail: describeFailure(failure),
+      });
+      setConsentFailureCode(describeFailure(failure));
       setConsentError(true);
       return;
     }
@@ -126,8 +170,18 @@ export function BillingPage() {
         termsVersion: BILLING_TERMS_VERSION,
       });
       window.location.assign(result.checkoutUrl);
-    } catch {
+    } catch (failure) {
       setBusy(false);
+      // Same reasoning as the acceptance above: a dead session is not a
+      // provider failure, and the customer needs to sign in rather than retry.
+      if (failure instanceof ApiRequestError && failure.status === 401) {
+        setSessionExpired(true);
+        return;
+      }
+      console.error('[billing] starting the payment-method setup failed', {
+        path: '/billing/payment-method/setup',
+        detail: describeFailure(failure),
+      });
       setError(true);
     }
   }
@@ -463,9 +517,22 @@ export function BillingPage() {
                     </Link>
                   </span>
                 </label>
+                {sessionExpired ? (
+                  <p className="action-notice error" role="alert">
+                    {t('billing.sessionExpired')}{' '}
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={() => void auth.signOut()}
+                    >
+                      {t('billing.sessionExpiredCta')}
+                    </button>
+                  </p>
+                ) : null}
                 {consentError ? (
                   <p className="action-notice error" role="alert">
-                    {t('billing.consentRecordFailed')}
+                    {t('billing.consentRecordFailed')}{' '}
+                    {consentFailureCode ? <span dir="ltr">({consentFailureCode})</span> : null}
                   </p>
                 ) : null}
                 {!plan.providerConfigured ? (

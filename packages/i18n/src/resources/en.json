@@ -140,7 +140,9 @@
     "loadError": "The subscription could not be loaded. Try again.",
     "consentTermsLink": "the terms of service",
     "consentPrivacyLink": "the privacy policy",
-    "consentRecordFailed": "We could not record your acceptance, so the payment-method setup was not started. Please try again."
+    "consentRecordFailed": "We could not record your acceptance, so the payment-method setup was not started. Please try again.",
+    "sessionExpired": "Your session has expired, so your acceptance was not recorded and the payment-method setup was not started. Nothing was charged. Please sign in again and retry.",
+    "sessionExpiredCta": "Sign in again"
   },
   "environment": {
     "staging": "Rehearsal environment — do not use production data",
