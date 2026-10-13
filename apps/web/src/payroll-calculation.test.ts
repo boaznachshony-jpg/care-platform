@@ -77,6 +77,10 @@ describe('monthly payroll calculation', () => {
       additions: 1_350,
       deductions: 0,
       total: 8_350,
+      // Nothing accrues here: `employerContributions` is zero in this input, so
+      // the whole cost of the month is what the caregiver is handed.
+      payableToWorker: 8_350,
+      calculationOnly: 0,
     });
   });
 
