@@ -1259,6 +1259,52 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     expect(screen.getByLabelText('ימי חג שעבדו')).toHaveValue(2);
   });
 
+  /**
+   * Vacation and sick days have the same perceptual shape as the holiday bug —
+   * counted on step 2, paired with an amount on the printed slip, and derived
+   * by nothing. They are deliberately NOT computed: sick pay in Israel is
+   * 0%/50%/100% by day index and vacation pay is the daily wage, so a silent
+   * multiply would be an entitlement claim this screen refuses to make. What
+   * the screen owes the reader is the gap, named while it can still be closed.
+   */
+  it('names recorded leave days that carry no payment, without blocking the save', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('ימי חופשה שנוצלו'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('ימי מחלה'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const notice = screen.getByRole('status');
+    expect(notice.textContent).toContain('ימי חופשה');
+    expect(notice.textContent).toContain('ימי מחלה');
+    // A status, not an alert, and not a validation error: an employer may owe
+    // nothing for those days, so the wizard must still move on.
+    expect(screen.getByRole('button', { name: 'המשך' })).toBeEnabled();
+  });
+
+  it('stops naming the gap once the amount is entered', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('ימי חופשה שנוצלו'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByRole('status').textContent).toContain('ימי חופשה');
+
+    fireEvent.change(screen.getByLabelText('תשלום חופשה'), { target: { value: '900' } });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('says that the day counts do not move the salary by themselves', () => {
+    // The two product lines below them teach count × rate = amount; these
+    // three counts do not follow that rule, and the proration sentence above
+    // describes a reduction that applies only to a mid-month start.
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(
+      screen.getByText(/שלושת המספרים האלה נרשמים בתיק ואינם משנים בעצמם את השכר/),
+    ).toBeVisible();
+  });
+
   it('marks the running totals inside the wizard as calculated', () => {
     renderWizard();
 

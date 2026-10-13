@@ -830,6 +830,16 @@ export function PayrollPage() {
     [additionalPayments],
   );
 
+  /**
+   * Day counts recorded with no matching amount. Named on step 3 so the gap is
+   * visible where it can still be closed, rather than only on the printed slip
+   * where each count is already paired with its ₪0.00.
+   */
+  const unpaidRecordedDays = [
+    numeric(values.vacationDays) > 0 && numeric(values.vacationPay) === 0 ? 'ימי חופשה' : null,
+    numeric(values.sickDays) > 0 && numeric(values.sickPay) === 0 ? 'ימי מחלה' : null,
+  ].filter((label): label is string => label !== null);
+
   const calculation = useMemo(() => {
     try {
       return calculateMonthlyPayroll({
@@ -1658,6 +1668,18 @@ export function PayrollPage() {
                 />
                 {fieldErrorMessage('absenceDays')}
               </label>
+              {/* The two live product lines further down this step teach a rule
+                  — count × rate = amount — that these three counts do not
+                  follow. They are recorded facts and change no total on their
+                  own (packages/domain/src/payroll.ts:53), while the proration
+                  sentence printed just above describes the one reduction that
+                  does exist and applies only to a mid-month start. Saying so
+                  here is the difference between a reader who enters the
+                  matching amounts and one who assumes they were computed. */}
+              <p className="form-note">
+                שלושת המספרים האלה נרשמים בתיק ואינם משנים בעצמם את השכר. תשלום חופשה ותשלום מחלה
+                מוזנים בשלב הבא; ימי היעדרות אינם מקטינים את שכר הבסיס.
+              </p>
               <label>
                 מספר שבתות או ימי מנוחה שעבדו
                 <input
@@ -1792,6 +1814,21 @@ export function PayrollPage() {
                 />
                 {fieldErrorMessage('sickPay')}
               </label>
+              {/* Days recorded, amount left at zero. The printed slip pairs the
+                  two on one line — "3 ימי חופשה | ₪0.00" — which reads as a
+                  settled fact to whoever is handed it, so the gap is named
+                  here, on the step where it can still be filled.
+                  Deliberately NOT derived, unlike a worked holiday: sick pay in
+                  Israel is 0%/50%/100% by day index and vacation pay is the
+                  daily wage, not the rest-day premium. Computing either would
+                  be the entitlement claim `liability.calculation` refuses to
+                  make. It is also not a validation error — an employer may owe
+                  nothing — so it is a status, and saving stays possible. */}
+              {unpaidRecordedDays.length > 0 ? (
+                <p className="info-box" role="status">
+                  {`נרשמו ${unpaidRecordedDays.join(' ו')} ללא סכום תשלום. אם מגיע תשלום, הזינו אותו כאן — התלוש יציג את הימים לצד הסכום.`}
+                </p>
+              ) : null}
               <label>
                 הפרשות מעסיק: פנסיה ופיצויים
                 <input
