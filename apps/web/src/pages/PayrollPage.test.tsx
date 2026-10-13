@@ -1086,12 +1086,16 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     const kinds = Array.from(summary!.querySelectorAll('.value-origin')).map((badge) =>
       badge.getAttribute('data-value-origin'),
     );
-    // Base, Saturdays, other additions, the subtotal, deductions, what the
-    // caregiver is paid, and the employer's cost — all derived; nothing on
-    // this screen is `paid`, because the month has not been closed and no
-    // payment date exists yet. The calculation-only line is absent here
+    // Base, Saturdays, holidays, other additions, the subtotal, deductions,
+    // what the caregiver is paid, and the employer's cost — all derived;
+    // nothing on this screen is `paid`, because the month has not been closed
+    // and no payment date exists yet. The calculation-only line is absent here
     // because no contribution was entered.
-    expect(kinds).toHaveLength(7);
+    //
+    // Eight since the worked holiday was given a line of its own: it is paid at
+    // the rest-day rate and is read the same way, rather than disappearing into
+    // "other additions" beside the monthly settlement.
+    expect(kinds).toHaveLength(8);
     expect(new Set(kinds)).toEqual(new Set(['calculated']));
     expect(kinds).not.toContain('paid');
     expect(summary!.textContent).toContain('מחושב');
@@ -1134,6 +1138,42 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     // rather than existing only in the view.
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(440);
+  });
+
+  /**
+   * A worked holiday is paid at the rest-day rate, so it is read the same way
+   * the rest days are: its own line, count × rate. Folded into "other
+   * additions" it shared a line with the monthly settlement, and a holiday paid
+   * at nothing looked exactly like a holiday paid correctly — the same
+   * perceptual defect the derivation was fixed for, one screen later.
+   */
+  it('gives the holiday its own summary line, and does not count it twice', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+    for (const _step of [3, 4, 5]) {
+      fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    }
+
+    expect(screen.getByRole('heading', { name: 'סיכום ואישור' })).toBeInTheDocument();
+    const lines = Array.from(document.querySelectorAll('.pay-summary > div'));
+
+    const holiday = lines.find((l) => l.textContent?.includes('תשלום עבור יום חג'));
+    expect(holiday).toBeDefined();
+    expect(normalizeText(holiday!.textContent)).toContain('1 × 440.00');
+    expect(normalizeText(holiday!.querySelector('strong')?.textContent)).toContain('440.00');
+
+    // Nothing else was entered, so once the holiday has its own line the
+    // remaining bundle is empty. If it still showed 440 the summary would be
+    // claiming the same shekels twice and would stop reconciling to the total.
+    const other = lines.find((l) => l.textContent?.includes('תוספות אחרות'));
+    expect(normalizeText(other!.querySelector('strong')?.textContent)).toContain('0.00');
   });
 
   it('keeps the derived amount in step with the rate, not frozen at the first value', () => {
