@@ -89,6 +89,34 @@ export interface PayrollComponentsAgorot {
   agreedDeductions: Agorot;
 }
 
+/**
+ * What a component settles, decided by the owner on 13.10.2026.
+ *
+ * `worker` — money the caregiver receives this month. `calculation_only` —
+ * money the employment costs but that does not pass through the monthly
+ * settlement: the employer's pension and severance share accrues to a fund,
+ * and is reckoned with at termination or year-end, not in this month's
+ * payment.
+ *
+ * The distinction is declared here rather than in the UI because the server
+ * recomputes every total and both sides have to mean the same thing by it.
+ */
+export type PayrollSettlementBasis = 'worker' | 'calculation_only';
+
+/**
+ * The classification, by component. Exported so a screen can mark each line
+ * instead of hardcoding a second list that drifts from this one.
+ */
+export const PAYROLL_SETTLEMENT_BASIS: Readonly<Record<string, PayrollSettlementBasis>> = {
+  baseSalary: 'worker',
+  restDayPay: 'worker',
+  holidayPay: 'worker',
+  vacationPay: 'worker',
+  sickPay: 'worker',
+  additionalPayments: 'worker',
+  employerContributions: 'calculation_only',
+};
+
 export interface PayrollTotals {
   restDayPay: number;
   additions: number;
@@ -98,8 +126,24 @@ export interface PayrollTotals {
    * caregiver who drew ₪7,000 of advances against a ₪6,000 month nets −₪1,000,
    * a balance carried forward. `payroll_entry.total` has always permitted it;
    * only the browser invented a floor, which erased what the employee owed.
+   *
+   * This figure includes the employer's own contributions, so it is the cost
+   * of the month to the employer — not what the caregiver is handed. It keeps
+   * that definition because `payroll_total_reconciles_agorot` (migration 0045)
+   * and `payroll_total_reconciles` (0041) have asserted it over every stored
+   * row since those migrations ran: redefining it would either break the
+   * constraint or silently change what historical records claim. The number
+   * was never wrong — only the label on it was, and that is what moved.
    */
   total: number;
+  /**
+   * What the caregiver receives this month: `total` less anything classified
+   * `calculation_only`. Derived rather than stored, so no column changes
+   * meaning and no migration is needed to start telling the truth on screen.
+   */
+  payableToWorker: number;
+  /** The part of `total` that does not pass through this month's payment. */
+  calculationOnly: number;
 }
 
 export interface PayrollTotalsAgorot {
@@ -107,6 +151,8 @@ export interface PayrollTotalsAgorot {
   additions: Agorot;
   deductions: Agorot;
   total: Agorot;
+  payableToWorker: Agorot;
+  calculationOnly: Agorot;
 }
 
 /** Why a component was refused, for a caller that maps it onto a field error. */
@@ -208,11 +254,17 @@ export function calculateMonthlyPayrollAgorot(
     components.advances,
     components.agreedDeductions,
   );
+  const total = subtractAgorot(addAgorot(components.baseSalary, additions), deductions);
   return {
     restDayPay,
     additions,
     deductions,
-    total: subtractAgorot(addAgorot(components.baseSalary, additions), deductions),
+    total,
+    // Subtracted, not re-summed from the worker components: one expression of
+    // the arithmetic, so the two figures can never drift apart by a rounding
+    // step, and `total` stays the number the reconcile CHECK asserts.
+    calculationOnly: components.employerContributions,
+    payableToWorker: subtractAgorot(total, components.employerContributions),
   };
 }
 
@@ -251,6 +303,8 @@ export function calculateMonthlyPayroll(components: PayrollComponents): PayrollT
     additions: shekelsOf(totals.additions),
     deductions: shekelsOf(totals.deductions),
     total: shekelsOf(totals.total),
+    payableToWorker: shekelsOf(totals.payableToWorker),
+    calculationOnly: shekelsOf(totals.calculationOnly),
   };
 }
 

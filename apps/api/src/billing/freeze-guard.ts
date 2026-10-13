@@ -87,6 +87,25 @@ const EXEMPT_ROUTE_PATTERNS: RegExp[] = [
   // plan, and cancel. The Cardcom webhook and the collection cron also live
   // here and carry no user session at all.
   /^\/billing(\/|$)/,
+  // Recording the legal acceptance, which the billing screen does
+  // immediately BEFORE it calls the exempt route above — deliberately, so a
+  // subscription can never exist without a record that its terms were
+  // accepted (BillingPage.submit, migration 0043).
+  //
+  // Exempting `/billing` and not this was a deadlock, not a gap: the freeze
+  // refused the acceptance with 402, submit() stopped there and never
+  // reached the route this list was written to keep open, and the customer
+  // could not add a card. A frozen account could therefore never be paid
+  // for, and so could never stop being frozen. Whoever froze hardest needed
+  // this most.
+  //
+  // It is a safe exemption on its own terms: the row is append-only (no
+  // UPDATE or DELETE grant, 0043), tenant-scoped, idempotent per (user,
+  // document, version), and it records a fact about the customer rather than
+  // doing product work on their behalf. The freeze exists to stop a frozen
+  // tenant getting more value out of the product, and writing down that they
+  // agreed to the terms is not value — it is the precondition for paying.
+  /^\/legal\/acceptances$/,
   // Scheduler-only endpoints, authenticated by CRON_SECRET, never by a user
   // bearer token — see cron-auth.ts.
   /^\/internal\/jobs(\/|$)/,
