@@ -1184,6 +1184,81 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(0);
   });
 
+  /**
+   * Four defects found reviewing the first version of the derivation. Each of
+   * these is the regression test for one of them; items 2 and 3 reintroduced
+   * the very underpayment the change exists to prevent.
+   */
+  it("treats a stored zero as the employer's figure, not as an empty slot", () => {
+    // paidHolidays 1 at ₪440 derives ₪440, but the record says ₪0 was paid.
+    // That mismatch IS the override. Showing ₪440 here would put a number on
+    // screen that exists in no record and in no total.
+    saveMvpPayroll([
+      payrollRecord('2026-08', { paidHolidays: 1, saturdayRate: 440, holidayPay: 0 }),
+    ]);
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const lines = Array.from(document.querySelectorAll('.wizard-content .payroll-live-total'));
+    const holidayLine = lines.find((line) => line.textContent?.includes('תוספת ימי חג'));
+    expect(holidayLine!.querySelector('.value-origin')?.getAttribute('data-value-origin')).toBe(
+      'input',
+    );
+    expect(normalizeText(holidayLine!.textContent)).not.toContain('440');
+
+    // And the next keystroke on the rate must not rewrite the stored zero.
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '500' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(0);
+  });
+
+  it('does not carry an override from one month into the next', () => {
+    // The worst of the four: override in August, switch to September, and the
+    // derivation stayed switched off — so holidays entered for September paid
+    // nothing at all, silently, which is the original bug returning.
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תשלום ימי חג'), { target: { value: '600' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-09' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(880);
+  });
+
+  it('survives a rest-day rate too large for the money model instead of unmounting', () => {
+    // `agorotFromShekels` throws above MAX_AGOROT, and this helper runs inside
+    // both a state updater and render. An uncaught throw tore down the wizard
+    // and lost every field the employer had typed; the oversized value belongs
+    // in a field error, not in an error boundary.
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
+
+    expect(() =>
+      fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+        target: { value: '20000000' },
+      }),
+    ).not.toThrow();
+    expect(screen.getByLabelText('ימי חג שעבדו')).toHaveValue(2);
+  });
+
   it('marks the running totals inside the wizard as calculated', () => {
     renderWizard();
 

@@ -379,7 +379,36 @@ function numeric(value: string): number {
  * rejected by the reconcile CHECK.
  */
 function derivedHolidayPay(paidHolidays: string, restDayRate: string): number {
-  return shekelsOf(scaleAgorot(agorotFromShekels(numeric(restDayRate)), numeric(paidHolidays)));
+  // A value in transit is not a crash. `agorotFromShekels` and `scaleAgorot`
+  // both throw `MoneyError` above MAX_AGOROT, and a half-typed rate reaches
+  // that range easily — `20000000` is four keystrokes. This runs inside both a
+  // `setValues` updater and render, so an uncaught throw unmounts the whole
+  // wizard and takes every typed field with it; the neighbouring `roundMoney`
+  // and `nationalInsuranceAmount` catch for exactly this reason, and the
+  // out-of-range value is reported by `validateAmount` where it belongs.
+  try {
+    return shekelsOf(scaleAgorot(agorotFromShekels(numeric(restDayRate)), numeric(paidHolidays)));
+  } catch (error) {
+    if (error instanceof MoneyError) return 0;
+    throw error;
+  }
+}
+
+/**
+ * Whether the stored holiday amount is the employer's own figure rather than
+ * the derived one. Compared unconditionally: a record that reads zero against
+ * a derived ₪440 is precisely a deliberate zero, and the early return that
+ * used to exempt it both displayed a ₪440 that existed in no record and let
+ * the next keystroke overwrite what the employer meant. A month with no
+ * holidays derives zero anyway, so a genuine fresh zero still reads as
+ * not-overridden.
+ */
+function holidayPayWasTyped(values: {
+  paidHolidays: string;
+  saturdayRate: string;
+  holidayPay: string;
+}): boolean {
+  return numeric(values.holidayPay) !== derivedHolidayPay(values.paidHolidays, values.saturdayRate);
 }
 
 function payrollValues(
@@ -486,6 +515,14 @@ export interface PayrollWizardDraft {
   step: number;
   values: PayrollWizardValues;
   additionalPayments: AdditionalPaymentDraft[];
+  /**
+   * Carried in the draft rather than re-inferred on restore. Inference cannot
+   * tell a typed amount that happens to equal the derived one from a derived
+   * one, so a reload would quietly hand the field back to the calculator and
+   * the next rate change would overwrite what the employer typed. Optional
+   * because drafts written before this field exists must still restore.
+   */
+  holidayPayOverridden?: boolean;
 }
 
 /**
@@ -588,15 +625,17 @@ export function PayrollPage() {
    * silently rewrite what was actually paid.
    */
   const [holidayPayOverridden, setHolidayPayOverridden] = useState(() => {
-    const current = restoredDraft?.value.values ?? null;
-    const source = current ?? {
-      paidHolidays: String(initialRecord?.paidHolidays ?? 0),
-      saturdayRate: String(initialRecord?.saturdayRate ?? profile.saturdayRate ?? 0),
-      holidayPay: String(initialRecord?.holidayPay ?? 0),
-    };
-    const typed = numeric(source.holidayPay);
-    if (typed === 0) return false;
-    return typed !== derivedHolidayPay(source.paidHolidays, source.saturdayRate);
+    // A restored draft carries the flag; only a draft written before the field
+    // existed, or a plain record load, has to be inferred.
+    if (restoredDraft?.value.holidayPayOverridden !== undefined)
+      return restoredDraft.value.holidayPayOverridden;
+    return holidayPayWasTyped(
+      restoredDraft?.value.values ?? {
+        paidHolidays: String(initialRecord?.paidHolidays ?? 0),
+        saturdayRate: String(initialRecord?.saturdayRate ?? profile.saturdayRate ?? 0),
+        holidayPay: String(initialRecord?.holidayPay ?? 0),
+      },
+    );
   });
   const [additionalPayments, setAdditionalPayments] = useState<AdditionalPaymentDraft[]>(
     () => restoredDraft?.value.additionalPayments ?? additionalPaymentDrafts(initialRecord),
@@ -673,7 +712,7 @@ export function PayrollPage() {
       try {
         saveFormDraft<PayrollWizardDraft>(
           PAYROLL_WIZARD_DRAFT,
-          { step, values, additionalPayments },
+          { step, values, additionalPayments, holidayPayOverridden },
           savedAt,
         );
         setDraftStatus('saved');
@@ -686,7 +725,10 @@ export function PayrollPage() {
       }
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [hasUnsavedWork, step, values, additionalPayments]);
+    // `holidayPayOverridden` is in the deps because it is now in the payload:
+    // taking the field over is a change the draft has to carry, and without it
+    // a reload hands the typed amount back to the calculator.
+  }, [hasUnsavedWork, step, values, additionalPayments, holidayPayOverridden]);
 
   /**
    * A reload or a tab close is the one navigation the draft alone cannot make
@@ -707,10 +749,16 @@ export function PayrollPage() {
   function discardDraft() {
     if (!window.confirm(t('payments.draftDiscardConfirm'))) return;
     const record = records.find((item) => item.month === values.month);
-    setValues({
+    const restored = {
       ...payrollValues(record, profile.baseSalary, profile.saturdayRate),
       month: values.month,
-    });
+    };
+    setValues(restored);
+    // Every path that replaces `values` wholesale must re-decide this with
+    // them. A flag left over from the discarded work would either keep the
+    // derivation switched off — reproducing the unpaid-holiday bug for the
+    // restored month — or switch it back on over a figure that was typed.
+    setHolidayPayOverridden(holidayPayWasTyped(restored));
     setAdditionalPayments(additionalPaymentDrafts(record));
     setDraftRestoredNotice(false);
     setValidationErrors([]);
@@ -1067,7 +1115,9 @@ export function PayrollPage() {
       return;
     const record = records.find((item) => item.month === month);
     setDraftRestoredNotice(false);
-    setValues({ ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month });
+    const loaded = { ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month };
+    setValues(loaded);
+    setHolidayPayOverridden(holidayPayWasTyped(loaded));
     setAdditionalPayments(additionalPaymentDrafts(record));
     setValidationErrors([]);
     setPayrollSaved(false);
@@ -1215,6 +1265,8 @@ export function PayrollPage() {
       }
       setSequence({ ...sequence, addedMonths });
       setValues(nextSequencePayrollValues(nextMonth, values.baseSalary, values.saturdayRate));
+      // A month that has just been opened holds nothing the employer typed.
+      setHolidayPayOverridden(false);
       setAdditionalPayments([]);
       setValidationErrors([]);
       setPayrollSaved(false);
