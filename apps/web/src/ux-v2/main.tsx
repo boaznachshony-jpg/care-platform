@@ -1,12 +1,7 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { CareDeskPrototype } from './CareDeskPrototype.js';
-import './prototype.css';
+import { seedPreviewWorkspace } from './seed.js';
 
-const root = document.getElementById('root');
-if (!root) throw new Error('Missing prototype root');
-createRoot(root).render(
-  <StrictMode>
-    <CareDeskPrototype />
-  </StrictMode>,
-);
+// Mount the real application, including its routing, copy and event handlers.
+// The isolated entry adds only a fixture and an opt-in visual layer.
+seedPreviewWorkspace();
+document.documentElement.classList.add('ux-v2');
+void import('../main.js').then(() => import('./prototype.css'));

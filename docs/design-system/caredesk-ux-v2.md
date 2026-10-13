@@ -1,136 +1,87 @@
-# CareDesk UX V2 — isolated review prototype
+# CareDesk UX V2 — existing product, visual-only preview
 
-Issue: #133. Owner: Codex UX V2. Branch: `feature/caredesk-ux-v2`.
-Status: experimental; human product/design and accessibility review required.
+Issue #133 · Draft PR #134 · `feature/caredesk-ux-v2` · Codex UX V2
 
-## Change log — 2026-10-13
+## Scope
 
-Initial isolated UX V2 preview: daily work, medication purchases, obligations,
-completion/reopening, reason-validated deferral, search, filters and task creation.
+The revised user instruction is authoritative: show the existing product with a
+new visual treatment only. Preserve all wording, headings, navigation, forms,
+validation and behavior. No new features or product copy.
 
-## Outcome and scope
-
-An action-first Hebrew RTL workspace for daily tasks, medication purchases and
-upcoming obligations. Neutral canvas, charcoal navigation and lime accents
-replace the clinical pastel direction for this user-authorized exploration.
-No analytics, legal calculations, medical advice, external reminders or actual
-purchases are included. Labels and deadlines are explicitly synthetic.
+The separate entry imports `apps/web/src/main.tsx` unchanged. It therefore uses
+the real App, AppShell, pages, translation resources, auth provider, storage,
+API client and business logic. `prototype.css` adds scoped visual overrides:
+neutral canvas, dark green navigation, lime selection accents, restrained card
+borders and shadows, and a five-column desktop tile grid. Existing dark mode,
+font scaling, mobile navigation and focus behavior remain available. No text is
+hidden, replaced or generated with CSS. Production files and shared tokens have
+no changes relative to `origin/main`.
 
 ## Architecture and isolation
 
-The existing app uses React/Vite, authenticated routing and tenant-scoped APIs,
-with application/domain/infrastructure packages and canonical PostgreSQL data.
-Existing Vitest coverage includes task and medication synchronization, auth,
-permissions and component accessibility; Playwright covers production journeys.
+The React/TypeScript/Vite app and Fastify API share the existing domain,
+application and schema packages. Existing tests cover auth, tenant isolation,
+task/medication synchronization, component accessibility and business rules.
 
-This prototype uses the existing React/TypeScript stack and shared `Button`.
-Its entry is `apps/web/ux-v2/index.html`; all UI state lives in React memory.
-It imports no production app, auth provider, API client, storage or business
-logic. Refresh resets every change. No environment file or database is needed.
-The dedicated Vite config has a separate root and `apps/web/build/ux-v2` output.
-The built preview blocks network connections via CSP; Vite development keeps its
-normal local hot-reload connection. Standard `pnpm build`
-does not include this entry; production routes and build configuration are
-unchanged. No new dependencies or lockfile changes are needed.
+The preview runner calls the existing `buildServer(loadEnv({...}))` with an
+explicit development environment and no database, auth or delivery credentials.
+It uses the existing in-memory repositories, mock providers and development
+token. It creates one synthetic case through the actual API. Nothing connects
+to a production database and no schema or API is changed.
 
-## Run locally
+The web build does not read .env files, overrides product environment inputs,
+and proxies its API to the loopback server. Web ports are 4182 (built preview)
+or 5182 (development); API port is 4183. All bind to 127.0.0.1, with strict ports.
+The browser fixture refuses other origins and never replaces an existing
+workspace. It uses the product's encrypted browser storage.
 
-From the repository root:
+Build output is `apps/web/build/ux-v2/dist`, separate from the production build.
+The built CSP permits same-origin API requests. Existing external reference
+links are retained. No new dependencies or lockfile changes are needed.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm --filter @caredesk/ui... build
-pnpm --filter @caredesk/web dev:ux-v2
-```
+## Run
 
-Open `http://127.0.0.1:5182`. For a built preview:
+From the repository root, after installing dependencies:
 
 ```sh
+pnpm build
 pnpm --filter @caredesk/web build:ux-v2
 pnpm --filter @caredesk/web preview:ux-v2
 ```
 
-Open `http://127.0.0.1:4182`. Servers bind loopback only and use strict ports.
-Do not point an existing production deployment at the prototype output.
+Open <http://127.0.0.1:4182/clients/ux-v2-demo>.
+The original landing page remains at `/`; there is no preview-only redirect.
+For hot reload, stop the preview runner and run
+`pnpm --filter @caredesk/web dev:ux-v2`, then use port 5182.
 
-## Review scenarios
+Use synthetic data only. Browser edits survive reloads within the existing
+product storage model; server data lasts only until the preview runner stops.
+After a server restart, use a fresh browser session or clear only this demo
+origin's site data for a clean fixture. Do not clear another development origin.
+Do not deploy or merge without the user's explicit authorization.
 
-1. Open medication purchases; complete a purchase and restore it from Completed.
-2. Add a task, choose an owner/category/time, and confirm it appears.
-3. Defer a task: an empty reason is rejected; a valid reason is retained in details.
-4. Search, switch categories/status filters, and recover from an empty result.
-5. Reload: all demo changes disappear.
-6. Use keyboard alone, including skip link, forms and native details controls.
-7. Review at 320, 390, 768 and 1440 pixels and with enlarged text.
+## Validation and review
 
-## Component and state contract
+- Fixture tests check encrypted storage round-trip, preservation of existing
+  workspace/preferences, and refusal to seed outside the dedicated origin.
+- Existing product unit/integration/accessibility suites are run without edits.
+- Browser review covers the dashboard, original task creation/completion and
+  completed filter, medication entry, dark mode, text scaling and mobile layout.
+- Review screenshots are `caredesk-ux-v2-desktop.jpg` and
+  `caredesk-ux-v2-mobile.jpg` alongside this document.
 
-`CareDeskPrototype` owns view/filter/search and synthetic items. `TaskCard`
-supports completion/reopening, native details and reason-validated postponement.
-`TaskForm` focuses its first field on mount, validates title and restores focus
-to the trigger. Native controls preserve keyboard operation. Actions announce
-their result through a live region. Cards include text status, owner and source.
-Empty/search, form validation and success states are implemented. Loading,
-network-error, offline and permission-denied states are not simulated because
-there is no server or protected operation in this in-memory prototype.
+Known baseline limitation found during review: canonical rule-generated tasks
+have `title: null`, a `titleKey`, and `dueAt: null`. The existing legacy task
+mapping does not translate `titleKey` and formats the empty date as
+`undefined.undefined.`. This is visible in the real task screen and was not
+patched or hidden by the design layer. It needs a separate product fix.
 
-All copy and fixtures are in the isolated Hebrew translation resource `he.json`.
-Responsive navigation moves to the bottom at narrow widths. Targets are at
-least 44px; styles use logical properties and respect reduced motion.
+## Review boundary
 
-## Experimental token proposal
+Current baseline: origin/main 6394a22, merged into the isolated branch.
+No dependency on current launch, payroll or sponsor work. Shared design tokens,
+component contracts, product/legal authority and all production behavior remain
+unchanged. This document records the experimental visual proposal for human
+review; it grants no release or deployment approval.
 
-Tokens are scoped to `.ux-v2`: canvas `#f5f5f1`, surface `#ffffff`, ink `#20241f`,
-muted text `#61665d`, charcoal `#20271f`, lime `#d9f777`, focus `#47661a`.
-Cards use 12px radius, hero 16px, controls 8px. These do not replace approved
-shared tokens. Promotion requires design review and shared-token visual tests.
-
-## Authority and synchronization
-
-Consulted Product Specification v1.0 (action-first, tasks, synthetic prototypes),
-Coding Constitution v1.0, ADRs 001–006, Database Blueprint, Rules & Workflow
-Engine, Design System/Component Catalog, User Stories, AI Review Constitution,
-Repository Bootstrap Plan and `SYNC_MATRIX.md`.
-
-Applicable matrix rows: Design token and Component contract. This document,
-isolated implementation and component/accessibility tests supply the proposal
-and examples. Shared UI contracts and tokens remain unchanged. Product scope
-is a user-authorized UX exploration, not a production module expansion: the
-older spec excludes medication management, while current code has medication
-pages and the current request explicitly includes purchase reminders.
-No domain statuses, workflow transitions, legal rules, permissions, canonical
-entities or persistence authority change. No migration or data rollback is
-needed. Remove the entry and additive scripts to remove the experiment.
-
-## Limitations and next step
-
-Hebrew-only prototype; no persistence, notifications, audit writes or backend
-integration. Dates are relative demo labels, not legal deadlines. Completion
-does not certify payment, compliance or medication administration. Review the
-visual direction and interactions before separately scoping authenticated
-integration. No merge or production deployment is authorized.
-
-## Validation evidence
-
-- `pnpm check`: PASS (format, architecture guardrails, lint, build, typecheck,
-  all 1,813 tests across 14 packages; 801 web and 433 API tests).
-- Six new component tests cover purchase completion/restoration, task validation,
-  focus restoration, deferral reason, filtering/empty state, reset and axe checks.
-- `pnpm --filter @caredesk/web build:ux-v2`: PASS. Both documented local dev and
-  built preview entrypoints rendered in a browser.
-- Chromium visual review at 320, 390, 768 and 1440px: no horizontal overflow;
-  measured visible controls at 320px meet 44px minimum targets.
-- Browser interaction: Space completes/reopens purchases; Enter opens/submits
-  task creation; first-field and trigger focus verified. Console errors: none
-  in the final built preview.
-- Production web build retained the same asset hashes as the pre-change build.
-- Full production Playwright journeys and live PostgreSQL RLS were not run:
-  this change adds no production runtime, DB, auth or API behavior. Existing
-  in-memory API, storage, auth and architecture suites passed.
-- Existing warnings: production bundle exceeds 500kB; jsdom does not implement
-  canvas for axe color-contrast calculation. Automated axe checks do not replace
-  human design/accessibility review.
-
-![Desktop preview](caredesk-ux-v2-desktop.jpg)
-
-![Mobile preview](caredesk-ux-v2-mobile.jpg)
+Validation result (2026-10-13): full `pnpm check` passed (1719 tests: 799 web, 433 API, plus workspace packages); separate preview build passed. Desktop 1440px and mobile 390px reviewed; 320px with enlarged text had no page-level horizontal overflow.
