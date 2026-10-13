@@ -1100,6 +1100,90 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     expect(document.querySelector('.wizard-content .value-origin-legend')).not.toBeNull();
   });
 
+  /**
+   * "ימי חג שעבדו" was collected, stored and never used by any calculation.
+   * The rest-day line one row above showed `4 × ₪440 = ₪1,760`; the holiday
+   * row below it showed nothing, so a reader who trusted the pattern reached
+   * step 3 with the holiday amount at zero and underpaid a full day's work.
+   * These four tests pin the whole contract: derived by default, visible,
+   * overridable on purpose, and never silently rewriting an old record.
+   */
+  it('pays a worked holiday at the rest-day rate instead of nothing', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+
+    // The amount is on screen, beside the count that produced it.
+    const lines = Array.from(document.querySelectorAll('.wizard-content .payroll-live-total'));
+    const holidayLine = lines.find((line) => line.textContent?.includes('תוספת ימי חג'));
+    expect(holidayLine).toBeDefined();
+    expect(normalizeText(holidayLine!.textContent)).toContain('440');
+
+    // And it reached the field that actually carries the money into the total,
+    // rather than existing only in the view.
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(440);
+  });
+
+  it('keeps the derived amount in step with the rate, not frozen at the first value', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '500' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(1_000);
+  });
+
+  it('stops deriving once the employer types an amount, and says which it is', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const amount = screen.getByLabelText('תשלום ימי חג');
+    fireEvent.change(amount, { target: { value: '600' } });
+    expect(amount).toHaveValue(600);
+    expect(
+      screen.getByText('הסכום הוזן ידנית ומחליף את החישוב לפי ימי החג והתעריף.'),
+    ).toBeVisible();
+
+    // Going back and changing the count must not overwrite what was typed.
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(600);
+  });
+
+  it('opens a previously saved month without rewriting the amount that was paid', () => {
+    // A record from before the derivation existed: one holiday worked, and an
+    // amount that does not match the rate. Re-opening it must leave the paid
+    // figure alone — this screen may be re-opened months later, and a silent
+    // correction would change the record of what a caregiver received.
+    saveMvpPayroll([
+      payrollRecord('2026-08', { paidHolidays: 1, saturdayRate: 440, holidayPay: 0 }),
+    ]);
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByLabelText('תשלום ימי חג')).toHaveValue(0);
+  });
+
   it('marks the running totals inside the wizard as calculated', () => {
     renderWizard();
 
