@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:ux-v2": "vite --config vite.ux-v2.config.ts",
+    "build:ux-v2": "vite build --config vite.ux-v2.config.ts",
+    "preview:ux-v2": "vite preview --config vite.ux-v2.config.ts",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

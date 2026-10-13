@@ -12,9 +12,12 @@ This dashboard is the shared coordination state for concurrent engineering agent
 
 ## Active work
 
+UX V2 isolation note: the user explicitly authorized side-environment work alongside current fixes. Issue #133 owns only the new `apps/web/src/ux-v2` and standalone preview entry/config, additive scripts, and review documentation. No production routes, auth, API, domain, storage, or schema changes. No dependency on launch or payroll work.
+
 <!-- prettier-ignore -->
 | Workstream | Issue | Owner/Agent | Branch | PR | Status | Depends on | Parallel safe | Blocker | Next action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CareDesk UX V2 isolated prototype | #133 | Codex UX V2 | `feature/caredesk-ux-v2` | — | IN_REVIEW | — | yes | None; full pnpm check passed (1,813 tests) | Open draft PR for human design/accessibility review; no merge or production deployment |
 | Current delivery coordination | — | Orchestrator | `main` | — | ACTIVE | — | n/a | None recorded | Assign each new task through an Issue and update this row set before parallel implementation |
 | Wave 3 canonical Product Intelligence closure | — | Codex primary | `codex/finalize-wave-3-closure-for-product-intelligence` | #48 | DONE | — | no | None; merged main CI succeeded at `a97f61f` | Retain as completed dependency evidence |
 | Final capability and production-readiness assessment | — | Codex primary | `codex/final-product-gap-production-readiness` | #50 | DONE | PR #48 | no | None; merged at `dc98410` | Retain as production-readiness scope authority |
