@@ -885,7 +885,13 @@ export function PayrollPage() {
     }
   }, [additionalPaymentsTotal, proratedBaseSalary.amount, values]);
   const otherAdditions = Math.max(0, calculation.additions - calculation.saturdayPay);
-  const standardOtherAdditions = Math.max(0, otherAdditions - additionalPaymentsTotal);
+  // Holiday pay is subtracted here because it now has a line of its own above.
+  // Leaving it in would show the same shekels twice and make the summary stop
+  // reconciling to the total the reconcile CHECK (0041, 0045) asserts.
+  const standardOtherAdditions = Math.max(
+    0,
+    otherAdditions - additionalPaymentsTotal - numeric(values.holidayPay),
+  );
   const beforeDeductions = proratedBaseSalary.amount + calculation.additions;
   const deductionBreakdown = [
     numeric(values.pocketMoney) > 0 ? `דמי כיס ${money.format(numeric(values.pocketMoney))}` : '',
@@ -2052,9 +2058,26 @@ export function PayrollPage() {
                   </span>
                   <strong>{money.format(calculation.saturdayPay)}</strong>
                 </div>
+                {/* A worked holiday is its own component at the rest-day rate,
+                    and it is read as one: same count × rate shape as the line
+                    above, because it is the same rate. Folded into "other
+                    additions" it was indistinguishable from the monthly
+                    settlement sharing that line — a holiday paid at nothing
+                    looked exactly like a holiday paid correctly, which is the
+                    perceptual defect the derivation itself was fixed for. */}
                 <div>
                   <span>
-                    תוספות אחרות <small>לא כולל שבתות, המוצגות בשורה נפרדת</small>
+                    תשלום עבור יום חג
+                    <small>
+                      {numeric(values.paidHolidays)} × {money.format(numeric(values.saturdayRate))}
+                    </small>
+                    <ValueOrigin kind={holidayPayOverridden ? 'input' : 'calculated'} />
+                  </span>
+                  <strong>{money.format(numeric(values.holidayPay))}</strong>
+                </div>
+                <div>
+                  <span>
+                    תוספות אחרות <small>לא כולל שבתות וימי חג, המוצגים בשורות נפרדות</small>
                     <ValueOrigin kind="calculated" />
                   </span>
                   <strong>{money.format(standardOtherAdditions)}</strong>
