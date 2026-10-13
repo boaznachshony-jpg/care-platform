@@ -872,7 +872,14 @@ export function PayrollPage() {
       // Same shape as CanonicalPayrollIntelligence's null total (DOM-07),
       // which cannot be used here because 14 render sites read this value.
       if (error instanceof PayrollComponentError) {
-        return { saturdayPay: 0, additions: 0, deductions: 0, total: 0 };
+        return {
+          saturdayPay: 0,
+          additions: 0,
+          deductions: 0,
+          total: 0,
+          payableToWorker: 0,
+          calculationOnly: 0,
+        };
       }
       throw error;
     }
@@ -2080,9 +2087,39 @@ export function PayrollPage() {
                   </span>
                   <strong>−{money.format(calculation.deductions)}</strong>
                 </div>
+                {/* Owner's decision, 13.10.2026: the employer's pension and
+                    severance share is a calculation, not part of the monthly
+                    settlement — it accrues to a fund and is reckoned with at
+                    termination or year-end. It used to be inside a single line
+                    labelled "סה״כ לתשלום / Net amount payable", which claimed
+                    the caregiver was handed roughly a thousand shekels a month
+                    that never reached her. The arithmetic is unchanged and the
+                    reconcile CHECK still holds; the one figure is now shown as
+                    the two things it has always been. */}
                 <div className="total">
                   <span>
-                    סה״כ לתשלום
+                    סה״כ לתשלום לעובדת
+                    <small>מה שמשולם החודש בפועל</small>
+                    <ValueOrigin kind="calculated" />
+                  </span>
+                  <strong>{money.format(calculation.payableToWorker)}</strong>
+                </div>
+                {calculation.calculationOnly > 0 ? (
+                  <div className="pay-line">
+                    <span>
+                      הפרשות מעסיק — חישוב בלבד
+                      <small>
+                        נצבר לקרן ואינו משולם לעובדת החודש. התחשבנות אפשרית בסיום העסקה או בסוף שנה.
+                      </small>
+                      <ValueOrigin kind="calculated" />
+                    </span>
+                    <strong>{money.format(calculation.calculationOnly)}</strong>
+                  </div>
+                ) : null}
+                <div className="pay-line">
+                  <span>
+                    עלות ההעסקה החודשית
+                    <small>לתשלום לעובדת בתוספת ההפרשות</small>
                     <ValueOrigin kind="calculated" />
                   </span>
                   <strong>{money.format(calculation.total)}</strong>
@@ -2187,9 +2224,15 @@ export function PayrollPage() {
                       <td>{numeric(values.sickDays)} ימי מחלה / Sick days</td>
                       <td>{money.format(numeric(values.sickPay))}</td>
                     </tr>
-                    <tr>
+                    <tr className="calculation-only">
                       <td>הפרשות מעסיק / Employer contributions</td>
-                      <td>פנסיה ופיצויים שהוזנו / Entered pension and severance</td>
+                      <td>
+                        חישוב בלבד — נצבר לקרן, אינו משולם החודש
+                        <br />
+                        <span dir="ltr">
+                          Calculation only — accrues to a fund, not paid this month
+                        </span>
+                      </td>
                       <td>{money.format(numeric(values.employerContributions))}</td>
                     </tr>
                     <tr>
@@ -2228,7 +2271,22 @@ export function PayrollPage() {
                       <td>−{money.format(calculation.deductions)}</td>
                     </tr>
                     <tr className="total">
-                      <td colSpan={2}>סה״כ לתשלום / Net amount payable</td>
+                      <td colSpan={2}>סה״כ לתשלום לעובדת / Net amount payable to the caregiver</td>
+                      <td>{money.format(calculation.payableToWorker)}</td>
+                    </tr>
+                    {/* Below the payable line, not inside it: this is the
+                        document the caregiver signs, and it must state what she
+                        receives. The employer's cost is shown too, because
+                        hiding it would make the slip disagree with the stored
+                        total, but it is named as what it is. */}
+                    <tr>
+                      <td colSpan={2}>
+                        עלות ההעסקה החודשית / Monthly cost to the employer
+                        <br />
+                        <span dir="ltr">
+                          Includes employer contributions, which are not paid out
+                        </span>
+                      </td>
                       <td>{money.format(calculation.total)}</td>
                     </tr>
                   </tbody>
@@ -2766,12 +2824,16 @@ export function PayrollPage() {
             </div>
             <div className="total">
               <span>
-                סה״כ לתשלום בשנת {reportYear}
+                עלות ההעסקה בשנת {reportYear}
                 {/* R5-02/R5-03. The underlying field is called `totalPaid`, but
                     it is the sum of the payroll records that were SAVED for the
                     year — a saved month is not a paid month, and closing a month
                     is a separate act with its own payment date. Marking this
-                    `calculated` rather than `paid` is the point of R5-03. */}
+                    `calculated` rather than `paid` is the point of R5-03.
+                    The heading says cost rather than "לתשלום" because each
+                    record's `total` includes the employer's own contributions,
+                    which never reach the caregiver — the same correction made
+                    to the monthly summary. */}
                 <ValueOrigin
                   kind="calculated"
                   provenance={{ source: t('valueOrigin.source.payrollRecord') }}

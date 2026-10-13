@@ -154,7 +154,7 @@ describe('PayrollPage annual report', () => {
     render(<PayrollPage />);
 
     expect(screen.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeInTheDocument();
-    expect(screen.getByText('סה״כ לתשלום בשנת 2026')).toBeInTheDocument();
+    expect(screen.getByText('עלות ההעסקה בשנת 2026')).toBeInTheDocument();
     expect(screen.getByText(/14,650\.00/)).toBeInTheDocument();
     expect(screen.getByText('שבתות וימי מנוחה מצטברים')).toBeInTheDocument();
     expect(screen.getByText('תשלום ימי חג מצטבר')).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe('PayrollPage annual report', () => {
 
     fireEvent.change(screen.getByLabelText('שנת הדוח'), { target: { value: '2025' } });
 
-    expect(screen.getByText('סה״כ לתשלום בשנת 2025')).toBeInTheDocument();
+    expect(screen.getByText('עלות ההעסקה בשנת 2025')).toBeInTheDocument();
     expect(screen.getByText('2025-12')).toBeInTheDocument();
     expect(screen.queryByText('2026-01')).not.toBeInTheDocument();
   });
@@ -1081,10 +1081,12 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     const kinds = Array.from(summary!.querySelectorAll('.value-origin')).map((badge) =>
       badge.getAttribute('data-value-origin'),
     );
-    // Base, Saturdays, other additions, the subtotal, deductions and the total
-    // are all derived; nothing on this screen is `paid`, because the month has
-    // not been closed and no payment date exists yet.
-    expect(kinds).toHaveLength(6);
+    // Base, Saturdays, other additions, the subtotal, deductions, what the
+    // caregiver is paid, and the employer's cost — all derived; nothing on
+    // this screen is `paid`, because the month has not been closed and no
+    // payment date exists yet. The calculation-only line is absent here
+    // because no contribution was entered.
+    expect(kinds).toHaveLength(7);
     expect(new Set(kinds)).toEqual(new Set(['calculated']));
     expect(kinds).not.toContain('paid');
     expect(summary!.textContent).toContain('מחושב');
@@ -1303,6 +1305,56 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     expect(
       screen.getByText(/שלושת המספרים האלה נרשמים בתיק ואינם משנים בעצמם את השכר/),
     ).toBeVisible();
+  });
+
+  /**
+   * Owner's decision, 13.10.2026: the employer's pension and severance share
+   * is a calculation, not part of the monthly settlement. It used to sit
+   * inside one line labelled "סה״כ לתשלום / Net amount payable", so the slip
+   * handed to the caregiver overstated what she received by the whole
+   * contribution.
+   */
+  it('shows what the caregiver is paid apart from what the employment costs', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('הפרשות מעסיק: פנסיה ופיצויים'), {
+      target: { value: '1000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const summary = document.querySelector('.wizard-content .pay-summary');
+    const text = normalizeText(summary!.textContent);
+    expect(text).toContain('סה״כ לתשלום לעובדת');
+    expect(text).toContain('עלות ההעסקה החודשית');
+    // Base 7,000 with a 1,000 contribution: paid 7,000, cost 8,000.
+    expect(text).toContain('7,000');
+    expect(text).toContain('8,000');
+  });
+
+  it('marks the contribution as calculation only, and says when it is settled', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('הפרשות מעסיק: פנסיה ופיצויים'), {
+      target: { value: '1000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByText(/הפרשות מעסיק — חישוב בלבד/)).toBeVisible();
+    expect(screen.getByText(/נצבר לקרן ואינו משולם לעובדת החודש/)).toBeVisible();
+  });
+
+  it('does not show a calculation-only line when nothing accrues', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.queryByText(/הפרשות מעסיק — חישוב בלבד/)).toBeNull();
   });
 
   it('marks the running totals inside the wizard as calculated', () => {
