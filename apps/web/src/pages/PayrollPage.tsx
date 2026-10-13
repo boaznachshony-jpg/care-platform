@@ -776,7 +776,7 @@ export function PayrollPage() {
     paidSaturdays: ['שבתות בתשלום'],
     saturdayRate: ['תעריף שבת'],
     paidHolidays: ['ימי חג'],
-    holidayPay: ['תשלום ימי חג'],
+    holidayPay: ['תשלום עבור יום חג'],
     vacationPay: ['תשלום חופשה'],
     sickPay: ['תשלום מחלה'],
     employerContributions: ['הפרשות מעסיק'],
@@ -1084,7 +1084,7 @@ export function PayrollPage() {
     if (stepToValidate === 3) {
       (
         [
-          ['holidayPay', 'תשלום ימי חג'],
+          ['holidayPay', 'תשלום עבור יום חג'],
           ['vacationPay', 'תשלום חופשה'],
           ['sickPay', 'תשלום מחלה'],
           ['employerContributions', 'הפרשות מעסיק'],
@@ -1740,7 +1740,7 @@ export function PayrollPage() {
               </label>
               <div className="payroll-live-total" aria-live="polite">
                 <span>
-                  תוספת ימי חג
+                  תשלום עבור יום חג
                   <small>
                     {numeric(values.paidHolidays)} × {money.format(numeric(values.saturdayRate))}
                   </small>
@@ -1770,7 +1770,7 @@ export function PayrollPage() {
           {step === 3 ? (
             <div className="form-grid">
               <label>
-                תשלום ימי חג
+                תשלום עבור יום חג
                 <input
                   type="number"
                   min="0"
@@ -1832,7 +1832,11 @@ export function PayrollPage() {
                   make. It is also not a validation error — an employer may owe
                   nothing — so it is a status, and saving stays possible. */}
               {unpaidRecordedDays.length > 0 ? (
-                <p className="info-box" role="status">
+                // Named, because `role="status"` alone no longer identifies it:
+                // the step carries several live regions (the draft state, the
+                // sequence progress), and a reader of this notice — or a test
+                // asserting on it — has to be able to mean this one.
+                <p className="info-box payroll-unpaid-days-notice" role="status">
                   {`נרשמו ${unpaidRecordedDays.join(' ו')} ללא סכום תשלום. אם מגיע תשלום, הזינו אותו כאן — התלוש יציג את הימים לצד הסכום.`}
                 </p>
               ) : null}
@@ -2207,7 +2211,7 @@ export function PayrollPage() {
                       <td>{money.format(calculation.saturdayPay)}</td>
                     </tr>
                     <tr>
-                      <td>תשלום ימי חג / Holiday pay</td>
+                      <td>תשלום עבור יום חג / Holiday pay</td>
                       <td>
                         {numeric(values.paidHolidays)} ימי חג / {numeric(values.paidHolidays)} paid
                         holidays
