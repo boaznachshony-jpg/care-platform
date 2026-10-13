@@ -17,6 +17,7 @@
     "pilot:provision-account": "node --env-file=.env.local --import tsx packages/db/src/provision-pilot-account.ts",
     "billing:activate-subscription": "node --env-file=.env.local --import tsx packages/db/src/activate-product-subscription.ts",
     "db:rls-test": "node --env-file=.env.local --import tsx packages/db/src/rls-check.ts",
+    "db:sponsor": "node --env-file=.env.local --import tsx packages/db/src/sponsor-tenant.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "node scripts/check-source-encoding.mjs && node scripts/check-imports-resolve.mjs && node scripts/check-repo-hygiene.mjs && node scripts/check-adr-006-freeze.mjs && node scripts/check-migration-ledger.mjs && node scripts/check-tenant-db-path.mjs && eslint .",
