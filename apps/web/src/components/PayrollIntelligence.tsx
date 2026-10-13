@@ -269,25 +269,39 @@ export function PayrollIntelligence({
             months that have not happened; the eyebrow above says so once, but
             the eyebrow is not attached to the numbers and does not survive a
             reader who scans straight to the amounts. */}
-        <div className="metric-grid">
+        {/* The badge rides on the same line as the name of the figure. It used
+            to be a grid child of its own, which on a narrow card made it a
+            full-width pill sitting between the label and the amount — the
+            largest thing in the cell, above the number it was describing. The
+            qualification still travels with every figure, as R5-04 requires;
+            it just stops outweighing it. */}
+        <div className="metric-grid metric-grid-compact">
           <div>
-            <span>סה״כ מוערך</span>
-            <ValueOrigin kind="forecast" />
+            <span className="metric-label">
+              סה״כ מוערך
+              <ValueOrigin kind="forecast" />
+            </span>
             <strong>{money.format(forecast.total)}</strong>
           </div>
           <div>
-            <span>ממוצע צפוי</span>
-            <ValueOrigin kind="forecast" />
+            <span className="metric-label">
+              ממוצע צפוי
+              <ValueOrigin kind="forecast" />
+            </span>
             <strong>{money.format(forecast.average)}</strong>
           </div>
           <div>
-            <span>שלושת החודשים הקרובים</span>
-            <ValueOrigin kind="forecast" />
+            <span className="metric-label">
+              שלושת החודשים הקרובים
+              <ValueOrigin kind="forecast" />
+            </span>
             <strong>{money.format(forecast.next3MonthsTotal)}</strong>
           </div>
           <div>
-            <span>מומלץ לשמור בצד בכל חודש</span>
-            <ValueOrigin kind="forecast" />
+            <span className="metric-label">
+              מומלץ לשמור בצד בכל חודש
+              <ValueOrigin kind="forecast" />
+            </span>
             <strong>{money.format(forecast.reserveRecommendation)}</strong>
             <small>הכוונת תכנון בלבד — לא ייעוץ פיננסי</small>
           </div>
@@ -309,7 +323,7 @@ export function PayrollIntelligence({
         <div className="forecast-strip" aria-label="תחזית חודשית">
           {forecast.months.map((m) => (
             <details key={m.month}>
-              <summary>
+              <summary className="forecast-month">
                 <small>{m.month}</small> <strong>{money.format(m.total)}</strong>{' '}
                 {/* R5-02/R5-03/R5-04. The strip used to say "בפועל" for every
                     ACTUAL month, and `ACTUAL` means only "a payroll record
