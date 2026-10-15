@@ -154,7 +154,7 @@ describe('PayrollPage annual report', () => {
     render(<PayrollPage />);
 
     expect(screen.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeInTheDocument();
-    expect(screen.getByText('סה״כ לתשלום בשנת 2026')).toBeInTheDocument();
+    expect(screen.getByText('עלות ההעסקה בשנת 2026')).toBeInTheDocument();
     expect(screen.getByText(/14,650\.00/)).toBeInTheDocument();
     expect(screen.getByText('שבתות וימי מנוחה מצטברים')).toBeInTheDocument();
     expect(screen.getByText('תשלום ימי חג מצטבר')).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe('PayrollPage annual report', () => {
 
     fireEvent.change(screen.getByLabelText('שנת הדוח'), { target: { value: '2025' } });
 
-    expect(screen.getByText('סה״כ לתשלום בשנת 2025')).toBeInTheDocument();
+    expect(screen.getByText('עלות ההעסקה בשנת 2025')).toBeInTheDocument();
     expect(screen.getByText('2025-12')).toBeInTheDocument();
     expect(screen.queryByText('2026-01')).not.toBeInTheDocument();
   });
@@ -343,7 +343,7 @@ describe('PayrollPage annual report', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.change(screen.getByLabelText('תשלום ימי חג'), {
+    fireEvent.change(screen.getByLabelText(/^תשלום עבור יום חג/), {
       target: { value: 'not-a-number' },
     });
     fireEvent.change(screen.getByLabelText('תוספת אחרת, אם קיימת'), {
@@ -352,7 +352,7 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
 
     expect(screen.getByRole('heading', { name: 'תוספות נוספות' })).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('תשלום ימי חג');
+    expect(screen.getByRole('alert')).toHaveTextContent('תשלום עבור יום חג');
     expect(screen.getByRole('alert')).toHaveTextContent('תוספת אחרת');
   });
 
@@ -440,7 +440,12 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByText('סכום לפני קיזוזים / Total before deductions')).toBeInTheDocument();
     expect(screen.queryByText('כלל התוספות')).not.toBeInTheDocument();
     expect(screen.queryByText('מתוכם דמי כיס')).not.toBeInTheDocument();
-    expect(screen.getAllByText(/8,150\.00/)).toHaveLength(2);
+    // Four, not two: `employerContributions` is zero in this month, so nothing
+    // accrues and `payableToWorker` equals `total`. The same figure therefore
+    // stands as both the cost of the month and what the caregiver is handed —
+    // each on screen and again on the printable slip. `calculationOnly` renders
+    // only when it is positive, so it adds nothing here.
+    expect(screen.getAllByText(/8,150\.00/)).toHaveLength(4);
   });
 });
 
@@ -1081,10 +1086,16 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     const kinds = Array.from(summary!.querySelectorAll('.value-origin')).map((badge) =>
       badge.getAttribute('data-value-origin'),
     );
-    // Base, Saturdays, other additions, the subtotal, deductions and the total
-    // are all derived; nothing on this screen is `paid`, because the month has
-    // not been closed and no payment date exists yet.
-    expect(kinds).toHaveLength(6);
+    // Base, Saturdays, holidays, other additions, the subtotal, deductions,
+    // what the caregiver is paid, and the employer's cost — all derived;
+    // nothing on this screen is `paid`, because the month has not been closed
+    // and no payment date exists yet. The calculation-only line is absent here
+    // because no contribution was entered.
+    //
+    // Eight since the worked holiday was given a line of its own: it is paid at
+    // the rest-day rate and is read the same way, rather than disappearing into
+    // "other additions" beside the monthly settlement.
+    expect(kinds).toHaveLength(8);
     expect(new Set(kinds)).toEqual(new Set(['calculated']));
     expect(kinds).not.toContain('paid');
     expect(summary!.textContent).toContain('מחושב');
@@ -1098,6 +1109,317 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
 
     expect(document.querySelector('.wizard-content .value-origin-legend')).not.toBeNull();
+  });
+
+  /**
+   * "ימי חג שעבדו" was collected, stored and never used by any calculation.
+   * The rest-day line one row above showed `4 × ₪440 = ₪1,760`; the holiday
+   * row below it showed nothing, so a reader who trusted the pattern reached
+   * step 3 with the holiday amount at zero and underpaid a full day's work.
+   * These four tests pin the whole contract: derived by default, visible,
+   * overridable on purpose, and never silently rewriting an old record.
+   */
+  it('pays a worked holiday at the rest-day rate instead of nothing', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+
+    // The amount is on screen, beside the count that produced it.
+    const lines = Array.from(document.querySelectorAll('.wizard-content .payroll-live-total'));
+    const holidayLine = lines.find((line) => line.textContent?.includes('תשלום עבור יום חג'));
+    expect(holidayLine).toBeDefined();
+    expect(normalizeText(holidayLine!.textContent)).toContain('440');
+
+    // And it reached the field that actually carries the money into the total,
+    // rather than existing only in the view.
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(440);
+  });
+
+  /**
+   * A worked holiday is paid at the rest-day rate, so it is read the same way
+   * the rest days are: its own line, count × rate. Folded into "other
+   * additions" it shared a line with the monthly settlement, and a holiday paid
+   * at nothing looked exactly like a holiday paid correctly — the same
+   * perceptual defect the derivation was fixed for, one screen later.
+   */
+  it('gives the holiday its own summary line, and does not count it twice', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('מספר שבתות או ימי מנוחה שעבדו'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+    for (const _step of [3, 4, 5]) {
+      fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    }
+
+    expect(screen.getByRole('heading', { name: 'סיכום ואישור' })).toBeInTheDocument();
+    const lines = Array.from(document.querySelectorAll('.pay-summary > div'));
+
+    const holiday = lines.find((l) => l.textContent?.includes('תשלום עבור יום חג'));
+    expect(holiday).toBeDefined();
+    expect(normalizeText(holiday!.textContent)).toContain('1 × 440.00');
+    expect(normalizeText(holiday!.querySelector('strong')?.textContent)).toContain('440.00');
+
+    // Nothing else was entered, so once the holiday has its own line the
+    // remaining bundle is empty. If it still showed 440 the summary would be
+    // claiming the same shekels twice and would stop reconciling to the total.
+    const other = lines.find((l) => l.textContent?.includes('תוספות אחרות'));
+    expect(normalizeText(other!.querySelector('strong')?.textContent)).toContain('0.00');
+  });
+
+  it('keeps the derived amount in step with the rate, not frozen at the first value', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '500' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(1_000);
+  });
+
+  it('stops deriving once the employer types an amount, and says which it is', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const amount = screen.getByLabelText(/^תשלום עבור יום חג/);
+    fireEvent.change(amount, { target: { value: '600' } });
+    expect(amount).toHaveValue(600);
+    expect(
+      screen.getByText('הסכום הוזן ידנית ומחליף את החישוב לפי ימי החג והתעריף.'),
+    ).toBeVisible();
+
+    // Going back and changing the count must not overwrite what was typed.
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(600);
+  });
+
+  it('opens a previously saved month without rewriting the amount that was paid', () => {
+    // A record from before the derivation existed: one holiday worked, and an
+    // amount that does not match the rate. Re-opening it must leave the paid
+    // figure alone — this screen may be re-opened months later, and a silent
+    // correction would change the record of what a caregiver received.
+    saveMvpPayroll([
+      payrollRecord('2026-08', { paidHolidays: 1, saturdayRate: 440, holidayPay: 0 }),
+    ]);
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(0);
+  });
+
+  /**
+   * Four defects found reviewing the first version of the derivation. Each of
+   * these is the regression test for one of them; items 2 and 3 reintroduced
+   * the very underpayment the change exists to prevent.
+   */
+  it("treats a stored zero as the employer's figure, not as an empty slot", () => {
+    // paidHolidays 1 at ₪440 derives ₪440, but the record says ₪0 was paid.
+    // That mismatch IS the override. Showing ₪440 here would put a number on
+    // screen that exists in no record and in no total.
+    saveMvpPayroll([
+      payrollRecord('2026-08', { paidHolidays: 1, saturdayRate: 440, holidayPay: 0 }),
+    ]);
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const lines = Array.from(document.querySelectorAll('.wizard-content .payroll-live-total'));
+    const holidayLine = lines.find((line) => line.textContent?.includes('תשלום עבור יום חג'));
+    expect(holidayLine!.querySelector('.value-origin')?.getAttribute('data-value-origin')).toBe(
+      'input',
+    );
+    // Assert the AMOUNT, not the whole line: the line legitimately carries the
+    // rate beside the count ("1 × 440.00 ₪"), so a search for "440" across it
+    // cannot tell the employer's stored zero from the derivation this test
+    // exists to refuse. What must not appear is 440 as the amount.
+    const amount = normalizeText(holidayLine!.querySelector('strong')?.textContent);
+    expect(amount).toContain('0.00');
+    expect(amount).not.toContain('440');
+
+    // And the next keystroke on the rate must not rewrite the stored zero.
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '500' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(0);
+  });
+
+  it('does not carry an override from one month into the next', () => {
+    // The worst of the four: override in August, switch to September, and the
+    // derivation stayed switched off — so holidays entered for September paid
+    // nothing at all, silently, which is the original bug returning.
+    //
+    // The employer confirms discarding the August work. Without this the month
+    // never changes: `loadMonth` guards unsaved work with `window.confirm`
+    // (WEB-02), which answers undefined in jsdom and cancels the switch — so
+    // the assertion below would read August's own typed figure back and pass
+    // or fail for a reason that has nothing to do with the override flag.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText(/^תשלום עבור יום חג/), { target: { value: '600' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
+    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-09' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+      target: { value: '440' },
+    });
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(880);
+    confirmSpy.mockRestore();
+  });
+
+  it('survives a rest-day rate too large for the money model instead of unmounting', () => {
+    // `agorotFromShekels` throws above MAX_AGOROT, and this helper runs inside
+    // both a state updater and render. An uncaught throw tore down the wizard
+    // and lost every field the employer had typed; the oversized value belongs
+    // in a field error, not in an error boundary.
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
+
+    expect(() =>
+      fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
+        target: { value: '20000000' },
+      }),
+    ).not.toThrow();
+    expect(screen.getByLabelText('ימי חג שעבדו')).toHaveValue(2);
+  });
+
+  /**
+   * Vacation and sick days have the same perceptual shape as the holiday bug —
+   * counted on step 2, paired with an amount on the printed slip, and derived
+   * by nothing. They are deliberately NOT computed: sick pay in Israel is
+   * 0%/50%/100% by day index and vacation pay is the daily wage, so a silent
+   * multiply would be an entitlement claim this screen refuses to make. What
+   * the screen owes the reader is the gap, named while it can still be closed.
+   */
+  it('names recorded leave days that carry no payment, without blocking the save', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('ימי חופשה שנוצלו'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('ימי מחלה'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const notice = document.querySelector('.payroll-unpaid-days-notice');
+    expect(notice).not.toBeNull();
+    // A status, not an alert — asserted on the element itself, because the step
+    // carries more than one live region and the role alone no longer picks it.
+    expect(notice!.getAttribute('role')).toBe('status');
+    expect(notice!.textContent).toContain('ימי חופשה');
+    expect(notice!.textContent).toContain('ימי מחלה');
+    // A status, not an alert, and not a validation error: an employer may owe
+    // nothing for those days, so the wizard must still move on.
+    expect(screen.getByRole('button', { name: 'המשך' })).toBeEnabled();
+  });
+
+  it('stops naming the gap once the amount is entered', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('ימי חופשה שנוצלו'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    expect(document.querySelector('.payroll-unpaid-days-notice')?.textContent).toContain(
+      'ימי חופשה',
+    );
+
+    fireEvent.change(screen.getByLabelText('תשלום חופשה'), { target: { value: '900' } });
+    expect(document.querySelector('.payroll-unpaid-days-notice')).toBeNull();
+  });
+
+  it('says that the day counts do not move the salary by themselves', () => {
+    // The two product lines below them teach count × rate = amount; these
+    // three counts do not follow that rule, and the proration sentence above
+    // describes a reduction that applies only to a mid-month start.
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(
+      screen.getByText(/שלושת המספרים האלה נרשמים בתיק ואינם משנים בעצמם את השכר/),
+    ).toBeVisible();
+  });
+
+  /**
+   * Owner's decision, 13.10.2026: the employer's pension and severance share
+   * is a calculation, not part of the monthly settlement. It used to sit
+   * inside one line labelled "סה״כ לתשלום / Net amount payable", so the slip
+   * handed to the caregiver overstated what she received by the whole
+   * contribution.
+   */
+  it('shows what the caregiver is paid apart from what the employment costs', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('הפרשות מעסיק: פנסיה ופיצויים'), {
+      target: { value: '1000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    const summary = document.querySelector('.wizard-content .pay-summary');
+    const text = normalizeText(summary!.textContent);
+    expect(text).toContain('סה״כ לתשלום לעובדת');
+    expect(text).toContain('עלות ההעסקה החודשית');
+    // Base 7,000 with a 1,000 contribution: paid 7,000, cost 8,000.
+    expect(text).toContain('7,000');
+    expect(text).toContain('8,000');
+  });
+
+  it('marks the contribution as calculation only, and says when it is settled', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.change(screen.getByLabelText('הפרשות מעסיק: פנסיה ופיצויים'), {
+      target: { value: '1000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.getByText(/הפרשות מעסיק — חישוב בלבד/)).toBeVisible();
+    expect(screen.getByText(/נצבר לקרן ואינו משולם לעובדת החודש/)).toBeVisible();
+  });
+
+  it('does not show a calculation-only line when nothing accrues', () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.queryByText(/הפרשות מעסיק — חישוב בלבד/)).toBeNull();
   });
 
   it('marks the running totals inside the wizard as calculated', () => {
