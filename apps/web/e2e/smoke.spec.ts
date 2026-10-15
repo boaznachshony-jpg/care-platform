@@ -558,7 +558,7 @@ test('walks through all payroll steps', async ({ page }) => {
   await expect(page.locator('.employment-expenses').getByText('סכום טרם הוזן')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeVisible();
-  await expect(page.getByText(/סה״כ לתשלום בשנת/)).toBeVisible();
+  await expect(page.getByText(/עלות ההעסקה בשנת/)).toBeVisible();
 });
 
 test('returns from the first payroll step to the dashboard', async ({ page }) => {

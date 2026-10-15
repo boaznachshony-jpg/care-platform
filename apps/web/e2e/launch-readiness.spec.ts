@@ -312,7 +312,7 @@ test.describe('launch readiness interactions', () => {
     await page.getByRole('button', { name: 'המשך' }).click();
 
     const additionFields: Array<[string, string]> = [
-      ['תשלום ימי חג', '450'],
+      ['תשלום עבור יום חג', '450'],
       ['תשלום חופשה', '350'],
       ['תשלום מחלה', '300'],
       ['הפרשות מעסיק: פנסיה ופיצויים', '900'],

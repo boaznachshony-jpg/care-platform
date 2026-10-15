@@ -40,7 +40,12 @@ export interface MonthlyPayrollCalculation {
   saturdayPay: number;
   additions: number;
   deductions: number;
+  /** Cost of the month to the employer. See `PayrollTotals.total`. */
   total: number;
+  /** What the caregiver is handed this month. See `PayrollTotals`. */
+  payableToWorker: number;
+  /** The accruing part that does not pass through this month's payment. */
+  calculationOnly: number;
 }
 
 export interface ProratedBaseSalary {
@@ -163,5 +168,7 @@ export function calculateMonthlyPayroll(input: MonthlyPayrollInput): MonthlyPayr
     additions: totals.additions,
     deductions: totals.deductions,
     total: totals.total,
+    payableToWorker: totals.payableToWorker,
+    calculationOnly: totals.calculationOnly,
   };
 }

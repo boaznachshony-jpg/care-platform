@@ -94,9 +94,22 @@ describe('account freeze guard', () => {
     expect(response.statusCode).not.toBe(402);
   });
 
-  it('exempts legal acceptances — the card-setup form records consent before it can unfreeze', async () => {
-    // SEC-AUTHZ-01. BillingPage must POST the terms/privacy acceptance before
-    // it may start card setup; refusing that write made the freeze permanent.
+  /**
+   * Reported from production as "we could not record your acceptance": a
+   * frozen customer pressed the button on the billing screen and the API
+   * answered 402.
+   *
+   * `/billing` was exempt and `/legal/acceptances` was not, and the billing
+   * screen records the acceptance BEFORE it calls the billing route — so the
+   * flow stopped at the refusal and never reached the route this exemption
+   * list exists to keep open. The customer could not add a card, so the
+   * account could not be paid for, so it could never stop being frozen.
+   *
+   * Found independently as SEC-AUTHZ-01 in the hardening review and fixed on
+   * both branches; this is the merge of the two tests. It fails with a 402
+   * against the previous exemption list.
+   */
+  it('exempts the legal acceptance — a frozen tenant must be able to accept and then pay', async () => {
     const { app } = buildFrozenTenantServer();
     const accepted = await app.inject({
       method: 'POST',
@@ -110,6 +123,7 @@ describe('account freeze guard', () => {
         context: 'billing',
       },
     });
+    expect(accepted.statusCode).not.toBe(402);
     expect(accepted.statusCode).toBe(201);
 
     // The exemption is that one route only: the freeze still holds elsewhere.

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { agorot } from './money.js';
 import {
   BLANK_PAYROLL_COMPONENTS_AGOROT,
+  PAYROLL_SETTLEMENT_BASIS,
   PayrollComponentError,
   calculateMonthlyPayroll,
   calculateMonthlyPayrollAgorot,
@@ -67,7 +68,82 @@ describe('calculateMonthlyPayroll', () => {
         additionalPayments: [{ amount: 200 }],
         pocketMoney: 100,
       }),
-    ).toEqual({ restDayPay: 1200, additions: 2150, deductions: 100, total: 8050 });
+    ).toEqual({
+      restDayPay: 1200,
+      additions: 2150,
+      deductions: 100,
+      total: 8050,
+      // The employer's ₪500 share is inside `total` and outside what the
+      // caregiver is handed. Owner's decision, 13.10.2026.
+      payableToWorker: 7550,
+      calculationOnly: 500,
+    });
+  });
+
+  /**
+   * The employer's pension and severance share is a cost of the month that
+   * does not pass through the month's payment: it accrues to a fund and is
+   * reckoned with at termination or year-end. It used to sit inside a single
+   * figure labelled "net amount payable", which overstated what the caregiver
+   * received by roughly a thousand shekels a month.
+   *
+   * `total` keeps its definition — the reconcile CHECKs in migrations 0041 and
+   * 0045 have asserted it over every stored row — so these tests pin the split
+   * rather than a new sum.
+   */
+  describe('settlement basis', () => {
+    it('leaves the employer contribution out of what the caregiver is paid', () => {
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        baseSalary: 6000,
+        employerContributions: 1000,
+      });
+      expect(totals.payableToWorker).toBe(6000);
+      expect(totals.calculationOnly).toBe(1000);
+      expect(totals.total).toBe(7000);
+    });
+
+    it('keeps the two figures equal when nothing accrues', () => {
+      const totals = calculateMonthlyPayroll({ ...BLANK, baseSalary: 6000, holidayPay: 440 });
+      expect(totals.payableToWorker).toBe(totals.total);
+      expect(totals.calculationOnly).toBe(0);
+    });
+
+    it('never drifts from the total by a rounding step', () => {
+      // Derived by subtraction from `total`, not re-summed from the worker
+      // components, so the identity holds for any combination.
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        baseSalary: 6000.33,
+        paidRestDays: 3.5,
+        restDayRate: 440.55,
+        holidayPay: 250.25,
+        employerContributions: 1000.67,
+        additionalPayments: [{ amount: 125.49 }],
+        pocketMoney: 100.01,
+        advances: 33.33,
+      });
+      expect(totals.payableToWorker + totals.calculationOnly).toBeCloseTo(totals.total, 2);
+    });
+
+    it('carries a negative payable through rather than clamping it', () => {
+      // DOM-07 again: advances larger than the month leave a balance the
+      // caregiver owes, and the split must not invent a floor.
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        baseSalary: 6000,
+        employerContributions: 500,
+        advances: 7000,
+      });
+      expect(totals.payableToWorker).toBe(-1000);
+      expect(totals.total).toBe(-500);
+    });
+
+    it('classifies every component it sums, so a screen can mark each line', () => {
+      expect(PAYROLL_SETTLEMENT_BASIS.employerContributions).toBe('calculation_only');
+      for (const key of ['baseSalary', 'restDayPay', 'holidayPay', 'vacationPay', 'sickPay'])
+        expect(PAYROLL_SETTLEMENT_BASIS[key]).toBe('worker');
+    });
   });
 
   it('treats pocket money as a deduction, not an addition', () => {
