@@ -24,7 +24,10 @@ const body = z
     paidRestDays: z.number().min(0).max(6),
     restDayRate: amount,
     paidHolidays: z.number().min(0).max(10),
-    holidayPay: amount,
+    // Still accepted so an in-flight older bundle is not rejected, but the
+    // stored amount is always `paidHolidays × restDayRate`. See
+    // `PayrollEntryInput.holidayPay`.
+    holidayPay: amount.optional(),
     vacationDays: days,
     vacationPay: amount,
     sickDays: days,

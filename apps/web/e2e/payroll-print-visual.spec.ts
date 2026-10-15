@@ -40,8 +40,9 @@ test('renders every payroll component bilingually on a centered A4 page', async 
   }
   await page.getByRole('button', { name: 'המשך' }).click();
 
+  // The holiday amount is derived from the count and the rate above, so the
+  // slip still prints ₪450 against it without this step typing anything.
   for (const [label, value] of [
-    ['תשלום עבור יום חג', '450'],
     ['תשלום חופשה', '350'],
     ['תשלום מחלה', '300'],
     ['הפרשות מעסיק: פנסיה ופיצויים', '900'],

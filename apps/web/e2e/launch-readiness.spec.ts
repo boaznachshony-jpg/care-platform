@@ -310,8 +310,9 @@ test.describe('launch readiness interactions', () => {
     }
     await page.getByRole('button', { name: 'המשך' }).click();
 
+    // No holiday amount to fill: it is ימי חג שעבדו (1) times the rest-day
+    // rate (450) from the previous step, which is the ₪450 this used to type.
     const additionFields: Array<[string, string]> = [
-      ['תשלום עבור יום חג', '450'],
       ['תשלום חופשה', '350'],
       ['תשלום מחלה', '300'],
       ['הפרשות מעסיק: פנסיה ופיצויים', '900'],

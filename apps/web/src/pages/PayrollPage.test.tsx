@@ -72,7 +72,7 @@ describe('PayrollPage retroactive sequence helpers', () => {
       saturdayRate: '450',
       workDays: '0',
       paidSaturdays: '0',
-      holidayPay: '0',
+      paidHolidays: '0',
       pocketMoney: '0',
       otherAddition: '0',
       advances: '0',
@@ -343,7 +343,7 @@ describe('PayrollPage annual report', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.change(screen.getByLabelText(/^תשלום עבור יום חג/), {
+    fireEvent.change(screen.getByLabelText('תשלום חופשה'), {
       target: { value: 'not-a-number' },
     });
     fireEvent.change(screen.getByLabelText('תוספת אחרת, אם קיימת'), {
@@ -352,7 +352,7 @@ describe('PayrollPage annual report', () => {
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
 
     expect(screen.getByRole('heading', { name: 'תוספות נוספות' })).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('תשלום עבור יום חג');
+    expect(screen.getByRole('alert')).toHaveTextContent('תשלום חופשה');
     expect(screen.getByRole('alert')).toHaveTextContent('תוספת אחרת');
   });
 
@@ -1116,8 +1116,12 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
    * The rest-day line one row above showed `4 × ₪440 = ₪1,760`; the holiday
    * row below it showed nothing, so a reader who trusted the pattern reached
    * step 3 with the holiday amount at zero and underpaid a full day's work.
-   * These four tests pin the whole contract: derived by default, visible,
-   * overridable on purpose, and never silently rewriting an old record.
+   *
+   * A holiday and a Saturday are now one process: the same rate, the same
+   * `count × rate`, counted apart only so the employer can see how many
+   * holidays were paid. The amount is never typed, which is what these tests
+   * pin — the first version made it typeable, and a typeable amount is exactly
+   * how a record came to hold one worked holiday paid ₪0.
    */
   it('pays a worked holiday at the rest-day rate instead of nothing', () => {
     renderWizard();
@@ -1132,12 +1136,30 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     const lines = Array.from(document.querySelectorAll('.wizard-content .payroll-live-total'));
     const holidayLine = lines.find((line) => line.textContent?.includes('תשלום עבור יום חג'));
     expect(holidayLine).toBeDefined();
-    expect(normalizeText(holidayLine!.textContent)).toContain('440');
+    expect(normalizeText(holidayLine!.querySelector('strong')?.textContent)).toContain('440.00');
 
-    // And it reached the field that actually carries the money into the total,
-    // rather than existing only in the view.
+    // And it carries into the additions step as the same figure, rather than
+    // existing only on the step that collected the count.
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(440);
+    const stepThree = Array.from(
+      document.querySelectorAll('.wizard-content .payroll-live-total'),
+    ).find((line) => line.textContent?.includes('תשלום עבור יום חג'));
+    expect(normalizeText(stepThree!.querySelector('strong')?.textContent)).toContain('440.00');
+  });
+
+  it('offers no field to type a holiday amount into', () => {
+    // The whole defect in one assertion. While the amount was typeable it
+    // could disagree with the count beside it, and nothing in the data model
+    // could call that disagreement wrong: a count of 1 and an amount of 0
+    // reconciled perfectly, which is what production stored for September 2026.
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
+
+    expect(screen.queryByLabelText(/^תשלום עבור יום חג/)).toBeNull();
+    // The Saturday amount is not typeable either, and never was. Same rate,
+    // same formula, same absence of a field.
+    expect(screen.queryByLabelText(/^תוספת שבתות/)).toBeNull();
   });
 
   /**
@@ -1189,57 +1211,18 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(1_000);
+    const stepThree = Array.from(
+      document.querySelectorAll('.wizard-content .payroll-live-total'),
+    ).find((line) => line.textContent?.includes('תשלום עבור יום חג'));
+    expect(normalizeText(stepThree!.querySelector('strong')?.textContent)).toContain('1,000.00');
   });
 
-  it('stops deriving once the employer types an amount, and says which it is', () => {
-    renderWizard();
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
-      target: { value: '440' },
-    });
-    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-
-    const amount = screen.getByLabelText(/^תשלום עבור יום חג/);
-    fireEvent.change(amount, { target: { value: '600' } });
-    expect(amount).toHaveValue(600);
-    expect(
-      screen.getByText('הסכום הוזן ידנית ומחליף את החישוב לפי ימי החג והתעריף.'),
-    ).toBeVisible();
-
-    // Going back and changing the count must not overwrite what was typed.
-    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
-    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(600);
-  });
-
-  it('opens a previously saved month without rewriting the amount that was paid', () => {
-    // A record from before the derivation existed: one holiday worked, and an
-    // amount that does not match the rate. Re-opening it must leave the paid
-    // figure alone — this screen may be re-opened months later, and a silent
-    // correction would change the record of what a caregiver received.
-    saveMvpPayroll([
-      payrollRecord('2026-08', { paidHolidays: 1, saturdayRate: 440, holidayPay: 0 }),
-    ]);
-    renderWizard();
-    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-
-    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(0);
-  });
-
-  /**
-   * Four defects found reviewing the first version of the derivation. Each of
-   * these is the regression test for one of them; items 2 and 3 reintroduced
-   * the very underpayment the change exists to prevent.
-   */
-  it("treats a stored zero as the employer's figure, not as an empty slot", () => {
-    // paidHolidays 1 at ₪440 derives ₪440, but the record says ₪0 was paid.
-    // That mismatch IS the override. Showing ₪440 here would put a number on
-    // screen that exists in no record and in no total.
+  it('corrects a stored month where a worked holiday was paid nothing', () => {
+    // September 2026 as production held it: one holiday worked, a rate of
+    // ₪440, and ₪0 recorded against it. The old screen showed that zero back
+    // and called it the employer's own figure, so the only way out was to
+    // retype 440 by hand. The amount is the count times the rate now, so
+    // opening the month states what the holiday is worth.
     saveMvpPayroll([
       payrollRecord('2026-08', { paidHolidays: 1, saturdayRate: 440, holidayPay: 0 }),
     ]);
@@ -1249,58 +1232,11 @@ describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
 
     const lines = Array.from(document.querySelectorAll('.wizard-content .payroll-live-total'));
     const holidayLine = lines.find((line) => line.textContent?.includes('תשלום עבור יום חג'));
+    expect(normalizeText(holidayLine!.querySelector('strong')?.textContent)).toContain('440.00');
+    // Calculated, not typed: there is no longer a kind this field can be.
     expect(holidayLine!.querySelector('.value-origin')?.getAttribute('data-value-origin')).toBe(
-      'input',
+      'calculated',
     );
-    // Assert the AMOUNT, not the whole line: the line legitimately carries the
-    // rate beside the count ("1 × 440.00 ₪"), so a search for "440" across it
-    // cannot tell the employer's stored zero from the derivation this test
-    // exists to refuse. What must not appear is 440 as the amount.
-    const amount = normalizeText(holidayLine!.querySelector('strong')?.textContent);
-    expect(amount).toContain('0.00');
-    expect(amount).not.toContain('440');
-
-    // And the next keystroke on the rate must not rewrite the stored zero.
-    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
-      target: { value: '500' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(0);
-  });
-
-  it('does not carry an override from one month into the next', () => {
-    // The worst of the four: override in August, switch to September, and the
-    // derivation stayed switched off — so holidays entered for September paid
-    // nothing at all, silently, which is the original bug returning.
-    //
-    // The employer confirms discarding the August work. Without this the month
-    // never changes: `loadMonth` guards unsaved work with `window.confirm`
-    // (WEB-02), which answers undefined in jsdom and cancels the switch — so
-    // the assertion below would read August's own typed figure back and pass
-    // or fail for a reason that has nothing to do with the override flag.
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    renderWizard();
-    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-08' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
-      target: { value: '440' },
-    });
-    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.change(screen.getByLabelText(/^תשלום עבור יום חג/), { target: { value: '600' } });
-
-    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
-    fireEvent.click(screen.getByRole('button', { name: 'חזרה' }));
-    fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-09' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-    fireEvent.change(screen.getByLabelText('תעריף לכל שבת או יום מנוחה'), {
-      target: { value: '440' },
-    });
-    fireEvent.change(screen.getByLabelText('ימי חג שעבדו'), { target: { value: '2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
-
-    expect(screen.getByLabelText(/^תשלום עבור יום חג/)).toHaveValue(880);
-    confirmSpy.mockRestore();
   });
 
   it('survives a rest-day rate too large for the money model instead of unmounting', () => {

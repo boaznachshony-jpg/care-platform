@@ -9,7 +9,14 @@ export type PayrollEntryInput = {
   paidRestDays: number;
   restDayRate: number;
   paidHolidays: number;
-  holidayPay: number;
+  /**
+   * Accepted for compatibility and then ignored, exactly like `total`: a
+   * worked holiday is `paidHolidays × restDayRate`, so the server derives it
+   * and stores its own figure. A client that disagrees is caught by the
+   * `total` assertion below, which is the loud failure this deserves — the
+   * quiet one was a count of 1 stored beside an amount of 0.
+   */
+  holidayPay?: number;
   vacationDays: number;
   vacationPay: number;
   sickDays: number;
@@ -173,7 +180,10 @@ export class PayrollEntryService {
         input.paidRestDays,
         input.restDayRate,
         input.paidHolidays,
-        input.holidayPay,
+        // Derived, not `input.holidayPay` — same contract as `total` below.
+        // The column stays stored so `payroll_entry_total_reconciles_agorot`
+        // (migration 0045) keeps summing the row it has always summed.
+        totals.holidayPay,
         input.vacationDays,
         input.vacationPay,
         input.sickDays,

@@ -53,14 +53,25 @@ export interface PayrollAdditionalPayment {
  * the `payroll_entry` money columns; `workDays`, `vacationDays`, `sickDays` and
  * the absence counters are recorded facts that do not enter the arithmetic.
  *
- * `paidRestDays` is a COUNT, not money — it is legitimately fractional (half a
- * rest day) and is the one term that is multiplied rather than added.
+ * `paidRestDays` and `paidHolidays` are COUNTS, not money. `paidRestDays` is
+ * legitimately fractional (half a rest day); both are multiplied by
+ * `restDayRate` rather than added.
+ *
+ * A worked holiday carries no rate of its own. It is a rest day that happens
+ * to fall on a holiday: same rate, same multiplication, counted separately
+ * only so the employer can see how many were paid. `holidayPay` used to sit
+ * here as a free money term beside `vacationPay`, which made it the one
+ * addition the employer typed rather than the product of a count and a rate —
+ * and so the one addition that could record a worked holiday paid nothing at
+ * all (a stored ₪0 against a count of 1 reconciled perfectly). It is now an
+ * output of the formula, in `PayrollTotals`, exactly like `restDayPay`.
  */
 export interface PayrollComponents {
   baseSalary: number;
   paidRestDays: number;
   restDayRate: number;
-  holidayPay: number;
+  /** A day count, not money: multiplied by `restDayRate`. */
+  paidHolidays: number;
   vacationPay: number;
   sickPay: number;
   employerContributions: number;
@@ -78,7 +89,8 @@ export interface PayrollComponentsAgorot {
   /** A day count, not money. */
   paidRestDays: number;
   restDayRate: Agorot;
-  holidayPay: Agorot;
+  /** A day count, not money. */
+  paidHolidays: number;
   vacationPay: Agorot;
   sickPay: Agorot;
   employerContributions: Agorot;
@@ -119,6 +131,8 @@ export const PAYROLL_SETTLEMENT_BASIS: Readonly<Record<string, PayrollSettlement
 
 export interface PayrollTotals {
   restDayPay: number;
+  /** `paidHolidays × restDayRate`. Derived here so nothing else may derive it. */
+  holidayPay: number;
   additions: number;
   deductions: number;
   /**
@@ -148,6 +162,7 @@ export interface PayrollTotals {
 
 export interface PayrollTotalsAgorot {
   restDayPay: Agorot;
+  holidayPay: Agorot;
   additions: Agorot;
   deductions: Agorot;
   total: Agorot;
@@ -162,7 +177,7 @@ export type PayrollComponentProblem = 'not_finite' | 'negative' | 'out_of_range'
  * DOM-07: a component that cannot be trusted stops the calculation instead of
  * becoming a silent zero. `safeAmount(NaN) === 0` meant a field that failed to
  * parse either over-paid the caregiver (a vanished `advances`) or under-paid
- * them (a vanished `holidayPay`), and nothing told anyone.
+ * them (a vanished `vacationPay`), and nothing told anyone.
  */
 export class PayrollComponentError extends Error {
   constructor(
@@ -234,15 +249,23 @@ function count(name: string, value: number): number {
 export function calculateMonthlyPayrollAgorot(
   components: PayrollComponentsAgorot,
 ): PayrollTotalsAgorot {
-  // The single rounding step in the whole calculation: a fractional day count
-  // times an integer daily rate. Everything downstream is integer addition.
+  // The only rounding steps in the whole calculation: a day count times an
+  // integer daily rate, twice, against the same rate. Everything downstream is
+  // integer addition. Two steps rather than one because the two counts are
+  // reported separately and must each round on their own — summing the counts
+  // first would make a half rest day and a holiday round together and disagree
+  // with the two figures the slip prints.
   const restDayPay = scaleAgorot(
     components.restDayRate,
     count('paidRestDays', components.paidRestDays),
   );
+  const holidayPay = scaleAgorot(
+    components.restDayRate,
+    count('paidHolidays', components.paidHolidays),
+  );
   const additions = addAgorot(
     restDayPay,
-    components.holidayPay,
+    holidayPay,
     components.vacationPay,
     components.sickPay,
     components.employerContributions,
@@ -257,6 +280,7 @@ export function calculateMonthlyPayrollAgorot(
   const total = subtractAgorot(addAgorot(components.baseSalary, additions), deductions);
   return {
     restDayPay,
+    holidayPay,
     additions,
     deductions,
     total,
@@ -274,7 +298,7 @@ export function toPayrollComponentsAgorot(components: PayrollComponents): Payrol
     baseSalary: toComponentAgorot('baseSalary', components.baseSalary),
     paidRestDays: count('paidRestDays', components.paidRestDays),
     restDayRate: toComponentAgorot('restDayRate', components.restDayRate),
-    holidayPay: toComponentAgorot('holidayPay', components.holidayPay),
+    paidHolidays: count('paidHolidays', components.paidHolidays),
     vacationPay: toComponentAgorot('vacationPay', components.vacationPay),
     sickPay: toComponentAgorot('sickPay', components.sickPay),
     employerContributions: toComponentAgorot(
@@ -300,6 +324,7 @@ export function calculateMonthlyPayroll(components: PayrollComponents): PayrollT
   const totals = calculateMonthlyPayrollAgorot(toPayrollComponentsAgorot(components));
   return {
     restDayPay: shekelsOf(totals.restDayPay),
+    holidayPay: shekelsOf(totals.holidayPay),
     additions: shekelsOf(totals.additions),
     deductions: shekelsOf(totals.deductions),
     total: shekelsOf(totals.total),
@@ -334,7 +359,7 @@ export const BLANK_PAYROLL_COMPONENTS_AGOROT: PayrollComponentsAgorot = {
   baseSalary: ZERO_AGOROT,
   paidRestDays: 0,
   restDayRate: ZERO_AGOROT,
-  holidayPay: ZERO_AGOROT,
+  paidHolidays: 0,
   vacationPay: ZERO_AGOROT,
   sickPay: ZERO_AGOROT,
   employerContributions: ZERO_AGOROT,
