@@ -7,7 +7,11 @@ import {
   type MvpMonthlyClose,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
-import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
+import {
+  ApiRequestError,
+  closeCanonicalPayrollMonth,
+  listCanonicalPayrollCloses,
+} from '../api/client.js';
 import { newIdempotencyKey } from '../api/idempotency.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
@@ -46,9 +50,25 @@ export function PayrollIntelligence({
   // payment date/method must not be discarded because the request failed —
   // this flag never clears the form, it only re-enables the button and says
   // what happened, so the same click can be retried.
-  const [closeError, setCloseError] = useState(false);
+  const [closeError, setCloseError] = useState<'none' | 'failed' | 'conflict'>('none');
   const [closing, setClosing] = useState(false);
-  const closeKey = useRef(newIdempotencyKey());
+  /**
+   * UI-WRITE-02. The key used to be minted once for the component's lifetime,
+   * so the second month closed in the same session reused the first month's
+   * key with a different body — a guaranteed IDEMPOTENCY_CONFLICT (409) that
+   * no retry could ever clear. Same signature pattern as VisaRenewalSection:
+   * the key belongs to the exact payload being sent. A retry of the same close
+   * (same month, same date, same amounts) reuses it, so a lost response plus a
+   * second press is replayed and not duplicated; a different close is a new
+   * attempt and gets a fresh key.
+   */
+  const closeAttempt = useRef<{ signature: string; key: string } | null>(null);
+  const closeKeyFor = (signature: string): string => {
+    if (closeAttempt.current?.signature !== signature) {
+      closeAttempt.current = { signature, key: newIdempotencyKey() };
+    }
+    return closeAttempt.current.key;
+  };
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash' | 'check' | 'other'>(
     'bank_transfer',
@@ -121,31 +141,36 @@ export function PayrollIntelligence({
       open.advances +
       open.agreedDeduction;
     const actualBase = open.baseSalary;
+    const payload = {
+      payrollReference: open.id,
+      month: open.month,
+      paymentDate,
+      paymentMethod,
+      total: open.total,
+      baseSalary: actualBase,
+      additions: Math.max(0, open.total - actualBase + deductions),
+      deductions,
+    };
     setClosing(true);
-    setCloseError(false);
+    setCloseError('none');
     try {
-      await closeCanonicalPayrollMonth(
-        caseId,
-        {
-          payrollReference: open.id,
-          month: open.month,
-          paymentDate,
-          paymentMethod,
-          total: open.total,
-          baseSalary: actualBase,
-          additions: Math.max(0, open.total - actualBase + deductions),
-          deductions,
-        },
-        closeKey.current,
-      );
+      await closeCanonicalPayrollMonth(caseId, payload, closeKeyFor(JSON.stringify(payload)));
       await refreshCloses();
-    } catch {
+    } catch (error) {
       // The whole point of this fix: a close that failed must never look like
       // a close that happened. Previously there was no `.catch` here at all,
       // so a rejected request left the button's onClick promise silently
       // dropped — the month stayed open server-side with zero on-screen
       // indication, and a caregiver's payment record never closed.
-      setCloseError(true);
+      if (error instanceof ApiRequestError && error.code === 'IDEMPOTENCY_CONFLICT') {
+        // The server already holds this key with a different body. Retrying
+        // with the same key can only 409 again, so the attempt is discarded
+        // and the next press is a genuinely new request with a new key.
+        closeAttempt.current = null;
+        setCloseError('conflict');
+      } else {
+        setCloseError('failed');
+      }
     } finally {
       setClosing(false);
     }
@@ -306,43 +331,20 @@ export function PayrollIntelligence({
         ) : (
           <p>אין די נתונים ליצירת תחזית. לא נוספו סכומים משוערים.</p>
         )}
-        <div className="forecast-strip" aria-label="תחזית חודשית">
-          {forecast.months.map((m) => (
-            <details key={m.month}>
-              <summary>
-                <small>{m.month}</small> <strong>{money.format(m.total)}</strong>{' '}
-                {/* R5-02/R5-03/R5-04. The strip used to say "בפועל" for every
-                    ACTUAL month, and `ACTUAL` means only "a payroll record
-                    exists for this month" — a closed month and an open saved
-                    month both report it. "בפועל" on a month nobody has paid yet
-                    is exactly the false claim R5-03 exists to remove, so the
-                    three cases are now told apart by the one thing that decides
-                    them: whether a canonical close record exists. */}
-                <ValueOrigin
-                  kind={
-                    closes.some((c) => c.month === m.month)
-                      ? 'paid'
-                      : m.status === 'ACTUAL'
-                        ? 'calculated'
-                        : 'forecast'
-                  }
-                />
-              </summary>
-              <ul>
-                {m.components.map((component) => (
-                  <li key={component.id}>
-                    <strong>{component.label}</strong> —{' '}
-                    {component.amount === null ? 'לא ידוע' : money.format(component.amount)}
-                    <small>
-                      {' '}
-                      · {component.explanation} · {component.status}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ))}
-        </div>
+        {/* The twelve-month strip was removed on 16.10.2026 at the owner's
+            request: "התצוגה הזו מיותרת ומעמיסה".
+            It restated one assumption twelve times. With no scenario set, every
+            month takes the same `safeBase` (packages/application/src/product-
+            intelligence.ts), so the strip rendered the identical figure twelve
+            times, each with its own "תחזית" badge, under four headline tiles
+            that are the same number summed, averaged and tripled. Twelve
+            repetitions of one number is not twelve findings, and the badges
+            that make a single figure honest become noise when every tile on the
+            panel carries one.
+            The four headline figures above still answer the question the panel
+            exists for — what a year costs — and R5-07 ("Future Cost placement")
+            remains open for a version derived from the saved records rather
+            than from base salary alone. */}
       </section>
       <section className="card monthly-close" id="monthly-close">
         <div className="section-heading">
@@ -402,9 +404,15 @@ export function PayrollIntelligence({
                 {caseBlockedReason}
               </p>
             ) : null}
-            {closeError ? (
+            {closeError === 'failed' ? (
               <p className="error-box" role="alert">
                 הסגירה נכשלה ולא נרשמה. הנתונים שהזנתם לא נמחקו — בדקו את החיבור ונסו לסגור שוב.
+              </p>
+            ) : null}
+            {closeError === 'conflict' ? (
+              <p className="error-box" role="alert">
+                בקשת סגירה קודמת לחודש זה נשלחה עם נתונים אחרים, ולכן השרת דחה את הבקשה הזו. החודש
+                לא נסגר. בדקו בהיסטוריית הסגירות אם החודש כבר סגור, ואם לא — נסו לסגור שוב.
               </p>
             ) : null}
             <button
