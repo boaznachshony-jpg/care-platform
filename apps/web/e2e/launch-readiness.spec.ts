@@ -97,6 +97,7 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('מחיר לשבת או ליום מנוחה בש״ח').fill('440');
     await page.getByLabel('מועד חידוש רישיון ההעסקה').fill('2027-01-15');
     await page.getByLabel('מועד חידוש הוויזה').fill('2026-12-31');
+    await page.getByRole('checkbox', { name: /בהשלמת ההקמה/ }).check();
     await page.getByRole('button', { name: 'שמירת הרשימה והמשך לאמצעי תשלום' }).click();
 
     await expect(page).toHaveURL(/\/billing\?from=onboarding$/);

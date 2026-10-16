@@ -5,7 +5,15 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { TASK_PRIORITIES } from '@caredesk/domain';
 import { createTaskRequestSchema, type TaskResponse } from '@caredesk/schemas';
-import { Alert, Button, EmptyState, Skeleton, StatusBadge, TextField } from '@caredesk/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  StatusBadge,
+  TextField,
+} from '@caredesk/ui';
 import {
   completeCaseTask,
   createCaseTask,
@@ -14,6 +22,7 @@ import {
   listCaseTasks,
 } from '../../api/client.js';
 import { LEGACY_UNSCOPED_CLIENT_ID } from '../../canonical-case.js';
+import { formatDateOnly } from '../../format-timestamp.js';
 import { readMvpTasksForClient } from '../../storage/mvp-storage.js';
 import { uploadUnsyncedRecords, type UploadOutcome } from '../../sync/legacy-upload.js';
 import { localTaskPriorityToCanonical } from '../../sync/task-mapping.js';
@@ -40,6 +49,9 @@ function statusTone(status: string): 'success' | 'warning' | 'neutral' {
 export function CaseTasksSection({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
   const [tasks, setTasks] = useState<TaskResponse[] | null>(null);
+  // A fetch that failed is not a case with no tasks. Kept apart from `tasks`
+  // (which stays null) so the empty state can never stand in for an error.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [addFailed, setAddFailed] = useState(false);
   const [completeFailed, setCompleteFailed] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
@@ -59,16 +71,32 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    setLoadFailed(false);
     listCaseTasks(caseId)
       .then((rows) => {
         if (!cancelled) setTasks(rows);
       })
       .catch(() => {
-        if (!cancelled) setTasks([]);
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
     };
+  }, [caseId]);
+
+  // The case assistant (ProductCompletionPanel) creates tasks through its own
+  // request and announces it with this event, so the list a family is looking
+  // at reflects the checklist it just confirmed without a reload.
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ caseId?: string }>).detail;
+      if (detail?.caseId !== caseId) return;
+      void listCaseTasks(caseId)
+        .then((rows) => setTasks(rows))
+        .catch(() => undefined);
+    };
+    window.addEventListener('caredesk:case-tasks-changed', refresh);
+    return () => window.removeEventListener('caredesk:case-tasks-changed', refresh);
   }, [caseId]);
 
   // One-time upload of tasks this browser already holds locally under the
@@ -137,7 +165,7 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
   }
 
   return (
-    <section>
+    <section id="tasks">
       <h2>{t('tasks.heading')}</h2>
       {completeFailed ? <Alert variant="error" title={t('tasks.completeFailed')} /> : null}
       {uploadOutcome && uploadOutcome.failedIds.length > 0 ? (
@@ -155,7 +183,9 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
         </Alert>
       ) : null}
 
-      {tasks === null ? (
+      {loadFailed ? (
+        <ErrorState kind="retryable" title={t('tasks.loadFailed')} body="" />
+      ) : tasks === null ? (
         <Skeleton loadingLabel={t('shell.loading')} height="1.5rem" width="14rem" />
       ) : tasks.length === 0 ? (
         <EmptyState title={t('tasks.empty')} body="" />
@@ -172,7 +202,8 @@ export function CaseTasksSection({ caseId }: { caseId: string }) {
               {task.dueAt ? (
                 <span>
                   {' '}
-                  {t('tasks.due')}: <span dir="ltr">{task.dueAt.slice(0, 10)}</span>
+                  {t('tasks.due')}:{' '}
+                  <span dir="ltr">{formatDateOnly(task.dueAt) ?? task.dueAt}</span>
                 </span>
               ) : null}
               {task.status !== 'completed' ? (

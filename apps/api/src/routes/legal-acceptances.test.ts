@@ -94,6 +94,27 @@ describe('/legal/acceptances', () => {
     });
   });
 
+  it("accepts context 'first-visit' from the consent gate an invited member sees", async () => {
+    // GAP-5-01: an invited manager or viewer never reaches onboarding or
+    // billing. LegalConsentGate records their acceptance on the first
+    // authenticated visit; migration 0050 widens the 0043 check constraint to
+    // match, and this route must not be the layer that rejects it.
+    const app = buildServer(loadEnv({}));
+    const response = await app.inject({
+      method: 'POST',
+      url: '/legal/acceptances',
+      headers: AUTH,
+      payload: { documents: [TERMS, PRIVACY], context: 'first-visit' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json<LegalAcceptanceResponse>().acceptances).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ document: 'terms', context: 'first-visit' }),
+        expect.objectContaining({ document: 'privacy', context: 'first-visit' }),
+      ]),
+    );
+  });
+
   it('rejects a version that is not a publication date', async () => {
     const app = buildServer(loadEnv({}));
     const response = await app.inject({

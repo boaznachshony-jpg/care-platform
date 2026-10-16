@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { AuthorizationError } from '@caredesk/application';
 import { addContactRequestSchema } from '@caredesk/schemas';
 import type { Container } from '../container.js';
@@ -8,6 +9,9 @@ import { sendError, sendValidationError } from './http-errors.js';
 interface CaseParams {
   caseId: string;
 }
+
+/** SEC-INPUT-01: a malformed case id is a 400, never a Postgres 22P02 turned 500. */
+const caseParamsSchema = z.object({ caseId: z.string().uuid() });
 
 function timelineActionTarget(
   eventTypeKey: string,
@@ -30,8 +34,10 @@ export function registerCaseSubResourceRoutes(app: FastifyInstance, container: C
   app.get<{ Params: CaseParams }>('/cases/:caseId/contacts', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
     try {
-      reply.send(await container.listContacts.execute(actor, request.params.caseId));
+      reply.send(await container.listContacts.execute(actor, params.data.caseId));
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
       throw error;
@@ -41,12 +47,14 @@ export function registerCaseSubResourceRoutes(app: FastifyInstance, container: C
   app.post<{ Params: CaseParams }>('/cases/:caseId/contacts', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
 
     const parsed = addContactRequestSchema.safeParse(request.body);
     if (!parsed.success) return sendValidationError(request, reply, parsed.error);
 
     try {
-      const result = await container.addContact.execute(actor, request.params.caseId, parsed.data);
+      const result = await container.addContact.execute(actor, params.data.caseId, parsed.data);
       reply.status(201).send(result);
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
@@ -65,8 +73,10 @@ export function registerCaseSubResourceRoutes(app: FastifyInstance, container: C
   app.get<{ Params: CaseParams }>('/cases/:caseId/timeline', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
     try {
-      const events = await container.listTimeline.execute(actor, request.params.caseId);
+      const events = await container.listTimeline.execute(actor, params.data.caseId);
       reply.send(
         events.map((event) => ({
           ...event,

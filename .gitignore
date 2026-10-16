@@ -59,3 +59,26 @@ care-platform-main/
 * - Copy
 * - Copy (*).*
 * - Copy (*)
+
+# Customer data that was found tracked in the public repository (SEC-INFRA-01).
+#
+# A real pay summary (names, ID number, salary) and screenshots of a customer's
+# workspace were committed at the repository root. Tracking was stopped with
+# `git rm --cached`; the files stay on disk for the owner, and rewriting history
+# is the owner's decision. The patterns keep them from ever being re-added.
+#
+# Enforced by scripts/check-repo-hygiene.mjs rule 4: no tracked binary document
+# (.pdf .docx .xlsx .zip .png .jpg) outside docs/, apps/web/public/ and
+# packages/ui/.
+שכר אירודה יוני 626.pdf
+bug db/
+
+# Build artefacts, hand-off snapshots and one-off deploy helpers that never
+# belonged in the tree (SEC-INFRA-08). The prototype now lives in
+# docs/reference/prototype/ and is no longer served from the production origin.
+*.zip
+netlify-deploy/
+test-output.txt
+/caredesk_prototype.html
+deploy-github-pages.bat
+share-prototype.bat

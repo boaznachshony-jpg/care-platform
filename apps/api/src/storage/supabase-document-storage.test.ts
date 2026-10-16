@@ -64,6 +64,30 @@ describe('SupabaseDocumentStorage', () => {
     );
   });
 
+  it('refuses a storage key with a traversal segment before contacting storage', async () => {
+    // SEC-INPUT-01 defence in depth: the routes validate ids, and the adapter
+    // still refuses to turn `..`, `.` or an empty segment into a URL path.
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200 }));
+    const storage = new SupabaseDocumentStorage(
+      'https://project.supabase.co',
+      'server-only-key',
+      'private-documents',
+      fetchImpl,
+    );
+    for (const key of ['cases/../x', 'cases/./x', 'cases//x']) {
+      await expect(
+        storage.putObject({
+          tenantId: 'tenant-1',
+          key,
+          contentType: 'application/pdf',
+          body: new Uint8Array([1]),
+        }),
+      ).rejects.toThrow(/traversal/);
+      await expect(storage.getSignedUrl(`tenant-1/${key}`, 900)).rejects.toThrow(/traversal/);
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('deletes a private object with server-only credentials', async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
     const storage = new SupabaseDocumentStorage(

@@ -10,6 +10,7 @@ import {
   type MvpReminderRecipient,
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { newEntityId } from '../api/idempotency.js';
 
 /**
  * The recipient list behind medication reminders.
@@ -89,7 +90,7 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
         ),
       );
     } else {
-      persist([...recipients, { ...draft, id: crypto.randomUUID(), updatedAt: now }]);
+      persist([...recipients, { ...draft, id: newEntityId(), updatedAt: now }]);
     }
     setDraft(emptyDraft());
     setEditingId(null);
@@ -113,6 +114,14 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
   return (
     <section className="reminder-recipients" aria-labelledby="reminder-recipients-title">
       <h2 id="reminder-recipients-title">{t('reminderRecipients.title')}</h2>
+      {/* GAP-3-01: nothing in the product sends a reminder yet. The list is
+          kept so a family can prepare it, but the first thing the screen says
+          is that the details are not used for sending until it says otherwise.
+          role="status", not "alert": it is a standing fact about this version,
+          not an event. */}
+      <p className="action-notice" role="status">
+        {t('reminderRecipients.notYetDelivered')}
+      </p>
       <p>{t('reminderRecipients.intro')}</p>
 
       {/* Deliberately not role="note". The medical disclaimer on this page is
@@ -259,7 +268,11 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
             {t('reminderRecipients.cancelEdit')}
           </button>
         ) : null}
-        {saved ? <p className="success-box">{t('reminderRecipients.savedNotice')}</p> : null}
+        {saved ? (
+          <p className="success-box" role="status">
+            {t('reminderRecipients.savedNotice')}
+          </p>
+        ) : null}
       </form>
     </section>
   );

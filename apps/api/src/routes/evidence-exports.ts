@@ -8,7 +8,7 @@ import {
   PgEvidenceExportService,
   type EvidenceExportService,
 } from '../evidence-export-service.js';
-import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
+import { clientAddress, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const params = z.object({ caseId: z.string().uuid() });
@@ -28,7 +28,7 @@ function makeEvidenceRateLimit(
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
-      : `unauthenticated:${request.ip}`;
+      : `unauthenticated:${clientAddress(request)}`;
     const decision = await limiter.consume(
       `evidence-export:${policy.bucket}:${principal}`,
       policy.max,

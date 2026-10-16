@@ -15,6 +15,19 @@ interface SupabaseInvitedUser {
   id?: unknown;
 }
 
+/**
+ * Supabase Auth answers 422 to an invitation for an e-mail that already has an
+ * account. Surfaced as its own type so the route can say "this person already
+ * has a CareDesk account" instead of blaming the e-mail provider (UI-NAV-02).
+ * Carries no address: the message must stay safe to log.
+ */
+export class IdentityAlreadyRegisteredError extends Error {
+  constructor() {
+    super('Identity invitation refused: the e-mail address is already registered.');
+    this.name = 'IdentityAlreadyRegisteredError';
+  }
+}
+
 /** Server-only Supabase Admin invitation. The service-role key never reaches the browser. */
 export class SupabaseInvitationService implements IdentityInvitationService {
   constructor(
@@ -37,6 +50,7 @@ export class SupabaseInvitationService implements IdentityInvitationService {
       },
       body: JSON.stringify({ email }),
     });
+    if (response.status === 422) throw new IdentityAlreadyRegisteredError();
     if (!response.ok) {
       throw new Error(`Identity invitation failed with status ${response.status}.`);
     }

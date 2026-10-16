@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import type { InMemoryAuditService, InMemoryTimelineService } from '@caredesk/infrastructure';
+import { describe, expect, it, vi } from 'vitest';
+import type {
+  InMemoryActorResolver,
+  InMemoryAuditService,
+  InMemoryTimelineService,
+  MembershipAuthorizationService,
+  MockAuthService,
+} from '@caredesk/infrastructure';
 import { buildContainer, DEV_TOKEN } from '../container.js';
 import { loadEnv } from '../env.js';
 import { buildServer } from '../create-server.js';
+import { INTAKE_REVIEW_RATE_LIMIT } from './case-documents.js';
 
 const AUTH = { authorization: `Bearer ${DEV_TOKEN}` };
 
@@ -150,6 +157,45 @@ describe('case document routes', () => {
     expect(response.json().fieldErrors).toHaveProperty('documentType');
   });
 
+  it('refuses a traversal case id before any use case (and so any storage key) sees it', async () => {
+    // SEC-INPUT-01. `..` segments in :caseId used to flow straight into the
+    // storage object key, so a caller could write under another prefix.
+    const env = loadEnv({});
+    const container = buildContainer(env);
+    const upload = vi.spyOn(container.uploadDocument, 'execute');
+    const app = buildServer(env, container);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/cases/..%2F..%2Fvictim%2Fcases%2Fx/documents',
+      headers: AUTH,
+      payload: UPLOAD_BODY,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(response.json().fieldErrors).toHaveProperty('caseId');
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('answers a malformed case id with 400 on every case-scoped document route, not 500', async () => {
+    const app = buildServer(loadEnv({}));
+    for (const [method, url] of [
+      ['GET', '/cases/not-a-uuid/documents'],
+      ['POST', '/cases/not-a-uuid/documents/import'],
+      ['GET', '/cases/not-a-uuid/documents/00000000-0000-4000-8000-000000000001/download-url'],
+      ['GET', '/cases/00000000-0000-4000-8000-000000000001/documents/not-a-uuid/download-url'],
+    ] as const) {
+      const response = await app.inject({
+        method,
+        url,
+        headers: AUTH,
+        ...(method === 'POST' ? { payload: UPLOAD_BODY } : {}),
+      });
+      expect(response.statusCode, `${method} ${url}`).toBe(400);
+      expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+    }
+  });
+
   it('requires authentication on every document route', async () => {
     const app = buildServer(loadEnv({}));
     expect((await app.inject({ method: 'GET', url: '/cases/any/documents' })).statusCode).toBe(401);
@@ -197,6 +243,22 @@ describe('document intake review confirmation (audit evidence)', () => {
     return created.json().id as string;
   }
 
+  it('rate-limits review receipts per signed-in person (CodeQL js/missing-rate-limiting)', async () => {
+    const { app } = makeApp();
+    const caseId = await openCase(app);
+    const documentId = await uploadDocument(app, caseId);
+    const url = `/cases/${caseId}/documents/${documentId}/intake-reviews`;
+
+    for (let attempt = 0; attempt < INTAKE_REVIEW_RATE_LIMIT.max; attempt += 1) {
+      const ok = await app.inject({ method: 'POST', url, headers: AUTH, payload: REVIEW_BODY });
+      expect(ok.statusCode).toBe(201);
+    }
+    const refused = await app.inject({ method: 'POST', url, headers: AUTH, payload: REVIEW_BODY });
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().code).toBe('RATE_LIMITED');
+    expect(refused.headers['retry-after']).toBeDefined();
+  });
+
   it('records a confirmed review with an audit event and a timeline event', async () => {
     const { app, container } = makeApp();
     const caseId = await openCase(app);
@@ -230,6 +292,62 @@ describe('document intake review confirmation (audit evidence)', () => {
     );
     expect(timelineEvent).toBeDefined();
     expect(timelineEvent?.employmentCaseId).toBe(caseId);
+  });
+
+  it('refuses a viewer who may read the document but not confirm a review', async () => {
+    // SEC-AUTHZ-04. The route used to gate this write on document:read alone,
+    // so a viewer could insert review receipts, audit and timeline events.
+    const { app, container } = makeApp();
+    const caseId = await openCase(app);
+    const documentId = await uploadDocument(app, caseId);
+    // The dev tenant the container seeds the owner into (DEV_TENANT_ID).
+    const tenantId = '00000000-0000-4000-8000-000000000001';
+    const seedActor = (token: string, userId: string, role: 'viewer' | 'manager') => {
+      (container.auth as MockAuthService).seedSession(token, {
+        userId,
+        authSubject: `${token}-subject`,
+        issuedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        mfaSatisfied: false,
+      });
+      (container.actorResolver as InMemoryActorResolver).seedActor(`${token}-subject`, {
+        userId,
+        tenantId,
+      });
+      (container.authorization as MembershipAuthorizationService).seedMembership({
+        userId,
+        tenantId,
+        role,
+        status: 'active',
+      });
+    };
+    seedActor('viewer-token', '00000000-0000-4000-8000-0000000000c1', 'viewer');
+    seedActor('manager-token', '00000000-0000-4000-8000-0000000000c2', 'manager');
+    const url = `/cases/${caseId}/documents/${documentId}/intake-reviews`;
+
+    const denied = await app.inject({
+      method: 'POST',
+      url,
+      headers: { authorization: 'Bearer viewer-token' },
+      payload: REVIEW_BODY,
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json()).toMatchObject({ code: 'FORBIDDEN' });
+    const listed = await app.inject({ method: 'GET', url, headers: AUTH });
+    expect(listed.json()).toEqual([]);
+    const audit = container.audit as InMemoryAuditService;
+    expect(audit.events.some((event) => event.action === 'document.create.denied')).toBe(true);
+    expect(audit.events.some((event) => event.action === 'document.intake_review_confirmed')).toBe(
+      false,
+    );
+
+    const allowed = await app.inject({
+      method: 'POST',
+      url,
+      headers: { authorization: 'Bearer manager-token' },
+      payload: REVIEW_BODY,
+    });
+    expect(allowed.statusCode).toBe(201);
   });
 
   it('records a cancellation with its own audit action and no confirmer', async () => {

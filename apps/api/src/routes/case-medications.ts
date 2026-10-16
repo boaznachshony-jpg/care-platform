@@ -16,6 +16,9 @@ interface CaseParams {
   caseId: string;
 }
 
+/** SEC-INPUT-01: a malformed case id is a 400, never a Postgres 22P02 turned 500. */
+const caseParamsSchema = z.object({ caseId: z.string().uuid() });
+
 interface MedicationParams extends CaseParams {
   medicationId: string;
 }
@@ -54,8 +57,10 @@ export function registerCaseMedicationRoutes(app: FastifyInstance, container: Co
   app.get<{ Params: CaseParams }>('/cases/:caseId/medications', options, async (request, reply) => {
     const actor = request.actor;
     if (!actor) return;
+    const params = caseParamsSchema.safeParse(request.params);
+    if (!params.success) return sendValidationError(request, reply, params.error);
     try {
-      const medications = await container.listMedications.execute(actor, request.params.caseId);
+      const medications = await container.listMedications.execute(actor, params.data.caseId);
       reply.send(medications.map(toResponse));
     } catch (error) {
       if (error instanceof AuthorizationError) return sendError(request, reply, 403, 'FORBIDDEN');
@@ -69,10 +74,12 @@ export function registerCaseMedicationRoutes(app: FastifyInstance, container: Co
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
+      const params = caseParamsSchema.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
       const parsed = createMedicationRequestSchema.safeParse(request.body);
       if (!parsed.success) return sendValidationError(request, reply, parsed.error);
       try {
-        const created = await container.createMedication.execute(actor, request.params.caseId, {
+        const created = await container.createMedication.execute(actor, params.data.caseId, {
           ...parsed.data,
           daysOfWeek: parsed.data.daysOfWeek ?? null,
         });
@@ -91,10 +98,12 @@ export function registerCaseMedicationRoutes(app: FastifyInstance, container: Co
     async (request, reply) => {
       const actor = request.actor;
       if (!actor) return;
+      const params = caseParamsSchema.safeParse(request.params);
+      if (!params.success) return sendValidationError(request, reply, params.error);
       const parsed = importMedicationRequestSchema.safeParse(request.body);
       if (!parsed.success) return sendValidationError(request, reply, parsed.error);
       try {
-        const imported = await container.importMedication.execute(actor, request.params.caseId, {
+        const imported = await container.importMedication.execute(actor, params.data.caseId, {
           ...parsed.data,
           daysOfWeek: parsed.data.daysOfWeek ?? null,
         });

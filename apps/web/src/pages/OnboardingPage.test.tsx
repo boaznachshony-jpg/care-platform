@@ -8,6 +8,12 @@ const mocks = vi.hoisted(() => ({
   recordLegalAcceptance: vi.fn(),
   ensureCanonicalCase: vi.fn(),
   getBillingSubscription: vi.fn(),
+  // SEC-WEB-05: the pending legal-acceptance queue is keyed by this id.
+  userId: 'user-a' as string | null,
+}));
+
+vi.mock('../auth/auth-context.js', () => ({
+  useAuth: () => ({ user: mocks.userId ? { id: mocks.userId } : null }),
 }));
 
 vi.mock('../api/client.js', async () => {
@@ -297,6 +303,7 @@ describe('onboarding legal acceptance', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    mocks.userId = 'user-a';
     mocks.recordLegalAcceptance.mockReset().mockResolvedValue({ acceptances: [] });
     mocks.ensureCanonicalCase.mockReset().mockResolvedValue(undefined);
     // Default: an account that has never engaged billing at all — the
@@ -310,9 +317,15 @@ describe('onboarding legal acceptance', () => {
     localStorage.setItem('caredesk.onboarding.step.default', '5');
   });
 
+  const completeButton = () =>
+    screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ });
+  const consentCheckbox = () => screen.getByLabelText(/בהשלמת ההקמה אני מאשר\/ת את/);
+
+  /** Ticks the consent box (GAP-5-02) and clicks the button that completes setup. */
   async function clickComplete() {
+    fireEvent.click(consentCheckbox());
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /שמירת הרשימה והמשך לאמצעי תשלום/ }));
+      fireEvent.click(completeButton());
     });
   }
 
@@ -325,9 +338,50 @@ describe('onboarding legal acceptance', () => {
     );
   });
 
-  it('records acceptance of both documents when setup is completed', async () => {
+  /**
+   * GAP-5-02: the acceptance was a passive paragraph. Before this change the
+   * button was enabled with nothing ticked and the acceptance was recorded
+   * against a click that approved nothing in particular.
+   */
+  it('keeps the completing button disabled until the consent box is ticked', async () => {
+    renderPage();
+    const checkbox = consentCheckbox();
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toBeRequired();
+    expect(completeButton()).toBeDisabled();
+    expect(completeButton()).toHaveAccessibleDescription(/יש לסמן את תיבת האישור/);
+
+    fireEvent.click(checkbox);
+    expect(completeButton()).toBeEnabled();
+
+    fireEvent.click(checkbox);
+    expect(completeButton()).toBeDisabled();
+  });
+
+  it('records nothing when the form is submitted without the tick', async () => {
+    renderPage();
+    await act(async () => {
+      fireEvent.submit(completeButton().closest('form')!);
+    });
+
+    expect(mocks.recordLegalAcceptance).not.toHaveBeenCalled();
+    expect(readMvpProfile().onboardingCompleted).toBe(false);
+  });
+
+  it('shows no consent control and records nothing on the steps before the last', () => {
+    localStorage.setItem('caredesk.onboarding.step.default', '0');
+    renderPage();
+    expect(screen.queryByLabelText(/בהשלמת ההקמה אני מאשר\/ת את/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/שם המטופל/), { target: { value: 'אילנה כהן' } });
+    fireEvent.click(screen.getByRole('button', { name: /המשך/ }));
+    expect(mocks.recordLegalAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('records acceptance of both documents once when setup is completed', async () => {
     renderPage();
     await clickComplete();
+
+    expect(mocks.recordLegalAcceptance).toHaveBeenCalledTimes(1);
 
     expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith({
       context: 'onboarding',
@@ -357,7 +411,10 @@ describe('onboarding legal acceptance', () => {
    * with no record anyone accepted anything, and nothing ever retried it.
    */
   describe('a failed acceptance leaves a trace instead of being discarded', () => {
-    const PENDING_KEY = 'caredesk.onboarding.pending-legal-acceptance.v1';
+    // SEC-WEB-05: scoped to the signed-in user. The unscoped key below is the
+    // one the queue used to live under, shared by every account on the device.
+    const LEGACY_UNSCOPED_KEY = 'caredesk.onboarding.pending-legal-acceptance.v1';
+    const PENDING_KEY = `${LEGACY_UNSCOPED_KEY}.user-a`;
     const expectedAcceptance = {
       context: 'onboarding',
       documents: [
@@ -406,6 +463,39 @@ describe('onboarding legal acceptance', () => {
         expect(mocks.recordLegalAcceptance).toHaveBeenCalledWith(expectedAcceptance),
       );
       expect(JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null')).toEqual(expectedAcceptance);
+    });
+
+    /**
+     * SEC-WEB-05: the queue survived sign-out under one shared key and was
+     * replayed by the next account to open this page - recording, under that
+     * account's identity, an acceptance its holder never gave. Against the
+     * code before this change both seeded keys below were flushed as user B.
+     */
+    it("never replays another user's queue, nor the legacy unscoped one, under the current user", async () => {
+      localStorage.setItem(LEGACY_UNSCOPED_KEY, JSON.stringify(expectedAcceptance));
+      localStorage.setItem(PENDING_KEY, JSON.stringify(expectedAcceptance));
+      mocks.userId = 'user-b';
+
+      renderPage();
+      // Give the mount-time flush every chance to fire before asserting.
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mocks.recordLegalAcceptance).not.toHaveBeenCalled();
+      expect(localStorage.getItem(LEGACY_UNSCOPED_KEY)).not.toBeNull();
+      expect(localStorage.getItem(PENDING_KEY)).not.toBeNull();
+    });
+
+    it('queues nothing when there is no signed-in user to own the queue', async () => {
+      mocks.userId = null;
+      mocks.recordLegalAcceptance.mockRejectedValue(new Error('network down'));
+      renderPage();
+      await clickComplete();
+
+      expect(
+        Object.keys(localStorage).filter((key) => key.startsWith(LEGACY_UNSCOPED_KEY)),
+      ).toEqual([]);
     });
   });
 

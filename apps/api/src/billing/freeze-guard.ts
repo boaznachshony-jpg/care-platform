@@ -105,6 +105,10 @@ const EXEMPT_ROUTE_PATTERNS: RegExp[] = [
   // doing product work on their behalf. The freeze exists to stop a frozen
   // tenant getting more value out of the product, and writing down that they
   // agreed to the terms is not value — it is the precondition for paying.
+  //
+  // Found twice: from production as "we could not record your acceptance",
+  // and independently as SEC-AUTHZ-01 in the hardening review. Both branches
+  // added this same pattern; the merge keeps one.
   /^\/legal\/acceptances$/,
   // Scheduler-only endpoints, authenticated by CRON_SECRET, never by a user
   // bearer token — see cron-auth.ts.

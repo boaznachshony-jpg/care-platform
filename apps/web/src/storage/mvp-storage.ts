@@ -3,6 +3,7 @@ import {
   decryptBusinessStorageValue,
   encryptBusinessStorageValue,
 } from './business-storage-crypto.js';
+import { newEntityId } from '../api/idempotency.js';
 
 export type ReminderLeadDays = 1 | 7 | 14 | 21 | 30;
 
@@ -189,7 +190,7 @@ export function ensureMvpClientMigration(): MvpClient[] {
       TASKS_STORAGE_NAME,
     ].some((key) => readBusinessItem(key) !== null);
   if (!hasLegacyData) return [];
-  const id = crypto.randomUUID();
+  const id = newEntityId();
   const now = new Date().toISOString();
   const client: MvpClient = {
     id,
@@ -229,7 +230,7 @@ export function readMvpClients(): MvpClient[] {
 export function createMvpClient(): MvpClient {
   const now = new Date().toISOString();
   const client: MvpClient = {
-    id: crypto.randomUUID(),
+    id: newEntityId(),
     label: NEW_EMPLOYER_LABEL,
     employerName: '',
     recipientName: '',
@@ -747,7 +748,7 @@ export function closeMvpPayrollMonth(
   if (existing) return existing;
   const close: MvpMonthlyClose = {
     ...input,
-    id: crypto.randomUUID(),
+    id: newEntityId(),
     status: 'closed',
     closedAt: new Date().toISOString(),
     workerAcknowledgement: 'not_supported',

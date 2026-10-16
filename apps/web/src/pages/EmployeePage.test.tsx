@@ -73,10 +73,11 @@ describe('EmployeePage', () => {
     expect(screen.getByText('מטפל או מטפלת')).toBeInTheDocument();
   });
 
-  it('displays caregiver country and employment start date', () => {
+  it('displays caregiver country and the employment start date day-first', () => {
     renderPage();
     expect(screen.getByText(/אוקראינה/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-01-15/)).toBeInTheDocument();
+    expect(screen.getByText(/15\.01\.2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-01-15/)).toBeNull();
   });
 
   it('displays caregiver language preference', () => {

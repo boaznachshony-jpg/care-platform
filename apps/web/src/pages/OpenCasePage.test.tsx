@@ -162,4 +162,14 @@ describe('OpenCasePage', () => {
     const { container } = renderPage();
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  // `/cases/new` renders outside the app shell; a customer who changed their
+  // mind here used to have nowhere to go but the browser's Back button.
+  it('renders a back link to the case list', () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: '← חזרה לתיקי ההעסקה' })).toHaveAttribute(
+      'href',
+      '/app',
+    );
+  });
 });

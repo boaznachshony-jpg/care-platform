@@ -20,7 +20,7 @@ import { registerLegalAcceptanceRoutes } from './routes/legal-acceptances.js';
 import { registerSupportRequestRoutes } from './routes/support-requests.js';
 import { registerVisaRenewalRoutes } from './routes/visa-renewals.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
-import { InMemoryRateLimiter } from './rate-limit.js';
+import { InMemoryRateLimiter, registerClientAddress } from './rate-limit.js';
 import { registerWave5Routes } from './routes/wave5.js';
 import { registerProductDifferentiationRoutes } from './routes/product-differentiation.js';
 import { registerCanonicalProductIntelligenceRoutes } from './routes/canonical-product-intelligence.js';
@@ -120,6 +120,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   });
 
   registerCorrelationId(app, env.CORRELATION_HEADER);
+  registerClientAddress(app, env);
   registerSecurityHeaders(app, env);
   registerErrorHandler(app);
   // Server-side billing freeze enforcement (see billing/freeze-guard.ts for
@@ -177,13 +178,13 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
 
   registerCaseRoutes(app, container);
   registerCaseSubResourceRoutes(app, container);
-  registerCaseDocumentRoutes(app, container);
+  registerCaseDocumentRoutes(app, container, productRateLimiter);
   registerCaseTaskRoutes(app, container);
   registerCaseMedicationRoutes(app, container);
   registerWorkspaceRoutes(app, container);
   registerWorkspaceVersionRoutes(app, container, env);
   registerDataIntegrityRoutes(app, container, env, cronRateLimiter);
-  registerFamilyAccessRoutes(app, container, env);
+  registerFamilyAccessRoutes(app, container, env, productRateLimiter);
   // Registered before the billing routes because that is the order the product
   // uses them in: the acceptance is recorded, and only then is the subscription
   // created. Registration order is not enforcement - apps/web/src/pages/
@@ -193,7 +194,7 @@ export function buildServer(env: Env, container: Container = buildContainer(env)
   registerBillingRoutes(app, container, env, cronRateLimiter);
   registerVisaRenewalRoutes(app, container);
   registerSupportRequestRoutes(app, env, supportRateLimiter);
-  registerWave5Routes(app, container);
+  registerWave5Routes(app, container, productRateLimiter);
   registerProductDifferentiationRoutes(app, container, productRateLimiter);
   registerCanonicalProductIntelligenceRoutes(app, container);
   registerPayrollEntryRoutes(app, container, productRateLimiter);

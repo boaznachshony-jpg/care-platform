@@ -29,8 +29,8 @@
 }
 
 .cd-text-field__input:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 1px;
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
 }
 
 .cd-text-field__input[aria-invalid='true'] {

@@ -105,11 +105,13 @@ describe('account freeze guard', () => {
    * list exists to keep open. The customer could not add a card, so the
    * account could not be paid for, so it could never stop being frozen.
    *
-   * This test fails with a 402 against the previous exemption list.
+   * Found independently as SEC-AUTHZ-01 in the hardening review and fixed on
+   * both branches; this is the merge of the two tests. It fails with a 402
+   * against the previous exemption list.
    */
   it('exempts the legal acceptance — a frozen tenant must be able to accept and then pay', async () => {
     const { app } = buildFrozenTenantServer();
-    const response = await app.inject({
+    const accepted = await app.inject({
       method: 'POST',
       url: '/legal/acceptances',
       headers: AUTH,
@@ -121,8 +123,13 @@ describe('account freeze guard', () => {
         context: 'billing',
       },
     });
-    expect(response.statusCode).not.toBe(402);
-    expect(response.statusCode).toBe(201);
+    expect(accepted.statusCode).not.toBe(402);
+    expect(accepted.statusCode).toBe(201);
+
+    // The exemption is that one route only: the freeze still holds elsewhere.
+    const write = await app.inject({ method: 'POST', url: '/cases', headers: AUTH, payload: {} });
+    expect(write.statusCode).toBe(402);
+    expect(write.json()).toMatchObject({ code: 'ACCOUNT_FROZEN' });
   });
 
   it('exempts emergency binder exports — the freeze must never trap this document', async () => {

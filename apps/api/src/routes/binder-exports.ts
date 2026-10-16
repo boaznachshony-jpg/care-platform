@@ -8,7 +8,7 @@ import {
   PgBinderExportService,
   type BinderExportService,
 } from '../binder-export-service.js';
-import type { RateLimiter, RouteRateLimit } from '../rate-limit.js';
+import { clientAddress, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const params = z.object({ caseId: z.string().uuid() });
@@ -39,7 +39,7 @@ function makeBinderRateLimit(limiter: RateLimiter, policy: RouteRateLimit): preH
   return async (request, reply) => {
     const principal = request.actor
       ? `${request.actor.tenantId}:${request.actor.userId}`
-      : `unauthenticated:${request.ip}`;
+      : `unauthenticated:${clientAddress(request)}`;
     const decision = await limiter.consume(
       `binder-export:${policy.bucket}:${principal}`,
       policy.max,

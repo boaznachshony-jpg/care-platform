@@ -59,8 +59,8 @@ describe('TimelinePage canonical API projection', () => {
     vi.mocked(listCaseTimeline).mockResolvedValue([
       {
         id: 'event-1',
-        eventTypeKey: 'payroll.month_closed',
-        summaryKey: 'Payroll month closed.',
+        eventTypeKey: 'case.opened',
+        summaryKey: 'timeline.case.opened.summary',
         occurredAt: '2026-08-15T12:00:00.000Z',
         actorDisplay: null,
         sensitivity: 'financial_sensitive',
@@ -68,12 +68,36 @@ describe('TimelinePage canonical API projection', () => {
       },
     ]);
     renderPage();
-    expect(await screen.findByText('Payroll month closed.')).toBeVisible();
+    // The summary key is translated and the timestamp is Israel wall clock,
+    // day-first (12:00 UTC is 15:00 IDT). Neither machine token is printed.
+    expect(await screen.findByRole('heading', { name: 'תיק ההעסקה נפתח' })).toBeVisible();
+    expect(screen.getByText('15.08.2026, 15:00')).toBeVisible();
+    expect(screen.queryByText('timeline.case.opened.summary')).toBeNull();
+    expect(screen.queryByText('case.opened')).toBeNull();
     expect(screen.getByRole('link', { name: 'פתיחת הפעולה' })).toHaveAttribute(
       'href',
       `/clients/${LEGACY_CLIENT_ID}/payroll`,
     );
     expect(screen.getByText(/פרטי אבטחה וספקים נשמרים בנפרד/)).toBeVisible();
+  });
+
+  // A few older rows carry English prose in summary_key instead of a
+  // translation key. They degrade to that prose, never to a dotted key.
+  it('falls back to the raw summary text when it is not a translation key', async () => {
+    vi.mocked(listCaseTimeline).mockResolvedValue([
+      {
+        id: 'event-legacy',
+        eventTypeKey: 'payroll.month_closed',
+        summaryKey: 'Payroll month closed.',
+        occurredAt: '2026-08-15T12:00:00.000Z',
+        actorDisplay: null,
+        sensitivity: 'financial_sensitive',
+        actionTarget: undefined,
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Payroll month closed.' })).toBeVisible();
+    expect(screen.queryByText('payroll.month_closed')).toBeNull();
   });
 
   /**
@@ -94,7 +118,9 @@ describe('TimelinePage canonical API projection', () => {
   it('shows a loading state while the canonical case is being resolved, without calling the API', () => {
     mockUseCaseForLegacyClient.mockReturnValue({ status: 'checking' });
     renderPage();
-    expect(screen.getByText('טוען…')).toBeVisible();
+    // Announced as a status (not a bare paragraph), in the plural voice the
+    // rest of the product uses.
+    expect(screen.getByRole('status')).toHaveTextContent('טוענים…');
     expect(listCaseTimeline).not.toHaveBeenCalled();
   });
 
@@ -111,6 +137,11 @@ describe('TimelinePage canonical API projection', () => {
     expect(screen.queryByText('אין כרגע אירועים להצגה.')).not.toBeInTheDocument();
     expect(screen.queryByText('לא ניתן לטעון את ציר הזמן הקנוני.')).not.toBeInTheDocument();
     expect(listCaseTimeline).not.toHaveBeenCalled();
+    // The sentence names the missing step; the button is the step.
+    expect(screen.getByRole('link', { name: 'פתיחת תיק העסקה' })).toHaveAttribute(
+      'href',
+      `/clients/${LEGACY_CLIENT_ID}/cases/new`,
+    );
   });
 
   it('tells a lookup failure apart from a real API failure', () => {

@@ -51,3 +51,44 @@ describe('scheduled job routes', () => {
     expect(response.headers['retry-after']).toBeDefined();
   });
 });
+
+/**
+ * SEC-INPUT-02. On Vercel `request.ip` is the platform hop, so without this
+ * every caller shared one ten-request budget and the first guessing run locked
+ * the real scheduler out. The header is trusted only when VERCEL is set.
+ */
+describe('scheduled job rate limit client address', () => {
+  const url = '/billing/jobs/collect';
+
+  it('gives each x-real-ip its own budget on Vercel', async () => {
+    const app = buildServer(loadEnv({ VERCEL: '1' }));
+    for (let attempt = 0; attempt < CRON_RATE_LIMIT.max; attempt += 1) {
+      await app.inject({ method: 'GET', url, headers: { 'x-real-ip': '203.0.113.10' } });
+    }
+    const exhausted = await app.inject({
+      method: 'GET',
+      url,
+      headers: { 'x-real-ip': '203.0.113.10' },
+    });
+    expect(exhausted.statusCode).toBe(429);
+    const other = await app.inject({
+      method: 'GET',
+      url,
+      headers: { 'x-real-ip': '203.0.113.11' },
+    });
+    expect(other.statusCode).toBe(401);
+  });
+
+  it('ignores x-real-ip off Vercel so a caller cannot reset its own budget', async () => {
+    const app = buildServer(loadEnv({}));
+    for (let attempt = 0; attempt < CRON_RATE_LIMIT.max; attempt += 1) {
+      await app.inject({ method: 'GET', url, headers: { 'x-real-ip': '203.0.113.10' } });
+    }
+    const forged = await app.inject({
+      method: 'GET',
+      url,
+      headers: { 'x-real-ip': '203.0.113.11' },
+    });
+    expect(forged.statusCode).toBe(429);
+  });
+});

@@ -70,6 +70,48 @@ describe('loadEnv', () => {
     ).toThrow(/points at the production Supabase project/);
   });
 
+  it('refuses a preview whose SUPABASE_URL is the production project', () => {
+    // SEC-INFRA-04. The database guard alone let a preview keep the production
+    // auth project (every customer identity) and the production private bucket.
+    expect(() =>
+      loadEnv({
+        ...productionBaseline,
+        DATABASE_URL: PREVIEW_DATABASE_URL,
+        SUPABASE_URL: `https://${PRODUCTION_REF}.supabase.co`,
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        PRODUCTION_SUPABASE_PROJECT_REF: PRODUCTION_REF,
+      }),
+    ).toThrow(/SUPABASE_URL points at the production Supabase project/);
+  });
+
+  it('refuses a preview whose BACKUP_SUPABASE_URL is the production project', () => {
+    expect(() =>
+      loadEnv({
+        ...productionBaseline,
+        DATABASE_URL: PREVIEW_DATABASE_URL,
+        BACKUP_SUPABASE_URL: `https://${PRODUCTION_REF}.supabase.co`,
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        PRODUCTION_SUPABASE_PROJECT_REF: PRODUCTION_REF,
+      }),
+    ).toThrow(/BACKUP_SUPABASE_URL points at the production Supabase project/);
+  });
+
+  it('lets a preview hold its own database, auth project and backup project', () => {
+    expect(() =>
+      loadEnv({
+        ...productionBaseline,
+        DATABASE_URL: PREVIEW_DATABASE_URL,
+        SUPABASE_URL: 'https://uvwxyz0123456789abcd.supabase.co',
+        BACKUP_SUPABASE_URL: 'https://zyxwvu9876543210dcba.supabase.co',
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        PRODUCTION_SUPABASE_PROJECT_REF: PRODUCTION_REF,
+      }),
+    ).not.toThrow();
+  });
+
   it('refuses a non-production deployment that cannot prove its database is not production', () => {
     // Fail closed: an unset PRODUCTION_SUPABASE_PROJECT_REF would otherwise
     // disarm the check above the first time somebody forgets one variable.

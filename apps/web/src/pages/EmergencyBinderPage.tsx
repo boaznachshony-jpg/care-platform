@@ -56,6 +56,16 @@ interface BinderData {
 
 export function EmergencyBinderPage() {
   const { t } = useTranslation();
+  // The API answers with enum tokens ('passport', 'verified'). The binder is
+  // read by a stand-in under stress and by outside reviewers, so both are
+  // named in the interface language; a token this build does not know
+  // degrades to itself, never to a leaked translation key.
+  const documentTypeLabel = (document: DocumentResponse) =>
+    t(`documents.type.${document.documentType}`, { defaultValue: document.documentType });
+  const documentStatusLabel = (document: DocumentResponse) => {
+    const verification = document.verificationStatus ?? 'uploaded';
+    return t(`documents.verification.${verification}`, { defaultValue: verification });
+  };
   const openCasePath = useClientPath()('/cases/new');
   const legacyClientId = useLegacyClientId();
   const [cases, setCases] = useState<EmploymentCaseResponse[]>([]);
@@ -320,7 +330,7 @@ export function EmergencyBinderPage() {
                               )
                             }
                           />{' '}
-                          {document.documentType} ({document.verificationStatus ?? document.status})
+                          {documentTypeLabel(document)} ({documentStatusLabel(document)})
                         </label>
                       ))
                     ) : (
@@ -401,7 +411,9 @@ export function EmergencyBinderPage() {
                 <dt>מעסיק/ה</dt>
                 <dd>{data.employmentCase.employer.fullName}</dd>
                 <dt>תחילת העסקה</dt>
-                <dd>{data.employmentCase.startDate}</dd>
+                <dd dir="ltr">
+                  {formatDateOnly(data.employmentCase.startDate) ?? data.employmentCase.startDate}
+                </dd>
               </dl>
             </section>
           )}
@@ -467,15 +479,7 @@ export function EmergencyBinderPage() {
                             {medication.daily ? 'כל יום' : 'לא כל יום'}
                             {medication.timesOfDay.length
                               ? ` · ${medication.timesOfDay
-                                  .map(
-                                    (time) =>
-                                      ({
-                                        morning: 'בוקר',
-                                        noon: 'צהריים',
-                                        evening: 'ערב',
-                                        night: 'לילה',
-                                      })[time],
-                                  )
+                                  .map((time) => t(`medications.time.${time}`))
                                   .join(', ')}`
                               : ' · לפי הצורך'}
                           </td>
@@ -551,7 +555,7 @@ export function EmergencyBinderPage() {
                   {openTasks.map((task) => (
                     <li key={task.id}>
                       {task.title ?? task.titleKey ?? 'משימה'}
-                      {task.dueAt ? ` — ${task.dueAt.slice(0, 10)}` : ''}
+                      {task.dueAt ? ` — ${formatDateOnly(task.dueAt) ?? task.dueAt}` : ''}
                     </li>
                   ))}
                 </ul>
@@ -569,7 +573,7 @@ export function EmergencyBinderPage() {
                     .filter((document) => documentIds.includes(document.id))
                     .map((document) => (
                       <li key={document.id}>
-                        {document.documentType} — {document.verificationStatus ?? document.status}
+                        {documentTypeLabel(document)} — {documentStatusLabel(document)}
                       </li>
                     ))}
                 </ul>

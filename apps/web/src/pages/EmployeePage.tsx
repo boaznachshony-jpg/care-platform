@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
+import { formatDateOnly } from '../format-timestamp.js';
 import {
   caregiverCountries,
   caregiverLanguages,
@@ -52,7 +53,7 @@ export function EmployeePage() {
           <h2>{profile.caregiverName || 'טרם הוזן'}</h2>
           <p>
             {profile.caregiverCountry || 'ארץ מוצא טרם הוגדרה'} · תחילת העסקה{' '}
-            {profile.employmentStartDate || 'טרם הוגדרה'}
+            {formatDateOnly(profile.employmentStartDate) ?? 'טרם הוגדרה'}
           </p>
           <div className="mini-facts">
             <span>שפה מועדפת: {profile.caregiverLanguage || 'טרם הוגדרה'}</span>

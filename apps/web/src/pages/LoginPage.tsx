@@ -40,8 +40,26 @@ function useDelayedStatus(active: boolean, delay = 3000) {
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const { signIn, signUp, resendSignUpConfirmation, requestMagicLink, requestPasswordReset } =
-    useAuth();
+  const {
+    signIn,
+    signUp,
+    resendSignUpConfirmation,
+    requestMagicLink,
+    requestPasswordReset,
+    lastSignOut,
+    retryDocumentCacheClear,
+  } = useAuth();
+  const [cacheClearStatus, setCacheClearStatus] = useState<'idle' | 'clearing' | 'cleared'>('idle');
+  // SEC-WEB-02: the previous sign-out could not delete the IndexedDB document
+  // cache (another CareDesk tab held it open). Passport and ID scans are still
+  // on this device, and the person who just signed out must be told.
+  const localFilesRemain = lastSignOut?.documentCacheCleared === false;
+
+  async function clearLocalFilesAgain() {
+    setCacheClearStatus('clearing');
+    const cleared = await retryDocumentCacheClear();
+    setCacheClearStatus(cleared ? 'cleared' : 'idle');
+  }
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<'login' | 'register'>(() =>
     searchParams.get('mode') === 'register' ? 'register' : 'login',
@@ -140,6 +158,26 @@ export function LoginPage() {
         <p className="eyebrow">CareDesk</p>
         <h1 id="login-title">{t(mode === 'login' ? 'auth.loginTitle' : 'auth.registerTitle')}</h1>
         <p>{t(mode === 'login' ? 'auth.loginIntro' : 'auth.registerIntro')}</p>
+
+        {localFilesRemain ? (
+          <div className="auth-confirmation-panel">
+            <p className="auth-error" role="alert">
+              {t('auth.localFilesNotCleared')}
+            </p>
+            <button
+              className="auth-secondary-button"
+              type="button"
+              disabled={cacheClearStatus === 'clearing'}
+              onClick={() => void clearLocalFilesAgain()}
+            >
+              {t('auth.clearLocalFilesAgain')}
+            </button>
+          </div>
+        ) : cacheClearStatus === 'cleared' ? (
+          <p className="auth-success" role="status">
+            {t('auth.localFilesCleared')}
+          </p>
+        ) : null}
 
         <div className="auth-mode-switch" role="tablist" aria-label={t('auth.accountAccess')}>
           <button

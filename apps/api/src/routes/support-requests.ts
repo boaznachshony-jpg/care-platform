@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Env } from '../env.js';
 import { sendError, sendValidationError } from './http-errors.js';
-import type { RateLimiter } from '../rate-limit.js';
+import { clientAddress, type RateLimiter } from '../rate-limit.js';
 import { ResendEmailProvider } from '../engagement/resend-email-provider.js';
 
 const MAX_MESSAGE_LENGTH = 500;
@@ -45,7 +45,7 @@ export function registerSupportRequestRoutes(
     }
 
     const rateLimit = await rateLimiter.consume(
-      `support:${request.ip}`,
+      `support:${clientAddress(request)}`,
       RATE_LIMIT_REQUESTS,
       RATE_LIMIT_WINDOW_MS,
     );

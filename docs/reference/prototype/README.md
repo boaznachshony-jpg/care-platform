@@ -1,7 +1,15 @@
 # Prototype Reference
 
-`/caredesk_prototype.html` is retained at the repository root for historical
-continuity.
+`docs/reference/prototype/caredesk_prototype.html` is the Claude-generated
+interactive prototype the product was first sketched in. It is kept for
+historical continuity only.
+
+It used to be tracked at the repository root and, separately, shipped from
+`apps/web/public/` on the production origin, where it loaded three scripts from
+cdnjs without subresource integrity. It was moved here on 05.09.2026 (audit
+finding SEC-WEB-04) and is no longer deployed anywhere. Do not copy it back into
+`apps/web/public/`: `apps/web/src/vercel-routing-contract.test.ts` allows only
+`robots.txt` and `sitemap.xml` there.
 
 Status: **visual and interaction reference only**
 

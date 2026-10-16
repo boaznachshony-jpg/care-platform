@@ -13,12 +13,19 @@ const authMocks = vi.hoisted(() => ({
   requestPasswordReset: vi.fn(),
   updatePassword: vi.fn(),
   signOut: vi.fn(),
+  retryDocumentCacheClear: vi.fn(),
+}));
+
+const authState = vi.hoisted(() => ({
+  lastSignOut: null as { documentCacheCleared: boolean } | null,
 }));
 
 vi.mock('../auth/auth-context.js', () => ({
   useAuth: () => ({
     enabled: true,
     user: null,
+    canWrite: true,
+    lastSignOut: authState.lastSignOut,
     ...authMocks,
   }),
 }));
@@ -87,6 +94,52 @@ describe('login progress', () => {
     expect(screen.getByRole('status')).toHaveTextContent('טוענים את האזור האישי');
     expect(screen.getByRole('status')).toHaveTextContent('טוענים את התיק המאובטח שלכם');
     expect(screen.getByRole('status')).toHaveTextContent('אין צורך לרענן את הדף');
+  });
+});
+
+/**
+ * SEC-WEB-02. Sign-out used to report success while passport and ID scans
+ * stayed in the device's IndexedDB whenever another tab blocked the delete.
+ */
+describe('local files left behind by sign-out', () => {
+  beforeEach(() => {
+    authMocks.retryDocumentCacheClear.mockReset();
+    authState.lastSignOut = null;
+  });
+
+  afterEach(() => {
+    authState.lastSignOut = null;
+  });
+
+  it('shows nothing when the previous sign-out cleared the device', () => {
+    authState.lastSignOut = { documentCacheCleared: true };
+    renderWithProviders(<LoginPage />);
+    expect(screen.queryByText(/קבצים מקומיים לא נמחקו/)).not.toBeInTheDocument();
+  });
+
+  it('warns that files remain and offers to clear them again', async () => {
+    authState.lastSignOut = { documentCacheCleared: false };
+    authMocks.retryDocumentCacheClear.mockResolvedValue(true);
+    const view = renderWithProviders(<LoginPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'קבצים מקומיים לא נמחקו — סגרו לשוניות אחרות של CareDesk ולחצו נקו שוב',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'נקו שוב' }));
+    expect(authMocks.retryDocumentCacheClear).toHaveBeenCalledTimes(1);
+
+    // The provider records the successful clear; the page reflects it.
+    authState.lastSignOut = { documentCacheCleared: true };
+    view.rerender(
+      <I18nextProvider i18n={initI18n()}>
+        <MemoryRouter>
+          <LoginPage />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent('הקבצים המקומיים נמחקו.');
+    expect(screen.queryByText(/קבצים מקומיים לא נמחקו/)).not.toBeInTheDocument();
   });
 });
 

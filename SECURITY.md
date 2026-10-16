@@ -19,9 +19,29 @@ repository owner directly and include:
   secret storage; `.env.example` documents variable names only.
 - No real personal data in fixtures, tests, screenshots, or demos — synthetic
   data only (Constitution §16, §25).
-- Dependency and secret scanning run in CI (`docs/architecture/repository-bootstrap-plan.md`
-  §M0.7); do not merge with an unresolved high-severity finding without
-  documented, time-boxed approval (Constitution §33 exception process).
+- Three automated controls run on every pull request and every push to
+  `main`/`staging` (`.github/workflows/ci.yml`), and a fourth runs weekly:
+  - secret scan: `gitleaks` over the full history (`secret-scan` job; the
+    allowlist is `.gitleaks.toml`);
+  - dependency audit: `pnpm audit --prod --audit-level=high` (`static` job) —
+    a high or critical advisory in a production dependency fails CI;
+  - request rate limits are in-memory per serverless instance and keyed by
+    `x-real-ip` behind Vercel (`apps/api/src/rate-limit.ts`); they are a
+    best-effort brake, not a distributed control — the entropy of
+    `CRON_SECRET` and the authenticated principal are the real limits;
+  - repository hygiene: `scripts/check-repo-hygiene.mjs` (`pnpm lint`) fails
+    on tracked archive directories, Windows `- Copy` duplicates, undeclared
+    lock-file overrides and any tracked `.pdf/.docx/.xlsx/.zip/.png/.jpg`
+    outside `docs/`, `apps/web/public/` and `packages/ui/`;
+  - Dependabot (`.github/dependabot.yml`): weekly npm and GitHub Actions
+    update PRs, Monday 05:00 Asia/Jerusalem.
+- Do not merge with an unresolved high-severity finding without documented,
+  time-boxed approval (Constitution §33 exception process). Moderate advisories
+  do not fail CI; they are resolved through the Dependabot PR, not ignored.
+- Browser security headers for the web origin are declared in
+  `apps/web/vercel.json` and mirrored into `vite preview` for the end-to-end
+  suite; `apps/web/src/vercel-headers.test.ts` fails when one is removed. The
+  API sets its own in `apps/api/src/plugins/security-headers.ts`.
 - Server-side authorization is mandatory on every protected route; the UI may
   hide unavailable actions but must never be the only enforcement point
   (Constitution §18).

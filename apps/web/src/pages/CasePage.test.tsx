@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
 import { ApiRequestError } from '../api/client.js';
 import { CasePage } from './CasePage.js';
@@ -85,10 +85,10 @@ const DEMO_CASE = {
   startDate: '2026-01-15',
 };
 
-function renderPage(caseId = DEMO_CASE_ID) {
+function renderPage(caseId = DEMO_CASE_ID, hash = '') {
   return render(
     <I18nextProvider i18n={initI18n()}>
-      <MemoryRouter initialEntries={[`/cases/${caseId}`]}>
+      <MemoryRouter initialEntries={[`/cases/${caseId}${hash}`]}>
         <Routes>
           <Route path="/cases/:caseId" element={<CasePage />} />
         </Routes>
@@ -132,6 +132,37 @@ describe('CasePage', () => {
     it('calls getEmploymentCase with the caseId from params', async () => {
       renderPage(DEMO_CASE_ID);
       await waitFor(() => expect(mockGetEmploymentCase).toHaveBeenCalledWith(DEMO_CASE_ID));
+    });
+
+    it('shows the start date day-first, not as the raw ISO string', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('15.01.2026')).toBeInTheDocument());
+      expect(screen.queryByText('2026-01-15')).toBeNull();
+    });
+  });
+
+  /**
+   * Health-factor actions link to `/cases/{id}#documents` and `#tasks`. The
+   * sections only exist after the case loads, so the browser's own hash
+   * handling never found them and every such link landed at the top.
+   */
+  describe('URL hash', () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+
+    afterEach(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    });
+
+    it('scrolls to the section named by the URL hash after the case loads', async () => {
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+      mockGetEmploymentCase.mockResolvedValue(DEMO_CASE);
+
+      renderPage(DEMO_CASE_ID, '#tasks');
+
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('tasks'));
+      expect(document.getElementById('tasks')).not.toBeNull();
     });
   });
 
@@ -192,6 +223,16 @@ describe('CasePage', () => {
       renderPage();
       await waitFor(() => expect(screen.getByText('התיק לא נמצא')).toBeInTheDocument());
     });
+
+    // This route renders outside the app shell: without this link a 404 was a
+    // page with one sentence on it and no way anywhere.
+    it('offers a way back on a 404', async () => {
+      renderPage();
+      expect(await screen.findByRole('link', { name: '← חזרה לתיקי ההעסקה' })).toHaveAttribute(
+        'href',
+        '/app',
+      );
+    });
   });
 
   describe('generic error state', () => {
@@ -202,6 +243,14 @@ describe('CasePage', () => {
     it('shows load failed error message', async () => {
       renderPage();
       await waitFor(() => expect(screen.getByText('טעינת התיק נכשלה')).toBeInTheDocument());
+    });
+
+    it('offers a way back on a load failure', async () => {
+      renderPage();
+      expect(await screen.findByRole('link', { name: '← חזרה לתיקי ההעסקה' })).toHaveAttribute(
+        'href',
+        '/app',
+      );
     });
   });
 });

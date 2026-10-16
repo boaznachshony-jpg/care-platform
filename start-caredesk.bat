@@ -28,7 +28,7 @@ echo ========================================
 echo   App URLs:
 echo   Local:   http://localhost:5173
 echo   Network: http://%IP%:5173
-echo   Mobile:  http://%IP%:5173/caredesk_prototype.html
+echo   Mobile:  http://%IP%:5173/
 echo ========================================
 echo.
 echo Press Ctrl+C to stop the server.

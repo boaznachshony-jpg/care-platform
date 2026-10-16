@@ -14,7 +14,8 @@ import {
 } from '../storage/mvp-storage.js';
 import { MAX_DOCUMENT_BYTES } from '@caredesk/schemas';
 import { useAuth } from '../auth/auth-context.js';
-import { importCaseDocument, listCaseDocuments } from '../api/client.js';
+import { ApiRequestError, importCaseDocument, listCaseDocuments } from '../api/client.js';
+import { newEntityId } from '../api/idempotency.js';
 import { LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
@@ -115,7 +116,16 @@ export function DocumentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState('');
+  /**
+   * One notice slot, two tones. A failed save or delete has to interrupt
+   * (role="alert", error styling); a confirmation only needs to be announced
+   * politely. The two used to share role="status" and the blue info box, so
+   * "the file could not be saved" looked and sounded like "the file was saved".
+   */
+  const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  // Disables only the row being deleted, so a slow network cannot let two
+  // presses race each other on the same document.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   /**
    * R1-07. Saving a document awaits an IndexedDB write (or, when signed in on
    * a client-scoped route, a network upload). The submit button used to stay
@@ -259,7 +269,7 @@ export function DocumentsPage() {
     setEditingId(document.id);
     setFile(null);
     setShowForm(true);
-    setMessage('');
+    setMessage(null);
   }
 
   function resetForm() {
@@ -278,19 +288,19 @@ export function DocumentsPage() {
     try {
       const existing = documents.find((document) => document.id === editingId);
       if (!existing && !file) {
-        setMessage('יש לבחור קובץ לפני השמירה.');
+        setMessage({ tone: 'error', text: 'יש לבחור קובץ לפני השמירה.' });
         return;
       }
       if (file && file.size > MAX_FILE_SIZE) {
-        setMessage('הקובץ גדול מדי. ניתן להעלות PDF או תמונה עד 5MB.');
+        setMessage({ tone: 'error', text: 'הקובץ גדול מדי. ניתן להעלות PDF או תמונה עד 5MB.' });
         return;
       }
       if (file && !ALLOWED_FILE_TYPES.includes(file.type)) {
-        setMessage('סוג הקובץ אינו נתמך. ניתן להעלות PDF, JPG או PNG.');
+        setMessage({ tone: 'error', text: 'סוג הקובץ אינו נתמך. ניתן להעלות PDF, JPG או PNG.' });
         return;
       }
 
-      const id = existing?.id ?? crypto.randomUUID();
+      const id = existing?.id ?? newEntityId();
       if (file) await saveDocumentFile(id, file);
 
       const saved: MvpDocument = {
@@ -309,11 +319,23 @@ export function DocumentsPage() {
           : [saved, ...documents],
       );
       resetForm();
-      setMessage(existing ? 'פרטי המסמך עודכנו ונשמרו.' : 'המסמך נוסף ונשמר.');
-    } catch {
-      setMessage(
-        'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.',
-      );
+      setMessage({
+        tone: 'success',
+        text: existing ? 'פרטי המסמך עודכנו ונשמרו.' : 'המסמך נוסף ונשמר.',
+      });
+    } catch (error) {
+      // saveDocumentFile takes one of two roads (see document-file-store.ts):
+      // a network upload to the workspace store when signed in on a client
+      // route, or an IndexedDB write otherwise. Telling a family whose upload
+      // hit a 503 to "leave private browsing" sends them to fix the wrong
+      // thing — the failure is named for where it actually happened.
+      setMessage({
+        tone: 'error',
+        text:
+          error instanceof ApiRequestError
+            ? 'לא ניתן היה להעלות את הקובץ לאחסון בענן. המסמך לא נשמר — בדקו את החיבור לאינטרנט ונסו שוב.'
+            : 'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.',
+      });
     } finally {
       // Released on every exit, including the three validation early-returns
       // above — a rejected file size must not leave the form permanently
@@ -324,7 +346,16 @@ export function DocumentsPage() {
   }
 
   async function openDocument(document: MvpDocument) {
-    const storedFile = await readDocumentFile(document.id);
+    let storedFile: Blob | string | null;
+    try {
+      storedFile = await readDocumentFile(document.id);
+    } catch {
+      setMessage({
+        tone: 'error',
+        text: 'לא ניתן היה לפתוח את הקובץ כרגע. המסמך עצמו לא נפגע — נסו שוב בעוד רגע.',
+      });
+      return;
+    }
     const href =
       typeof storedFile === 'string'
         ? storedFile
@@ -332,7 +363,10 @@ export function DocumentsPage() {
           ? URL.createObjectURL(storedFile)
           : document.dataUrl;
     if (!href) {
-      setMessage('הקובץ אינו נמצא במכשיר זה. ניתן לערוך את המסמך ולהעלות אותו מחדש.');
+      setMessage({
+        tone: 'error',
+        text: 'הקובץ אינו נמצא במכשיר זה. ניתן לערוך את המסמך ולהעלות אותו מחדש.',
+      });
       return;
     }
     const link = window.document.createElement('a');
@@ -346,9 +380,22 @@ export function DocumentsPage() {
 
   async function removeDocument(document: MvpDocument) {
     if (!window.confirm(`למחוק את "${document.name}"?`)) return;
-    await deleteDocumentFile(document.id);
-    persist(documents.filter((item) => item.id !== document.id));
-    setMessage('המסמך נמחק.');
+    if (deletingId) return;
+    setDeletingId(document.id);
+    try {
+      // The file goes first, then the record. If the file delete fails (a
+      // network DELETE on the signed-in path, a blocked IndexedDB transaction
+      // on the local one) the record is deliberately left exactly as it was:
+      // a document the family can still see and retry is better than one that
+      // vanished from the list while its file stayed behind.
+      await deleteDocumentFile(document.id);
+      persist(documents.filter((item) => item.id !== document.id));
+      setMessage({ tone: 'success', text: 'המסמך נמחק.' });
+    } catch {
+      setMessage({ tone: 'error', text: 'לא ניתן היה למחוק את המסמך. נסו שוב.' });
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -365,8 +412,11 @@ export function DocumentsPage() {
       </header>
 
       {message ? (
-        <p className="info-box" role="status">
-          {message}
+        <p
+          className={message.tone === 'error' ? 'action-notice error' : 'info-box'}
+          role={message.tone === 'error' ? 'alert' : 'status'}
+        >
+          {message.text}
         </p>
       ) : null}
 
@@ -540,9 +590,10 @@ export function DocumentsPage() {
                     <button
                       className="danger-button"
                       type="button"
+                      disabled={deletingId === document.id}
                       onClick={() => void removeDocument(document)}
                     >
-                      מחיקה
+                      {deletingId === document.id ? 'מוחק…' : 'מחיקה'}
                     </button>
                   </div>
                 </article>

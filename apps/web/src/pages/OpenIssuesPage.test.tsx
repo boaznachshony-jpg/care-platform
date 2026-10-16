@@ -237,6 +237,22 @@ describe('OpenIssuesPage', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * R2-08, second half. A lookup that succeeded and found no case is neither a
+   * failed lookup nor a clean file. The dashboard already said so; this screen
+   * used to fall through to "nothing to report".
+   */
+  it('says the case is not linked, with a way to open one, instead of showing a clean file', async () => {
+    mockFindCanonicalCase.mockResolvedValue(null);
+    renderPage();
+    expect(await screen.findByText(/לא מצאנו תיק העסקה המקושר ללקוח הזה/)).toBeInTheDocument();
+    expect(mockGetCaseHealth).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'פתיחת תיק העסקה' })).toHaveAttribute(
+      'href',
+      '/cases/new',
+    );
+  });
+
   it('renders an attention health factor as an urgent issue with its action link', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('הסכם העסקה חתום')).toBeInTheDocument());

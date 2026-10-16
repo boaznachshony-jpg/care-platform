@@ -2,7 +2,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
+import { makePrincipalRateLimit, type RateLimiter, type RouteRateLimit } from '../rate-limit.js';
 import { sendError, sendValidationError } from './http-errors.js';
+
+/** SEC-AUTHZ-05: a worker invitation mints a token and sends mail; same budget as family invitations. */
+export const WORKER_INVITATION_RATE_LIMIT = {
+  max: 10,
+  timeWindow: 10 * 60_000,
+  bucket: 'worker-invitation',
+} as const satisfies RouteRateLimit;
 
 const id = z.string().uuid();
 const idempotencyKey = (request: FastifyRequest) => {
@@ -44,10 +52,22 @@ async function workerIdentity(request: FastifyRequest, container: Container) {
   return container.auth.verifySession(header.slice(7));
 }
 
-export function registerWave5Routes(app: FastifyInstance, container: Container): void {
+export function registerWave5Routes(
+  app: FastifyInstance,
+  container: Container,
+  rateLimiter: RateLimiter,
+): void {
   const service = container.wave5;
   if (!service) return;
-  const employer = { preHandler: makeAuthenticate(container.auth, container.actorResolver) };
+  const authenticate = makeAuthenticate(container.auth, container.actorResolver);
+  const employer = { preHandler: authenticate };
+  const invite = {
+    config: { rateLimit: WORKER_INVITATION_RATE_LIMIT },
+    preHandler: [
+      authenticate,
+      makePrincipalRateLimit(rateLimiter, 'wave5', WORKER_INVITATION_RATE_LIMIT),
+    ],
+  };
   const worker = {
     preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
       const session = await workerIdentity(request, container);
@@ -66,8 +86,13 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
         return sendError(request, reply, 400, 'VALIDATION_ERROR');
       try {
         reply.send(await service.collaboration(request.actor, request.params.caseId));
-      } catch {
-        return sendError(request, reply, 403, 'FORBIDDEN');
+      } catch (error) {
+        // Only the service's own authorization decision is a 403. Anything
+        // else - a database fault included - is a 500 through the standard
+        // error handler, so an outage is never reported as "you may not".
+        if (error instanceof Error && error.message === 'manager_required')
+          return sendError(request, reply, 403, 'FORBIDDEN');
+        throw error;
       }
     },
   );
@@ -120,7 +145,7 @@ export function registerWave5Routes(app: FastifyInstance, container: Container):
       }
     },
   );
-  app.post('/worker/invitations', employer, async (request, reply) => {
+  app.post('/worker/invitations', invite, async (request, reply) => {
     const body = z
       .object({
         caseId: id,

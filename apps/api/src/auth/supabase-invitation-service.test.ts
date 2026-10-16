@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SupabaseInvitationService } from './supabase-invitation-service.js';
+import {
+  IdentityAlreadyRegisteredError,
+  SupabaseInvitationService,
+} from './supabase-invitation-service.js';
 
 describe('SupabaseInvitationService', () => {
   it('creates a server-side invitation with the configured return URL', async () => {
@@ -51,5 +54,25 @@ describe('SupabaseInvitationService', () => {
     }
     expect(message).toBe('Identity invitation failed with status 429.');
     expect(message).not.toContain('private-family@example.test');
+  });
+});
+
+describe('SupabaseInvitationService existing accounts', () => {
+  it('maps a 422 reply to IdentityAlreadyRegisteredError without the address', async () => {
+    // UI-NAV-02. Supabase answers 422 when the e-mail already has an account.
+    // That is not a delivery failure and the route must be able to tell.
+    const service = new SupabaseInvitationService(
+      'https://project.supabase.co',
+      'service-role-secret',
+      'https://app.example.test/app',
+      vi.fn(async () => ({
+        ok: false,
+        status: 422,
+        json: async () => ({ msg: 'A user with this email address has already been registered' }),
+      })),
+    );
+    const failure = await service.invite('already-here@example.test').catch((error) => error);
+    expect(failure).toBeInstanceOf(IdentityAlreadyRegisteredError);
+    expect(String(failure.message)).not.toContain('already-here@example.test');
   });
 });

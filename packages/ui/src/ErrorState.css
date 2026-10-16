@@ -2,7 +2,7 @@
   padding: var(--space-5);
   border-radius: var(--radius-card);
   border: 1px solid var(--color-danger);
-  background-color: color-mix(in srgb, var(--color-danger) 6%, white);
+  background-color: color-mix(in srgb, var(--color-danger) 6%, var(--color-bg-surface));
 }
 
 .cd-error-state__title {

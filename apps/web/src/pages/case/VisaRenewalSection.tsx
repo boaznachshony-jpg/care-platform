@@ -25,6 +25,7 @@ import {
   type WorkflowTemplateOptionResponse,
 } from '../../api/client.js';
 import { newIdempotencyKey } from '../../api/idempotency.js';
+import { formatDateOnly } from '../../format-timestamp.js';
 
 type LoadState =
   | { kind: 'loading' }
@@ -106,8 +107,8 @@ function authorizationLabel(
   t: (key: string) => string,
 ): string {
   const status = t(`visaRenewal.authorizationStatus.${authorization.status}`);
-  const from = authorization.validFrom ?? t('visaRenewal.dateUnknown');
-  const until = authorization.validUntil ?? t('visaRenewal.dateUnknown');
+  const from = formatDateOnly(authorization.validFrom) ?? t('visaRenewal.dateUnknown');
+  const until = formatDateOnly(authorization.validUntil) ?? t('visaRenewal.dateUnknown');
   return `${status} · ${from} – ${until}`;
 }
 
@@ -354,7 +355,9 @@ export function VisaRenewalSection({ caseId }: { caseId: string }) {
                           <>
                             {' '}
                             · {t('visaRenewal.nextReview')}{' '}
-                            <span dir="ltr">{blocker.nextReviewAt.slice(0, 10)}</span>
+                            <span dir="ltr">
+                              {formatDateOnly(blocker.nextReviewAt) ?? blocker.nextReviewAt}
+                            </span>
                           </>
                         ) : null}
                       </li>

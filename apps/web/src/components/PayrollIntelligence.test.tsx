@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
 import type { MvpPayrollRecord } from '../storage/mvp-storage.js';
 import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
+import { ApiRequestError } from '../api/client.js';
 import { PayrollIntelligence } from './PayrollIntelligence.js';
 
 // Constitution §16: synthetic data only.
@@ -14,10 +15,21 @@ const OPEN_MONTH = `${YEAR}-02`;
 const mockListCanonicalPayrollCloses = vi.fn();
 const mockCloseCanonicalPayrollMonth = vi.fn();
 
-vi.mock('../api/client.js', () => ({
-  listCanonicalPayrollCloses: (...args: unknown[]) => mockListCanonicalPayrollCloses(...args),
-  closeCanonicalPayrollMonth: (...args: unknown[]) => mockCloseCanonicalPayrollMonth(...args),
-}));
+vi.mock('../api/client.js', () => {
+  class ApiRequestError extends Error {
+    constructor(
+      readonly status: number,
+      readonly code: string,
+    ) {
+      super(code);
+    }
+  }
+  return {
+    ApiRequestError,
+    listCanonicalPayrollCloses: (...args: unknown[]) => mockListCanonicalPayrollCloses(...args),
+    closeCanonicalPayrollMonth: (...args: unknown[]) => mockCloseCanonicalPayrollMonth(...args),
+  };
+});
 
 function payrollRecord(month: string, overrides: Partial<MvpPayrollRecord> = {}): MvpPayrollRecord {
   return {
@@ -247,5 +259,113 @@ describe('PayrollIntelligence — canonical case resolution', () => {
     await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
     expect(await screen.findByText(new RegExp(`${CLOSED_MONTH} — הושלם`))).toBeInTheDocument();
     expect(screen.queryByText(/סגר\/ה/)).toBeNull();
+  });
+});
+
+/**
+ * UI-WRITE-02. The idempotency key used to be minted once per component
+ * lifetime, so the second month closed in the same session reused the first
+ * month's key with a different body — a guaranteed IDEMPOTENCY_CONFLICT that
+ * no retry could clear. The key now belongs to the exact close being sent: a
+ * different month gets a new key, a retry of the same close reuses the key.
+ */
+describe('PayrollIntelligence — one idempotency key per close attempt', () => {
+  const THIRD_MONTH = `${YEAR}-03`;
+  const CLOSE_BUTTON = 'אישור שהחודש מוכן וסגירה';
+
+  function closeRow(month: string) {
+    return {
+      id: `close-${month}`,
+      payrollReference: `pay-${month}`,
+      month,
+      paymentDate: `${month}-09`,
+      paymentMethod: 'bank_transfer',
+      total: 7_000,
+      baseSalary: 7_000,
+      additions: 0,
+      deductions: 0,
+      closedAt: `${month}-10T08:00:00.000Z`,
+      closedBy: null,
+    };
+  }
+
+  function renderThreeMonths() {
+    return render(
+      <I18nextProvider i18n={initI18n()}>
+        <PayrollIntelligence
+          records={[
+            payrollRecord(CLOSED_MONTH),
+            payrollRecord(OPEN_MONTH),
+            payrollRecord(THIRD_MONTH),
+          ]}
+          expenses={[]}
+          baseSalary={7_000}
+          caseLookup={FOUND}
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it('mints a new key for the next month and reuses the key when the same close is retried', async () => {
+    mockListCanonicalPayrollCloses
+      .mockResolvedValueOnce([closeRow(CLOSED_MONTH)])
+      .mockResolvedValue([closeRow(CLOSED_MONTH), closeRow(THIRD_MONTH)]);
+    mockCloseCanonicalPayrollMonth
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValue({});
+    renderThreeMonths();
+    // The latest month without a canonical close is the one offered first.
+    await screen.findByRole('heading', { name: `סגירת ${THIRD_MONTH}` });
+
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_BUTTON }));
+    await waitFor(() => expect(mockCloseCanonicalPayrollMonth).toHaveBeenCalledTimes(1));
+    const firstCall = mockCloseCanonicalPayrollMonth.mock.calls[0] as [
+      string,
+      { month: string },
+      string,
+    ];
+    expect(firstCall[1].month).toBe(THIRD_MONTH);
+    const firstKey = firstCall[2];
+    expect(typeof firstKey).toBe('string');
+
+    // After the refresh the next open month is offered; closing it is a new
+    // attempt with a new body and must not reuse the burned key.
+    await screen.findByRole('heading', { name: `סגירת ${OPEN_MONTH}` });
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_BUTTON }));
+    await waitFor(() => expect(mockCloseCanonicalPayrollMonth).toHaveBeenCalledTimes(2));
+    const secondCall = mockCloseCanonicalPayrollMonth.mock.calls[1] as [
+      string,
+      { month: string },
+      string,
+    ];
+    expect(secondCall[1].month).toBe(OPEN_MONTH);
+    expect(secondCall[2]).not.toBe(firstKey);
+
+    // That second close failed; pressing again is a retry of the same close,
+    // so the server must see the same key and replay rather than duplicate.
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_BUTTON }));
+    await waitFor(() => expect(mockCloseCanonicalPayrollMonth).toHaveBeenCalledTimes(3));
+    expect(mockCloseCanonicalPayrollMonth.mock.calls[2]?.[2]).toBe(secondCall[2]);
+  });
+
+  it('names an idempotency conflict specifically and does not retry with the burned key', async () => {
+    mockCloseCanonicalPayrollMonth
+      .mockRejectedValueOnce(new ApiRequestError(409, 'IDEMPOTENCY_CONFLICT'))
+      .mockResolvedValue({});
+    renderIntelligence();
+    await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_BUTTON }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/נתונים אחרים/);
+    expect(alert).not.toHaveTextContent(/בדקו את החיבור/);
+
+    fireEvent.click(screen.getByRole('button', { name: CLOSE_BUTTON }));
+    await waitFor(() => expect(mockCloseCanonicalPayrollMonth).toHaveBeenCalledTimes(2));
+    expect(mockCloseCanonicalPayrollMonth.mock.calls[1]?.[2]).not.toBe(
+      mockCloseCanonicalPayrollMonth.mock.calls[0]?.[2],
+    );
   });
 });

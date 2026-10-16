@@ -33,8 +33,18 @@ import { z } from 'zod';
 export const LEGAL_DOCUMENT_NAMES = ['terms', 'privacy'] as const;
 export type LegalDocumentName = (typeof LEGAL_DOCUMENT_NAMES)[number];
 
-/** Where in the product the acceptance was collected. */
-export const LEGAL_ACCEPTANCE_CONTEXTS = ['onboarding', 'billing'] as const;
+/**
+ * Where in the product the acceptance was collected.
+ *
+ * - 'onboarding': the owner finishing the setup wizard.
+ * - 'billing': the owner attaching a payment method.
+ * - 'first-visit': any signed-in user - in practice an invited manager or
+ *   viewer, who never sees the two screens above - with no acceptance on
+ *   record at the current document versions (LegalConsentGate). Migration
+ *   0050 widens the database check constraint to match; the two lists must
+ *   stay identical.
+ */
+export const LEGAL_ACCEPTANCE_CONTEXTS = ['onboarding', 'billing', 'first-visit'] as const;
 export type LegalAcceptanceContext = (typeof LEGAL_ACCEPTANCE_CONTEXTS)[number];
 
 /** A version is a publication date: `YYYY-MM-DD`, and nothing else. */

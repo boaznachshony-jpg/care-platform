@@ -13,25 +13,25 @@
 }
 
 .cd-status-badge--success {
-  background-color: color-mix(in srgb, var(--color-success) 12%, white);
+  background-color: color-mix(in srgb, var(--color-success) 12%, var(--color-bg-surface));
   color: var(--color-success);
   border-color: var(--color-success);
 }
 
 .cd-status-badge--warning {
-  background-color: color-mix(in srgb, var(--color-warning) 12%, white);
+  background-color: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg-surface));
   color: var(--color-warning);
   border-color: var(--color-warning);
 }
 
 .cd-status-badge--danger {
-  background-color: color-mix(in srgb, var(--color-danger) 12%, white);
+  background-color: color-mix(in srgb, var(--color-danger) 12%, var(--color-bg-surface));
   color: var(--color-danger);
   border-color: var(--color-danger);
 }
 
 .cd-status-badge--info {
-  background-color: color-mix(in srgb, var(--color-info) 12%, white);
+  background-color: color-mix(in srgb, var(--color-info) 12%, var(--color-bg-surface));
   color: var(--color-info);
   border-color: var(--color-info);
 }

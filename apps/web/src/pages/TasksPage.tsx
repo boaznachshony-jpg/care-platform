@@ -9,6 +9,7 @@ import {
   type MvpTaskSource,
 } from '../storage/mvp-storage.js';
 import { createQuarterlyInsuranceTask } from '../quarterly-national-insurance.js';
+import { newEntityId } from '../api/idempotency.js';
 import { NATIONAL_INSURANCE_PAYMENT_URL } from '../upcoming-payments.js';
 import {
   archiveCaseTask,
@@ -244,7 +245,7 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     event.preventDefault();
     const existing = tasks.find((task) => task.id === editingId);
     const saved: MvpTask = {
-      id: existing?.id ?? crypto.randomUUID(),
+      id: existing?.id ?? newEntityId(),
       title: draft.title.trim(),
       dueDate: draft.dueDate,
       priority: draft.priority,

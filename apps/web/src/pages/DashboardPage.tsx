@@ -8,6 +8,7 @@ import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { findCanonicalCase } from '../canonical-case.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
+import { formatDateOnly } from '../format-timestamp.js';
 import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
 import { missingProfileFieldCount } from '../profile-completeness.js';
 import {
@@ -423,7 +424,16 @@ export function DashboardPage() {
           {/* R2-08. Distinct from the line above: the server answered, and had
               no case for this client. That is a broken link to a real file, not
               a connectivity problem, and it needs a different next step. */}
-          {caseMissing ? <p role="alert">{t('dashboard.caseNotLinked')}</p> : null}
+          {caseMissing ? (
+            <>
+              <p role="alert">{t('dashboard.caseNotLinked')}</p>
+              {/* The alert names the missing step; this is the step. It used
+                  to point at the clients screen, which has no case action. */}
+              <Link className="primary-button" to={path('/cases/new')}>
+                {t('case.openTitle')}
+              </Link>
+            </>
+          ) : null}
           {/* healthDisclaimer covers what the score measures; this line adds the
               part it leaves out - the score does not replace an outside check. */}
           {health ? <p className="legal-note">{t('liability.score')}</p> : null}
@@ -488,7 +498,9 @@ export function DashboardPage() {
             </div>
             <div>
               <span>{t('profile.startDate')}</span>
-              <strong>{profile.employmentStartDate}</strong>
+              <strong dir="ltr">
+                {formatDateOnly(profile.employmentStartDate) ?? profile.employmentStartDate}
+              </strong>
             </div>
           </div>
         </section>

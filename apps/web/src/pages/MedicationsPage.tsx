@@ -10,6 +10,7 @@ import {
   type MvpMedicationTime,
 } from '../storage/mvp-storage.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
+import { newEntityId } from '../api/idempotency.js';
 import { ReminderRecipientsSection } from '../components/ReminderRecipientsSection.js';
 import {
   archiveCaseMedication,
@@ -217,7 +218,7 @@ export function MedicationsPage() {
         ),
       );
     } else {
-      persist([...medications, { ...draft, id: crypto.randomUUID(), updatedAt: now }]);
+      persist([...medications, { ...draft, id: newEntityId(), updatedAt: now }]);
     }
     setDraft(emptyDraft());
     setEditingId(null);
@@ -289,11 +290,11 @@ export function MedicationsPage() {
           {t('medications.sync.localCopy')}
         </p>
       ) : syncStatus.phase === 'ambiguous' ? (
-        <p className="action-notice error" role="status">
+        <p className="action-notice error" role="alert">
           {t('medications.sync.ambiguous')}
         </p>
       ) : syncStatus.phase === 'upload-failed' ? (
-        <p className="action-notice error" role="status">
+        <p className="action-notice error" role="alert">
           {t('medications.sync.uploadFailed', { count: syncStatus.failedCount })}{' '}
           <button
             className="text-link"
@@ -304,7 +305,7 @@ export function MedicationsPage() {
           </button>
         </p>
       ) : syncStatus.phase === 'update-failed' ? (
-        <p className="action-notice error" role="status">
+        <p className="action-notice error" role="alert">
           {t('medications.sync.updateFailed', { count: syncStatus.failedCount })}{' '}
           <button
             className="text-link"
@@ -452,7 +453,7 @@ export function MedicationsPage() {
             Deliberately not role="note": the medical disclaimer above owns that
             role on this page, and a second one would make it unfindable. */}
         {!draft.daily && (draft.daysOfWeek ?? []).length === 0 ? (
-          <p className="action-notice error medications-days-missing">
+          <p className="action-notice error medications-days-missing" role="status">
             {t('medications.daysMissing')}
           </p>
         ) : null}
@@ -481,7 +482,11 @@ export function MedicationsPage() {
             {t('medications.cancelEdit')}
           </button>
         ) : null}
-        {saved ? <p className="success-box">{t('medications.savedNotice')}</p> : null}
+        {saved ? (
+          <p className="success-box" role="status">
+            {t('medications.savedNotice')}
+          </p>
+        ) : null}
       </form>
 
       {/* Kept on the same screen as the medication list on purpose: the person

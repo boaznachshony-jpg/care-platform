@@ -156,7 +156,9 @@ Thank you,
 
 **בסדר הזה. הראשון משחרר כסף.**
 
-### 3.1 — `CRON_SECRET` — משחרר את הגבייה החוזרת
+### 3.1 — `CRON_SECRET` — משחרר את הגבייה החוזרת ואת הסריקה הלילית
+
+> מאז 05.09.2026 `GET /ready` בייצור מחזיר 503 עם הסיבה `CRON_SECRET is not configured` כל עוד המשתנה חסר — כך שאפשר לראות בדפדפן שהצעד הזה עדיין פתוח, ולראות שהוא נסגר.
 
 1. `vercel.com` → פרויקט **`care-platform-api`**
 2. **Settings** → **Environment Variables**

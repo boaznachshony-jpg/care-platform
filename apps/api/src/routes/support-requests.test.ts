@@ -93,6 +93,39 @@ describe('support request routes', () => {
     await app.close();
   });
 
+  it('keys the budget on x-real-ip on Vercel so one stranger cannot lock everyone out', async () => {
+    // SEC-INPUT-02. Behind Vercel's edge every request shares request.ip.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => new Response('{}', { status: 200 })),
+    );
+    const app = buildServer(
+      loadEnv({
+        SUPPORT_DESTINATION_EMAIL: 'private-destination@example.com',
+        SUPPORT_FROM_EMAIL: 'support@example.com',
+        RESEND_API_KEY: 'server-only-resend-key',
+        VERCEL: '1',
+      }),
+    );
+    const request = (address: string) => ({
+      method: 'POST' as const,
+      url: '/support/requests',
+      headers: { 'x-real-ip': address },
+      payload: {
+        kind: 'help',
+        replyEmail: 'customer@example.com',
+        message: 'A sufficiently detailed support request.',
+      },
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await app.inject(request('203.0.113.10'))).statusCode).toBe(202);
+    }
+    expect((await app.inject(request('203.0.113.10'))).statusCode).toBe(429);
+    expect((await app.inject(request('203.0.113.11'))).statusCode).toBe(202);
+    await app.close();
+  });
+
   it('rate limits through the provider contract and sends retry guidance', async () => {
     vi.stubGlobal(
       'fetch',

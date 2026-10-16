@@ -147,7 +147,7 @@ test.describe('document validation and persistence', () => {
 
   test('rejects a missing file and an unsupported file type', async ({ page }) => {
     await page.getByRole('button', { name: 'שמירת המסמך' }).click();
-    await expect(page.getByRole('status')).toContainText('יש לבחור קובץ לפני השמירה');
+    await expect(page.getByRole('alert')).toContainText('יש לבחור קובץ לפני השמירה');
 
     await page.getByLabel('בחירת קובץ').setInputFiles({
       name: 'malware.exe',
@@ -155,7 +155,7 @@ test.describe('document validation and persistence', () => {
       buffer: Buffer.from('not a supported document'),
     });
     await page.getByRole('button', { name: 'שמירת המסמך' }).click();
-    await expect(page.getByRole('status')).toContainText('סוג הקובץ אינו נתמך');
+    await expect(page.getByRole('alert')).toContainText('סוג הקובץ אינו נתמך');
   });
 
   test('rejects a file larger than 10MB', async ({ page }) => {
@@ -165,7 +165,7 @@ test.describe('document validation and persistence', () => {
       buffer: Buffer.alloc(10_000_001),
     });
     await page.getByRole('button', { name: 'שמירת המסמך' }).click();
-    await expect(page.getByRole('status')).toContainText('הקובץ גדול מדי');
+    await expect(page.getByRole('alert')).toContainText('הקובץ גדול מדי');
   });
 
   test('saves document metadata, edits it and keeps the edit after reload', async ({ page }) => {
