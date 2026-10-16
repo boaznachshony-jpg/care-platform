@@ -18,6 +18,54 @@ const money = new Intl.NumberFormat('he-IL', {
   currency: 'ILS',
   maximumFractionDigits: 0,
 });
+/**
+ * R5-10. `pocketMoney` is a deduction. `packages/domain/src/payroll.ts:68`
+ * says so in as many words, and `calculateMonthlyPayroll` has always counted
+ * it as one, which is why the record's stored `total` already nets it.
+ *
+ * The close payload re-derived the additions/deductions split by hand and left
+ * it out. Two things followed. The server's reconcile asks whether
+ * `total === baseSalary + additions - deductions`, and with the pocket money
+ * missing from one side it does not, so the month was refused with a 422 and
+ * the screen told the family to check their internet connection for a request
+ * the network had delivered perfectly. And where the clamp absorbed the error
+ * instead, the stored receipt understated BOTH figures by exactly the pocket
+ * money, the two errors cancelled in the total, and the CHECK constraint that
+ * exists to catch this passed — leaving the immutable record a termination
+ * settlement is reconstructed from quietly wrong on both lines.
+ *
+ * Deriving `additions` from the stored total by subtraction is kept: the total
+ * is the one figure the domain owns end to end, so anything derived from it
+ * cannot drift. What is removed is the `Math.max(0, …)` clamp, which existed
+ * only to satisfy the `additions_amount >= 0` constraint from migration 0026.
+ * A split that cannot be expressed is now named rather than silently replaced
+ * by one that reconciles against figures nobody was paid.
+ */
+export type CanonicalCloseSplit =
+  | { kind: 'ok'; additions: number; deductions: number }
+  | { kind: 'unrepresentable'; additions: number; deductions: number };
+
+export function canonicalCloseSplit(record: {
+  total: number;
+  baseSalary: number;
+  pocketMoney: number;
+  medicalInsuranceDeduction?: number;
+  housingDeduction?: number;
+  advances: number;
+  agreedDeduction: number;
+}): CanonicalCloseSplit {
+  const deductions =
+    record.pocketMoney +
+    (record.medicalInsuranceDeduction ?? 0) +
+    (record.housingDeduction ?? 0) +
+    record.advances +
+    record.agreedDeduction;
+  const additions = record.total - record.baseSalary + deductions;
+  return additions < 0
+    ? { kind: 'unrepresentable', additions, deductions }
+    : { kind: 'ok', additions, deductions };
+}
+
 export function PayrollIntelligence({
   records,
   expenses,
@@ -47,6 +95,8 @@ export function PayrollIntelligence({
   // this flag never clears the form, it only re-enables the button and says
   // what happened, so the same click can be retried.
   const [closeError, setCloseError] = useState(false);
+  /** Separate from `closeError`: this one is never worth retrying. */
+  const [closeRefusal, setCloseRefusal] = useState('');
   const [closing, setClosing] = useState(false);
   const closeKey = useRef(newIdempotencyKey());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -115,11 +165,15 @@ export function PayrollIntelligence({
           : null;
   async function closeMonth() {
     if (!caseId || !open || !paymentDate || open.total <= 0) return;
-    const deductions =
-      (open.medicalInsuranceDeduction ?? 0) +
-      (open.housingDeduction ?? 0) +
-      open.advances +
-      open.agreedDeduction;
+    const split = canonicalCloseSplit(open);
+    if (split.kind === 'unrepresentable') {
+      setCloseRefusal(
+        `לא ניתן לסגור את החודש: הקיזוזים (\u20aa${split.deductions.toFixed(2)}) גבוהים מהשכר הכולל, ולכן התוספות יוצאות שליליות (\u20aa${split.additions.toFixed(2)}) והשרת אינו יכול לרשום אותן. החודש נשאר פתוח ושום דבר לא נמחק. בדקו את המקדמות ואת הקיזוזים במסך השכר.`,
+      );
+      return;
+    }
+    setCloseRefusal('');
+    const deductions = split.deductions;
     const actualBase = open.baseSalary;
     setClosing(true);
     setCloseError(false);
@@ -133,7 +187,7 @@ export function PayrollIntelligence({
           paymentMethod,
           total: open.total,
           baseSalary: actualBase,
-          additions: Math.max(0, open.total - actualBase + deductions),
+          additions: split.additions,
           deductions,
         },
         closeKey.current,
@@ -419,6 +473,11 @@ export function PayrollIntelligence({
             {closeError ? (
               <p className="error-box" role="alert">
                 הסגירה נכשלה ולא נרשמה. הנתונים שהזנתם לא נמחקו — בדקו את החיבור ונסו לסגור שוב.
+              </p>
+            ) : null}
+            {closeRefusal ? (
+              <p className="error-box" role="alert">
+                {closeRefusal}
               </p>
             ) : null}
             <button
