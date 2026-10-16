@@ -7,11 +7,7 @@ import {
   type MvpMonthlyClose,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
-import {
-  ApiRequestError,
-  closeCanonicalPayrollMonth,
-  listCanonicalPayrollCloses,
-} from '../api/client.js';
+import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
 import { newIdempotencyKey } from '../api/idempotency.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
@@ -50,25 +46,9 @@ export function PayrollIntelligence({
   // payment date/method must not be discarded because the request failed —
   // this flag never clears the form, it only re-enables the button and says
   // what happened, so the same click can be retried.
-  const [closeError, setCloseError] = useState<'none' | 'failed' | 'conflict'>('none');
+  const [closeError, setCloseError] = useState(false);
   const [closing, setClosing] = useState(false);
-  /**
-   * UI-WRITE-02. The key used to be minted once for the component's lifetime,
-   * so the second month closed in the same session reused the first month's
-   * key with a different body — a guaranteed IDEMPOTENCY_CONFLICT (409) that
-   * no retry could ever clear. Same signature pattern as VisaRenewalSection:
-   * the key belongs to the exact payload being sent. A retry of the same close
-   * (same month, same date, same amounts) reuses it, so a lost response plus a
-   * second press is replayed and not duplicated; a different close is a new
-   * attempt and gets a fresh key.
-   */
-  const closeAttempt = useRef<{ signature: string; key: string } | null>(null);
-  const closeKeyFor = (signature: string): string => {
-    if (closeAttempt.current?.signature !== signature) {
-      closeAttempt.current = { signature, key: newIdempotencyKey() };
-    }
-    return closeAttempt.current.key;
-  };
+  const closeKey = useRef(newIdempotencyKey());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash' | 'check' | 'other'>(
     'bank_transfer',
@@ -141,36 +121,31 @@ export function PayrollIntelligence({
       open.advances +
       open.agreedDeduction;
     const actualBase = open.baseSalary;
-    const payload = {
-      payrollReference: open.id,
-      month: open.month,
-      paymentDate,
-      paymentMethod,
-      total: open.total,
-      baseSalary: actualBase,
-      additions: Math.max(0, open.total - actualBase + deductions),
-      deductions,
-    };
     setClosing(true);
-    setCloseError('none');
+    setCloseError(false);
     try {
-      await closeCanonicalPayrollMonth(caseId, payload, closeKeyFor(JSON.stringify(payload)));
+      await closeCanonicalPayrollMonth(
+        caseId,
+        {
+          payrollReference: open.id,
+          month: open.month,
+          paymentDate,
+          paymentMethod,
+          total: open.total,
+          baseSalary: actualBase,
+          additions: Math.max(0, open.total - actualBase + deductions),
+          deductions,
+        },
+        closeKey.current,
+      );
       await refreshCloses();
-    } catch (error) {
+    } catch {
       // The whole point of this fix: a close that failed must never look like
       // a close that happened. Previously there was no `.catch` here at all,
       // so a rejected request left the button's onClick promise silently
       // dropped — the month stayed open server-side with zero on-screen
       // indication, and a caregiver's payment record never closed.
-      if (error instanceof ApiRequestError && error.code === 'IDEMPOTENCY_CONFLICT') {
-        // The server already holds this key with a different body. Retrying
-        // with the same key can only 409 again, so the attempt is discarded
-        // and the next press is a genuinely new request with a new key.
-        closeAttempt.current = null;
-        setCloseError('conflict');
-      } else {
-        setCloseError('failed');
-      }
+      setCloseError(true);
     } finally {
       setClosing(false);
     }
@@ -418,15 +393,9 @@ export function PayrollIntelligence({
                 {caseBlockedReason}
               </p>
             ) : null}
-            {closeError === 'failed' ? (
+            {closeError ? (
               <p className="error-box" role="alert">
                 הסגירה נכשלה ולא נרשמה. הנתונים שהזנתם לא נמחקו — בדקו את החיבור ונסו לסגור שוב.
-              </p>
-            ) : null}
-            {closeError === 'conflict' ? (
-              <p className="error-box" role="alert">
-                בקשת סגירה קודמת לחודש זה נשלחה עם נתונים אחרים, ולכן השרת דחה את הבקשה הזו. החודש
-                לא נסגר. בדקו בהיסטוריית הסגירות אם החודש כבר סגור, ואם לא — נסו לסגור שוב.
               </p>
             ) : null}
             <button
