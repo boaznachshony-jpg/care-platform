@@ -22,7 +22,7 @@ body,
    reading time is driven by SIZE, not by typeface — so the typeface is chosen
    for letter discrimination and the size is set separately, below.) */
 :root {
-  --cd-font-family: "Heebo", "Rubik", "Segoe UI", Arial, sans-serif;
+  --cd-font-family: 'Heebo', 'Rubik', 'Segoe UI', Arial, sans-serif;
 }
 /* No background/color here on purpose: the later `body` rule next to the token
    block sets both from --cd-canvas/--cd-ink and wins on document order. A
@@ -94,8 +94,7 @@ button {
   display: grid;
   place-items: center;
   padding: 64px 20px 32px;
-  background:
-    radial-gradient(circle at top right, #dceaff, transparent 42%), #f4f7fb;
+  background: radial-gradient(circle at top right, #dceaff, transparent 42%), #f4f7fb;
 }
 .auth-card {
   width: min(100%, 520px);
@@ -421,7 +420,7 @@ button {
   height: 1px;
   flex: 1;
   background: #dce4ef;
-  content: "";
+  content: '';
 }
 .auth-magic-button {
   min-height: 56px;
@@ -501,7 +500,7 @@ button {
   font-size: 13px;
   font-weight: 700;
 }
-[data-theme="dark"] .thread-author {
+[data-theme='dark'] .thread-author {
   color: #b9b9c8;
 }
 /* Standing medications. The disclaimer sits above the data on purpose and is
@@ -544,10 +543,10 @@ button {
 .medications-list small {
   display: block;
 }
-[data-theme="dark"] .medications-times {
+[data-theme='dark'] .medications-times {
   border-color: rgba(255, 255, 255, 0.14);
 }
-[data-theme="dark"] .medications-times small {
+[data-theme='dark'] .medications-times small {
   color: #a3a3b5;
 }
 button,
@@ -2174,7 +2173,7 @@ a {
   padding: 20px 25px;
 }
 .timeline:before {
-  content: "";
+  content: '';
   position: absolute;
   right: 126px;
   top: 40px;
@@ -2314,7 +2313,7 @@ a {
    `.readable-form input`, and not every form grid sits inside a readable-form.
    Checkboxes and radios are excluded — they are sized as touch targets, not as
    fields, and stretching one to the column width would be its own defect. */
-.form-grid label > input:not([type="checkbox"]):not([type="radio"]),
+.form-grid label > input:not([type='checkbox']):not([type='radio']),
 .form-grid label > select {
   width: 100%;
   min-width: 0;
@@ -3149,7 +3148,7 @@ body {
   border-radius: 17px;
   background: #fbfcfe;
 }
-.setup-checklist > label:has(input[type="checkbox"]) {
+.setup-checklist > label:has(input[type='checkbox']) {
   display: flex;
   align-items: center;
   min-height: 72px;
@@ -3160,7 +3159,7 @@ body {
   background: #edfaf2;
   color: #17653a;
 }
-.setup-checklist input[type="checkbox"] {
+.setup-checklist input[type='checkbox'] {
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
@@ -3666,7 +3665,7 @@ select:focus-visible {
   background: var(--cd-primary-soft);
 }
 
-.onboarding-page .onboarding-choice-group input[type="radio"] {
+.onboarding-page .onboarding-choice-group input[type='radio'] {
   width: 28px;
   height: 28px;
   min-width: 28px;
@@ -3786,7 +3785,7 @@ select:focus-visible {
   --cd-control-padding-inline: 16px;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
 select,
 textarea,
 .cd-text-field__input {
@@ -3801,7 +3800,7 @@ textarea,
   font: inherit;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
 select,
 .cd-text-field__input {
   height: var(--cd-control-height);
@@ -3815,10 +3814,10 @@ textarea {
   resize: vertical;
 }
 
-input[type="date"],
-input[type="time"],
-input[type="month"],
-input[type="number"] {
+input[type='date'],
+input[type='time'],
+input[type='month'],
+input[type='number'] {
   display: block;
   block-size: var(--cd-control-height);
   line-height: normal;
@@ -4074,7 +4073,7 @@ input[type="number"] {
   padding: 70px 0 90px;
 }
 .public-hero::before {
-  content: "";
+  content: '';
   position: absolute;
   z-index: -1;
   inset: -120px -22vw auto auto;
@@ -4128,7 +4127,7 @@ input[type="number"] {
   list-style: none;
 }
 .public-trust-points li::before {
-  content: "✓";
+  content: '✓';
   margin-inline-end: 7px;
   color: #23845a;
   font-weight: 900;
@@ -4137,7 +4136,7 @@ input[type="number"] {
   position: relative;
 }
 .public-hero-visual::after {
-  content: "";
+  content: '';
   position: absolute;
   z-index: -1;
   inset: 12% -8% -9% 13%;
@@ -4334,12 +4333,12 @@ input[type="number"] {
   cursor: pointer;
 }
 .public-faq summary::after {
-  content: "+";
+  content: '+';
   color: #175fc7;
   font-size: 28px;
 }
 .public-faq details[open] summary::after {
-  content: "−";
+  content: '−';
 }
 .public-faq details p {
   margin: 0;
@@ -5059,7 +5058,7 @@ input[type="number"] {
   gap: 7px;
   font-weight: 800;
 }
-.family-invite-card input:not([type="radio"]),
+.family-invite-card input:not([type='radio']),
 .family-member-actions select {
   width: 100%;
   min-height: 56px;
@@ -5232,7 +5231,7 @@ input[type="number"] {
   }
 
   button,
-  [role="button"],
+  [role='button'],
   summary,
   .auth-secondary-button,
   .text-link,
@@ -5289,10 +5288,8 @@ input[type="number"] {
   .auth-page {
     min-height: 100dvh;
     place-items: start center;
-    padding-block: calc(24px + env(safe-area-inset-top))
-      calc(24px + env(safe-area-inset-bottom));
-    padding-inline: max(16px, env(safe-area-inset-left))
-      max(16px, env(safe-area-inset-right));
+    padding-block: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-bottom));
+    padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
   }
 
   .auth-card {
@@ -5322,10 +5319,8 @@ input[type="number"] {
 
   .clients-landing {
     min-height: 100dvh;
-    padding-block: calc(24px + env(safe-area-inset-top))
-      calc(32px + env(safe-area-inset-bottom));
-    padding-inline: max(16px, env(safe-area-inset-left))
-      max(16px, env(safe-area-inset-right));
+    padding-block: calc(24px + env(safe-area-inset-top)) calc(32px + env(safe-area-inset-bottom));
+    padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
   }
 
   .clients-hero,
@@ -5439,7 +5434,7 @@ input[type="number"] {
 
   .onboarding-page .field-error,
   .onboarding-page .field-error-message,
-  .onboarding-page [role="alert"],
+  .onboarding-page [role='alert'],
   .onboarding-page .blocked-explanation,
   .onboarding-page .continue-explanation,
   .onboarding-page .onboarding-blocked-help,
@@ -5472,7 +5467,7 @@ input[type="number"] {
     background: var(--cd-surface);
   }
 
-  .onboarding-choice-group input[type="radio"] {
+  .onboarding-choice-group input[type='radio'] {
     width: 28px;
     height: 28px;
     min-width: 28px;
@@ -5492,8 +5487,7 @@ input[type="number"] {
     position: sticky;
     min-height: 48px;
     padding-block: 8px;
-    padding-inline: max(12px, env(safe-area-inset-left))
-      max(12px, env(safe-area-inset-right));
+    padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
     line-height: 1.35;
   }
 
@@ -5541,8 +5535,7 @@ input[type="number"] {
 @media (max-width: 390px) {
   .auth-page,
   .clients-landing {
-    padding-inline: max(12px, env(safe-area-inset-left))
-      max(12px, env(safe-area-inset-right));
+    padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
   }
 
   .auth-card,
@@ -5584,8 +5577,7 @@ input[type="number"] {
 @supports (padding: max(0px)) {
   @media (max-width: 760px) {
     .mobile-nav {
-      padding-inline: max(6px, env(safe-area-inset-left))
-        max(6px, env(safe-area-inset-right));
+      padding-inline: max(6px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-right));
     }
   }
 }
@@ -5694,7 +5686,7 @@ input[type="number"] {
   gap: 7px;
   font-weight: 800;
 }
-.billing-setup-form input:not([type="checkbox"]) {
+.billing-setup-form input:not([type='checkbox']) {
   width: 100%;
   min-height: 56px;
   padding: 11px 14px;
@@ -6026,13 +6018,7 @@ input[type="number"] {
 .bar-row i {
   display: block;
   height: 100%;
-  background: repeating-linear-gradient(
-    45deg,
-    #1559c7,
-    #1559c7 8px,
-    #4c81d2 8px,
-    #4c81d2 16px
-  );
+  background: repeating-linear-gradient(45deg, #1559c7, #1559c7 8px, #4c81d2 8px, #4c81d2 16px);
 }
 
 /* Forecast card — the figures read before the labelling, not under it.
@@ -6524,7 +6510,7 @@ input[type="number"] {
 
 /* Premium dark theme — opt-in via [data-theme='dark'] on <html>.
    Additive only: with the attribute absent, the light theme is untouched. */
-[data-theme="dark"] {
+[data-theme='dark'] {
   color-scheme: dark;
   --cd-ink: #f2f0f7;
   --cd-muted: #a3a3b5;
@@ -6539,8 +6525,7 @@ input[type="number"] {
   --cd-canvas: #14141c;
   --cd-border: rgba(255, 255, 255, 0.05);
   --cd-focus: #8ab8ff;
-  --cd-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --cd-shadow: 0 8px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --cd-surface-raised: #22222e;
   --cd-pill: #262630;
   --cd-gold-edge: rgba(230, 190, 90, 0.3);
@@ -6571,116 +6556,113 @@ input[type="number"] {
 
 /* "Gold on Night" icon gradient — brighter approved stops on dark tiles only.
    The SVG defs live in DashboardPage.tsx with deeper default stops for light. */
-[data-theme="dark"] .cd-tile-grad-stop-a {
+[data-theme='dark'] .cd-tile-grad-stop-a {
   stop-color: #eac25e;
 }
-[data-theme="dark"] .cd-tile-grad-stop-b {
+[data-theme='dark'] .cd-tile-grad-stop-b {
   stop-color: #7ea6ff;
 }
 
 /* App shell chrome. */
-[data-theme="dark"] .topbar,
-[data-theme="dark"] .sidebar,
-[data-theme="dark"] .mobile-nav {
+[data-theme='dark'] .topbar,
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .mobile-nav {
   background: rgba(20, 20, 28, 0.94);
 }
-[data-theme="dark"] .sidebar {
+[data-theme='dark'] .sidebar {
   border-inline-end-color: var(--cd-border);
 }
-[data-theme="dark"] .topbar {
+[data-theme='dark'] .topbar {
   border-bottom-color: var(--cd-border);
 }
-[data-theme="dark"] .mobile-nav {
+[data-theme='dark'] .mobile-nav {
   border-top-color: var(--cd-border);
   box-shadow: none;
 }
-[data-theme="dark"] .topbar span,
-[data-theme="dark"] .brand small,
-[data-theme="dark"] .sidebar-help span {
+[data-theme='dark'] .topbar span,
+[data-theme='dark'] .brand small,
+[data-theme='dark'] .sidebar-help span {
   color: var(--cd-muted);
 }
-[data-theme="dark"] .desktop-nav a,
-[data-theme="dark"] .settings-link,
-[data-theme="dark"] .mobile-nav a,
-[data-theme="dark"] .mobile-nav button {
+[data-theme='dark'] .desktop-nav a,
+[data-theme='dark'] .settings-link,
+[data-theme='dark'] .mobile-nav a,
+[data-theme='dark'] .mobile-nav button {
   color: var(--cd-muted);
 }
-[data-theme="dark"] .desktop-nav a.active,
-[data-theme="dark"] .desktop-nav a:hover,
-[data-theme="dark"] .settings-link:hover,
-[data-theme="dark"] .mobile-nav a.active,
-[data-theme="dark"] .mobile-nav button.active {
+[data-theme='dark'] .desktop-nav a.active,
+[data-theme='dark'] .desktop-nav a:hover,
+[data-theme='dark'] .settings-link:hover,
+[data-theme='dark'] .mobile-nav a.active,
+[data-theme='dark'] .mobile-nav button.active {
   background: var(--cd-pill);
   color: #fff;
 }
 /* Gold edge-light on the active nav pill (inset shadow: no layout shift on borderless links). */
-[data-theme="dark"] .desktop-nav a.active,
-[data-theme="dark"] .mobile-nav a.active,
-[data-theme="dark"] .mobile-nav button.active {
+[data-theme='dark'] .desktop-nav a.active,
+[data-theme='dark'] .mobile-nav a.active,
+[data-theme='dark'] .mobile-nav button.active {
   box-shadow: inset 0 1px 0 var(--cd-gold-edge-strong);
 }
-[data-theme="dark"] .sidebar-help {
+[data-theme='dark'] .sidebar-help {
   background: var(--cd-surface-raised);
 }
-[data-theme="dark"] .sidebar-help strong {
+[data-theme='dark'] .sidebar-help strong {
   color: var(--cd-success);
 }
-[data-theme="dark"] .brand-mark,
-[data-theme="dark"] .top-client-switch,
-[data-theme="dark"] .top-actions button,
-[data-theme="dark"] .top-actions .notification-bell,
-[data-theme="dark"] .avatar {
+[data-theme='dark'] .brand-mark,
+[data-theme='dark'] .top-client-switch,
+[data-theme='dark'] .top-actions button,
+[data-theme='dark'] .top-actions .notification-bell,
+[data-theme='dark'] .avatar {
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
-[data-theme="dark"] .report-footnote,
-[data-theme="dark"] .record-timestamp {
+[data-theme='dark'] .report-footnote,
+[data-theme='dark'] .record-timestamp {
   color: #a3a3b5;
 }
-[data-theme="dark"] .sign-out-button,
-[data-theme="dark"] .font-size-controls {
+[data-theme='dark'] .sign-out-button,
+[data-theme='dark'] .font-size-controls {
   /* On the near-black top bar a 12% edge disappears; the chip has to be
      visible for the control to read as a button at all. */
   border-color: rgba(255, 255, 255, 0.22);
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
-[data-theme="dark"] .top-actions .font-size-controls button {
+[data-theme='dark'] .top-actions .font-size-controls button {
   color: var(--cd-primary-hover);
 }
-[data-theme="dark"]
-  .top-actions
-  .font-size-controls
-  button:hover:not(:disabled),
-[data-theme="dark"] .top-actions .font-size-controls button:focus-visible {
+[data-theme='dark'] .top-actions .font-size-controls button:hover:not(:disabled),
+[data-theme='dark'] .top-actions .font-size-controls button:focus-visible {
   background: var(--cd-pill);
 }
-[data-theme="dark"] .mobile-more-menu {
+[data-theme='dark'] .mobile-more-menu {
   border-color: var(--cd-border);
   background: var(--cd-surface);
 }
-[data-theme="dark"] .mobile-more-menu a,
-[data-theme="dark"] .mobile-more-menu button {
+[data-theme='dark'] .mobile-more-menu a,
+[data-theme='dark'] .mobile-more-menu button {
   background: var(--cd-surface);
   color: var(--cd-ink);
 }
-[data-theme="dark"] .cd-skip-link {
+[data-theme='dark'] .cd-skip-link {
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
 
 /* Card surfaces: near-black elevation, 16px radius, hairline border. */
-[data-theme="dark"] .card,
-[data-theme="dark"] .wizard-card,
-[data-theme="dark"] .list-card,
-[data-theme="dark"] .settings-list,
-[data-theme="dark"] .status-card,
-[data-theme="dark"] .profile-card,
-[data-theme="dark"] .timeline,
-[data-theme="dark"] .task-card,
-[data-theme="dark"] .document-card,
-[data-theme="dark"] .date-strip,
-[data-theme="dark"] dl {
+[data-theme='dark'] .card,
+[data-theme='dark'] .wizard-card,
+[data-theme='dark'] .list-card,
+[data-theme='dark'] .settings-list,
+[data-theme='dark'] .status-card,
+[data-theme='dark'] .profile-card,
+[data-theme='dark'] .timeline,
+[data-theme='dark'] .task-card,
+[data-theme='dark'] .document-card,
+[data-theme='dark'] .date-strip,
+[data-theme='dark'] dl {
   background: var(--cd-surface);
   border: 1px solid var(--cd-border);
   border-radius: 16px;
@@ -6688,256 +6670,255 @@ input[type="number"] {
 }
 /* Primary surfaces get the "Gold on Night" treatment: soft vertical gradient,
    gold edge-light on the top border and the layered depth shadow. */
-[data-theme="dark"] .card,
-[data-theme="dark"] .status-card {
+[data-theme='dark'] .card,
+[data-theme='dark'] .status-card {
   background: var(--cd-card-gradient);
   border-top-color: var(--cd-gold-edge);
   box-shadow: var(--cd-shadow);
 }
-[data-theme="dark"] .card:hover {
+[data-theme='dark'] .card:hover {
   background: var(--cd-card-gradient-hover);
 }
-[data-theme="dark"] .status-card.good {
+[data-theme='dark'] .status-card.good {
   background: var(--cd-card-gradient);
 }
-[data-theme="dark"] .task-card.done {
+[data-theme='dark'] .task-card.done {
   background: var(--cd-surface);
 }
-[data-theme="dark"] .timeline-dot {
+[data-theme='dark'] .timeline-dot {
   border-color: var(--cd-surface);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14);
 }
-[data-theme="dark"] .timeline:before {
+[data-theme='dark'] .timeline:before {
   background: rgba(255, 255, 255, 0.1);
 }
 
 /* Secondary labels: uniform muted gray for AA contrast on dark surfaces. */
-[data-theme="dark"] .eyebrow,
-[data-theme="dark"] .section-heading > div > span,
-[data-theme="dark"] .section-title-row > div > span,
-[data-theme="dark"] .section-heading > span,
-[data-theme="dark"] .hero-row p,
-[data-theme="dark"] .page-header p,
-[data-theme="dark"] .status-card span,
-[data-theme="dark"] .status-card p,
-[data-theme="dark"] .detail-list span,
-[data-theme="dark"] .task-date,
-[data-theme="dark"] .task-card p,
-[data-theme="dark"] .list-task p,
-[data-theme="dark"] .metric-list small,
-[data-theme="dark"] .mini-facts,
-[data-theme="dark"] .date-strip span,
-[data-theme="dark"] .balance-grid span,
-[data-theme="dark"] .settings-list p,
-[data-theme="dark"] .document-card p,
-[data-theme="dark"] .timeline-content p,
-[data-theme="dark"] .next-action > p,
-[data-theme="dark"] .pay-summary small,
-[data-theme="dark"] .attention-item small,
-[data-theme="dark"] .trust-message-card small,
-[data-theme="dark"] .nav-tile-label,
-[data-theme="dark"] dt {
+[data-theme='dark'] .eyebrow,
+[data-theme='dark'] .section-heading > div > span,
+[data-theme='dark'] .section-title-row > div > span,
+[data-theme='dark'] .section-heading > span,
+[data-theme='dark'] .hero-row p,
+[data-theme='dark'] .page-header p,
+[data-theme='dark'] .status-card span,
+[data-theme='dark'] .status-card p,
+[data-theme='dark'] .detail-list span,
+[data-theme='dark'] .task-date,
+[data-theme='dark'] .task-card p,
+[data-theme='dark'] .list-task p,
+[data-theme='dark'] .metric-list small,
+[data-theme='dark'] .mini-facts,
+[data-theme='dark'] .date-strip span,
+[data-theme='dark'] .balance-grid span,
+[data-theme='dark'] .settings-list p,
+[data-theme='dark'] .document-card p,
+[data-theme='dark'] .timeline-content p,
+[data-theme='dark'] .next-action > p,
+[data-theme='dark'] .pay-summary small,
+[data-theme='dark'] .attention-item small,
+[data-theme='dark'] .trust-message-card small,
+[data-theme='dark'] .nav-tile-label,
+[data-theme='dark'] dt {
   color: var(--cd-muted);
 }
-[data-theme="dark"] .detail-list > div,
-[data-theme="dark"] .list-task,
-[data-theme="dark"] .settings-list article,
-[data-theme="dark"] .pay-summary > div,
-[data-theme="dark"] .timeline-content,
-[data-theme="dark"] .date-strip > div,
-[data-theme="dark"] .client-card dl > div {
+[data-theme='dark'] .detail-list > div,
+[data-theme='dark'] .list-task,
+[data-theme='dark'] .settings-list article,
+[data-theme='dark'] .pay-summary > div,
+[data-theme='dark'] .timeline-content,
+[data-theme='dark'] .date-strip > div,
+[data-theme='dark'] .client-card dl > div {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Secondary sub-surfaces inside cards. */
-[data-theme="dark"] .balance-grid > div,
-[data-theme="dark"] .metric-grid > div,
-[data-theme="dark"] .trust-message-card > div,
-[data-theme="dark"] .contact-summary,
-[data-theme="dark"] .visa-workflow-summary > div,
-[data-theme="dark"] .family-role-label {
+[data-theme='dark'] .balance-grid > div,
+[data-theme='dark'] .metric-grid > div,
+[data-theme='dark'] .trust-message-card > div,
+[data-theme='dark'] .contact-summary,
+[data-theme='dark'] .visa-workflow-summary > div,
+[data-theme='dark'] .family-role-label {
   background: var(--cd-surface-raised);
   border-color: var(--cd-border);
   color: var(--cd-ink);
 }
 
 /* Status chips, pills and banners — translucent tints with AA-contrast text. */
-[data-theme="dark"] .progress-label,
-[data-theme="dark"] .status-chip {
+[data-theme='dark'] .progress-label,
+[data-theme='dark'] .status-chip {
   background: var(--cd-surface-raised);
   border-color: rgba(255, 255, 255, 0.1);
   color: var(--cd-ink);
 }
-[data-theme="dark"] .status-chip.missing,
-[data-theme="dark"] .pill.amber,
-[data-theme="dark"] .status-chip.soon {
+[data-theme='dark'] .status-chip.missing,
+[data-theme='dark'] .pill.amber,
+[data-theme='dark'] .status-chip.soon {
   background: var(--cd-warning-soft);
   color: #fbd38d;
 }
-[data-theme="dark"] .status-chip.attention,
-[data-theme="dark"] .pill.blue {
+[data-theme='dark'] .status-chip.attention,
+[data-theme='dark'] .pill.blue {
   background: var(--cd-primary-soft);
   color: #a8c7fa;
 }
-[data-theme="dark"] .status-chip.ok,
-[data-theme="dark"] .pill.green {
+[data-theme='dark'] .status-chip.ok,
+[data-theme='dark'] .pill.green {
   background: var(--cd-success-soft);
   color: #7ee2b8;
 }
-[data-theme="dark"] .status-chip.urgent {
+[data-theme='dark'] .status-chip.urgent {
   background: rgba(244, 100, 92, 0.18);
   color: #f4a19b;
 }
-[data-theme="dark"] .pill.purple {
+[data-theme='dark'] .pill.purple {
   background: rgba(139, 92, 246, 0.2);
   color: #c4b5fd;
 }
-[data-theme="dark"] .pill.neutral {
+[data-theme='dark'] .pill.neutral {
   background: var(--cd-surface-raised);
   color: var(--cd-muted);
 }
-[data-theme="dark"] .status-card.warning .status-icon {
+[data-theme='dark'] .status-card.warning .status-icon {
   background: var(--cd-warning-soft);
   color: #fbd38d;
 }
-[data-theme="dark"] .status-card.attention .status-icon {
+[data-theme='dark'] .status-card.attention .status-icon {
   background: var(--cd-primary-soft);
   color: #a8c7fa;
 }
-[data-theme="dark"] .status-card.ok .status-icon,
-[data-theme="dark"] .status-card.good .status-icon,
-[data-theme="dark"] .metric-icon.green {
+[data-theme='dark'] .status-card.ok .status-icon,
+[data-theme='dark'] .status-card.good .status-icon,
+[data-theme='dark'] .metric-icon.green {
   background: var(--cd-success-soft);
   color: #7ee2b8;
 }
-[data-theme="dark"] .metric-icon.blue {
+[data-theme='dark'] .metric-icon.blue {
   background: var(--cd-primary-soft);
   color: #a8c7fa;
 }
-[data-theme="dark"] .metric-icon.purple {
+[data-theme='dark'] .metric-icon.purple {
   background: rgba(139, 92, 246, 0.2);
   color: #c4b5fd;
 }
-[data-theme="dark"] .info-box {
+[data-theme='dark'] .info-box {
   background: var(--cd-primary-soft);
   color: #b9d2fb;
 }
-[data-theme="dark"] .demo-banner {
+[data-theme='dark'] .demo-banner {
   background: var(--cd-warning-soft);
   border-color: rgba(245, 179, 66, 0.5);
   color: #fbd38d;
 }
-[data-theme="dark"] .attention-item {
+[data-theme='dark'] .attention-item {
   background: var(--cd-surface-raised);
   border-inline-start-color: #7d94b8;
 }
-[data-theme="dark"] .attention-item.critical,
-[data-theme="dark"] .attention-item.high {
+[data-theme='dark'] .attention-item.critical,
+[data-theme='dark'] .attention-item.high {
   background: rgba(244, 100, 92, 0.12);
   border-inline-start-color: #f4645c;
 }
-[data-theme="dark"] .attention-item.soon {
+[data-theme='dark'] .attention-item.soon {
   background: var(--cd-warning-soft);
   border-inline-start-color: var(--cd-warning);
 }
-[data-theme="dark"] .attention-item.ok {
+[data-theme='dark'] .attention-item.ok {
   background: var(--cd-success-soft);
   border-inline-start-color: var(--cd-success);
 }
-[data-theme="dark"] .score-ring {
+[data-theme='dark'] .score-ring {
   border-color: var(--cd-success);
 }
 
 /* Buttons and links. Primary keeps its existing gradient shape, restopped to
    muted gold→royal ("Gold on Night"), plus a subtle gold top-edge highlight. */
-[data-theme="dark"] .primary-button {
+[data-theme='dark'] .primary-button {
   border-color: transparent;
   background: linear-gradient(135deg, #b98b2e, #4c6fd1);
   color: #fff;
   box-shadow: inset 0 1px 0 var(--cd-gold-edge-strong);
 }
-[data-theme="dark"] .primary-button:hover {
+[data-theme='dark'] .primary-button:hover {
   border-color: transparent;
   background: linear-gradient(135deg, #a87c25, #4363c0);
 }
-[data-theme="dark"] .secondary-button,
-[data-theme="dark"] .danger-button,
-[data-theme="dark"] .filter-row button,
-[data-theme="dark"] .client-more-actions button,
-[data-theme="dark"] .danger-text-button {
+[data-theme='dark'] .secondary-button,
+[data-theme='dark'] .danger-button,
+[data-theme='dark'] .filter-row button,
+[data-theme='dark'] .client-more-actions button,
+[data-theme='dark'] .danger-text-button {
   border-color: rgba(255, 255, 255, 0.12);
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
-[data-theme="dark"] .secondary-button:hover {
+[data-theme='dark'] .secondary-button:hover {
   background: var(--cd-pill);
 }
-[data-theme="dark"] .danger-button,
-[data-theme="dark"] .client-more-actions .danger-text-button {
+[data-theme='dark'] .danger-button,
+[data-theme='dark'] .client-more-actions .danger-text-button {
   border-color: rgba(244, 100, 92, 0.5);
   color: #f4a19b;
 }
-[data-theme="dark"] .filter-row button.active {
+[data-theme='dark'] .filter-row button.active {
   background: var(--cd-pill);
   color: #fff;
 }
-[data-theme="dark"] .text-link,
-[data-theme="dark"] .section-title-row a,
-[data-theme="dark"] .task-card button,
-[data-theme="dark"] .timeline-content button,
-[data-theme="dark"] .timeline-content a,
-[data-theme="dark"] .text-button {
+[data-theme='dark'] .text-link,
+[data-theme='dark'] .section-title-row a,
+[data-theme='dark'] .task-card button,
+[data-theme='dark'] .timeline-content button,
+[data-theme='dark'] .timeline-content a,
+[data-theme='dark'] .text-button {
   color: var(--cd-primary-hover);
 }
-[data-theme="dark"] button:focus-visible,
-[data-theme="dark"] a:focus-visible,
-[data-theme="dark"] input:focus-visible,
-[data-theme="dark"] select:focus-visible {
+[data-theme='dark'] button:focus-visible,
+[data-theme='dark'] a:focus-visible,
+[data-theme='dark'] input:focus-visible,
+[data-theme='dark'] select:focus-visible {
   box-shadow: 0 0 0 2px var(--cd-canvas);
 }
 
 /* Form controls keep the shared geometry, on dark surfaces. */
-[data-theme="dark"]
-  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-[data-theme="dark"] select,
-[data-theme="dark"] textarea,
-[data-theme="dark"] .cd-text-field__input {
+[data-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']),
+[data-theme='dark'] select,
+[data-theme='dark'] textarea,
+[data-theme='dark'] .cd-text-field__input {
   border-color: rgba(255, 255, 255, 0.14);
   background: var(--cd-surface-raised);
   color: var(--cd-ink);
 }
-[data-theme="dark"] .save-bar {
+[data-theme='dark'] .save-bar {
   border-color: var(--cd-border);
   background: rgba(28, 28, 38, 0.96);
 }
-[data-theme="dark"] .save-bar span {
+[data-theme='dark'] .save-bar span {
   color: #7ee2b8;
 }
 
 /* Dashboard tabs + launcher tiles in dark — "Gold on Night" (זהב על לילה). */
-[data-theme="dark"] .nav-tile {
+[data-theme='dark'] .nav-tile {
   background: var(--cd-card-gradient);
   border-color: var(--cd-border);
   border-top-color: var(--cd-gold-edge);
   box-shadow: var(--cd-shadow);
 }
-[data-theme="dark"] .nav-tile:hover {
+[data-theme='dark'] .nav-tile:hover {
   background: var(--cd-card-gradient-hover);
   transform: translateY(-1px);
   box-shadow: var(--cd-shadow);
 }
 /* Gold glow on the tile icons only — never on text. */
-[data-theme="dark"] .nav-tile svg {
+[data-theme='dark'] .nav-tile svg {
   filter: drop-shadow(0 0 5px rgba(220, 180, 80, 0.4));
 }
-[data-theme="dark"] .dash-tabs {
+[data-theme='dark'] .dash-tabs {
   background: var(--cd-surface);
   border-color: var(--cd-border);
 }
-[data-theme="dark"] .dash-tab {
+[data-theme='dark'] .dash-tab {
   color: #8d8d9d;
 }
-[data-theme="dark"] .dash-tab.active {
+[data-theme='dark'] .dash-tab.active {
   background: var(--cd-pill);
   color: #fff;
   /* Gold top edge via inset shadow: pill buttons are borderless, so no layout shift. */
