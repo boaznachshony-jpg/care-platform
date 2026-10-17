@@ -43,8 +43,6 @@
     "packages/domain/src/money.ts#negateAgorot": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it.",
     "packages/domain/src/money.ts#parseShekels": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it. The web app formats money with its own helpers.",
     "packages/domain/src/money.ts#shekelsText": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it. The web app formats money with its own helpers.",
-    "packages/domain/src/national-insurance.ts#outstandingQuarterlyInsurance": "The case N3 exists for. Work plan 16.10.2026 item D (Team 1) wires it; this line then becomes a warning to delete it.",
-    "packages/domain/src/national-insurance.ts#quarterlyInsuranceScheduleForPayrollMonth": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it. Related to work plan 16.10.2026 item D (Team 1).",
     "packages/domain/src/payroll.ts#BLANK_PAYROLL_COMPONENTS_AGOROT": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it.",
     "packages/domain/src/payroll.ts#PAYROLL_SETTLEMENT_BASIS": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it.",
     "packages/domain/src/proration.ts#isRestDay": "Pre-existing when N3 landed (17.10.2026): tested, never called in production code. Wire it or delete it. Partial-month proration is not applied anywhere.",
