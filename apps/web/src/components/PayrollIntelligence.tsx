@@ -320,43 +320,20 @@ export function PayrollIntelligence({
         ) : (
           <p>אין די נתונים ליצירת תחזית. לא נוספו סכומים משוערים.</p>
         )}
-        <div className="forecast-strip" aria-label="תחזית חודשית">
-          {forecast.months.map((m) => (
-            <details key={m.month}>
-              <summary className="forecast-month">
-                <small>{m.month}</small> <strong>{money.format(m.total)}</strong>{' '}
-                {/* R5-02/R5-03/R5-04. The strip used to say "בפועל" for every
-                    ACTUAL month, and `ACTUAL` means only "a payroll record
-                    exists for this month" — a closed month and an open saved
-                    month both report it. "בפועל" on a month nobody has paid yet
-                    is exactly the false claim R5-03 exists to remove, so the
-                    three cases are now told apart by the one thing that decides
-                    them: whether a canonical close record exists. */}
-                <ValueOrigin
-                  kind={
-                    closes.some((c) => c.month === m.month)
-                      ? 'paid'
-                      : m.status === 'ACTUAL'
-                        ? 'calculated'
-                        : 'forecast'
-                  }
-                />
-              </summary>
-              <ul>
-                {m.components.map((component) => (
-                  <li key={component.id}>
-                    <strong>{component.label}</strong> —{' '}
-                    {component.amount === null ? 'לא ידוע' : money.format(component.amount)}
-                    <small>
-                      {' '}
-                      · {component.explanation} · {component.status}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ))}
-        </div>
+        {/* The twelve-month strip was removed on 16.10.2026 at the owner's
+            request: "התצוגה הזו מיותרת ומעמיסה".
+            It restated one assumption twelve times. With no scenario set, every
+            month takes the same `safeBase` (packages/application/src/product-
+            intelligence.ts), so the strip rendered the identical figure twelve
+            times, each with its own "תחזית" badge, under four headline tiles
+            that are the same number summed, averaged and tripled. Twelve
+            repetitions of one number is not twelve findings, and the badges
+            that make a single figure honest become noise when every tile on the
+            panel carries one.
+            The four headline figures above still answer the question the panel
+            exists for — what a year costs — and R5-07 ("Future Cost placement")
+            remains open for a version derived from the saved records rather
+            than from base salary alone. */}
       </section>
       <section className="card monthly-close" id="monthly-close">
         <div className="section-heading">
