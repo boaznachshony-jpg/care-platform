@@ -1587,5 +1587,9 @@
     "removeConfirm": "Remove this person from the reminder list?",
     "savedNotice": "Recipients saved.",
     "updatedAt": "Updated"
+  },
+  "nationalInsuranceCopy": {
+    "failed": "{{count}} National Insurance reports have not been copied to the server yet. They are saved in the account as usual and nothing was lost; try again, and if it keeps happening, contact support.",
+    "retry": "Try again"
   }
 }
