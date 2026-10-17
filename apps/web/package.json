@@ -4,10 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:ux-v2": "tsx ux-v2/serve.ts --dev",
+    "build:ux-v2": "vite build --config vite.ux-v2.config.ts",
+    "build:vercel": "tsx ux-v2/build-vercel.ts",
+    "preview:ux-v2": "tsx ux-v2/serve.ts",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p ux-v2/tsconfig.json",
     "test": "vitest run",
     "test:a11y": "vitest run --reporter=verbose",
     "test:e2e": "playwright test"
@@ -30,9 +34,11 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "esbuild": "0.25.12",
     "@playwright/test": "^1.50.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
+    "@types/node": "^26.2.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
