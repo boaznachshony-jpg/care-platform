@@ -213,13 +213,17 @@ describe('DashboardPage', () => {
 
   it('renders every launcher tile as a link to its destination', () => {
     renderPage();
-    const payments = createUpcomingPayments();
+    const payments = createUpcomingPayments(new Date(), {
+      employmentStartDate: mockProfile.employmentStartDate,
+    });
     const salaryDate = formatDisplayDate(
       payments.find((payment) => payment.id === 'salary')?.dueDate ?? '',
     );
-    const insuranceDate = formatDisplayDate(
-      payments.find((payment) => payment.id === 'nationalInsurance')?.dueDate ?? '',
-    );
+    const insurance = payments.find((payment) => payment.id === 'nationalInsurance');
+    // D: a passed deadline that is not marked paid stays on the tile, marked late.
+    const insuranceDate = `${formatDisplayDate(insurance?.dueDate ?? '')}${
+      (insurance?.daysRemaining ?? 0) < 0 ? ' · באיחור' : ''
+    }`;
 
     const expectations: Array<[RegExp, string]> = [
       [/^ציון תקינות/, '/overview'],

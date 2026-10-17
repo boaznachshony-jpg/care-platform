@@ -1,0 +1,7 @@
+import { nextDueDate } from './index.js';
+
+export function renderDashboard(): string {
+  return nextDueDate('2026-10-16');
+}
+
+renderDashboard();

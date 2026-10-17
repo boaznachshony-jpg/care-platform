@@ -809,20 +809,34 @@ export function buildContainer(env: Env): Container {
         authentication: hasSupabaseAuth ? 'ok' : 'unconfigured',
         privateStorage: hasPrivateStorage ? 'ok' : 'unconfigured',
       };
-      if (env.NODE_ENV !== 'production') return { ready: true, reasons: [], checks };
       const reasons: string[] = [];
-      if (!pool) reasons.push('DATABASE_URL is not configured');
-      if (!hasSupabaseAuth) reasons.push('Supabase authentication is not configured');
-      if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
-      // The daily scan can detect a loss; without a destination it can only
-      // write a line nobody is subscribed to. In production that is a gap in
-      // the control, not a preference, so `/ready` names it. It is a reason
-      // rather than a check because the endpoint reports dependencies, and the
-      // missing piece here is configuration, not an unreachable service.
-      if (!env.DATA_LOSS_ALERT_EMAIL)
-        reasons.push(
-          'DATA_LOSS_ALERT_EMAIL is not configured; a suspected data loss would be logged and nobody told',
-        );
+      // K (work plan 16.10.2026). Outside production this method used to
+      // return `ready: true` before asking anything, so a staging or local
+      // API holding a rotated key, a deleted bucket or an unreachable database
+      // reported itself healthy - the R0-08 bug, kept alive everywhere except
+      // the one environment where it had already cost a day. Now the rule is
+      // the same in every environment: a dependency that is configured is
+      // probed, and one that does not answer makes the API not ready.
+      //
+      // What stays production-only is a dependency that is NOT configured.
+      // Development and tests run in-memory on purpose (see buildContainer),
+      // and an absent setting there is a choice, not a fault. Unconfigured
+      // dependencies are never probed, so `pnpm dev:api` and the test suite
+      // still make no network call from `/ready`.
+      if (env.NODE_ENV === 'production') {
+        if (!pool) reasons.push('DATABASE_URL is not configured');
+        if (!hasSupabaseAuth) reasons.push('Supabase authentication is not configured');
+        if (!hasPrivateStorage) reasons.push('Private document storage is not configured');
+        // The daily scan can detect a loss; without a destination it can only
+        // write a line nobody is subscribed to. In production that is a gap in
+        // the control, not a preference, so `/ready` names it. It is a reason
+        // rather than a check because the endpoint reports dependencies, and the
+        // missing piece here is configuration, not an unreachable service.
+        if (!env.DATA_LOSS_ALERT_EMAIL)
+          reasons.push(
+            'DATA_LOSS_ALERT_EMAIL is not configured; a suspected data loss would be logged and nobody told',
+          );
+      }
 
       // R0-08. Until now these two checks ended here, at "the variable is set".
       // That is why `authentication` reported `ok` for the whole of the

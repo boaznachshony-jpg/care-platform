@@ -97,6 +97,7 @@ export function AppShell({ children }: AppShellProps) {
         documents: readMvpDocuments(),
         expenses: readMvpEmploymentExpenses(),
         reminderLeadDays: profile.reminderLeadDays,
+        employmentStartDate: profile.employmentStartDate,
       })
     : [];
 
