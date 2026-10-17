@@ -1,0 +1,442 @@
+/* Visual overrides only. Components, text, routing and event handlers are the
+   existing product's. Keep font-scale, focus, reduced-motion and mobile behavior. */
+:root.ux-v2-visual {
+  --cd-ink: #202824;
+  --cd-muted: #59635c;
+  --cd-primary: #365e40;
+  --cd-primary-hover: #294b31;
+  --cd-primary-soft: #e9efdf;
+  --cd-surface: #ffffff;
+  --cd-canvas: #f2f3ed;
+  --cd-border: #dce0d5;
+  --cd-focus: #365e40;
+  --cd-shadow: 0 5px 22px rgb(29 42 29 / 5%);
+  --cd-accent-on-soft: #2e5137;
+  --cd-surface-raised: #f7f8f3;
+  --cd-surface-pill: #edf0e6;
+  --cd-sidebar-surface: #202c24;
+  --cd-sidebar-text: #ebeee4;
+  --cd-sidebar-muted: #bec9b9;
+  --cd-highlight: #d5ee8e;
+  --ux-on-primary: #fff;
+}
+:root.ux-v2-visual[data-theme='dark'] {
+  --cd-ink: #eef1e7;
+  --cd-muted: #b5bfb0;
+  --cd-primary: #c6e38a;
+  --cd-primary-hover: #d7eeab;
+  --cd-primary-soft: #303f29;
+  --ux-on-primary: #202d1b;
+  --cd-surface: #232b25;
+  --cd-canvas: #181e19;
+  --cd-border: #3d493c;
+  --cd-focus: #c6e38a;
+  --cd-shadow: 0 5px 22px rgb(0 0 0 / 14%);
+  --cd-accent-on-soft: #d5eeac;
+  --cd-surface-raised: #2b352c;
+  --cd-surface-pill: #303b30;
+  --cd-sidebar-surface: #141c16;
+  --cd-sidebar-text: #ebeee4;
+  --cd-sidebar-muted: #bec9b9;
+  --cd-highlight: #d5ee8e;
+}
+.ux-v2-visual body {
+  background: var(--cd-canvas);
+  color: var(--cd-ink);
+}
+.ux-v2-visual .environment-banner {
+  background: #344a36;
+  color: #fff;
+  border-color: #344a36;
+}
+.ux-v2-visual .sidebar {
+  background: var(--cd-sidebar-surface);
+  border-color: #3c493e;
+  color: var(--cd-sidebar-text);
+}
+.ux-v2-visual .brand-mark {
+  background: var(--cd-highlight);
+  color: #202c24;
+  border-radius: 13px;
+  box-shadow: none;
+}
+.ux-v2-visual .brand,
+.ux-v2-visual .brand strong {
+  color: var(--cd-ink);
+}
+.ux-v2-visual .brand small {
+  color: var(--cd-muted);
+}
+.ux-v2-visual .sidebar .brand,
+.ux-v2-visual .sidebar .brand strong {
+  color: var(--cd-sidebar-text);
+}
+.ux-v2-visual .sidebar .brand small {
+  color: var(--cd-sidebar-muted);
+}
+.ux-v2-visual .sidebar nav a {
+  color: var(--cd-sidebar-muted);
+  border-radius: 12px;
+}
+.ux-v2-visual .sidebar nav a:hover {
+  background: #344335;
+  color: #fff;
+}
+.ux-v2-visual .sidebar nav a.active {
+  background: var(--cd-highlight);
+  color: #202c24;
+  box-shadow: none;
+}
+.ux-v2-visual .sidebar-help {
+  background: #2c3b2d;
+  border: 1px solid #455442;
+  border-radius: 16px;
+}
+.ux-v2-visual .sidebar-help strong {
+  color: var(--cd-sidebar-text);
+}
+.ux-v2-visual .topbar {
+  background: var(--cd-surface);
+  border-color: var(--cd-border);
+  box-shadow: none;
+}
+.ux-v2-visual .page-header h1,
+.ux-v2-visual .hero-row h1 {
+  letter-spacing: -0.035em;
+  color: var(--cd-ink);
+}
+.ux-v2-visual .eyebrow {
+  color: var(--cd-muted);
+}
+.ux-v2-visual .dash-tabs {
+  background: var(--cd-surface-pill);
+  border: 1px solid var(--cd-border);
+  border-radius: 14px;
+  box-shadow: none;
+}
+.ux-v2-visual .dash-tab {
+  color: var(--cd-muted);
+  border-radius: 10px;
+}
+.ux-v2-visual .dash-tab.active {
+  background: var(--cd-sidebar-surface);
+  color: var(--cd-sidebar-text);
+  box-shadow: none;
+}
+.ux-v2-visual .card,
+.ux-v2-visual .status-card {
+  background: var(--cd-surface);
+  border-color: var(--cd-border);
+  border-radius: 20px;
+  box-shadow: var(--cd-shadow);
+}
+.ux-v2-visual .tile-grid {
+  gap: 14px;
+}
+.ux-v2-visual .nav-tile {
+  background: var(--cd-surface);
+  border-color: var(--cd-border);
+  border-radius: 18px;
+  box-shadow: var(--cd-shadow);
+}
+.ux-v2-visual .nav-tile:hover {
+  border-color: var(--cd-primary);
+}
+.ux-v2-visual .nav-tile-label {
+  color: var(--cd-muted);
+}
+.ux-v2-visual .nav-tile-value {
+  color: var(--cd-ink);
+}
+.ux-v2-visual .cd-tile-grad-stop-a {
+  stop-color: #4d7350;
+}
+.ux-v2-visual .cd-tile-grad-stop-b {
+  stop-color: #a5bb75;
+}
+.ux-v2-visual .primary-button {
+  background: var(--cd-primary);
+  color: var(--ux-on-primary);
+  border-radius: 13px;
+  box-shadow: none;
+}
+.ux-v2-visual .primary-button:hover {
+  background: var(--cd-primary-hover);
+}
+.ux-v2-visual .secondary-button {
+  background: var(--cd-surface);
+  border-color: var(--cd-border);
+  color: var(--cd-ink);
+  border-radius: 13px;
+}
+.ux-v2-visual input,
+.ux-v2-visual select,
+.ux-v2-visual textarea {
+  border-color: var(--cd-border);
+  border-radius: 12px;
+}
+.ux-v2-visual .mobile-nav {
+  background: var(--cd-surface);
+  border-color: var(--cd-border);
+}
+.ux-v2-visual .mobile-nav a.active {
+  color: var(--cd-accent-on-soft);
+  background: var(--cd-primary-soft);
+}
+@media (min-width: 1180px) {
+  .ux-v2-visual .tile-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .ux-v2-visual .nav-tile {
+    padding: 20px 16px;
+  }
+}
+.ux-v2-visual .sidebar-help span,
+.ux-v2-visual .sidebar .settings-link {
+  color: var(--cd-sidebar-muted);
+}
+.ux-v2-visual .sidebar .settings-link:hover {
+  color: #fff;
+  background: #344335;
+}
+.ux-v2-visual .app-frame {
+  padding-block-start: calc(34px / var(--ui-scale));
+}
+.ux-v2-visual .topbar {
+  top: calc(34px / var(--ui-scale));
+}
+.ux-v2-visual .sidebar {
+  /* Desktop font scaling zooms the shell. Keep its fixed menu in the viewport. */
+  inset-block-start: calc(34px / var(--ui-scale));
+  height: calc((100dvh - 34px) / var(--ui-scale));
+}
+
+/* The case picker lives outside the dark sidebar. Its brand and surfaces
+   need the same readable foregrounds as the rest of the light/dark canvas. */
+.ux-v2-visual .clients-landing {
+  background: var(--cd-canvas);
+  color: var(--cd-ink);
+}
+.ux-v2-visual .clients-hero {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+.ux-v2-visual .clients-hero h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.25;
+}
+.ux-v2-visual .clients-hero p,
+.ux-v2-visual .client-card dt {
+  color: var(--cd-muted);
+}
+.ux-v2-visual .clients-hero-actions {
+  width: 100%;
+  max-width: 780px;
+}
+.ux-v2-visual .client-card {
+  border-color: var(--cd-border);
+  border-radius: 20px;
+  box-shadow: var(--cd-shadow);
+}
+.ux-v2-visual .client-avatar {
+  background: var(--cd-primary-soft);
+  color: var(--cd-accent-on-soft);
+}
+.ux-v2-visual .client-card dl > div {
+  border-color: var(--cd-border);
+}
+.ux-v2-visual .client-more-actions summary,
+.ux-v2-visual .clients-empty > span {
+  color: var(--cd-accent-on-soft);
+}
+.ux-v2-visual .local-data-notice {
+  flex-wrap: wrap;
+  background: var(--cd-surface-raised);
+  border: 1px solid var(--cd-border);
+  color: var(--cd-muted);
+}
+.ux-v2-visual .local-data-notice strong {
+  color: var(--cd-ink);
+}
+
+/* Native choices keep their checked state and keyboard behavior, with the
+   full label providing the touch target rather than a text-field-sized box. */
+.ux-v2-visual input[type='checkbox'],
+.ux-v2-visual input[type='radio'] {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 24px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--cd-primary);
+}
+.ux-v2-visual .readable-form label:has(> input[type='checkbox']),
+.ux-v2-visual .readable-form label:has(> input[type='radio']) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+}
+.ux-v2-visual .medications-times {
+  border-color: var(--cd-border);
+}
+.ux-v2-visual .readable-form .medications-times label:has(> input[type='checkbox']) {
+  display: inline-flex;
+  margin-inline-end: 18px;
+}
+.ux-v2-visual .medications-times small,
+.ux-v2-visual .readable-form > p:not(.action-notice) {
+  color: var(--cd-muted);
+}
+.ux-v2-visual .medications-page {
+  gap: 20px;
+}
+.ux-v2-visual .medications-page > h1 {
+  margin-block: 0;
+  line-height: 1.25;
+}
+.ux-v2-visual .medications-page > section,
+.ux-v2-visual .medications-page > form {
+  padding: 24px;
+  border: 1px solid var(--cd-border);
+  border-radius: 20px;
+  background: var(--cd-surface);
+}
+.ux-v2-visual .nav-tile {
+  min-width: 0;
+}
+.ux-v2-visual #main-content,
+.ux-v2-visual #dashboard-overview,
+.ux-v2-visual #dashboard-payments,
+.ux-v2-visual #dashboard-case {
+  scroll-margin-block-start: 136px;
+}
+.ux-v2-visual .nav-tile-value {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.ux-v2-visual button.text-link {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cd-accent-on-soft);
+  font: inherit;
+  font-weight: 700;
+}
+.ux-v2-visual .filter-row button {
+  border-color: var(--cd-border);
+  background: var(--cd-surface);
+  color: var(--cd-ink);
+}
+.ux-v2-visual .filter-row button.active {
+  border-color: var(--cd-primary);
+  background: var(--cd-primary-soft);
+  color: var(--cd-accent-on-soft);
+}
+.ux-v2-visual .mobile-more-menu,
+.ux-v2-visual .mobile-more-menu a,
+.ux-v2-visual .mobile-more-menu button {
+  background: var(--cd-surface);
+  color: var(--cd-ink);
+  border-color: var(--cd-border);
+}
+.ux-v2-visual .mobile-more-menu a.active,
+.ux-v2-visual .mobile-nav button.active {
+  background: var(--cd-primary-soft);
+  color: var(--cd-accent-on-soft);
+}
+
+@media (max-width: 760px) {
+  /* The banner is already in flow on mobile; a second inset created a gap. */
+  .ux-v2-visual .app-frame {
+    padding-block-start: 0;
+  }
+  .ux-v2-visual .topbar {
+    top: 48px;
+  }
+  .ux-v2-visual .clients-hero-actions {
+    align-items: stretch;
+  }
+  .ux-v2-visual .clients-hero-actions > .primary-button,
+  .ux-v2-visual .clients-hero-actions > .secondary-button,
+  .ux-v2-visual .clients-hero-actions > .sign-out-button {
+    /* A horizontal flex basis becomes the height when this row stacks. */
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 58px;
+    padding-block: 12px;
+  }
+  .ux-v2-visual .dash-tabs {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .ux-v2-visual .dash-tab {
+    flex: 1 0 auto;
+    min-width: 0;
+    max-width: 100%;
+    padding-inline: 6px;
+    white-space: normal;
+  }
+  .ux-v2-visual .nav-tile {
+    padding: 18px;
+    gap: 8px;
+  }
+  .ux-v2-visual .medications-page > section,
+  .ux-v2-visual .medications-page > form {
+    padding: 18px;
+  }
+  .ux-v2-visual .mobile-more-menu {
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+  }
+}
+/* Responsive QA correction: the desktop sidebar remains at tablet widths,
+   leaving less room when the existing font-scale preference zooms the shell.
+   Let controls and attention actions wrap without hiding or shrinking them. */
+@media (min-width: 761px) and (max-width: 1050px) {
+  .ux-v2-visual .app-body {
+    min-width: 0;
+  }
+  .ux-v2-visual .topbar {
+    height: auto;
+    min-height: 86px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-block: 12px;
+  }
+  .ux-v2-visual .topbar > div:first-child,
+  .ux-v2-visual .top-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ux-v2-visual .top-actions {
+    flex-wrap: wrap;
+  }
+  .ux-v2-visual .top-actions > * {
+    flex-shrink: 0;
+  }
+  .ux-v2-visual .attention-item {
+    flex-wrap: wrap;
+  }
+  .ux-v2-visual .attention-item > div {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .ux-v2-visual .attention-item > .primary-button,
+  .ux-v2-visual .attention-item > .secondary-button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+@media print {
+  .ux-v2-visual .app-frame {
+    padding-block-start: 0;
+  }
+}

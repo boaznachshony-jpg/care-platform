@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from './AppShell.js';
+import { UxV2VisualLayer } from './visual-ux/UxV2VisualLayer.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { TasksPage } from './pages/TasksPage.js';
 import { EmployeePage } from './pages/EmployeePage.js';
@@ -114,6 +115,7 @@ function AuthenticatedApp() {
       sessionRecovering={<span>{t('errors.sessionRecovering')}</span>}
     >
       <AccountFrozenGate>
+        <UxV2VisualLayer />
         <Routes>
           <Route path="/worker" element={<WorkerPortalPage />} />
           <Route

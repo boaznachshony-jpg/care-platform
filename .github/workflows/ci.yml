@@ -222,6 +222,16 @@ jobs:
         run: pnpm --filter @caredesk/web exec playwright install --with-deps chromium
       - name: Run end-to-end tests
         run: pnpm --filter @caredesk/web test:e2e
+      - name: Reject UX TEST mode in production builds
+        run: |
+          set +e
+          VERCEL_ENV=production pnpm --filter @caredesk/web build:visual-test > /tmp/caredesk-visual-production-guard.log 2>&1
+          task_guard_status=$?
+          set -e
+          test "$task_guard_status" -ne 0
+          grep -F 'UX V2 visual test builds cannot target production.' /tmp/caredesk-visual-production-guard.log
+      - name: Compare approved UX against baseline in desktop and mobile TEST builds
+        run: pnpm --filter @caredesk/web test:e2e:visual
       - name: Upload Playwright report and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
