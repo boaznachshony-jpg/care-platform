@@ -155,6 +155,28 @@ describe('PayrollIntelligence — R5-02 / R5-03 / R5-04', () => {
     );
   });
 
+  /**
+   * Owner, 17.10.2026: full-width bars smeared figures a few hundred shekels
+   * apart across the whole card. The months are a readable list; a small
+   * column chart beside it shows the shape of the year and is hidden from
+   * screen readers, because the list already carries every value.
+   */
+  it('lists the months for reading and draws one small column per month', async () => {
+    const { container } = renderIntelligence();
+    await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
+
+    expect(screen.getByRole('list', { name: 'עלות לפי חודש' })).toBeInTheDocument();
+    expect(container.querySelector('.bar-row-track')).toBeNull();
+
+    const chart = container.querySelector('.trend-chart')!;
+    expect(chart).toHaveAttribute('aria-hidden', 'true');
+    expect(chart.querySelectorAll('button, a, input, [tabindex]')).toHaveLength(0);
+    const columns = Array.from(chart.querySelectorAll('.trend-column'));
+    expect(columns).toHaveLength(container.querySelectorAll('.bar-row').length);
+    expect(columns[0]).toHaveClass('trend-column-paid');
+    expect(columns[1]).toHaveClass('trend-column-open');
+  });
+
   it('marks the amount waiting to be closed as calculated, not as paid', async () => {
     const { container } = renderIntelligence();
     await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());

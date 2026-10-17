@@ -24,6 +24,12 @@ const monthLabel = (month: string) => {
   const date = new Date(`${month}-01T00:00:00Z`);
   return Number.isNaN(date.getTime()) ? month : monthName.format(date);
 };
+/** "2026-06" -> "יוני" / "אוג׳": the chart's axis, where a full name will not fit. */
+const shortMonthName = new Intl.DateTimeFormat('he-IL', { month: 'short', timeZone: 'UTC' });
+const shortMonthLabel = (month: string) => {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? month : shortMonthName.format(date);
+};
 
 const money = new Intl.NumberFormat('he-IL', {
   style: 'currency',
@@ -97,6 +103,7 @@ export function PayrollIntelligence({
   // distinct from an empty list, which is a legitimate state for a case that
   // has never closed a month.
   const [closesError, setClosesError] = useState(false);
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
   // Set only on a failed close POST. Constitution §13: the user's typed
   // payment date/method must not be discarded because the request failed —
   // this flag never clears the form, it only re-enables the button and says
@@ -253,56 +260,102 @@ export function PayrollIntelligence({
                 </strong>
               </div>
             </div>
-            <div className="bar-chart" role="img" aria-label="מגמת עלות חודשית">
-              <h3>מגמת עלות חודשית</h3>
-              {analytics.trend.map((record) => {
-                /* R5-03/R5-05. A closed month has a canonical close record, and
-                   that record already carries the payment date and the moment
-                   it was closed — so this is one of the few places where "when"
-                   can be shown without inventing a field. An open month is a
-                   derived total and nothing more. */
-                const close = closes.find((c) => c.month === record.month);
-                /* One line per month, four fixed places: the month in words,
-                   the bar, the amount, and ONE status. The row used to render
-                   five items into a four-column grid, so the paid badge and its
-                   provenance fell to a second line inside the 70px month
-                   column and wrapped into a five-line bubble, beside a separate
-                   "סגור ✓" that said the same thing as "✓ שולם". A paid month
-                   draws a solid bar and an open one a pale bar, so the
-                   difference survives a glance as well as the text. */
-                const paid = Boolean(close) || record.closed;
-                return (
-                  <div
-                    className={paid ? 'bar-row bar-row-paid' : 'bar-row bar-row-open'}
-                    key={record.month}
-                  >
-                    <span className="bar-row-month">{monthLabel(record.month)}</span>
-                    <div className="bar-row-track">
-                      <i style={{ width: `${Math.max(3, (record.total / max) * 100)}%` }} />
-                    </div>
-                    <strong className="bar-row-amount">{money.format(record.total)}</strong>
-                    <span className="bar-row-status">
-                      {close ? (
-                        <ValueOrigin
-                          kind="paid"
-                          provenance={{
-                            source: t('valueOrigin.source.monthlyClose'),
-                            when: formatDateOnly(close.paymentDate) ?? close.paymentDate,
-                          }}
-                        />
-                      ) : record.closed ? (
-                        <ValueOrigin kind="paid" />
-                      ) : (
-                        <>
-                          <ValueOrigin kind="calculated" />
-                          <small>טרם נסגר</small>
-                        </>
-                      )}
-                    </span>
+            <section className="trend-section" aria-labelledby="monthly-trend-title">
+              <h3 id="monthly-trend-title">מגמת עלות חודשית</h3>
+              {/* The months as a list - month, amount, one status - with a small
+                  column chart beside it. The full-width bars this replaced
+                  smeared figures that differ by a few hundred shekels across
+                  the whole card (owner, 17.10.2026). The list is the readable
+                  part and carries every value; the chart only shows the shape
+                  of the year, so it is hidden from screen readers rather than
+                  read twice. */}
+              <div className="trend-layout">
+                <div className="trend-list" role="list" aria-label="עלות לפי חודש">
+                  {analytics.trend.map((record) => {
+                    /* R5-03/R5-05. A closed month has a canonical close record,
+                       and that record carries the payment date - one of the
+                       few places "when" can be shown without inventing a
+                       field. An open month is a derived total and nothing more. */
+                    const close = closes.find((c) => c.month === record.month);
+                    const paid = Boolean(close) || record.closed;
+                    return (
+                      <div
+                        className={paid ? 'bar-row bar-row-paid' : 'bar-row bar-row-open'}
+                        key={record.month}
+                        role="listitem"
+                      >
+                        <span className="bar-row-month">{monthLabel(record.month)}</span>
+                        <strong className="bar-row-amount">{money.format(record.total)}</strong>
+                        <span className="bar-row-status">
+                          {close ? (
+                            <ValueOrigin
+                              kind="paid"
+                              provenance={{
+                                source: t('valueOrigin.source.monthlyClose'),
+                                when: formatDateOnly(close.paymentDate) ?? close.paymentDate,
+                              }}
+                            />
+                          ) : record.closed ? (
+                            <ValueOrigin kind="paid" />
+                          ) : (
+                            <>
+                              <ValueOrigin kind="calculated" />
+                              <small>טרם נסגר</small>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <figure className="trend-chart" aria-hidden="true">
+                  <div className="trend-plot">
+                    {analytics.trend.map((record) => {
+                      const paid =
+                        record.closed || closes.some((close) => close.month === record.month);
+                      return (
+                        <div
+                          className={
+                            paid
+                              ? 'trend-column trend-column-paid'
+                              : 'trend-column trend-column-open'
+                          }
+                          key={record.month}
+                          onPointerEnter={() => setHoveredMonth(record.month)}
+                          onPointerLeave={() => setHoveredMonth(null)}
+                        >
+                          {/* Grows from a zero baseline: a column that started
+                              anywhere else would turn a few hundred shekels into
+                              a visual cliff. */}
+                          <i style={{ height: `${Math.max(2, (record.total / max) * 100)}%` }} />
+                          {hoveredMonth === record.month ? (
+                            <span className="trend-tooltip">
+                              <strong>{money.format(record.total)}</strong>
+                              <small>{monthLabel(record.month)}</small>
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                  <div className="trend-axis">
+                    {analytics.trend.map((record) => (
+                      <span key={record.month}>{shortMonthLabel(record.month)}</span>
+                    ))}
+                  </div>
+                  <figcaption className="trend-key">
+                    <span className="trend-key-item">
+                      <i className="trend-swatch trend-swatch-paid" />
+                      שולם
+                    </span>
+                    <span className="trend-key-item">
+                      <i className="trend-swatch trend-swatch-open" />
+                      טרם נסגר
+                    </span>
+                  </figcaption>
+                </figure>
+              </div>
+            </section>
             <details>
               <summary>הרכב עלות ומצטבר — חלופה טקסטואלית לתרשים</summary>
               <table>

@@ -6020,30 +6020,36 @@ input[type='number'] {
 .metric-grid strong {
   font-size: 1.3rem;
 }
-.bar-chart {
+/* Monthly cost history: the months as a list (month, amount, one status)
+   with a small column chart beside it. The rows lay themselves out by the
+   width of this card, not of the screen - the same card sits beside a sidebar
+   on a laptop and alone on a phone. */
+.trend-section {
   display: grid;
-  gap: 0;
-  /* The rows lay themselves out by the width of this card, not of the
-     screen: the same card sits beside a sidebar on a laptop and alone on a
-     phone. */
+  gap: 8px;
   container-type: inline-size;
 }
-.bar-chart h3 {
-  margin-bottom: 6px;
+.trend-section h3 {
+  margin: 0;
 }
-/* Monthly cost history: one line per month in four fixed places - month,
-   bar, amount, status. Every column has a set width or a no-wrap rule, so
-   nothing drops onto a second line inside a narrow cell. */
+.trend-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 24px;
+  align-items: start;
+}
+.trend-list {
+  display: grid;
+}
 .bar-row {
   display: grid;
-  /* The status column is a fixed width, not sized by its content: every row
-     is its own grid, and a content-sized column moved the bar and the amount
-     of an open month out of line with the paid months above it. */
-  grid-template-columns: 7.5rem minmax(80px, 1fr) 7rem 17.5rem;
-  grid-template-areas: 'month track amount status';
+  /* Fixed widths: every row is its own grid, and a content-sized column would
+     move one month's amount out of line with the months above it. */
+  grid-template-columns: 7.5rem 7rem minmax(0, 1fr);
+  grid-template-areas: 'month amount status';
   align-items: center;
   column-gap: 16px;
-  padding: 10px 0;
+  padding: 9px 0;
   border-bottom: 1px solid var(--cd-border, #d3dde9);
 }
 .bar-row:last-child {
@@ -6053,30 +6059,6 @@ input[type='number'] {
   grid-area: month;
   font-weight: 600;
   white-space: nowrap;
-}
-.bar-row-track {
-  grid-area: track;
-  height: 10px;
-  background: var(--cd-pill, #eef2f7);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.bar-row-track i {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--cd-accent, #1f62cf);
-}
-/* A month not yet closed is a calculated figure, not a payment: a pale,
-   hatched bar. The status text says so too; the bar is never the only cue. */
-.bar-row-open .bar-row-track i {
-  background: repeating-linear-gradient(
-    45deg,
-    var(--cd-accent-soft, #e3efff),
-    var(--cd-accent-soft, #e3efff) 6px,
-    color-mix(in srgb, var(--cd-accent, #1f62cf) 35%, transparent) 6px,
-    color-mix(in srgb, var(--cd-accent, #1f62cf) 35%, transparent) 12px
-  );
 }
 .bar-row-amount {
   grid-area: amount;
@@ -6109,30 +6091,140 @@ input[type='number'] {
   flex-basis: 100%;
   white-space: nowrap;
 }
-/* A medium-width card: the status moves under its month instead of
-   squeezing the bar. */
-@container (max-width: 700px) {
-  .bar-row {
-    grid-template-columns: 7rem minmax(60px, 1fr) auto;
-    grid-template-areas:
-      'month track amount'
-      'status status status';
-    row-gap: 6px;
+
+/* The chart: one column per month, from a zero baseline, at most 24px wide
+   with air between them; a hairline baseline; month names under it. A paid
+   month is solid; a month not closed yet is an outlined column - a pale fill
+   alone is too faint on white to read (1.2:1), while the outline in the
+   accent clears 3:1. The list beside it says the same in words. */
+.trend-chart {
+  margin: 0;
+  padding: 12px 12px 8px;
+  border: 1px solid var(--cd-border, #d3dde9);
+  border-radius: 12px;
+  background: var(--cd-surface-raised, #f5f8fc);
+}
+.trend-plot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  height: 120px;
+  border-bottom: 1px solid var(--cd-border, #d3dde9);
+}
+.trend-column {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex: 1 1 0;
+  height: 100%;
+  min-width: 0;
+}
+.trend-column i {
+  display: block;
+  width: 100%;
+  max-width: 24px;
+  border-radius: 4px 4px 0 0;
+  background: var(--cd-accent, #1f62cf);
+}
+.trend-column-open i {
+  background: var(--cd-accent-soft, #e3efff);
+  box-shadow: inset 0 0 0 1.5px var(--cd-accent, #1f62cf);
+}
+.trend-column:hover i {
+  filter: brightness(1.12);
+}
+.trend-tooltip {
+  position: absolute;
+  /* Inside the plot, at its top: above the column it would leave the chart
+     box and cover the heading. */
+  top: 0;
+  /* Physical on purpose: centred over its column in RTL and LTR alike. */
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--cd-surface, #fff);
+  border: 1px solid var(--cd-border, #d3dde9);
+  box-shadow: 0 4px 14px rgb(15 33 61 / 12%);
+  white-space: nowrap;
+  z-index: 2;
+  pointer-events: none;
+}
+.trend-tooltip strong {
+  font-variant-numeric: tabular-nums;
+}
+.trend-tooltip small {
+  color: var(--cd-text-secondary, #52627a);
+}
+.trend-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 4px;
+}
+.trend-axis span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--cd-text-secondary, #52627a);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.trend-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--cd-text-secondary, #52627a);
+}
+.trend-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.trend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--cd-accent, #1f62cf);
+}
+.trend-swatch-open {
+  background: var(--cd-accent-soft, #e3efff);
+  box-shadow: inset 0 0 0 1.5px var(--cd-accent, #1f62cf);
+}
+
+/* A medium card: the chart goes above the list, at full width but still
+   short, and the list keeps its one line per month. */
+@container (max-width: 720px) {
+  .trend-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .trend-chart {
+    order: -1;
   }
 }
-/* A phone-width card: month and amount on the first line, the bar under
-   them, the status last - each at full width, nothing squeezed. */
+/* A phone-width card: month and amount on the first line, the status under
+   them at full width - nothing squeezed. */
 @container (max-width: 460px) {
   .bar-row {
     grid-template-columns: 1fr auto;
     grid-template-areas:
       'month amount'
-      'track track'
       'status status';
-    row-gap: 8px;
+    row-gap: 6px;
   }
   .bar-row .value-origin-provenance {
     white-space: normal;
+  }
+  .trend-plot {
+    height: 90px;
   }
 }
 
