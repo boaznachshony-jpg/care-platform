@@ -1,0 +1,6 @@
+// ...and the route that validates the export does not accept it.
+const body = z
+  .object({
+    sections: z.array(z.enum(['case', 'caregiver', 'documents', 'payroll'])).min(1),
+  })
+  .strict();

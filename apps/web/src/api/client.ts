@@ -30,8 +30,11 @@ import type {
   StartVisaRenewalRequest,
   LegalAcceptanceRequest,
   LegalAcceptanceResponse,
+  ImportNationalInsuranceReportRequest,
+  NationalInsuranceReportResponse,
 } from '@caredesk/schemas';
 import { newIdempotencyKey } from './idempotency.js';
+import { payrollEntryRequest, scenarioExpenseRequest } from './strict-bodies.js';
 import { getBrowserAuthClient } from '../auth/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
 
@@ -737,8 +740,41 @@ export function savePayrollEntry(
 ): Promise<{ entry: PayrollEntryResponse; replayed: boolean }> {
   return apiRequest(
     `/cases/${encodeURIComponent(caseId)}/payroll-entries/${encodeURIComponent(month)}`,
-    { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
+    {
+      method: 'PUT',
+      headers: { 'idempotency-key': idempotencyKey },
+      body: JSON.stringify(payrollEntryRequest(input)),
+    },
   );
+}
+
+/**
+ * R5-09 stage 2: copy one saved National Insurance payment's report lines to
+ * the server (migration 0049). Idempotent on `legacyExpenseId`; the server
+ * recomputes every amount and never deletes a month. Built field by field so a
+ * stray property cannot reach the route's `.strict()` schema (the G rule).
+ */
+export function importNationalInsuranceReport(
+  caseId: string,
+  input: ImportNationalInsuranceReportRequest,
+): Promise<{
+  report: NationalInsuranceReportResponse;
+  outcome: 'created' | 'updated' | 'unchanged';
+}> {
+  return apiRequest(`/cases/${encodeURIComponent(caseId)}/national-insurance-reports/import`, {
+    method: 'POST',
+    body: JSON.stringify({
+      legacyExpenseId: input.legacyExpenseId,
+      dueDate: input.dueDate,
+      months: input.months.map((line) => ({
+        month: line.month,
+        employed: line.employed,
+        wage: line.wage,
+        ratePercent: line.ratePercent,
+        amount: line.amount,
+      })),
+    }),
+  });
 }
 
 /** Planning-only Future Cost scenario expense (canonical scenario_expense row). */
@@ -769,7 +805,7 @@ export function createScenarioExpense(
   return apiRequest(`/cases/${encodeURIComponent(caseId)}/scenario-expenses`, {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify(input),
+    body: JSON.stringify(scenarioExpenseRequest(input)),
   });
 }
 /**
@@ -786,7 +822,11 @@ export function updateScenarioExpense(
 ): Promise<{ expense: ScenarioExpenseResponse; replayed: boolean }> {
   return apiRequest(
     `/cases/${encodeURIComponent(caseId)}/scenario-expenses/${encodeURIComponent(expenseId)}`,
-    { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
+    {
+      method: 'PUT',
+      headers: { 'idempotency-key': idempotencyKey },
+      body: JSON.stringify(scenarioExpenseRequest(input)),
+    },
   );
 }
 export function deleteScenarioExpense(

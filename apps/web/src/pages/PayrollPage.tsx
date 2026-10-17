@@ -15,9 +15,13 @@ import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
+import { useNationalInsuranceReportCopy } from '../sync/national-insurance-report-copy.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
-import { quarterlyInsuranceScheduleForPayrollMonth } from '../quarterly-national-insurance.js';
+import {
+  NATIONAL_INSURANCE_CATEGORY,
+  quarterlyInsuranceScheduleForPayrollMonth,
+} from '../national-insurance-presenter.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -26,8 +30,13 @@ import {
   type EmploymentExpenseFrequency,
   type MvpAdditionalPayment,
   type MvpEmploymentExpense,
+  type MvpNationalInsuranceReportMonth,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
+import {
+  storageWriteFailureMessage,
+  storageWriteFailureReason,
+} from '../storage/storage-write-error.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
 import { ValueOrigin, ValueOriginLegend } from '../components/ValueOrigin.js';
 import {
@@ -44,9 +53,6 @@ const percent = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
 const MAX_PAYROLL_AMOUNT = 10_000_000;
 const MAX_PAID_SATURDAYS = 6;
 const MAX_PAID_HOLIDAYS = 10;
-
-/** The employment expense category that opens the national insurance calculator. */
-export const NATIONAL_INSURANCE_CATEGORY = 'ביטוח לאומי';
 
 /**
  * Index order matters: position 0 is month 01. The names themselves live in the
@@ -309,6 +315,41 @@ export function nationalInsuranceTotals(
   return { wages: Math.round(wages), amount: roundMoney(amount) };
 }
 
+/**
+ * L. The report lines as they are saved with the payment: what the form showed,
+ * not the overrides that produced it, so a later change to a payroll record
+ * or to the contract salary cannot rewrite a report that was already filed.
+ */
+export function nationalInsuranceReportMonths(
+  rows: NationalInsuranceMonthRow[],
+): MvpNationalInsuranceReportMonth[] {
+  return rows.map(({ month, employed, wage, ratePercent, amount }) => ({
+    month,
+    employed,
+    wage,
+    ratePercent,
+    amount,
+  }));
+}
+
+/**
+ * L. A saved report reopened for editing: every stored line comes back as an
+ * override, so the table shows what was filed rather than re-deriving it.
+ */
+export function overridesFromReportMonths(
+  months: MvpNationalInsuranceReportMonth[] | undefined,
+): Record<string, NationalInsuranceMonthOverride> {
+  const overrides: Record<string, NationalInsuranceMonthOverride> = {};
+  for (const line of months ?? []) {
+    overrides[line.month] = {
+      employed: line.employed,
+      wage: String(line.wage),
+      rate: String(line.ratePercent),
+    };
+  }
+  return overrides;
+}
+
 /** "2026-07" -> "יולי 2026", using the month names the form itself prints. */
 export function hebrewMonthLabel(month: string, monthNames: string[]): string {
   const index = Number(month.slice(5, 7)) - 1;
@@ -453,6 +494,10 @@ function withNationalInsuranceTracking(
     savedAt: existing?.savedAt ?? new Date().toISOString(),
     source: 'payroll-national-insurance',
     sourcePeriod,
+    // L: saving a payroll month must not drop a report already saved here.
+    ...(existing?.nationalInsuranceMonths
+      ? { nationalInsuranceMonths: existing.nationalInsuranceMonths }
+      : {}),
   };
 
   return existing
@@ -540,9 +585,13 @@ export function PayrollPage() {
   const legacyClientId = useLegacyClientId();
   const caseLookup = useCaseForLegacyClient(legacyClientId);
   const path = useClientPath();
-  const [profile, setProfile] = useMvpProfile();
+  const [profile, setProfile, profileSaveError] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
+  // R5-09 stage 2: each saved National Insurance report is also copied to the
+  // server. The workspace stays the place it is saved; a copy that fails is
+  // said on screen below the periodic payments heading, never swallowed.
+  const nationalInsuranceCopy = useNationalInsuranceReportCopy(caseLookup, expenses);
   /**
    * WEB-02: read once, synchronously, before the first paint. Restoring in an
    * effect would flash the empty wizard and race the user's first keystroke.
@@ -592,6 +641,10 @@ export function PayrollPage() {
   const [expenseAmountOverridden, setExpenseAmountOverridden] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  /** Set when the device refused a periodic-payment write (I); shown by the form. */
+  const [expenseSaveError, setExpenseSaveError] = useState('');
+  /** Set when the device refused the wizard's save; shown where success would be. */
+  const [payrollSaveError, setPayrollSaveError] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
@@ -1085,7 +1138,10 @@ export function PayrollPage() {
       setMessage('יש להזין שכר בסיס ותאריך תחולה.');
       return;
     }
-    setProfile({ ...profile, baseSalary, salaryEffectiveDate: profile.salaryEffectiveDate });
+    // Silent saves: a refused profile write keeps this step open and says so.
+    if (!setProfile({ ...profile, baseSalary, salaryEffectiveDate: profile.salaryEffectiveDate })) {
+      return;
+    }
     setMessage('הגדרת השכר נשמרה. מקור השכר: נתוני ההעסקה שהזין המשתמש.');
     setStep(1);
   }
@@ -1160,10 +1216,32 @@ export function PayrollPage() {
       ? records.map((record) => (record.month === saved.month ? saved : record))
       : [saved, ...records];
     const nextExpenses = withNationalInsuranceTracking(expenses, saved.month);
-    saveMvpPayroll(next);
-    saveMvpEmploymentExpenses(nextExpenses);
+    // Silent saves (17.10.2026): both writes used to be unguarded. A refused
+    // write threw out of this handler, so the screen said nothing and the
+    // employer could not tell whether the month existed. The record is written
+    // first and alone decides whether the month was saved; the draft is only
+    // cleared after it has landed, so a refusal loses nothing that was typed.
+    try {
+      saveMvpPayroll(next);
+    } catch (error) {
+      setPayrollSaved(false);
+      setPayrollSaveError(storageWriteFailureMessage(error));
+      return;
+    }
+    setPayrollSaveError('');
     setRecords(next);
-    setExpenses(nextExpenses);
+    // The quarter's tracking row is secondary: the month is already saved, so
+    // a refusal here is reported as exactly that and nothing else is undone.
+    let trackingSaved = true;
+    try {
+      saveMvpEmploymentExpenses(nextExpenses);
+      setExpenses(nextExpenses);
+    } catch (error) {
+      trackingSaved = false;
+      setPayrollSaveError(
+        `רישום השכר החודשי נשמר, אבל מעקב התשלום לביטוח לאומי לרבעון לא נשמר: ${storageWriteFailureReason(error)} שמרו את החודש שוב כדי ליצור את המעקב.`,
+      );
+    }
     setReportYear(saved.month.slice(0, 4));
     // WEB-02: the work is committed, so the draft is no longer recoverable
     // work — it is a stale copy that could later be offered over newer data.
@@ -1171,7 +1249,11 @@ export function PayrollPage() {
     setDraftRestoredNotice(false);
     setDraftStatus('idle');
     setDraftSavedAt('');
-    setMessage('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
+    setMessage(
+      trackingSaved
+        ? 'רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.'
+        : 'רישום השכר החודשי נשמר.',
+    );
     setPayrollSaved(true);
     if (sequence && continueSequence) {
       const addedMonths = sequence.addedMonths.includes(saved.month)
@@ -1219,12 +1301,15 @@ export function PayrollPage() {
       savedAt: existingExpense?.savedAt ?? new Date().toISOString(),
       source: existingExpense?.source,
       sourcePeriod: existingExpense?.sourcePeriod,
+      // L: the report lines are kept with the payment instead of discarded.
+      ...(isNationalInsuranceExpense && insuranceMonthRows.length > 0
+        ? { nationalInsuranceMonths: nationalInsuranceReportMonths(insuranceMonthRows) }
+        : {}),
     };
     const next = existingExpense
       ? expenses.map((expense) => (expense.id === existingExpense.id ? saved : expense))
       : [saved, ...expenses];
-    saveMvpEmploymentExpenses(next);
-    setExpenses(next);
+    if (!persistExpenses(next)) return;
     setExpenseDraft((current) => ({ ...current, amount: '', dueDate: '', note: '' }));
     setInsuranceMonthOverrides({});
     setExpenseAmountOverridden(false);
@@ -1245,9 +1330,28 @@ export function PayrollPage() {
     // A saved amount is the customer's figure and must not be overwritten by
     // the calculator; a tracking item with no amount yet is left to compute.
     setExpenseAmountOverridden(expense.amountEntered !== false);
-    setInsuranceMonthOverrides({});
+    // L: a saved report reopens as it was filed.
+    setInsuranceMonthOverrides(overridesFromReportMonths(expense.nationalInsuranceMonths));
     setEditingExpenseId(expense.id);
     setMessage('עדכנו את הפרטים בטופס ושמרו.');
+  }
+
+  /**
+   * I, applied here with L: false when the device refused the write. The list
+   * then stays what is stored and the form says why. Marking a quarter paid
+   * goes through here too, and since D that mark is what clears an overdue
+   * quarter, so a refused one must not look accepted.
+   */
+  function persistExpenses(next: MvpEmploymentExpense[]): boolean {
+    try {
+      saveMvpEmploymentExpenses(next);
+    } catch (error) {
+      setExpenseSaveError(storageWriteFailureMessage(error));
+      return false;
+    }
+    setExpenseSaveError('');
+    setExpenses(next);
+    return true;
   }
 
   function toggleExpense(expense: MvpEmploymentExpense) {
@@ -1256,15 +1360,13 @@ export function PayrollPage() {
         ? { ...item, status: item.status === 'paid' ? ('upcoming' as const) : ('paid' as const) }
         : item,
     );
-    saveMvpEmploymentExpenses(next);
-    setExpenses(next);
+    persistExpenses(next);
   }
 
   function removeExpense(expense: MvpEmploymentExpense) {
     if (!window.confirm(`למחוק את התשלום "${expense.category}"?`)) return;
     const next = expenses.filter((item) => item.id !== expense.id);
-    saveMvpEmploymentExpenses(next);
-    setExpenses(next);
+    if (!persistExpenses(next)) return;
     setMessage('התשלום התקופתי נמחק.');
   }
 
@@ -1311,6 +1413,11 @@ export function PayrollPage() {
           <p className="info-box">
             הסכום מגיע מהזנת המשתמש בלבד. המערכת אינה קובעת שכר חוקי ואינה מחליפה בדיקה מקצועית.
           </p>
+          {profileSaveError ? (
+            <p className="action-notice error" role="alert">
+              {profileSaveError}
+            </p>
+          ) : null}
           <button className="primary-button" type="submit">
             שמירת הגדרת השכר
           </button>
@@ -2222,6 +2329,11 @@ export function PayrollPage() {
               </section>
             </>
           ) : null}
+          {payrollSaveError ? (
+            <p className="action-notice error" role="alert">
+              {payrollSaveError}
+            </p>
+          ) : null}
           {step === 5 && payrollSaved ? (
             <div className="success-box payroll-save-confirmation" role="status">
               <strong>השכר נשמר בהצלחה</strong>
@@ -2294,6 +2406,14 @@ export function PayrollPage() {
             amounts, the national insurance calculator's derived amount, and
             rows the user marked as paid. Before the badges they were three
             claims in one typeface. */}
+        {nationalInsuranceCopy.failedCount > 0 ? (
+          <p className="action-notice error" role="alert">
+            {t('nationalInsuranceCopy.failed', { count: nationalInsuranceCopy.failedCount })}{' '}
+            <button className="text-link" type="button" onClick={nationalInsuranceCopy.retry}>
+              {t('nationalInsuranceCopy.retry')}
+            </button>
+          </p>
+        ) : null}
         <ValueOriginLegend kinds={['input', 'calculated', 'paid']} />
         <form className="readable-form" onSubmit={saveExpense}>
           <div className="form-grid">
@@ -2573,6 +2693,11 @@ export function PayrollPage() {
               </button>
             ) : null}
           </div>
+          {expenseSaveError ? (
+            <p className="action-notice error" role="alert">
+              {expenseSaveError}
+            </p>
+          ) : null}
         </form>
         {expenses.length > 0 ? (
           <div className="detail-list employment-expenses">

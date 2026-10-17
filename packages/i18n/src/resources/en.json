@@ -1463,7 +1463,36 @@
       "retry": "Reload this part"
     },
     "sessionRecovering": "Reconnecting to your account... what you entered is saved.",
-    "apiUnreachable": "No server address is configured for this environment, so cloud saving is not working. Data is stored on this device only. Please contact support."
+    "apiUnreachable": "No server address is configured for this environment, so cloud saving is not working. Data is stored on this device only. Please contact support.",
+    "api": {
+      "network": "We could not reach the server, and nothing was saved. Check your internet connection and try again.",
+      "sessionExpired": "Your session has ended, and nothing was saved. Sign in again and retry.",
+      "forbidden": "Your account is not allowed to do this, and nothing was saved.",
+      "managerRequired": "Only the account owner or a manager can do this, and nothing was saved.",
+      "mfaRequired": "This action requires two-step verification, and nothing was saved. Turn it on in Settings and try again.",
+      "notFound": "This item was not found. It may have been deleted, or you may not have access to it. Reload the page and check.",
+      "validation": "Some details are not valid, so nothing was saved. Check the fields and try again.",
+      "badRequest": "The request was not sent correctly, so nothing was saved. Reload the page and try again. If it happens again, contact support.",
+      "conflict": "The data changed since this screen was opened, perhaps on another device, so your change was not saved. Reload the page to see the latest version, then save again.",
+      "invalidState": "This cannot be done in the item's current state, and nothing was saved. Reload the page and check its status.",
+      "inProgress": "An earlier action on this item is still running. Wait a moment and try again.",
+      "payrollMonthClosed": "This payroll month is already closed and cannot be changed. Your change was not saved.",
+      "totalMismatch": "The total does not match the sum of its parts, so nothing was saved. Check the amounts and try again.",
+      "workspaceShrinkRejected": "Saving was stopped because it would have deleted existing data. Nothing on the server changed. Reload the page before you continue.",
+      "workspaceRestoreNotConfirmed": "The restore has to be confirmed explicitly before it runs. Nothing was restored.",
+      "reviewerRequired": "Choose a reviewer before saving. Nothing was saved.",
+      "documentNotInCase": "One of the selected documents does not belong to this case. Reload the page and select again.",
+      "ruleExists": "A rule like this already exists, so no new rule was created.",
+      "familyMemberExists": "This family member is already on the account, so no new invitation was sent.",
+      "invitationInvalid": "This invitation is no longer valid. Ask the account owner to send a new one.",
+      "accountFrozen": "The account is currently frozen, so changes cannot be saved. See the billing screen for details.",
+      "rateLimited": "Too many requests were sent in a short time, and nothing was saved. Wait a minute and try again.",
+      "deliveryFailed": "Sending did not succeed. Try again in a few minutes.",
+      "billingUnavailable": "The payment service is not available right now. Try again later.",
+      "serviceUnavailable": "The service is not available right now, and the action did not complete. Try again in a few minutes.",
+      "server": "A server error occurred, and the action did not complete. Try again. If it happens again, contact support.",
+      "generic": "The action did not complete. Try again, and if it happens again, contact support."
+    }
   },
   "medications": {
     "eyebrow": "Handover information",
@@ -1558,5 +1587,9 @@
     "removeConfirm": "Remove this person from the reminder list?",
     "savedNotice": "Recipients saved.",
     "updatedAt": "Updated"
+  },
+  "nationalInsuranceCopy": {
+    "failed": "{{count}} National Insurance reports have not been copied to the server yet. They are saved in the account as usual and nothing was lost; try again, and if it keeps happening, contact support.",
+    "retry": "Try again"
   }
 }

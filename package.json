@@ -20,7 +20,7 @@
     "db:sponsor": "node --env-file=.env.local --import tsx packages/db/src/sponsor-tenant.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "node scripts/check-source-encoding.mjs && node scripts/check-imports-resolve.mjs && node scripts/check-repo-hygiene.mjs && node scripts/check-adr-006-freeze.mjs && node scripts/check-migration-ledger.mjs && node scripts/check-tenant-db-path.mjs && eslint .",
+    "lint": "node scripts/check-source-encoding.mjs && node scripts/check-imports-resolve.mjs && node scripts/check-repo-hygiene.mjs && node scripts/check-adr-006-freeze.mjs && node scripts/check-migration-ledger.mjs && node scripts/check-tenant-db-path.mjs && node scripts/check-exported-and-unused.mjs && node scripts/check-shared-enums.mjs && eslint .",
     "lint:encoding": "node scripts/check-source-encoding.mjs",
     "lint:hygiene": "node scripts/check-repo-hygiene.mjs",
     "lint:hygiene:demo-failure": "node scripts/check-repo-hygiene.mjs --fixture scripts/fixtures/repo-hygiene-violations",
@@ -30,8 +30,15 @@
     "lint:migration-ledger:demo-failure": "node scripts/check-migration-ledger.mjs --fixture scripts/fixtures/migration-ledger-violations",
     "lint:tenant-db-path": "node scripts/check-tenant-db-path.mjs",
     "lint:tenant-db-path:demo-failure": "node scripts/check-tenant-db-path.mjs --fixture scripts/fixtures/tenant-db-path-violations",
+    "lint:exported-and-unused": "node scripts/check-exported-and-unused.mjs",
+    "lint:exported-and-unused:demo-failure": "node scripts/check-exported-and-unused.mjs --fixture scripts/fixtures/exported-and-unused-violations",
+    "lint:shared-enums": "node scripts/check-shared-enums.mjs",
+    "lint:shared-enums:demo-failure": "node scripts/check-shared-enums.mjs --root scripts/fixtures/shared-enums-violation --sidecar shared-enums.json",
     "typecheck": "pnpm -r --if-present typecheck",
+    "pretest": "node scripts/check-dist-freshness.mjs",
     "test": "pnpm -r --if-present test",
+    "check:dist-freshness": "node scripts/check-dist-freshness.mjs",
+    "check:dist-freshness:demo-failure": "node scripts/check-dist-freshness.mjs --demo-failure",
     "test:a11y": "pnpm --filter @caredesk/web test:a11y",
     "build": "pnpm -r --if-present build",
     "check": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test",
@@ -48,7 +55,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
     "prettier": "^3.4.2",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3"
   }
 }

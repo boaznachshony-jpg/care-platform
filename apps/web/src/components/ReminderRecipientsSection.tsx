@@ -9,6 +9,7 @@ import {
   type MvpReminderChannel,
   type MvpReminderRecipient,
 } from '../storage/mvp-storage.js';
+import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 
 /**
@@ -49,12 +50,28 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
   const [draft, setDraft] = useState(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /** I: set when the device refused a write; cleared by the next one that lands. */
+  const [saveError, setSaveError] = useState('');
 
-  function persist(next: MvpReminderRecipient[]): void {
+  /**
+   * I: false when the device refused the write. The list used to be put on
+   * screen before the write, so a refused one left the new person showing as
+   * if saved. Now the write comes first, and on failure the screen keeps what
+   * is stored and says so.
+   */
+  function persist(next: MvpReminderRecipient[]): boolean {
+    try {
+      saveMvpReminderRecipients(next);
+    } catch (error) {
+      setSaved(false);
+      setSaveError(storageWriteFailureMessage(error));
+      return false;
+    }
+    setSaveError('');
     setRecipients(next);
-    saveMvpReminderRecipients(next);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2500);
+    return true;
   }
 
   /**
@@ -82,15 +99,13 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
     event.preventDefault();
     if (!draft.name.trim()) return;
     const now = new Date().toISOString();
-    if (editingId) {
-      persist(
-        recipients.map((item) =>
+    const next = editingId
+      ? recipients.map((item) =>
           item.id === editingId ? { ...item, ...draft, updatedAt: now } : item,
-        ),
-      );
-    } else {
-      persist([...recipients, { ...draft, id: crypto.randomUUID(), updatedAt: now }]);
-    }
+        )
+      : [...recipients, { ...draft, id: crypto.randomUUID(), updatedAt: now }];
+    // On failure the form keeps what was typed, so it can be retried.
+    if (!persist(next)) return;
     setDraft(emptyDraft());
     setEditingId(null);
   }
@@ -103,7 +118,7 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
 
   function remove(id: string): void {
     if (!window.confirm(t('reminderRecipients.removeConfirm'))) return;
-    persist(recipients.filter((item) => item.id !== id));
+    if (!persist(recipients.filter((item) => item.id !== id))) return;
     if (editingId === id) {
       setEditingId(null);
       setDraft(emptyDraft());
@@ -260,6 +275,11 @@ export function ReminderRecipientsSection({ recordedBy = '' }: { recordedBy?: st
           </button>
         ) : null}
         {saved ? <p className="success-box">{t('reminderRecipients.savedNotice')}</p> : null}
+        {saveError ? (
+          <p className="action-notice error" role="alert">
+            {saveError}
+          </p>
+        ) : null}
       </form>
     </section>
   );

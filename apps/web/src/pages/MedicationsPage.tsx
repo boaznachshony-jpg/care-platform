@@ -9,6 +9,7 @@ import {
   type MvpMedicationDay,
   type MvpMedicationTime,
 } from '../storage/mvp-storage.js';
+import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import { ReminderRecipientsSection } from '../components/ReminderRecipientsSection.js';
 import {
@@ -63,6 +64,8 @@ export function MedicationsPage() {
   const [draft, setDraft] = useState(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /** I: set when the device refused a write; cleared by the next one that lands. */
+  const [saveError, setSaveError] = useState('');
 
   // Medications are the record an emergency binder is read for on someone
   // else's device — see EmergencyBinderPage.tsx. Getting them onto the
@@ -175,12 +178,26 @@ export function MedicationsPage() {
     };
   }, [caseLookup, syncAttempt]);
 
-  function persist(next: MvpMedication[]): void {
+  /**
+   * I: false when the device refused the write. The list used to be put on
+   * screen before the write, so a refused one left the new row showing as if
+   * saved. Now the write comes first, and on failure the screen keeps what is
+   * stored and says so.
+   */
+  function persist(next: MvpMedication[]): boolean {
+    try {
+      saveMvpMedications(next);
+    } catch (error) {
+      setSaved(false);
+      setSaveError(storageWriteFailureMessage(error));
+      return false;
+    }
+    setSaveError('');
     setMedications(next);
-    saveMvpMedications(next);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2500);
     if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
+    return true;
   }
 
   function toggleTime(time: MvpMedicationTime): void {
@@ -210,15 +227,13 @@ export function MedicationsPage() {
     event.preventDefault();
     if (!draft.name.trim()) return;
     const now = new Date().toISOString();
-    if (editingId) {
-      persist(
-        medications.map((item) =>
+    const next = editingId
+      ? medications.map((item) =>
           item.id === editingId ? { ...item, ...draft, updatedAt: now } : item,
-        ),
-      );
-    } else {
-      persist([...medications, { ...draft, id: crypto.randomUUID(), updatedAt: now }]);
-    }
+        )
+      : [...medications, { ...draft, id: crypto.randomUUID(), updatedAt: now }];
+    // On failure the form keeps what was typed, so it can be retried.
+    if (!persist(next)) return;
     setDraft(emptyDraft());
     setEditingId(null);
   }
@@ -255,11 +270,17 @@ export function MedicationsPage() {
     // runs (see markPendingAction/replayPendingActions), so a failed attempt
     // is retried on the next mount, the retry button, or this bumped
     // `syncAttempt`, rather than silently never tried again.
-    if (caseLookup.status === 'found') {
-      const serverId = getUploadedServerId('medications', caseLookup.caseId, id);
-      if (serverId) markPendingAction('medications', caseLookup.caseId, id, 'archive');
+    //
+    // I: the archive is recorded only once the local removal has landed, so a
+    // refused write cannot archive on the server a medication still shown here.
+    const serverId =
+      caseLookup.status === 'found'
+        ? getUploadedServerId('medications', caseLookup.caseId, id)
+        : undefined;
+    if (!persist(medications.filter((item) => item.id !== id))) return;
+    if (serverId && caseLookup.status === 'found') {
+      markPendingAction('medications', caseLookup.caseId, id, 'archive');
     }
-    persist(medications.filter((item) => item.id !== id));
     if (editingId === id) {
       setEditingId(null);
       setDraft(emptyDraft());
@@ -482,6 +503,11 @@ export function MedicationsPage() {
           </button>
         ) : null}
         {saved ? <p className="success-box">{t('medications.savedNotice')}</p> : null}
+        {saveError ? (
+          <p className="action-notice error" role="alert">
+            {saveError}
+          </p>
+        ) : null}
       </form>
 
       {/* Kept on the same screen as the medication list on purpose: the person

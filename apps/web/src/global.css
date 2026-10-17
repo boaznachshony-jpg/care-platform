@@ -2058,6 +2058,27 @@ a {
   background: #fde8e8;
   color: #a52f27;
 }
+
+.quarterly-insurance-earlier h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.quarterly-insurance-earlier ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quarterly-insurance-earlier li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  min-width: 0;
+}
 .payroll-history small {
   display: block;
   margin-top: 4px;
@@ -6020,21 +6041,6 @@ input[type='number'] {
   height: 100%;
   background: repeating-linear-gradient(45deg, #1559c7, #1559c7 8px, #4c81d2 8px, #4c81d2 16px);
 }
-.forecast-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-  gap: 8px;
-}
-.forecast-strip > div {
-  display: grid;
-  gap: 4px;
-  padding: 10px;
-  border: 1px solid #dce5f1;
-  border-radius: 10px;
-}
-.forecast-strip span {
-  font-size: 0.75rem;
-}
 
 /* Forecast card — the figures read before the labelling, not under it.
    `.value-origin` wraps and grows by default, which is right inside a form
@@ -6059,24 +6065,6 @@ input[type='number'] {
   line-height: 1.3;
 }
 .metric-grid-compact .value-origin,
-.forecast-month .value-origin {
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  font-size: 0.66rem;
-  padding: 0 6px;
-  line-height: 1.5;
-}
-.forecast-month {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
-  cursor: pointer;
-}
-.forecast-month strong {
-  font-size: 1rem;
-  margin-inline-start: auto;
-}
 .payroll-intelligence table {
   width: 100%;
   border-collapse: collapse;
@@ -6770,7 +6758,6 @@ input[type='number'] {
 [data-theme='dark'] .trust-message-card > div,
 [data-theme='dark'] .contact-summary,
 [data-theme='dark'] .visa-workflow-summary > div,
-[data-theme='dark'] .forecast-strip > div,
 [data-theme='dark'] .family-role-label {
   background: var(--cd-surface-raised);
   border-color: var(--cd-border);

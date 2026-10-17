@@ -19,14 +19,14 @@
     "@caredesk/infrastructure": "workspace:*",
     "@caredesk/schemas": "workspace:*",
     "@fastify/cors": "^11.3.0",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.5",
     "pg": "^8.13.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/pg": "^8.11.10",
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3",
     "vitest": "^3.0.4"
   }

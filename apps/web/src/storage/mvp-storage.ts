@@ -3,6 +3,7 @@ import {
   decryptBusinessStorageValue,
   encryptBusinessStorageValue,
 } from './business-storage-crypto.js';
+import { StorageWriteError } from './storage-write-error.js';
 
 export type ReminderLeadDays = 1 | 7 | 14 | 21 | 30;
 
@@ -136,8 +137,17 @@ function readBusinessItem(key: string): string | null {
   return stored === null ? null : decryptBusinessStorageValue(stored);
 }
 
+/**
+ * I. Every workspace write goes through here, and a refused one throws
+ * `StorageWriteError`: one type the screens can catch and show, instead of a
+ * raw DOMException that escaped them and left an unsaved row on screen.
+ */
 function writeBusinessItem(key: string, value: string): void {
-  window.localStorage.setItem(key, encryptBusinessStorageValue(value));
+  try {
+    window.localStorage.setItem(key, encryptBusinessStorageValue(value));
+  } catch (reason) {
+    throw new StorageWriteError(key, reason);
+  }
 }
 
 export function clientIdFromPath(
@@ -328,6 +338,15 @@ function readMvpProfileForClient(clientId: string | null): MvpProfile {
 
 export function readMvpProfile(): MvpProfile {
   return readMvpProfileForClient(clientIdFromPath());
+}
+
+/**
+ * Silent saves (17.10.2026): `saveMvpProfile` writes the profile first and
+ * then the employer list and the automatic tasks. A refusal names its key, and
+ * this says whether the refused write was the profile itself.
+ */
+export function isMvpProfileStorageKey(key: string): boolean {
+  return key === STORAGE_KEY || key.startsWith(`${STORAGE_KEY}${CLIENT_KEY_SEPARATOR}`);
 }
 
 export function saveMvpProfile(profile: MvpProfile): void {
@@ -580,6 +599,25 @@ export interface MvpEmploymentExpense {
   savedAt: string;
   source?: 'payroll-national-insurance';
   sourcePeriod?: string;
+  /**
+   * L. The per-month lines of a National Insurance report as they stood when
+   * the payment was saved. They used to be discarded on save, so the amount
+   * survived but not the wages, months and rates it was reported from.
+   * ADR-006 amendment 1 allows this field until NI reports have a canonical
+   * home; see docs/adr/ADR-006-amendment-01-national-insurance-report-months.md.
+   */
+  nationalInsuranceMonths?: MvpNationalInsuranceReportMonth[];
+}
+
+/** One line of a saved National Insurance report. See `nationalInsuranceMonths`. */
+export interface MvpNationalInsuranceReportMonth {
+  month: string;
+  employed: boolean;
+  /** Whole shekels: the Institute's form is "ללא אגורות". */
+  wage: number;
+  ratePercent: number;
+  /** wage x rate, to agorot. */
+  amount: number;
 }
 
 export type MvpTaskPriority = 'normal' | 'important' | 'urgent';

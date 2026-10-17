@@ -11,7 +11,7 @@ import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 
 export function EmployeePage() {
   const path = useClientPath();
-  const [profile, setProfile] = useMvpProfile();
+  const [profile, setProfile, profileSaveError] = useMvpProfile();
   const [draft, setDraft] = useState(profile);
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -68,7 +68,8 @@ export function EmployeePage() {
           className="card readable-form"
           onSubmit={(event) => {
             event.preventDefault();
-            setProfile(draft);
+            // Silent saves: on a refusal the form stays open with what was typed.
+            if (!setProfile(draft)) return;
             setEditing(false);
             setSaved(true);
           }}
@@ -119,6 +120,11 @@ export function EmployeePage() {
               ))}
             </select>
           </label>
+          {profileSaveError ? (
+            <p className="action-notice error" role="alert">
+              {profileSaveError}
+            </p>
+          ) : null}
           <div className="button-row">
             <button className="primary-button" type="submit">
               שמירת הפרטים

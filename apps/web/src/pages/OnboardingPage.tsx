@@ -10,6 +10,7 @@ import {
   languageAfterCountryChange,
 } from '../caregiver-options.js';
 import { ensureCanonicalCase, LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
+import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { AutocompleteField } from '../components/AutocompleteField.js';
 import { LicensedBureauSelector } from '../components/LicensedBureauSelector.js';
 import { israeliLocalities } from '../data/israeli-localities.js';
@@ -134,7 +135,9 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const { clientId = '' } = useParams<{ clientId: string }>();
   const path = useClientPath();
-  const [profile, setProfile] = useMvpProfile();
+  const [profile, setProfile, profileSaveError] = useMvpProfile();
+  /** Silent saves: set when the device refused the in-progress draft. */
+  const [draftSaveError, setDraftSaveError] = useState('');
   /**
    * The local, per-client signal for "this account has never seen billing".
    * It is wrong for a paying customer adding a second client — which is why
@@ -182,11 +185,26 @@ export function OnboardingPage() {
   // out of the committed profile but survive leaving the page mid-step.
   useEffect(() => {
     const handle = window.setTimeout(
-      () => saveMvpOnboardingDraft(draft, { samePersonChoice: samePerson, helperChoice }),
+      () => saveDraft(draft, { samePersonChoice: samePerson, helperChoice }),
       DRAFT_SAVE_DELAY_MS,
     );
     return () => window.clearTimeout(handle);
   }, [draft, samePerson, helperChoice]);
+
+  /**
+   * Silent saves (17.10.2026): the draft write used to run unguarded, and from
+   * the debounce timer a refusal was an uncaught error nobody saw. The draft
+   * is what lets someone leave mid-step and come back, so losing it is said.
+   */
+  function saveDraft(...args: Parameters<typeof saveMvpOnboardingDraft>): void {
+    try {
+      saveMvpOnboardingDraft(...args);
+    } catch (error) {
+      setDraftSaveError(storageWriteFailureMessage(error));
+      return;
+    }
+    setDraftSaveError('');
+  }
 
   function updateDraft(next: MvpProfile) {
     setDraft(next);
@@ -328,7 +346,7 @@ export function OnboardingPage() {
     updateDraft(next);
     // A radio tap is a discrete answer, not mid-typing: persist it immediately
     // so a reload inside the debounce window still restores the exact choice.
-    saveMvpOnboardingDraft(next, { samePersonChoice: choice, helperChoice });
+    saveDraft(next, { samePersonChoice: choice, helperChoice });
   }
 
   function chooseHelper(choice: Exclude<Choice, ''>) {
@@ -336,16 +354,18 @@ export function OnboardingPage() {
     const next =
       choice === 'no' ? { ...draft, representativeName: '', representativePhone: '' } : draft;
     if (next !== draft) updateDraft(next);
-    saveMvpOnboardingDraft(next, { samePersonChoice: samePerson, helperChoice: choice });
+    saveDraft(next, { samePersonChoice: samePerson, helperChoice: choice });
   }
 
-  function commitStep(next: MvpProfile) {
+  /** False when the device refused the step: the wizard then stays on it. */
+  function commitStep(next: MvpProfile): boolean {
     // When the employer is the care recipient, the ID/phone/address typed on
     // the employer step also answer the recipient fields elsewhere in the app.
     const committed = withSamePersonFallbacks(next);
     setDraft(committed);
-    setProfile(committed);
-    saveMvpOnboardingDraft(committed, { samePersonChoice: samePerson, helperChoice });
+    if (!setProfile(committed)) return false;
+    saveDraft(committed, { samePersonChoice: samePerson, helperChoice });
+    return true;
   }
 
   async function complete() {
@@ -355,7 +375,10 @@ export function OnboardingPage() {
       onboardingCompleted: true,
     });
     setDraft(completed);
-    setProfile(completed);
+    // Silent saves: a refused profile used to be followed by clearing the
+    // draft, opening the case and leaving the wizard — setup "finished" with
+    // nothing kept. Now nothing after this runs unless the profile landed.
+    if (!setProfile(completed)) return;
     clearMvpOnboardingDraft();
     window.localStorage.removeItem(stepStorageKey(clientId));
 
@@ -483,8 +506,7 @@ export function OnboardingPage() {
             if (step === LAST_STEP) {
               void complete();
             } else {
-              commitStep(draft);
-              setStep((value) => value + 1);
+              if (commitStep(draft)) setStep((value) => value + 1);
             }
           }}
         >
@@ -984,6 +1006,11 @@ export function OnboardingPage() {
             </div>
           ) : null}
 
+          {profileSaveError || draftSaveError ? (
+            <p className="action-notice error" role="alert">
+              {profileSaveError || draftSaveError}
+            </p>
+          ) : null}
           <div className="wizard-actions">
             <button
               className="secondary-button"

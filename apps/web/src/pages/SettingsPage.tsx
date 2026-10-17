@@ -26,7 +26,7 @@ import {
 export function SettingsPage() {
   const path = useClientPath();
   const { t } = useTranslation();
-  const [profile, setProfile] = useMvpProfile();
+  const [profile, setProfile, profileSaveError] = useMvpProfile();
   // Setup data must never have to be typed twice: the form starts from the
   // stored profile synchronously (no flash of empty fields), with the
   // same-person details already mirrored across the employer/recipient pair.
@@ -164,7 +164,12 @@ export function SettingsPage() {
               field as string
             ];
           }
-          setProfile({ ...profile, ...(changes as Partial<MvpProfile>) });
+          // Silent saves: on a refusal the touched fields stay touched, so the
+          // form keeps what was typed and the same press can be retried.
+          if (!setProfile({ ...profile, ...(changes as Partial<MvpProfile>) })) {
+            setSaved(false);
+            return;
+          }
           touchedFields.current.clear();
           setSaved(true);
         }}
@@ -614,6 +619,11 @@ export function SettingsPage() {
           </div>
           {notificationResult ? <p role="status">{notificationResult}</p> : null}
         </section>
+        {profileSaveError ? (
+          <p className="action-notice error" role="alert">
+            {profileSaveError}
+          </p>
+        ) : null}
         <div className="save-bar">
           {saved ? <span role="status">{t('settings.saved')}</span> : <span />}
           <button className="primary-button" type="submit" disabled={!profileIsValid}>

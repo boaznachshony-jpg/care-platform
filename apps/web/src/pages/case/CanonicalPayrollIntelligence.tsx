@@ -23,6 +23,7 @@ import {
   type SaveScenarioExpenseRequest,
   type ScenarioExpenseResponse,
 } from '../../api/client.js';
+import { payrollEntryRequest } from '../../api/strict-bodies.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -143,6 +144,56 @@ function legacyExpenseToScenario(expense: MvpEmploymentExpense): SaveScenarioExp
         startMonth: dueMonth,
         endMonth: null,
       };
+}
+
+/**
+ * R5-09. `saturdayRate` is optional on the legacy MVP record because the field
+ * did not exist before 30.07.2026. Every month entered before that date stores
+ * only the product, `saturdayPay`, which is required and therefore always
+ * present. Reading the absent rate as `?? 0` migrated such a month with rest
+ * day pay of zero, and the screen then offered to remove the browser record
+ * that held the only copy of the real figure.
+ *
+ * The canonical entry stores a rate and a day count rather than a product, so
+ * a `saturdayPay` that does not divide evenly into its day count cannot be
+ * represented exactly. That case is reported rather than rounded away: a month
+ * a family reconstructs at a termination settlement must not move by an agora
+ * on its own, because `docs/governance/TERMINATION-SETTLEMENT.md` makes the
+ * gap against the calculation a debt owed to the caregiver.
+ */
+export type LegacyRestDayFigures = {
+  saturdayRate?: number;
+  paidSaturdays: number;
+  saturdayPay: number;
+};
+
+export type LegacyRestDayRate =
+  | { kind: 'stored' | 'derived' | 'none'; rate: number }
+  | { kind: 'unrepresentable'; rate: number; wouldBecome: number; stored: number };
+
+export function legacyRestDayRate(record: LegacyRestDayFigures): LegacyRestDayRate {
+  if (typeof record.saturdayRate === 'number' && Number.isFinite(record.saturdayRate)) {
+    return { kind: 'stored', rate: record.saturdayRate };
+  }
+  const days = record.paidSaturdays;
+  const pay = record.saturdayPay;
+  if (!Number.isFinite(days) || !Number.isFinite(pay) || days <= 0 || pay === 0) {
+    // Nothing was paid for rest days, or the record cannot say how many there
+    // were. Zero is the honest answer here, unlike the `?? 0` it replaces.
+    return { kind: 'none', rate: 0 };
+  }
+  try {
+    const rateAgorot = scaleAgorot(agorotFromShekels(pay), 1 / days);
+    const rate = shekelsOf(rateAgorot);
+    const wouldBecome = shekelsOf(scaleAgorot(rateAgorot, days));
+    return wouldBecome === pay
+      ? { kind: 'derived', rate }
+      : { kind: 'unrepresentable', rate, wouldBecome, stored: pay };
+  } catch {
+    // A legacy record carrying a non-finite or out-of-range figure must not
+    // tear down the screen on the way to being reported (DOM-04 class).
+    return { kind: 'none', rate: 0 };
+  }
 }
 
 /** The authenticated EmploymentCase is the sole authority for this canonical payroll surface. */
@@ -298,9 +349,9 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     // WEB-04(b): a saved server entry always wins over the profile — this
     // branch only ever reaches `prefillFromProfile` when there is NO saved
     // entry for the month, i.e. exactly the case `blank()` used to handle.
-    const next = found
-      ? { ...found, version: found.version }
-      : prefillFromProfile(profileRef.current);
+    // G: picked field by field, not spread. The loaded entry carries `id`,
+    // `month`, `createdAt` and `updatedAt`, which the strict route refuses.
+    const next = found ? payrollEntryRequest(found) : prefillFromProfile(profileRef.current);
     setDraft(next);
     // What "unsaved" means below: the draft this effect just produced, before
     // any keystroke. Recorded as a snapshot rather than compared field-by-field
@@ -377,7 +428,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       await savePayrollEntry(
         caseId,
         month,
-        { ...draft, total: calculatedTotal },
+        payrollEntryRequest({ ...draft, total: calculatedTotal }),
         newIdempotencyKey(),
       );
       setState('saved');
@@ -406,6 +457,14 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   }
   function prepareLegacyMigration() {
     if (!legacy || !migrationConfirmed) return;
+    const restDay = legacyRestDayRate(legacy);
+    if (restDay.kind === 'unrepresentable') {
+      setError(
+        `לא ניתן להעביר את החודש הזה בלי לשנות את הסכום. ברישום המקומי שמור תשלום שבת של ₪${restDay.stored.toFixed(2)} עבור ${legacy.paidSaturdays} שבתות, והרישום הקנוני שומר תעריף ליום ולא סכום כולל — תעריף של ₪${restDay.rate.toFixed(2)} היה מניב ₪${restDay.wouldBecome.toFixed(2)}. הרישום המקומי נשאר ללא שינוי. הזינו את התעריף המדויק במסך השכר ושמרו את החודש מחדש, ואז העבירו.`,
+      );
+      return;
+    }
+    setError('');
     // These figures now come from the legacy MVP record, not the profile —
     // the "prefilled from setup" badge would be actively misleading here.
     setPrefilledFields({ baseSalary: false, restDayRate: false });
@@ -414,7 +473,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       baseSalary: legacy.baseSalary,
       workDays: legacy.workDays,
       paidRestDays: legacy.paidSaturdays,
-      restDayRate: legacy.saturdayRate ?? 0,
+      restDayRate: restDay.rate,
       paidHolidays: legacy.paidHolidays ?? 0,
       holidayPay: legacy.holidayPay ?? 0,
       vacationDays: legacy.vacationDays ?? 0,

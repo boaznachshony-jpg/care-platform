@@ -12,6 +12,8 @@ import {
 } from '../health-factors.js';
 import { OpenIssuesGlance, type OpenIssue } from '../components/OpenIssuesGlance.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
+import { overdueDaysLabel } from '../national-insurance-presenter.js';
+import { readMvpEmploymentExpenses } from '../storage/mvp-storage.js';
 import { SOON_WINDOW_DAYS, daysUntil, expirySeverity } from '../date-diff.js';
 import { missingProfileFieldKeys } from '../profile-completeness.js';
 
@@ -123,16 +125,23 @@ export function OpenIssuesPage() {
     });
   }
 
-  for (const payment of createUpcomingPayments()) {
+  for (const payment of createUpcomingPayments(new Date(), {
+    expenses: readMvpEmploymentExpenses(),
+    employmentStartDate: profile.employmentStartDate,
+  })) {
     if (payment.daysRemaining > SOON_WINDOW_DAYS) continue;
     issues.push({
       id: `payment-${payment.id}`,
-      severity: 'soon',
+      // D: a passed deadline is not "soon". It used to be impossible here,
+      // because the date could never be in the past.
+      severity: payment.daysRemaining < 0 ? 'urgent' : 'soon',
       title: t(`payments.${payment.id}Title`),
       explanation: `${t('payments.dueDate', { date: formatDisplayDate(payment.dueDate) })} · ${
         payment.daysRemaining === 0
           ? t('payments.dueToday')
-          : t('payments.daysRemaining', { count: payment.daysRemaining })
+          : payment.daysRemaining < 0
+            ? overdueDaysLabel(payment.daysRemaining)
+            : t('payments.daysRemaining', { count: payment.daysRemaining })
       }`,
       actionLabel: payment.id === 'salary' ? t('payments.openPayroll') : t('payments.openTasks'),
       actionTo: path(payment.id === 'salary' ? '/payroll' : '/tasks'),
