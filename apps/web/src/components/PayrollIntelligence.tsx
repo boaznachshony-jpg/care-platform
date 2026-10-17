@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { payrollIntelligence } from '../product-intelligence.js';
+import { payrollRecordDeductions } from '../payroll-report.js';
 import {
   type MvpEmploymentExpense,
   type MvpMonthlyClose,
@@ -18,6 +19,49 @@ const money = new Intl.NumberFormat('he-IL', {
   currency: 'ILS',
   maximumFractionDigits: 0,
 });
+/**
+ * R5-10. `pocketMoney` is a deduction. `packages/domain/src/payroll.ts:68`
+ * says so in as many words, and `calculateMonthlyPayroll` has always counted
+ * it as one, which is why the record's stored `total` already nets it.
+ *
+ * The close payload re-derived the additions/deductions split by hand and left
+ * it out. Two things followed. The server's reconcile asks whether
+ * `total === baseSalary + additions - deductions`, and with the pocket money
+ * missing from one side it does not, so the month was refused with a 422 and
+ * the screen told the family to check their internet connection for a request
+ * the network had delivered perfectly. And where the clamp absorbed the error
+ * instead, the stored receipt understated BOTH figures by exactly the pocket
+ * money, the two errors cancelled in the total, and the CHECK constraint that
+ * exists to catch this passed — leaving the immutable record a termination
+ * settlement is reconstructed from quietly wrong on both lines.
+ *
+ * Deriving `additions` from the stored total by subtraction is kept: the total
+ * is the one figure the domain owns end to end, so anything derived from it
+ * cannot drift. What is removed is the `Math.max(0, …)` clamp, which existed
+ * only to satisfy the `additions_amount >= 0` constraint from migration 0026.
+ * A split that cannot be expressed is now named rather than silently replaced
+ * by one that reconciles against figures nobody was paid.
+ */
+export type CanonicalCloseSplit =
+  | { kind: 'ok'; additions: number; deductions: number }
+  | { kind: 'unrepresentable'; additions: number; deductions: number };
+
+export function canonicalCloseSplit(record: {
+  total: number;
+  baseSalary: number;
+  pocketMoney: number;
+  medicalInsuranceDeduction?: number;
+  housingDeduction?: number;
+  advances: number;
+  agreedDeduction: number;
+}): CanonicalCloseSplit {
+  const deductions = payrollRecordDeductions(record);
+  const additions = record.total - record.baseSalary + deductions;
+  return additions < 0
+    ? { kind: 'unrepresentable', additions, deductions }
+    : { kind: 'ok', additions, deductions };
+}
+
 export function PayrollIntelligence({
   records,
   expenses,
@@ -47,6 +91,8 @@ export function PayrollIntelligence({
   // this flag never clears the form, it only re-enables the button and says
   // what happened, so the same click can be retried.
   const [closeError, setCloseError] = useState(false);
+  /** Separate from `closeError`: this one is never worth retrying. */
+  const [closeRefusal, setCloseRefusal] = useState('');
   const [closing, setClosing] = useState(false);
   const closeKey = useRef(newIdempotencyKey());
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -115,11 +161,15 @@ export function PayrollIntelligence({
           : null;
   async function closeMonth() {
     if (!caseId || !open || !paymentDate || open.total <= 0) return;
-    const deductions =
-      (open.medicalInsuranceDeduction ?? 0) +
-      (open.housingDeduction ?? 0) +
-      open.advances +
-      open.agreedDeduction;
+    const split = canonicalCloseSplit(open);
+    if (split.kind === 'unrepresentable') {
+      setCloseRefusal(
+        `לא ניתן לסגור את החודש: הסכום הכולל השמור (₪${open.total.toFixed(2)}) נמוך משכר הבסיס פחות הקיזוזים (₪${split.deductions.toFixed(2)}), ולכן התוספות יוצאות שליליות (₪${split.additions.toFixed(2)}) והשרת אינו יכול לרשום אותן. החודש נשאר פתוח ושום דבר לא נמחק. פתחו את החודש במסך השכר ושמרו אותו מחדש כדי שהסכום יחושב מחדש.`,
+      );
+      return;
+    }
+    setCloseRefusal('');
+    const deductions = split.deductions;
     const actualBase = open.baseSalary;
     setClosing(true);
     setCloseError(false);
@@ -133,7 +183,7 @@ export function PayrollIntelligence({
           paymentMethod,
           total: open.total,
           baseSalary: actualBase,
-          additions: Math.max(0, open.total - actualBase + deductions),
+          additions: split.additions,
           deductions,
         },
         closeKey.current,
@@ -320,43 +370,20 @@ export function PayrollIntelligence({
         ) : (
           <p>אין די נתונים ליצירת תחזית. לא נוספו סכומים משוערים.</p>
         )}
-        <div className="forecast-strip" aria-label="תחזית חודשית">
-          {forecast.months.map((m) => (
-            <details key={m.month}>
-              <summary className="forecast-month">
-                <small>{m.month}</small> <strong>{money.format(m.total)}</strong>{' '}
-                {/* R5-02/R5-03/R5-04. The strip used to say "בפועל" for every
-                    ACTUAL month, and `ACTUAL` means only "a payroll record
-                    exists for this month" — a closed month and an open saved
-                    month both report it. "בפועל" on a month nobody has paid yet
-                    is exactly the false claim R5-03 exists to remove, so the
-                    three cases are now told apart by the one thing that decides
-                    them: whether a canonical close record exists. */}
-                <ValueOrigin
-                  kind={
-                    closes.some((c) => c.month === m.month)
-                      ? 'paid'
-                      : m.status === 'ACTUAL'
-                        ? 'calculated'
-                        : 'forecast'
-                  }
-                />
-              </summary>
-              <ul>
-                {m.components.map((component) => (
-                  <li key={component.id}>
-                    <strong>{component.label}</strong> —{' '}
-                    {component.amount === null ? 'לא ידוע' : money.format(component.amount)}
-                    <small>
-                      {' '}
-                      · {component.explanation} · {component.status}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ))}
-        </div>
+        {/* The twelve-month strip was removed on 16.10.2026 at the owner's
+            request: "התצוגה הזו מיותרת ומעמיסה".
+            It restated one assumption twelve times. With no scenario set, every
+            month takes the same `safeBase` (packages/application/src/product-
+            intelligence.ts), so the strip rendered the identical figure twelve
+            times, each with its own "תחזית" badge, under four headline tiles
+            that are the same number summed, averaged and tripled. Twelve
+            repetitions of one number is not twelve findings, and the badges
+            that make a single figure honest become noise when every tile on the
+            panel carries one.
+            The four headline figures above still answer the question the panel
+            exists for — what a year costs — and R5-07 ("Future Cost placement")
+            remains open for a version derived from the saved records rather
+            than from base salary alone. */}
       </section>
       <section className="card monthly-close" id="monthly-close">
         <div className="section-heading">
@@ -419,6 +446,11 @@ export function PayrollIntelligence({
             {closeError ? (
               <p className="error-box" role="alert">
                 הסגירה נכשלה ולא נרשמה. הנתונים שהזנתם לא נמחקו — בדקו את החיבור ונסו לסגור שוב.
+              </p>
+            ) : null}
+            {closeRefusal ? (
+              <p className="error-box" role="alert">
+                {closeRefusal}
               </p>
             ) : null}
             <button

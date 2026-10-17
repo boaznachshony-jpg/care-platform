@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import type { Container } from '../container.js';
+import { createBinderExportRequestSchema } from '@caredesk/schemas';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import {
-  BINDER_SECTIONS,
   InMemoryBinderExportService,
   PgBinderExportService,
   type BinderExportService,
@@ -13,21 +13,8 @@ import { sendError, sendValidationError } from './http-errors.js';
 
 const params = z.object({ caseId: z.string().uuid() });
 
-/**
- * The explicit selection manifest. Nothing is implied: a section or document
- * that was not named here was not exported, and every document id must belong
- * to the case (verified server-side) before a receipt exists.
- */
-const body = z
-  .object({
-    sections: z.array(z.enum(BINDER_SECTIONS)).min(1).max(BINDER_SECTIONS.length),
-    documentIds: z.array(z.string().uuid()).max(200).default([]),
-  })
-  .strict()
-  .refine((value) => value.documentIds.length === 0 || value.sections.includes('documents'), {
-    path: ['documentIds'],
-    message: 'documentIds requires the documents section',
-  });
+/** The explicit selection manifest - shared with EmergencyBinderPage. */
+const body = createBinderExportRequestSchema;
 
 const MINUTE_MS = 60_000;
 export const BINDER_EXPORT_RATE_LIMITS = {

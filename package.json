@@ -31,7 +31,10 @@
     "lint:tenant-db-path": "node scripts/check-tenant-db-path.mjs",
     "lint:tenant-db-path:demo-failure": "node scripts/check-tenant-db-path.mjs --fixture scripts/fixtures/tenant-db-path-violations",
     "typecheck": "pnpm -r --if-present typecheck",
+    "pretest": "node scripts/check-dist-freshness.mjs",
     "test": "pnpm -r --if-present test",
+    "check:dist-freshness": "node scripts/check-dist-freshness.mjs",
+    "check:dist-freshness:demo-failure": "node scripts/check-dist-freshness.mjs --demo-failure",
     "test:a11y": "pnpm --filter @caredesk/web test:a11y",
     "build": "pnpm -r --if-present build",
     "check": "pnpm format:check && pnpm lint && pnpm build && pnpm typecheck && pnpm test",
@@ -48,7 +51,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
     "prettier": "^3.4.2",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3"
   }
 }
