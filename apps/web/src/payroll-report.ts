@@ -20,6 +20,59 @@ function amount(value: number | undefined): number {
   return Number.isFinite(value) ? (value ?? 0) : 0;
 }
 
+/**
+ * C1. The one definition of a month's additions and deductions on the web.
+ *
+ * `/clients/:id/payroll` shows the same month twice: in the annual report built
+ * here, and in the cost table `payrollIntelligence` builds. The cost table kept
+ * its own copy of the sum and left `pocketMoney` out of the deductions, so a
+ * month of base 6,000 + holiday 800 + pocket money 500 was shown there as
+ * deductions 0 and total 6,300 — a row that does not add up, next to a report
+ * that says deductions 500. `pocketMoney` is a deduction
+ * (`packages/domain/src/payroll.ts`), so every screen sums it through here.
+ */
+export function payrollRecordAdditions(
+  record: Pick<
+    MvpPayrollRecord,
+    | 'saturdayPay'
+    | 'holidayPay'
+    | 'vacationPay'
+    | 'sickPay'
+    | 'employerContributions'
+    | 'otherAddition'
+    | 'additionalPayments'
+  >,
+): number {
+  return (
+    amount(record.saturdayPay) +
+    amount(record.holidayPay) +
+    amount(record.vacationPay) +
+    amount(record.sickPay) +
+    amount(record.employerContributions) +
+    amount(record.otherAddition) +
+    (record.additionalPayments ?? []).reduce((total, payment) => total + amount(payment.amount), 0)
+  );
+}
+
+export function payrollRecordDeductions(
+  record: Pick<
+    MvpPayrollRecord,
+    | 'pocketMoney'
+    | 'medicalInsuranceDeduction'
+    | 'housingDeduction'
+    | 'advances'
+    | 'agreedDeduction'
+  >,
+): number {
+  return (
+    amount(record.pocketMoney) +
+    amount(record.medicalInsuranceDeduction) +
+    amount(record.housingDeduction) +
+    amount(record.advances) +
+    amount(record.agreedDeduction)
+  );
+}
+
 export function getPayrollYears(records: MvpPayrollRecord[]): string[] {
   return [...new Set(records.map((record) => record.month.slice(0, 4)).filter(Boolean))].sort(
     (first, second) => second.localeCompare(first),
@@ -47,20 +100,8 @@ export function createAnnualPayrollReport(
       report.sickPay += amount(record.sickPay);
       report.employerContributions += amount(record.employerContributions);
       report.otherAdditions += amount(record.otherAddition) + additionalPayments;
-      report.additions +=
-        amount(record.saturdayPay) +
-        amount(record.holidayPay) +
-        amount(record.vacationPay) +
-        amount(record.sickPay) +
-        amount(record.employerContributions) +
-        amount(record.otherAddition) +
-        additionalPayments;
-      report.deductions +=
-        amount(record.pocketMoney) +
-        amount(record.medicalInsuranceDeduction) +
-        amount(record.housingDeduction) +
-        amount(record.advances) +
-        amount(record.agreedDeduction);
+      report.additions += payrollRecordAdditions(record);
+      report.deductions += payrollRecordDeductions(record);
       report.totalPaid += amount(record.total);
       return report;
     },

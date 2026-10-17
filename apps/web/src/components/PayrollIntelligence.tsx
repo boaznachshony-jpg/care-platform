@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { payrollIntelligence } from '../product-intelligence.js';
+import { payrollRecordDeductions } from '../payroll-report.js';
 import {
   type MvpEmploymentExpense,
   type MvpMonthlyClose,
@@ -54,12 +55,7 @@ export function canonicalCloseSplit(record: {
   advances: number;
   agreedDeduction: number;
 }): CanonicalCloseSplit {
-  const deductions =
-    record.pocketMoney +
-    (record.medicalInsuranceDeduction ?? 0) +
-    (record.housingDeduction ?? 0) +
-    record.advances +
-    record.agreedDeduction;
+  const deductions = payrollRecordDeductions(record);
   const additions = record.total - record.baseSalary + deductions;
   return additions < 0
     ? { kind: 'unrepresentable', additions, deductions }
@@ -168,7 +164,7 @@ export function PayrollIntelligence({
     const split = canonicalCloseSplit(open);
     if (split.kind === 'unrepresentable') {
       setCloseRefusal(
-        `לא ניתן לסגור את החודש: הקיזוזים (\u20aa${split.deductions.toFixed(2)}) גבוהים מהשכר הכולל, ולכן התוספות יוצאות שליליות (\u20aa${split.additions.toFixed(2)}) והשרת אינו יכול לרשום אותן. החודש נשאר פתוח ושום דבר לא נמחק. בדקו את המקדמות ואת הקיזוזים במסך השכר.`,
+        `לא ניתן לסגור את החודש: הסכום הכולל השמור (₪${open.total.toFixed(2)}) נמוך משכר הבסיס פחות הקיזוזים (₪${split.deductions.toFixed(2)}), ולכן התוספות יוצאות שליליות (₪${split.additions.toFixed(2)}) והשרת אינו יכול לרשום אותן. החודש נשאר פתוח ושום דבר לא נמחק. פתחו את החודש במסך השכר ושמרו אותו מחדש כדי שהסכום יחושב מחדש.`,
       );
       return;
     }

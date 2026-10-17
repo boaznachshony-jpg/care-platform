@@ -80,14 +80,29 @@ describe('canonicalCloseSplit', () => {
     }
   });
 
-  it('refuses rather than clamps when the deductions exceed the month', () => {
-    // `additions_amount >= 0` is a database constraint (migration 0026). The
-    // clamp this replaces made such a month fail with a generic error; naming
-    // it points the family at the advances, which is where the answer is.
+  it('never refuses a total the domain formula produced, even when advances exceed the month', () => {
+    // The total nets negative here, and the split still recovers the real
+    // additions (none) and deductions (the advances) exactly.
     const r = record({ advances: 9_000 });
     const split = canonicalCloseSplit(r);
+    expect(r.total).toBe(-3_000);
+    expect(split).toEqual({ kind: 'ok', additions: 0, deductions: 9_000 });
+  });
+
+  it('refuses rather than clamps a stored total that cannot be split', () => {
+    // Only a total saved outside the domain formula (a legacy record) can sit
+    // below base − deductions. `additions_amount >= 0` is a database
+    // constraint (migration 0026), so the clamp this replaces made that month
+    // fail with a generic error; naming it sends the family to the record.
+    const split = canonicalCloseSplit({
+      total: 5_000,
+      baseSalary: 6_000,
+      pocketMoney: 0,
+      advances: 0,
+      agreedDeduction: 0,
+    });
     expect(split.kind).toBe('unrepresentable');
-    expect(split.additions).toBeLessThan(0);
+    expect(split.additions).toBe(-1_000);
   });
 
   it('treats the optional deduction fields as zero, never as missing', () => {
