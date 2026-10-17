@@ -226,6 +226,53 @@ export interface FutureCostActual {
   sourceId: string;
 }
 export type FutureCostEnteredPayroll = FutureCostActual;
+
+/**
+ * E (work plan 16.10.2026). A quarterly or annual expense used to count only
+ * in the one month its `dueDate` fell in. So a quarterly National Insurance
+ * payment appeared once in a twelve-month forecast instead of four times, and
+ * an annual renewal whose last due date was before the window did not appear
+ * at all, though it falls due again inside it. The annual total and the
+ * monthly reserve understated exactly the costs a family is least likely to
+ * remember.
+ *
+ * Now each one recurs at its real frequency. One rule keeps that from
+ * over-counting. The web app records National Insurance as ONE ROW PER
+ * QUARTER, each marked `quarterly` (PayrollPage creates `expense-ni-…` for
+ * every payroll quarter). Rows with the same label, frequency and source are
+ * one series:
+ *   - every row counts in its own due month, as before;
+ *   - only the series' latest row repeats, every 3 or 12 months after its
+ *     due date, at its amount, until `endMonth` if one is set.
+ * Three recorded quarters therefore forecast each later quarter once, not
+ * three times. Nothing is ever projected BEFORE a row's due date: the stored
+ * date is the last known occurrence, not a guess about earlier ones.
+ */
+const RECURRENCE_MONTHS = { quarterly: 3, annual: 12 } as const;
+type PeriodicExpense = ForecastExpense & { frequency: keyof typeof RECURRENCE_MONTHS };
+
+function isPeriodic(expense: ForecastExpense): expense is PeriodicExpense {
+  return expense.frequency === 'quarterly' || expense.frequency === 'annual';
+}
+
+/** YYYY-MM of the occurrence the row records: its due date, else its start month. */
+function anchorMonth(expense: ForecastExpense): string | undefined {
+  const due = /^\d{4}-(0[1-9]|1[0-2])/.exec(expense.dueDate ?? '')?.[0];
+  return due ?? expense.startMonth;
+}
+
+function seriesKey(expense: ForecastExpense): string {
+  return [expense.source ?? 'employment_expense', expense.frequency, expense.label].join('\u0000');
+}
+
+/** Whole months from `from` to `to` (YYYY-MM); negative when `to` is earlier. */
+function monthsBetween(from: string, to: string): number {
+  return (
+    (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 +
+    (Number(to.slice(5, 7)) - Number(from.slice(5, 7)))
+  );
+}
+
 export function projectFutureCost(input: {
   startMonth: string;
   baseSalary?: number;
@@ -257,6 +304,29 @@ export function projectFutureCost(input: {
   const money = (amount: number): Agorot => agorotFromShekels(amount);
   const start = new Date(`${input.startMonth}-01T00:00:00Z`);
   const safeBase = input.baseSalary ?? 0;
+  // The row of each quarterly/annual series that repeats: the latest one.
+  const seriesLeaders = new Map<string, PeriodicExpense>();
+  // A quarterly/annual row with neither a due date nor a start month cannot be
+  // placed in any month. It used to vanish silently; it is now named in
+  // `unknowns` so the forecast says what it does not know.
+  const unplaceable: PeriodicExpense[] = [];
+  for (const expense of input.expenses) {
+    if (!isPeriodic(expense)) continue;
+    const anchor = anchorMonth(expense);
+    if (!anchor) {
+      unplaceable.push(expense);
+      continue;
+    }
+    const key = seriesKey(expense);
+    const leader = seriesLeaders.get(key);
+    if (!leader || anchor > anchorMonth(leader)!) seriesLeaders.set(key, expense);
+  }
+  const recursAfterAnchor = (expense: PeriodicExpense, month: string): boolean => {
+    if (seriesLeaders.get(seriesKey(expense)) !== expense) return false;
+    if (expense.endMonth !== undefined && month > expense.endMonth) return false;
+    const elapsed = monthsBetween(anchorMonth(expense)!, month);
+    return elapsed > 0 && elapsed % RECURRENCE_MONTHS[expense.frequency] === 0;
+  };
   const months = Array.from({ length: 12 }, (_, offset) => {
     const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + offset, 1));
     const month = date.toISOString().slice(0, 7);
@@ -272,8 +342,10 @@ export function projectFutureCost(input: {
     // itemised breakdown — which used `||` — listed it once. The total and the
     // explanation of the total disagreed, on the one surface this product
     // exists to provide. One deduped set now feeds both.
-    const monthExpenses = input.expenses.filter(
-      (e) => (e.frequency === 'monthly' && inWindow(e)) || e.dueDate?.startsWith(month),
+    const monthExpenses = input.expenses.filter((e) =>
+      isPeriodic(e)
+        ? anchorMonth(e) === month || recursAfterAnchor(e, month)
+        : (e.frequency === 'monthly' && inWindow(e)) || e.dueDate?.startsWith(month),
     );
     const expenseTotal = monthExpenses.reduce(
       (sum: Agorot, e) => addAgorot(sum, money(e.amount)),
@@ -364,7 +436,9 @@ export function projectFutureCost(input: {
             ? 'Planning-only value; canonical records are unchanged'
             : e.frequency === 'monthly'
               ? 'Stored recurring employment cost'
-              : 'Stored dated employment cost',
+              : isPeriodic(e) && anchorMonth(e) !== month
+                ? `Stored ${e.frequency} employment cost, repeated from its last due date`
+                : 'Stored dated employment cost',
         status: 'FORECAST' as const,
       })),
       ...scenarioItems.map((item) => ({
@@ -410,7 +484,10 @@ export function projectFutureCost(input: {
     average: shekelsOf(scaleAgorot(totalAgorot, 1 / 12)),
     reserveRecommendation: shekelsOf(scaleAgorot(totalAgorot, 1 / 12)),
     guidance: 'planning_guidance_not_financial_advice' as const,
-    unknowns: input.baseSalary === undefined ? ['base_salary'] : [],
+    unknowns: [
+      ...(input.baseSalary === undefined ? ['base_salary'] : []),
+      ...unplaceable.map((e) => `expense_schedule:${e.id}`),
+    ],
     assumptions: [
       ...(safeBase
         ? [
@@ -424,6 +501,13 @@ export function projectFutureCost(input: {
       ...input.expenses
         .filter((e) => e.frequency === 'monthly')
         .map((e) => ({ id: e.id, label: `${e.label} repeats monthly`, amount: e.amount })),
+      ...[...seriesLeaders.values()]
+        .filter((e) => e.endMonth === undefined || e.endMonth >= input.startMonth)
+        .map((e) => ({
+          id: e.id,
+          label: `${e.label} repeats ${e.frequency === 'quarterly' ? 'every 3 months' : 'every year'}`,
+          amount: e.amount,
+        })),
     ],
   };
 }
