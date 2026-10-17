@@ -16,6 +16,7 @@ import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { MAX_DOCUMENT_BYTES } from '@caredesk/schemas';
 import { useAuth } from '../auth/auth-context.js';
 import { importCaseDocument, listCaseDocuments } from '../api/client.js';
+import { describeApiError } from '../api/error-contract.js';
 import { LEGACY_UNSCOPED_CLIENT_ID } from '../canonical-case.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
@@ -251,7 +252,7 @@ export function DocumentsPage() {
    * what is stored, the failure is shown, and the caller stops before saying
    * anything was saved.
    */
-  function persist(next: MvpDocument[]): boolean {
+  function persist(next: MvpDocument[], { sync = true }: { sync?: boolean } = {}): boolean {
     try {
       saveMvpDocuments(next);
     } catch (error) {
@@ -261,8 +262,24 @@ export function DocumentsPage() {
     }
     setSaveError('');
     setDocuments(next);
-    if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
+    if (sync && caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
     return true;
+  }
+
+  /**
+   * Silent saves (17.10.2026): every file failure used to read "could not save
+   * the file on this device — check private browsing", including a refusal by
+   * the server, where the advice is wrong. A refusal from the API is now worded
+   * by the shared error table (H1, `api/error-contract.ts`); anything else
+   * happened on this device.
+   */
+  function fileFailureMessage(error: unknown): string {
+    const fromServer =
+      error instanceof TypeError ||
+      (typeof error === 'object' && error !== null && 'status' in error && 'code' in error);
+    return fromServer
+      ? t(describeApiError(error).messageKey)
+      : 'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.';
   }
 
   function startEdit(document: MvpDocument) {
@@ -307,8 +324,6 @@ export function DocumentsPage() {
       }
 
       const id = existing?.id ?? crypto.randomUUID();
-      if (file) await saveDocumentFile(id, file);
-
       const saved: MvpDocument = {
         id,
         name: draft.name,
@@ -319,22 +334,47 @@ export function DocumentsPage() {
         fileType: file?.type ?? existing?.fileType ?? '',
         updatedAt: new Date().toISOString(),
       };
-      // On failure the form stays open with what was typed, so it can be retried.
-      if (
-        !persist(
-          existing
-            ? documents.map((item) => (item.id === existing.id ? saved : item))
-            : [saved, ...documents],
-        )
-      ) {
-        return;
+      const next = existing
+        ? documents.map((item) => (item.id === existing.id ? saved : item))
+        : [saved, ...documents];
+
+      if (existing && file) {
+        // Silent saves (17.10.2026): replacing the file of an existing
+        // document. The file is stored under the document's id, so writing it
+        // first and then having the record refused left the old record — old
+        // name, old type — in front of the new file. The record now goes
+        // first; if the file is then refused, the record is put back, so the
+        // document on screen always matches the file behind it. The case sync
+        // waits until both have landed, so it never pairs the new record with
+        // the old file.
+        // On a refused record nothing has changed, and the form keeps what
+        // was typed so it can be retried.
+        if (!persist(next, { sync: false })) return;
+        try {
+          await saveDocumentFile(id, file);
+        } catch (error) {
+          const restored = persist(documents, { sync: false });
+          setMessage('');
+          setSaveError(
+            restored
+              ? `הקובץ החדש לא נשמר, והמסמך נשאר כפי שהיה עם הקובץ הקודם. ${fileFailureMessage(error)}`
+              : `הקובץ החדש לא נשמר, ולא ניתן היה להחזיר את פרטי המסמך הקודמים: המסמך מציג את הפרטים החדשים אבל פותח את הקובץ הקודם. ${fileFailureMessage(error)}`,
+          );
+          return;
+        }
+        if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
+      } else {
+        // A new document's file has no record pointing at it until the record
+        // lands, so a refused record leaves nothing on screen to mislead.
+        if (file) await saveDocumentFile(id, file);
+        // On failure the form stays open with what was typed, so it can be retried.
+        if (!persist(next)) return;
       }
       resetForm();
       setMessage(existing ? 'פרטי המסמך עודכנו ונשמרו.' : 'המסמך נוסף ונשמר.');
-    } catch {
-      setMessage(
-        'לא ניתן היה לשמור את הקובץ במכשיר. ודאו שהגלישה אינה במצב פרטי ושיש שטח אחסון פנוי.',
-      );
+    } catch (error) {
+      setMessage('');
+      setSaveError(fileFailureMessage(error));
     } finally {
       // Released on every exit, including the three validation early-returns
       // above — a rejected file size must not leave the form permanently
