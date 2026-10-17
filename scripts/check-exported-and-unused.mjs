@@ -168,7 +168,7 @@ function parseModule(file) {
     if (ts.isIdentifier(node)) {
       mod.identifierCounts.set(node.text, (mod.identifierCounts.get(node.text) ?? 0) + 1);
     }
-    // import('./x.js') - a namespace import as far as this check is concerned.
+    // A dynamic import of a relative path counts as a namespace import here.
     if (
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
