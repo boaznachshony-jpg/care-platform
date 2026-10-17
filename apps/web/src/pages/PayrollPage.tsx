@@ -18,7 +18,10 @@ import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
-import { quarterlyInsuranceScheduleForPayrollMonth } from '../quarterly-national-insurance.js';
+import {
+  NATIONAL_INSURANCE_CATEGORY,
+  quarterlyInsuranceScheduleForPayrollMonth,
+} from '../national-insurance-presenter.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -45,9 +48,6 @@ const percent = new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 });
 const MAX_PAYROLL_AMOUNT = 10_000_000;
 const MAX_PAID_SATURDAYS = 6;
 const MAX_PAID_HOLIDAYS = 10;
-
-/** The employment expense category that opens the national insurance calculator. */
-export const NATIONAL_INSURANCE_CATEGORY = 'ביטוח לאומי';
 
 /**
  * Index order matters: position 0 is month 01. The names themselves live in the

@@ -4,16 +4,36 @@ import {
   formatDisplayDate,
   type UpcomingPayment,
 } from '../upcoming-payments.js';
+import {
+  earlierQuartersNote,
+  overdueDaysLabel,
+  type QuarterlyInsuranceContext,
+} from '../national-insurance-presenter.js';
+import { readMvpEmploymentExpenses, readMvpProfile } from '../storage/mvp-storage.js';
 
 /**
  * Always-visible card with the two recurring payment obligations of a
  * household employer: the next salary payment (due by the 9th of the month)
- * and the next quarterly National Insurance payment (due by the 15th of
+ * and the quarterly National Insurance payment (due by the 15th of
  * April / July / October / January), including the official payment link.
+ *
+ * D: a passed National Insurance deadline that is not marked paid stays on
+ * this card as overdue, and older unpaid quarters are counted under it. The
+ * marks come from the payroll screen's periodic payments; without a
+ * `nationalInsurance` prop they are read from this device's workspace.
  */
-export function UpcomingPaymentsCard({ today }: { today?: Date } = {}) {
+export function UpcomingPaymentsCard({
+  today,
+  nationalInsurance,
+}: { today?: Date; nationalInsurance?: QuarterlyInsuranceContext } = {}) {
   const { t, i18n } = useTranslation();
-  const payments = createUpcomingPayments(today);
+  const payments = createUpcomingPayments(
+    today,
+    nationalInsurance ?? {
+      expenses: readMvpEmploymentExpenses(),
+      employmentStartDate: readMvpProfile().employmentStartDate,
+    },
+  );
 
   const dueMonthName = (payment: UpcomingPayment) =>
     new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(
@@ -39,13 +59,18 @@ export function UpcomingPaymentsCard({ today }: { today?: Date } = {}) {
                 {' · '}
                 {payment.daysRemaining === 0
                   ? t('payments.dueToday')
-                  : t('payments.daysRemaining', { count: payment.daysRemaining })}
+                  : payment.daysRemaining < 0
+                    ? overdueDaysLabel(payment.daysRemaining)
+                    : t('payments.daysRemaining', { count: payment.daysRemaining })}
               </p>
               <small>
                 {payment.id === 'salary'
                   ? t('payments.salaryNote')
                   : t('payments.nationalInsuranceNote', { month: dueMonthName(payment) })}
               </small>
+              {payment.earlierOutstanding ? (
+                <p className="form-note">{earlierQuartersNote(payment.earlierOutstanding)}</p>
+              ) : null}
             </div>
             {payment.externalUrl ? (
               <a

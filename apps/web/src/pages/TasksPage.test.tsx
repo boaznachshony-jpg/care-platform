@@ -1,6 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { emptyMvpProfile, readMvpTasks, saveMvpProfile } from '../storage/mvp-storage.js';
+import {
+  emptyMvpProfile,
+  readMvpTasks,
+  saveMvpEmploymentExpenses,
+  saveMvpProfile,
+} from '../storage/mvp-storage.js';
 import { TasksPage } from './TasksPage.js';
 
 describe('TasksPage', () => {
@@ -107,7 +112,9 @@ describe('TasksPage', () => {
   it('shows preparation only on the final day of the quarter', () => {
     render(<TasksPage today={new Date('2026-09-30T12:00:00')} />);
 
-    expect(screen.getByRole('heading', { name: 'הכנת נתוני ביטוח לאומי לרבעון' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'הכנת נתוני ביטוח לאומי לרבעון יולי – ספטמבר 2026' }),
+    ).toBeVisible();
     expect(screen.getByText('טרם נפתח לתשלום')).toBeVisible();
     expect(screen.getByText(/אפשרות הדיווח והתשלום תיפתח מחר/)).toBeVisible();
   });
@@ -117,7 +124,7 @@ describe('TasksPage', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר',
+        name: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר 2026',
       }),
     ).toBeVisible();
     expect(screen.getByText('ניתן לשלם בין 1.10 ל־15.10')).toBeVisible();
@@ -127,5 +134,53 @@ describe('TasksPage', () => {
     expect(
       screen.getByRole('link', { name: 'מעבר לאתר הביטוח הלאומי לדיווח ולתשלום' }),
     ).toHaveAttribute('href', 'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx');
+  });
+
+  /**
+   * D. On 17.10.2026 this card said Q3 was overdue while the dashboard said
+   * the next payment was 15.01.2027; on 01.11 the card itself would have moved
+   * on to Q4 and dropped Q3. Q2 had already vanished that way on 01.08.
+   */
+  it.each([
+    ['2026-10-17', 'באיחור'],
+    ['2026-11-01', 'באיחור'],
+  ])('keeps an unpaid Q3 overdue on %s, with the older unpaid quarters under it', (day) => {
+    saveMvpProfile({ ...emptyMvpProfile, employmentStartDate: '2026-01-15' });
+    render(<TasksPage today={new Date(`${day}T12:00:00`)} />);
+
+    const card = screen.getByRole('region', { name: 'משימת ביטוח לאומי רבעונית' });
+    expect(
+      screen.getByRole('heading', { name: 'תשלום ביטוח לאומי לרבעון יולי – ספטמבר 2026' }),
+    ).toBeVisible();
+    expect(card).toHaveTextContent('מועד אחרון: 15 באוקטובר');
+    expect(card).toHaveTextContent('רבעונים קודמים שלא סומנו כשולמו');
+    expect(card).toHaveTextContent('תשלום ביטוח לאומי לרבעון אפריל – יוני 2026');
+    expect(card).toHaveTextContent('מועד אחרון: 15.07.2026');
+    expect(card).toHaveTextContent('תשלום ביטוח לאומי לרבעון ינואר – מרץ 2026');
+    expect(card).not.toHaveTextContent('2025');
+  });
+
+  it('drops a quarter once it is marked paid on the payroll screen', () => {
+    saveMvpProfile({ ...emptyMvpProfile, employmentStartDate: '2026-01-15' });
+    saveMvpEmploymentExpenses(
+      ['2026-Q1', '2026-Q2'].map((sourcePeriod) => ({
+        id: `expense-${sourcePeriod}`,
+        category: 'ביטוח לאומי',
+        frequency: 'quarterly' as const,
+        amount: 720,
+        dueDate: '2026-07-15',
+        status: 'paid' as const,
+        note: '',
+        savedAt: '2026-07-10T12:00:00.000Z',
+        source: 'payroll-national-insurance' as const,
+        sourcePeriod,
+      })),
+    );
+    render(<TasksPage today={new Date('2026-10-17T12:00:00')} />);
+
+    const card = screen.getByRole('region', { name: 'משימת ביטוח לאומי רבעונית' });
+    expect(card).toHaveTextContent('תשלום ביטוח לאומי לרבעון יולי – ספטמבר 2026');
+    expect(card).not.toHaveTextContent('רבעונים קודמים שלא סומנו כשולמו');
+    expect(card).not.toHaveTextContent('אפריל – יוני');
   });
 });
