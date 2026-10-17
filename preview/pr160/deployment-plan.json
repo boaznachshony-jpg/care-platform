@@ -1,0 +1,108 @@
+{
+  "issue": 162,
+  "pullRequest": "https://github.com/boaznachshony-jpg/care-platform/pull/160",
+  "productSourceSha": "376ca59e447a3944b48d4bd420b85f0a84cee21b",
+  "validatedProductCi": "https://github.com/boaznachshony-jpg/care-platform/actions/runs/39058918894",
+  "previewBranch": "test/pr-160-external-preview",
+  "status": "prepared_pending_account_access_and_verified_TEST_resources",
+  "deploymentTarget": "preview",
+  "productionDeploymentAllowed": false,
+  "mergeAllowed": false,
+  "projects": {
+    "web": {
+      "name": "caredesk-pr160-test-web",
+      "projectId": null,
+      "origin": null,
+      "rootDirectory": "apps/web",
+      "installCommand": "pnpm install --frozen-lockfile",
+      "localConfig": "preview/pr160/vercel-web.json",
+      "buildCommand": "pnpm --filter @caredesk/web^... build && node ../../scripts/pr160-build-web.mjs",
+      "outputDirectory": "dist",
+      "buildMode": "ux-v2-test"
+    },
+    "api": {
+      "name": "caredesk-pr160-test-api",
+      "projectId": null,
+      "origin": null,
+      "rootDirectory": "apps/api",
+      "installCommand": "pnpm install --frozen-lockfile",
+      "localConfig": "preview/pr160/vercel-api.json",
+      "buildCommand": "node ../../scripts/pr160-assert-preview-target.mjs && pnpm --filter @caredesk/api... build",
+      "outputDirectory": "public",
+      "entrypoint": "apps/api/api/index.js",
+      "runtimeNodeEnv": "production",
+      "platformEnvironment": "preview"
+    },
+    "supabase": {
+      "name": "caredesk-pr160-test",
+      "projectRef": null,
+      "productionProjectRefForDenialGuard": null,
+      "projectUrl": null,
+      "databaseRole": "caredesk_app",
+      "privateDocumentBucket": "caredesk-pr160-test-documents",
+      "privateBackupBucket": "caredesk-pr160-test-backup",
+      "newWorkspaceEncryptionKeyRequired": true,
+      "copyProductionData": false
+    }
+  },
+  "configurationPreflight": {
+    "command": "node scripts/pr160-test-environment.mjs",
+    "unitTests": "node --test scripts/pr160-test-environment.test.mjs",
+    "input": "Explicit TEST variables in process memory or the service secret manager; no secrets in this manifest, source, command arguments or logs.",
+    "scope": "Configuration validation only; live identity, database permissions, RLS and browser behavior remain unverified until the actual services are connected."
+  },
+  "deploymentSequence": [
+    "Obtain explicit account access for Vercel and Supabase; select or create dedicated TEST resources without production credentials or data.",
+    "Verify actual provider project identities and distinct TEST/production Supabase refs before accepting any database or storage credential.",
+    "Apply the existing migrations to the empty TEST database, provision the least-privilege app role, and verify forced tenant RLS using the existing scripts.",
+    "Configure real TEST Auth, private TEST storage/backup buckets, a freshly generated workspace encryption key, disabled billing and mock AI. Do not configure real messaging providers.",
+    "Create synthetic TEST users and tenant memberships without sending invitations, plus a synthetic workspace and canonical case; preserve the existing auth and onboarding flow.",
+    "Map only the preflight's curated Web/API variables into dedicated Preview environments for the preview branch. Do not inherit settings from production projects or write provider-managed VERCEL metadata as project variables. Keep preflight TEST inputs scoped to the same Preview branch.",
+    "Verify product source equality against productSourceSha; build the exact frontend entry and API, without auth transforms, seed entrypoints, fake responses or memory repository overrides.",
+    "Use Vercel CLI --local-config with the dedicated Web/API config files and verified TEST project IDs; root directories remain apps/web and apps/api. Verify the selected config and actual Preview target in deployment evidence. Never use --prod or the Production target. Project build settings alone cannot override the existing repository vercel.json.",
+    "Deploy the API as Preview, inspect readiness and verify real TEST identity/data access, then deploy the Web as Preview with the explicit API origin and TEST Auth redirect allowlist. Do not claim full readiness while the existing data-loss email monitor is unconfigured.",
+    "Run the hosted desktop/mobile acceptance cases with no API response mocks, save screenshots and reduced network evidence, then provide the verified HTTPS /app URL."
+  ],
+  "hostedAcceptance": {
+    "requiredDevices": ["desktop", "mobile"],
+    "requiredScreens": ["client entry", "client home", "tasks", "medications"],
+    "requiredChecks": [
+      "Real TEST sign-in, tenant membership, workspace load and logout through unchanged product controls.",
+      "Task create/edit/complete/local reopen/reload; do not invent a server reopen endpoint or promise cross-device reopen durability absent from the existing product.",
+      "Medication add with times/weekdays, edit, archive confirmation/cancellation and reload under existing API contracts.",
+      "Home health response and rendered state from the actual TEST database, without forcing the synthetic visual-CI score.",
+      "Direct links and refresh, Hebrew RTL, light/dark, maximum existing text scale, pointer targets and keyboard focus.",
+      "Navigate to settings, await the actual destination heading and verify the scoped visual class is removed.",
+      "Reject any localhost, production, unapproved API/Auth or credential-bearing request; permit only verified TEST origins and the unchanged Google Fonts origins.",
+      "Recreate the TEST API instance and read previously created canonical IDs before reseeding; a browser reload alone is not proof of server persistence."
+    ],
+    "evidence": [
+      "deployment/source identity",
+      "device screenshots",
+      "origin/path/method/status only network log",
+      "database/RLS checks",
+      "server restart persistence readback"
+    ],
+    "sensitiveLoggingAllowed": false
+  },
+  "automaticGitDeployment": {
+    "existingWebProject": "disabled for previewBranch",
+    "existingApiProject": "disabled for previewBranch",
+    "manualPreviewDeployment": "requires verified TEST projects/configuration and explicit account access"
+  },
+  "readinessLimitation": {
+    "status": "UNRESOLVED",
+    "reason": "The existing production-mode API reports ready:false without DATA_LOSS_ALERT_EMAIL. Configuring that field requires the existing Resend/support configuration, intentionally absent from the TEST map.",
+    "requiredResolution": "Verify an authorized TEST-only mail sink/provider and monitoring configuration, or disclose the exact readiness limitation before describing the environment as fully ready. No fake keys, suppressed readiness checks, production mail credentials or product gate changes."
+  },
+  "rejectedShortcut": {
+    "oldAuthTransform": "Changes the external auth gate to local; excluded.",
+    "oldMemoryApi": "No durable persistence or separate real identities; canonical health endpoints require the database-backed API; excluded."
+  },
+  "providerReferences": [
+    "https://vercel.com/docs/project-configuration/git-configuration",
+    "https://vercel.com/docs/environment-variables",
+    "https://vercel.com/docs/deployments/environments",
+    "https://vercel.com/docs/cli/global-options#local-config"
+  ]
+}

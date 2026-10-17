@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": { "deploymentEnabled": false },
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "node ../../scripts/pr160-assert-preview-target.mjs && pnpm --filter @caredesk/api... build",
+  "outputDirectory": "public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
+  "crons": [
+    { "path": "/billing/jobs/collect", "schedule": "17 4 * * *" },
+    { "path": "/internal/jobs/data-integrity-scan", "schedule": "42 3 * * *" }
+  ]
+}

@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
-    "deploymentEnabled": { "feature/caredesk-ux-v2-visual": false }
+    "deploymentEnabled": {
+      "feature/caredesk-ux-v2-visual": false,
+      "test/pr-160-external-preview": false
+    }
   },
   "framework": "vite",
   "installCommand": "pnpm install --frozen-lockfile",
