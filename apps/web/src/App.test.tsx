@@ -32,7 +32,7 @@ describe('App', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('רישום נתוני שכר, מעקב תשלומים ותזכורות')).toBeInTheDocument();
     expect(screen.queryByText('חישובי שכר, סיכומים ותזכורות')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'כניסה לחשבון' })).toHaveAttribute('href', '/app');
+    expect(screen.getByRole('link', { name: 'כניסה לאזור האישי' })).toHaveAttribute('href', '/app');
     const registrationLinks = screen.getAllByRole('link', { name: 'פתיחת חשבון חדש' });
     expect(registrationLinks.length).toBeGreaterThan(0);
     for (const link of registrationLinks) {
