@@ -4,7 +4,8 @@
   "productSourceSha": "376ca59e447a3944b48d4bd420b85f0a84cee21b",
   "validatedProductCi": "https://github.com/boaznachshony-jpg/care-platform/actions/runs/39058918894",
   "previewBranch": "test/pr-160-external-preview",
-  "status": "prepared_pending_account_access_and_verified_TEST_resources",
+  "status": "handoff_to_development_pending_TEST_connections_and_hosted_acceptance",
+  "executionOwner": "Development team; claim ownership in issue 162 before service provisioning",
   "deploymentTarget": "preview",
   "productionDeploymentAllowed": false,
   "mergeAllowed": false,
@@ -52,7 +53,7 @@
     "scope": "Configuration validation only; live identity, database permissions, RLS and browser behavior remain unverified until the actual services are connected."
   },
   "deploymentSequence": [
-    "Obtain explicit account access for Vercel and Supabase; select or create dedicated TEST resources without production credentials or data.",
+    "Development team connects Vercel and Supabase using its authorized service access; select or create dedicated TEST resources without production credentials or data. This handoff is not permission for the preparing agent to sign in.",
     "Verify actual provider project identities and distinct TEST/production Supabase refs before accepting any database or storage credential.",
     "Apply the existing migrations to the empty TEST database, provision the least-privilege app role, and verify forced tenant RLS using the existing scripts.",
     "Configure real TEST Auth, private TEST storage/backup buckets, a freshly generated workspace encryption key, disabled billing and mock AI. Do not configure real messaging providers.",
@@ -73,7 +74,7 @@
       "Home health response and rendered state from the actual TEST database, without forcing the synthetic visual-CI score.",
       "Direct links and refresh, Hebrew RTL, light/dark, maximum existing text scale, pointer targets and keyboard focus.",
       "Navigate to settings, await the actual destination heading and verify the scoped visual class is removed.",
-      "Reject any localhost, production, unapproved API/Auth or credential-bearing request; permit only verified TEST origins and the unchanged Google Fonts origins.",
+      "Reject localhost, production and unapproved API/Auth destinations and secrets in URLs/logs. Permit required Auth/Authorization headers only to verified TEST origins, plus the unchanged public Google Fonts origins.",
       "Recreate the TEST API instance and read previously created canonical IDs before reseeding; a browser reload alone is not proof of server persistence."
     ],
     "evidence": [
@@ -88,7 +89,7 @@
   "automaticGitDeployment": {
     "existingWebProject": "disabled for previewBranch",
     "existingApiProject": "disabled for previewBranch",
-    "manualPreviewDeployment": "requires verified TEST projects/configuration and explicit account access"
+    "manualPreviewDeployment": "development team verifies dedicated TEST projects/configuration using its authorized access before Preview deployment"
   },
   "readinessLimitation": {
     "status": "UNRESOLVED",
