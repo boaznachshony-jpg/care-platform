@@ -1,0 +1,10 @@
+// Demo for scripts/check-exported-and-unused.mjs - the shape of the bug N3 exists for.
+// `outstandingQuarters` is the right answer, exported and tested, and never called.
+export function outstandingQuarters(today: string): string[] {
+  return today ? ['2026-Q3'] : [];
+}
+
+// `nextDueDate` has a real caller (screen.ts), so it is not reported.
+export function nextDueDate(today: string): string {
+  return today;
+}
