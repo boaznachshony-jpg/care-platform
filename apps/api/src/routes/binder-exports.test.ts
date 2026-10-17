@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FastifyInstance, InjectOptions } from 'fastify';
+import { BINDER_EXPORT_PRESETS, BINDER_SECTIONS } from '@caredesk/schemas';
 import { buildContainer, DEV_TOKEN, type Container } from '../container.js';
 import { buildServer } from '../create-server.js';
 import { loadEnv } from '../env.js';
@@ -143,6 +144,30 @@ describe('binder export routes', () => {
       expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
     }
   });
+
+  // The page's default ("full") export once named `medications`, which this
+  // route did not know: every default export was refused with 400 and the
+  // page printed it as an unrecorded copy. Every preset the page offers must
+  // record a receipt.
+  it.each(Object.entries(BINDER_EXPORT_PRESETS))(
+    'records an export for the "%s" preset the binder page offers',
+    async (preset, sections) => {
+      const { app } = makeApp();
+      const caseId = await createCase(app);
+      const documentIds = sections.some((section) => section === 'documents')
+        ? [await uploadDocument(app, caseId)]
+        : [];
+      const response = await exportBinder(app, caseId, `key-preset-${preset}`, {
+        sections: [...sections],
+        documentIds,
+      });
+      expect(response.statusCode).toBe(201);
+      expect(
+        response.json<{ receipt: { manifest: { sections: string[] } } }>().receipt.manifest
+          .sections,
+      ).toEqual(BINDER_SECTIONS.filter((section) => sections.some((s) => s === section)));
+    },
+  );
 
   it('refuses a manifest naming a document that does not belong to the case', async () => {
     const { app } = makeApp();

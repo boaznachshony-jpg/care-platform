@@ -41,4 +41,5 @@ export * from './family-access.js';
 export * from './billing.js';
 export * from './legal-acceptance.js';
 export * from './visa-renewal.js';
+export * from './binder-export.js';
 export * from './date.js';
