@@ -136,6 +136,17 @@ export function getWorkspaceSyncState(): WorkspaceSyncState {
   return state;
 }
 
+/**
+ * True once this session has read the account's workspace from the server.
+ * A background copy of workspace data to a canonical table waits for this
+ * (R5-09): before it, the device may still be showing an older local copy,
+ * and copying that would send yesterday's figures. Changes are announced on
+ * WORKSPACE_SYNC_CHANGED like every other sync state change.
+ */
+export function hasHydratedWorkspaceThisSession(): boolean {
+  return hydratedThisSession;
+}
+
 function isCurrentSync(userId: string, generation: number): boolean {
   return activeUserId === userId && syncGeneration === generation;
 }

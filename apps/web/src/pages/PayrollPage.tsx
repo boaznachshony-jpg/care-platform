@@ -16,6 +16,7 @@ import { useMvpProfile } from '../hooks/use-mvp-profile.js';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
+import { useNationalInsuranceReportCopy } from '../sync/national-insurance-report-copy.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
 import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
 import {
@@ -622,6 +623,10 @@ export function PayrollPage() {
   const [profile, setProfile, profileSaveError] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
+  // R5-09 stage 2: each saved National Insurance report is also copied to the
+  // server. The workspace stays the place it is saved; a copy that fails is
+  // said on screen below the periodic payments heading, never swallowed.
+  const nationalInsuranceCopy = useNationalInsuranceReportCopy(caseLookup, expenses);
   /**
    * WEB-02: read once, synchronously, before the first paint. Restoring in an
    * effect would flash the empty wizard and race the user's first keystroke.
@@ -2520,6 +2525,14 @@ export function PayrollPage() {
             amounts, the national insurance calculator's derived amount, and
             rows the user marked as paid. Before the badges they were three
             claims in one typeface. */}
+        {nationalInsuranceCopy.failedCount > 0 ? (
+          <p className="action-notice error" role="alert">
+            {t('nationalInsuranceCopy.failed', { count: nationalInsuranceCopy.failedCount })}{' '}
+            <button className="text-link" type="button" onClick={nationalInsuranceCopy.retry}>
+              {t('nationalInsuranceCopy.retry')}
+            </button>
+          </p>
+        ) : null}
         <ValueOriginLegend kinds={['input', 'calculated', 'paid']} />
         <form className="readable-form" onSubmit={saveExpense}>
           <div className="form-grid">
