@@ -340,6 +340,15 @@ export function readMvpProfile(): MvpProfile {
   return readMvpProfileForClient(clientIdFromPath());
 }
 
+/**
+ * Silent saves (17.10.2026): `saveMvpProfile` writes the profile first and
+ * then the employer list and the automatic tasks. A refusal names its key, and
+ * this says whether the refused write was the profile itself.
+ */
+export function isMvpProfileStorageKey(key: string): boolean {
+  return key === STORAGE_KEY || key.startsWith(`${STORAGE_KEY}${CLIENT_KEY_SEPARATOR}`);
+}
+
 export function saveMvpProfile(profile: MvpProfile): void {
   if (!isBrowser()) return;
   const clientId = clientIdFromPath();

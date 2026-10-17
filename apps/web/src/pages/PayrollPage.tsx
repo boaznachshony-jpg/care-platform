@@ -619,7 +619,7 @@ export function PayrollPage() {
   const legacyClientId = useLegacyClientId();
   const caseLookup = useCaseForLegacyClient(legacyClientId);
   const path = useClientPath();
-  const [profile, setProfile] = useMvpProfile();
+  const [profile, setProfile, profileSaveError] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
   /**
@@ -1229,7 +1229,10 @@ export function PayrollPage() {
       setMessage('יש להזין שכר בסיס ותאריך תחולה.');
       return;
     }
-    setProfile({ ...profile, baseSalary, salaryEffectiveDate: profile.salaryEffectiveDate });
+    // Silent saves: a refused profile write keeps this step open and says so.
+    if (!setProfile({ ...profile, baseSalary, salaryEffectiveDate: profile.salaryEffectiveDate })) {
+      return;
+    }
     setMessage('הגדרת השכר נשמרה. מקור השכר: נתוני ההעסקה שהזין המשתמש.');
     setStep(1);
   }
@@ -1503,6 +1506,11 @@ export function PayrollPage() {
           <p className="info-box">
             הסכום מגיע מהזנת המשתמש בלבד. המערכת אינה קובעת שכר חוקי ואינה מחליפה בדיקה מקצועית.
           </p>
+          {profileSaveError ? (
+            <p className="action-notice error" role="alert">
+              {profileSaveError}
+            </p>
+          ) : null}
           <button className="primary-button" type="submit">
             שמירת הגדרת השכר
           </button>

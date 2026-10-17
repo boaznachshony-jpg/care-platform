@@ -62,6 +62,14 @@ export function storageWriteFailureMessage(error: unknown): string {
   return `השמירה נכשלה והשינוי לא נשמר: ${storageWriteFailureReason(error)} המסך מציג רק את מה שנשמר בפועל. נסו שוב, ואם זה חוזר — אל תסגרו את הדף לפני שתפנו לתמיכה.`;
 }
 
+/**
+ * The profile landed, but a write `saveMvpProfile` makes after it (the
+ * employer list's label, the automatic renewal tasks) was refused.
+ */
+export function profileFollowUpFailureMessage(error: unknown): string {
+  return `פרטי הפרופיל נשמרו, אבל עדכון נלווה לא נשמר (שם התיק ברשימת התיקים או משימות החידוש האוטומטיות): ${storageWriteFailureReason(error)} שמרו שוב כדי להשלים אותו.`;
+}
+
 /** Why the device refused, as one sentence, for a screen that words the rest itself. */
 export function storageWriteFailureReason(error: unknown): string {
   return WHY[error instanceof StorageWriteError ? error.failure : 'unknown'];
