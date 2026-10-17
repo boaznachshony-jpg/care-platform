@@ -5,7 +5,11 @@ import type {
   MvpTask,
   ReminderLeadDays,
 } from './storage/mvp-storage.js';
-import { createQuarterlyInsuranceTask } from './quarterly-national-insurance.js';
+import {
+  NATIONAL_INSURANCE_CATEGORY,
+  earlierQuartersLabel,
+  quarterlyInsuranceOverview,
+} from './national-insurance-presenter.js';
 import { nextSalaryPaymentDate } from './upcoming-payments.js';
 import { daysUntil, extractIsoDateFromLabel } from './date-diff.js';
 
@@ -23,6 +27,8 @@ export interface CareNotificationInput {
   documents: MvpDocument[];
   expenses: MvpEmploymentExpense[];
   reminderLeadDays: ReminderLeadDays;
+  /** `yyyy-mm-dd`; quarters that ended before it are not National Insurance debts. */
+  employmentStartDate?: string;
   today?: Date;
 }
 
@@ -54,6 +60,7 @@ export function createCareNotifications({
   documents,
   expenses,
   reminderLeadDays,
+  employmentStartDate,
   today = new Date(),
 }: CareNotificationInput): CareNotification[] {
   const items: CareNotification[] = [];
@@ -96,7 +103,9 @@ export function createCareNotifications({
 
   for (const expense of expenses) {
     if (expense.status === 'paid') continue;
-    if (expense.category === 'ביטוח לאומי' && expense.frequency === 'quarterly') continue;
+    if (expense.category === NATIONAL_INSURANCE_CATEGORY && expense.frequency === 'quarterly') {
+      continue;
+    }
     const days = daysFrom(today, expense.dueDate);
     if (days === null || days > reminderLeadDays) continue;
     items.push({
@@ -120,8 +129,25 @@ export function createCareNotifications({
     });
   }
 
-  const quarterlyInsurance = createQuarterlyInsuranceTask(today);
-  if (quarterlyInsurance.preparationOnly) {
+  // D: the same quarters, from the same rule, as the dashboard and the tasks
+  // screen. Older unpaid quarters are one line, not one alarm each, and they
+  // stay until marked paid.
+  const { headline: quarterlyInsurance, earlier } = quarterlyInsuranceOverview(today, {
+    expenses,
+    employmentStartDate,
+  });
+  if (earlier.length > 0) {
+    const oldest = earlier[0]!;
+    items.push({
+      id: `national-insurance-earlier-${oldest.id}`,
+      title: 'תשלומי ביטוח לאומי לרבעונים קודמים',
+      detail: `${earlierQuartersLabel(earlier.length)} · ${oldest.deadlineLabel}`,
+      severity: 'overdue',
+      to: '/tasks',
+      dueDate: oldest.deadlineDate,
+    });
+  }
+  if (quarterlyInsurance?.preparationOnly) {
     items.push({
       id: quarterlyInsurance.id,
       title: quarterlyInsurance.title,
@@ -130,7 +156,7 @@ export function createCareNotifications({
       to: '/tasks',
       dueDate: quarterlyInsurance.periodEnd,
     });
-  } else if (quarterlyInsurance.status !== 'not_open') {
+  } else if (quarterlyInsurance && quarterlyInsurance.status !== 'not_open') {
     items.push({
       id: quarterlyInsurance.id,
       title: quarterlyInsurance.title,
