@@ -41,8 +41,9 @@
  *      they are independent and the ledger keys on the full filename - but the
  *      ordering between them is decided by `c` sorting before `w`, not by
  *      intent. Two agents on two branches both writing `0036_*.sql` both pass
- *      CI today. The existing pair is grandfathered by name below; a new
- *      collision fails. The applied files are immutable and are NOT renumbered.
+ *      CI today. The exact historical 0026 pair and the independently applied
+ *      0049 pair are recorded by name below; any other collision fails. Applied
+ *      files are immutable and are NOT renumbered.
  *
  *   5. THE /ready CONTRACT IS COMPLETE. packages/db/src/required-migrations.ts
  *      is what `/ready` compares the live ledger against. It must list exactly
@@ -80,13 +81,22 @@ const RUNNER = 'packages/db/src/migrate.ts';
 const REQUIRED_LIST = 'packages/db/src/required-migrations.ts';
 
 /**
- * Numbers that were already duplicated when this check was written. Both files
- * are applied in production, so they are immutable: renaming either one would
- * make the runner apply it a second time under a new version. The entry is a
- * record of history, not permission - a third file numbered 0026 still fails.
+ * Exact, reviewed collisions in immutable migration history. The 0026 files
+ * were already applied in production when this guard was introduced. For 0049,
+ * #153 merged national_insurance_report into main at 4eef894 while #151's
+ * payroll_settlement_integrity was already applied to isolated acceptance
+ * databases. The former creates independent NI report tables; the latter
+ * extends payroll aggregates. Neither depends on the other, and the full-name
+ * ledger safely applies NI first, then payroll, followed by payroll 0050/0051.
+ * Keeping their recorded filenames avoids reapplying a renamed version.
+ *
+ * This is a record of those exact independent pairs, not permission for future
+ * collisions: a third 0026/0049 file, an alternative suffix, or any duplicate
+ * at another number still fails. It does not authorize production migration.
  */
 const GRANDFATHERED_DUPLICATES = {
   '0026': ['0026_canonical_product_intelligence.sql', '0026_wave5_worker_authorization.sql'],
+  '0049': ['0049_national_insurance_report.sql', '0049_payroll_settlement_integrity.sql'],
 };
 
 function flag(name) {
