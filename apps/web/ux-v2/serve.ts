@@ -35,8 +35,7 @@ try {
   web.printUrls();
   const stop = async () => {
     await api.close();
-    if ('close' in web) await web.close();
-    else web.httpServer.close();
+    await web.close();
     process.exit(0);
   };
   process.once('SIGINT', stop);

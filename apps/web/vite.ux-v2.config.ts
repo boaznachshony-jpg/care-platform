@@ -21,6 +21,7 @@ export default defineConfig({
     'import.meta.env.VITE_REGULATION_CONSOLE': JSON.stringify(''),
     'import.meta.env.VITE_PUBLIC_SITE_URL': JSON.stringify('http://127.0.0.1:4182'),
     'import.meta.env.VITE_PUBLIC_SIGNUP_URL': JSON.stringify(''),
+    'import.meta.env.VITE_UX_V2_PREVIEW_ORIGINS': JSON.stringify('[]'),
   },
   plugins: [
     react(),

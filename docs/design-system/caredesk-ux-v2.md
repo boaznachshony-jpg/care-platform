@@ -127,3 +127,44 @@ on port 4182. Both use the same isolated in-memory API on port 4183; existing
 browser workspaces are preserved. Additional case-picker and medication-form
 screenshots accompany the review artifacts. PR #134 remains a draft; no merge
 into main or production deployment was performed.
+
+## Independent external review — 2026-10-17
+
+The user explicitly requested an external mobile review URL that remains
+available when the local computer is off. The existing Vercel Git integration
+publishes the branch preview; no main merge, production promotion, custom-domain
+change or production environment-variable change is authorized.
+
+`apps/web/ux-v2/build-vercel.ts` emits Vercel Build Output API v3 artifacts only
+when `VERCEL_ENV=preview` and `VERCEL_GIT_COMMIT_REF=feature/caredesk-ux-v2`.
+Other branches and production use the ordinary Vite build. Previous custom
+output is cleared first so a cached demo cannot override a normal build.
+
+The external build loads the same product entry and scoped stylesheet. An
+isolated Vite transform selects the existing local-demo auth gate state in
+that build alone; the product auth source, environment classification, screens,
+translations, routes and handlers are unchanged. Fixture seeding is restricted
+to the exact deployment and branch origins embedded at build time; the local
+ports retain their existing independent preview configuration.
+
+The same-origin `/__ux_api` function bundles the original Fastify server factory
+and seeds the same synthetic case as the local runner. It explicitly constructs
+configuration from an allowlist, ignoring inherited DB, Supabase, mail, payment,
+AI and storage credentials. All repositories are in-memory. It rejects
+production, other branches and unknown hosts at runtime as well. No API project
+configuration, database, schema or production service is modified.
+
+This environment is for reviewing the real interface and its existing
+interactions with disposable synthetic data. Browser storage follows the
+existing product model; API data can reset on a serverless cold start or new
+deployment. It is not a durable shared test database, nor a test of real sign-in,
+email delivery, billing or production integrations. Use synthetic inputs only.
+
+Additional isolation tests cover branch/host rejection, exact-origin seeding,
+encrypted storage, preservation of existing workspaces, ignored upstream
+credentials, unchanged protected routes, and real task/medication handlers.
+
+Validation: `pnpm check` passed (1,731 tests: 811 web, 433 API, plus workspace
+packages). The external bundle built successfully, and a simulated production
+build left no custom preview output. The preview scripts also have a separate
+TypeScript check included in the web package's typecheck command.

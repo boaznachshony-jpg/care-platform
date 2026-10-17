@@ -6,6 +6,7 @@ import fixture from './fixture.json';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   localStorage.clear();
 });
 
@@ -33,7 +34,24 @@ describe('isolated product preview fixture', () => {
     { hostname: '127.0.0.1', port: '5173' },
   ])('refuses to seed outside the dedicated origin: %j', (location) => {
     vi.stubGlobal('window', { location });
-    expect(() => seedPreviewWorkspace()).toThrow('loopback-only');
+    expect(() => seedPreviewWorkspace()).toThrow('dedicated preview origin');
     expect(localStorage.length).toBe(0);
+  });
+
+  it('allows only the exact external origin embedded by the isolated build', () => {
+    vi.stubEnv('VITE_UX_V2_PREVIEW_ORIGINS', '["https://isolated-preview.example.test"]');
+    vi.stubGlobal('window', {
+      localStorage,
+      sessionStorage,
+      dispatchEvent: window.dispatchEvent.bind(window),
+      location: {
+        hostname: 'isolated-preview.example.test',
+        port: '',
+        origin: 'https://isolated-preview.example.test',
+        pathname: '/clients/ux-v2-demo',
+      },
+    });
+    seedPreviewWorkspace();
+    expect(readMvpClients()).toHaveLength(1);
   });
 });

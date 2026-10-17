@@ -4,11 +4,11 @@ import fixture from './fixture.json';
 export function seedPreviewWorkspace(): void {
   // A separate origin and an empty workspace are both required. Never replace
   // existing browser data, including data created by a reviewer in this demo.
-  if (
-    window.location.hostname !== '127.0.0.1' ||
-    !['4182', '5182'].includes(window.location.port)
-  ) {
-    throw new Error('UX V2 is a loopback-only preview.');
+  const externalOrigins: string[] = JSON.parse(import.meta.env.VITE_UX_V2_PREVIEW_ORIGINS ?? '[]');
+  const loopback =
+    window.location.hostname === '127.0.0.1' && ['4182', '5182'].includes(window.location.port);
+  if (!loopback && !externalOrigins.includes(window.location.origin)) {
+    throw new Error('UX V2 requires its dedicated preview origin.');
   }
   if (Object.keys(localStorage).some((key) => key.startsWith('caredesk.mvp.'))) return;
   const profile = { ...emptyMvpProfile, ...fixture.profile };
