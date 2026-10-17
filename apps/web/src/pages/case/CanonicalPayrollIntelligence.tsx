@@ -23,6 +23,7 @@ import {
   type SaveScenarioExpenseRequest,
   type ScenarioExpenseResponse,
 } from '../../api/client.js';
+import { payrollEntryRequest } from '../../api/strict-bodies.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -145,7 +146,6 @@ function legacyExpenseToScenario(expense: MvpEmploymentExpense): SaveScenarioExp
       };
 }
 
-/** The authenticated EmploymentCase is the sole authority for this canonical payroll surface. */
 /**
  * R5-09. `saturdayRate` is optional on the legacy MVP record because the field
  * did not exist before 30.07.2026. Every month entered before that date stores
@@ -196,6 +196,7 @@ export function legacyRestDayRate(record: LegacyRestDayFigures): LegacyRestDayRa
   }
 }
 
+/** The authenticated EmploymentCase is the sole authority for this canonical payroll surface. */
 export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<PayrollEntryResponse[]>();
@@ -348,9 +349,9 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
     // WEB-04(b): a saved server entry always wins over the profile — this
     // branch only ever reaches `prefillFromProfile` when there is NO saved
     // entry for the month, i.e. exactly the case `blank()` used to handle.
-    const next = found
-      ? { ...found, version: found.version }
-      : prefillFromProfile(profileRef.current);
+    // G: picked field by field, not spread. The loaded entry carries `id`,
+    // `month`, `createdAt` and `updatedAt`, which the strict route refuses.
+    const next = found ? payrollEntryRequest(found) : prefillFromProfile(profileRef.current);
     setDraft(next);
     // What "unsaved" means below: the draft this effect just produced, before
     // any keystroke. Recorded as a snapshot rather than compared field-by-field
@@ -427,7 +428,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       await savePayrollEntry(
         caseId,
         month,
-        { ...draft, total: calculatedTotal },
+        payrollEntryRequest({ ...draft, total: calculatedTotal }),
         newIdempotencyKey(),
       );
       setState('saved');
