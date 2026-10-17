@@ -19,7 +19,8 @@ export default defineConfig({
   testMatch: /visual-ux\.spec\.ts/,
   fullyParallel: true,
   workers: 2,
-  retries: process.env.CI ? 2 : 0,
+  // A comparison must be ready on its first run; retries can hide stale-page reads.
+  retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
   outputDir: 'test-results/visual-ux',
   webServer: [

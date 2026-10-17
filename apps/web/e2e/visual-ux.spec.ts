@@ -242,6 +242,10 @@ async function semantics(page: Page) {
       );
     };
     return {
+      route:
+        location.pathname.replace(/\/clients\/[^/?#]+/g, '/clients/:id') +
+        location.search +
+        location.hash,
       text: text(document.body.textContent),
       headings: [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((element) => [
         element.tagName,
@@ -627,6 +631,11 @@ for (const width of [390, 1440]) {
           await page.locator('a[href$="/settings"]').filter({ visible: true }).click();
         }
         await expect(page).toHaveURL(`${clientHome}/settings`);
+        // History updates before React may commit the destination. Baseline
+        // already has no visual class, so that assertion cannot prove arrival.
+        await expect(
+          page.getByRole('heading', { level: 1, name: 'פרטים והעדפות', exact: true }),
+        ).toBeVisible();
         await expect(page.locator('html')).not.toHaveClass(/ux-v2-visual/);
         checkpoints.push(await semantics(page));
         excludedStyles.push(await palette(page));
