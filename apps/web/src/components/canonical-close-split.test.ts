@@ -34,7 +34,7 @@ function record(overrides: Partial<typeof base>) {
 
 function reconciles(r: ReturnType<typeof record>): boolean {
   const split = canonicalCloseSplit(r);
-  return r.total === r.baseSalary + split.additions - split.deductions;
+  return r.total - r.employerContributions === r.baseSalary + split.additions - split.deductions;
 }
 
 describe('canonicalCloseSplit', () => {

@@ -1,10 +1,26 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTenant } from '@caredesk/db';
+import {
+  assertPayrollMoneyPrecision,
+  calculateMonthlyPayroll,
+  derivePayrollSettlement,
+  deriveApprovedPayrollComponents,
+  payrollTotalMatches,
+  roundShekels,
+} from '@caredesk/domain';
+import {
+  lockPayrollMonth,
+  lockPayrollRequest,
+  PAYROLL_ENTRY_COLUMNS,
+  payrollEntryFromRow,
+  type PayrollEntryRow,
+} from '../payroll-entry-service.js';
 
 type Actor = { tenantId: string; userId: string; correlationId: string };
 export interface CloseMonthInput {
   payrollReference: string;
+  payrollVersion: number;
   month: string;
   paymentDate: string;
   paymentMethod: 'bank_transfer' | 'cash' | 'check' | 'other';
@@ -24,6 +40,11 @@ export interface CanonicalClose {
   baseSalary: number | null;
   additions: number | null;
   deductions: number | null;
+  settlementBasis: 'legacy_total' | 'worker';
+  calculationTotal: number | null;
+  employerContributions: number | null;
+  payrollVersion: number | null;
+  openingBalance: number | null;
   closedAt: string;
   /**
    * R5-08. The display name of the person who closed the month, or null when
@@ -45,6 +66,11 @@ interface CloseRow {
   closed_at: Date;
   /** R5-08. Selected so the receipt can name a person; see `response`. */
   closed_by: string | null;
+  settlement_basis?: 'legacy_total' | 'worker';
+  calculation_total?: string | null;
+  employer_contributions_amount?: string | null;
+  payroll_version?: number | null;
+  opening_balance_amount?: string | null;
 }
 
 /**
@@ -78,13 +104,20 @@ export const closeResponse = (
   baseSalary: row.base_salary_amount === null ? null : Number(row.base_salary_amount),
   additions: row.additions_amount === null ? null : Number(row.additions_amount),
   deductions: row.deductions_amount === null ? null : Number(row.deductions_amount),
+  settlementBasis: row.settlement_basis ?? 'legacy_total',
+  calculationTotal: row.calculation_total == null ? null : Number(row.calculation_total),
+  employerContributions:
+    row.employer_contributions_amount == null ? null : Number(row.employer_contributions_amount),
+  payrollVersion: row.payroll_version ?? null,
+  openingBalance: row.opening_balance_amount == null ? null : Number(row.opening_balance_amount),
   closedAt: row.closed_at.toISOString(),
   closedBy: (row.closed_by && namesByUserId.get(row.closed_by)) || null,
 });
 
 const CLOSE_COLUMNS = `id,payroll_reference,payroll_month::text,payment_date::text,payment_method,
           total_amount::text,base_salary_amount::text,additions_amount::text,
-          deductions_amount::text,closed_at,closed_by`;
+          deductions_amount::text,closed_at,closed_by,settlement_basis,
+          calculation_total::text,employer_contributions_amount::text,payroll_version,opening_balance_amount::text`;
 
 /** Display names for the current tenant's members, keyed by user id. */
 async function memberNames(client: {
@@ -138,6 +171,15 @@ export class CanonicalIntelligenceService {
       if (!manager.rowCount) throw new Error('manager_required');
       const exists = await client.query(`select 1 from employment_case where id=$1`, [caseId]);
       if (!exists.rowCount) throw new Error('case_not_found');
+      if (!Number.isInteger(input.payrollVersion) || input.payrollVersion < 1)
+        throw new Error('version_required');
+      assertPayrollMoneyPrecision(input);
+      for (const amount of [input.total, input.baseSalary, input.additions, input.deductions]) {
+        if (!Number.isFinite(amount) || amount !== roundShekels(amount))
+          throw new Error('money_precision');
+      }
+      await lockPayrollMonth(client, actor.tenantId, caseId, input.month);
+      await lockPayrollRequest(client, actor.tenantId, 'product_intelligence.month_close', key);
 
       const requestHash = createHash('sha256')
         .update(JSON.stringify({ caseId, input }))
@@ -151,6 +193,85 @@ export class CanonicalIntelligenceService {
         if (replay.rows[0].request_hash !== requestHash) throw new Error('idempotency_conflict');
         return { close: replay.rows[0].response, replayed: true };
       }
+
+      const existing = await client.query<CloseRow>(
+        `select ${CLOSE_COLUMNS} from payroll_month_close where employment_case_id=$1 and payroll_month=($2||'-01')::date`,
+        [caseId, input.month],
+      );
+      if (existing.rows[0]) {
+        const row = existing.rows[0];
+        const equivalent =
+          row.settlement_basis === 'worker' &&
+          row.payroll_reference === input.payrollReference &&
+          row.payroll_version === input.payrollVersion &&
+          row.payment_date.slice(0, 10) === input.paymentDate &&
+          row.payment_method === input.paymentMethod &&
+          Number(row.total_amount) === input.total &&
+          Number(row.base_salary_amount) === input.baseSalary &&
+          Number(row.additions_amount) === input.additions &&
+          Number(row.deductions_amount) === input.deductions;
+        if (!equivalent) throw new Error('payroll_close_conflict');
+        const close = closeResponse(row, await memberNames(client));
+        await client.query(
+          `insert into idempotency_record (tenant_id,operation,idempotency_key,request_hash,response)
+           values ($1,'product_intelligence.month_close',$2,$3,$4)`,
+          [actor.tenantId, key, requestHash, JSON.stringify(close)],
+        );
+        return { close, replayed: true };
+      }
+
+      const payroll = await client.query<PayrollEntryRow>(
+        `select ${PAYROLL_ENTRY_COLUMNS} from payroll_entry where employment_case_id=$1 and payroll_month=($2||'-01')::date and id::text=$3 for update`,
+        [caseId, input.month, input.payrollReference],
+      );
+      if (!payroll.rows[0]) throw new Error('payroll_reference_not_found');
+      const entry = payrollEntryFromRow(payroll.rows[0]);
+      if (entry.version !== input.payrollVersion) throw new Error('version_conflict');
+      if (entry.status !== 'final') throw new Error('payroll_final_required');
+      if (entry.calculationContext) {
+        const approved = deriveApprovedPayrollComponents(
+          entry,
+          entry.calculationContext,
+          input.month,
+          entry.calculationPolicySnapshot ?? [],
+        );
+        const fields = [
+          'baseSalary',
+          'workDays',
+          'paidRestDays',
+          'restDayRate',
+          'paidHolidays',
+          'holidayPay',
+          'vacationDays',
+          'vacationPay',
+          'sickDays',
+          'sickPay',
+          'otherAbsenceDays',
+          'employerContributions',
+          'pocketMoney',
+          'deductions',
+          'advances',
+          'agreedDeductions',
+        ] as const;
+        if (fields.some((field) => approved.components[field] !== entry[field]))
+          throw new Error('payroll_close_amount_mismatch');
+      }
+      const totals = calculateMonthlyPayroll(entry);
+      const openingBalance = entry.calculationContext?.openingBalance?.amount ?? 0;
+      if (openingBalance > 0) throw new Error('payroll_carry_source_mismatch');
+      const settlement = derivePayrollSettlement(entry, openingBalance);
+      const workerAdditions = roundShekels(
+        totals.additions - entry.employerContributions + Math.max(openingBalance, 0),
+      );
+      const settlementDeductions = roundShekels(totals.deductions + Math.max(-openingBalance, 0));
+      if (
+        !payrollTotalMatches(entry.total, totals.total) ||
+        !payrollTotalMatches(input.total, settlement.closingWorkerBalance) ||
+        !payrollTotalMatches(input.baseSalary, entry.baseSalary) ||
+        !payrollTotalMatches(input.additions, workerAdditions) ||
+        !payrollTotalMatches(input.deductions, settlementDeductions)
+      )
+        throw new Error('payroll_close_amount_mismatch');
 
       const timelineId = randomUUID();
       const auditId = randomUUID();
@@ -172,8 +293,10 @@ export class CanonicalIntelligenceService {
       const inserted = await client.query<CloseRow>(
         `insert into payroll_month_close (id,tenant_id,employment_case_id,payroll_reference,
           payroll_month,payment_date,payment_method,timeline_event_id,audit_event_id,closed_by,
-          closed_at,correlation_id,total_amount,base_salary_amount,additions_amount,deductions_amount)
-         values ($1,$2,$3,$4,($5||'-01')::date,$6,$7,$8,$9,$10,now(),$11,$12,$13,$14,$15)
+          closed_at,correlation_id,total_amount,base_salary_amount,additions_amount,deductions_amount,
+          settlement_basis,payroll_entry_id,payroll_version,calculation_total,employer_contributions_amount,opening_balance_amount)
+         values ($1,$2,$3,$4,($5||'-01')::date,$6,$7,$8,$9,$10,now(),$11,$12,$13,$14,$15,
+          'worker',$16,$17,$18,$19,$20)
          returning ${CLOSE_COLUMNS}`,
         [
           closeId,
@@ -187,10 +310,15 @@ export class CanonicalIntelligenceService {
           auditId,
           actor.userId,
           actor.correlationId,
-          input.total,
-          input.baseSalary,
-          input.additions,
-          input.deductions,
+          settlement.closingWorkerBalance,
+          entry.baseSalary,
+          workerAdditions,
+          settlementDeductions,
+          entry.id,
+          entry.version,
+          totals.total,
+          entry.employerContributions,
+          openingBalance,
         ],
       );
       const close = closeResponse(inserted.rows[0]!, await memberNames(client));

@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "feature/caredesk-ux-v2-payments": false,
+      "preview/caredesk-ux-v2-payments": false
+    }
+  },
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm --filter @caredesk/api... build",
   "outputDirectory": "public",

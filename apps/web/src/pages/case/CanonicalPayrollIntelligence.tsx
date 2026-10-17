@@ -6,6 +6,7 @@ import { newIdempotencyKey } from '../../api/idempotency.js';
 import {
   agorotFromShekels,
   calculateMonthlyPayroll,
+  assertPayrollMoneyPrecision,
   scaleAgorot,
   shekelsOf,
 } from '@caredesk/domain';
@@ -24,6 +25,10 @@ import {
   type ScenarioExpenseResponse,
 } from '../../api/client.js';
 import { payrollEntryRequest } from '../../api/strict-bodies.js';
+import {
+  canonicalPayrollCloseCost,
+  canonicalPayrollEmploymentCost,
+} from '../../payroll-canonical.js';
 import {
   readMvpEmploymentExpenses,
   readMvpPayroll,
@@ -254,6 +259,7 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
    */
   const calculatedTotal = useMemo(() => {
     try {
+      assertPayrollMoneyPrecision(draft);
       return calculateMonthlyPayroll(draft).total;
     } catch {
       // A component the domain refuses (DOM-07: non-finite or negative) cannot
@@ -407,11 +413,15 @@ export function CanonicalPayrollIntelligence({ caseId }: { caseId: string }) {
       source: 'planning_scenario' as const,
     })),
     actuals: closes
-      .filter((c) => c.total !== null)
-      .map((c) => ({ month: c.month, amount: c.total!, sourceId: c.id })),
+      .map((c) => ({
+        month: c.month,
+        amount: canonicalPayrollCloseCost(c, entries ?? []),
+        sourceId: c.id,
+      }))
+      .filter((c): c is { month: string; amount: number; sourceId: string } => c.amount !== null),
     enteredPayroll: (entries ?? []).map((e) => ({
       month: e.month,
-      amount: e.total,
+      amount: canonicalPayrollEmploymentCost(e),
       sourceId: e.id,
     })),
   });

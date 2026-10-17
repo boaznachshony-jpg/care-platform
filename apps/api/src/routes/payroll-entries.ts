@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { z } from 'zod';
 import { withTenant } from '@caredesk/db';
-import { PayrollComponentError } from '@caredesk/domain';
+import { PayrollComponentError, PayrollPolicyError, roundShekels } from '@caredesk/domain';
+import { PayrollCalculationContextSchema } from '@caredesk/schemas';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { PayrollEntryService } from '../payroll-entry-service.js';
@@ -15,15 +16,27 @@ const params = z.object({
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
     .optional(),
 });
-const amount = z.number().finite().min(0).max(10_000_000);
-const days = z.number().finite().min(0).max(31);
+const amount = z
+  .number()
+  .finite()
+  .min(0)
+  .max(10_000_000)
+  .refine((value) => value === roundShekels(value), 'Money must use whole agorot');
+const count = (maximum: number) =>
+  z
+    .number()
+    .finite()
+    .min(0)
+    .max(maximum)
+    .refine((value) => value === roundShekels(value), 'Counts support two decimal places');
+const days = count(31);
 const body = z
   .object({
     baseSalary: amount,
     workDays: days,
-    paidRestDays: z.number().min(0).max(6),
+    paidRestDays: count(6),
     restDayRate: amount,
-    paidHolidays: z.number().min(0).max(10),
+    paidHolidays: count(10),
     holidayPay: amount,
     vacationDays: days,
     vacationPay: amount,
@@ -41,12 +54,18 @@ const body = z
     // DOM-02: still accepted, but only as an assertion the server checks
     // against its own recomputation. A mismatch is a 422; the value stored is
     // always the derived one. Negative is legitimate (DOM-07 carry-forward).
-    total: z.number().finite().min(-10_000_000).max(10_000_000),
+    total: z
+      .number()
+      .finite()
+      .min(-10_000_000)
+      .max(10_000_000)
+      .refine((value) => value === roundShekels(value), 'Money must use whole agorot'),
     status: z.enum(['draft', 'final']),
     // API-03: optional HERE because this route upserts and only the service,
     // holding the row lock, can tell a create from an update. The service
     // requires it whenever a row exists; see `version_required` below.
     version: z.number().int().positive().optional(),
+    calculationContext: PayrollCalculationContextSchema.nullish(),
   })
   .strict();
 
@@ -160,6 +179,16 @@ export function registerPayrollEntryRoutes(
         const result = await service.save(req.actor, p.data.caseId, p.data.month!, key, b.data);
         return reply.status(result.replayed ? 200 : 201).send(result);
       } catch (e) {
+        if (e instanceof PayrollPolicyError)
+          return sendError(
+            req,
+            reply,
+            e.code === 'money_precision' || e.code === 'invalid_context' ? 400 : 422,
+            e.code === 'money_precision' || e.code === 'invalid_context'
+              ? 'VALIDATION_ERROR'
+              : 'PAYROLL_POLICY_REQUIRED',
+            { [e.field]: [e.code] },
+          );
         // Root 4: a component the domain refuses (DOM-07) is a bad request, not
         // a 500. It is unreachable through this route's schema and is mapped
         // anyway, because the service is not the route's private property.
@@ -173,6 +202,12 @@ export function registerPayrollEntryRoutes(
         // components produce. 422 rather than 400 — the payload is well formed,
         // its arithmetic is not.
         if (m === 'total_mismatch') return sendError(req, reply, 422, 'TOTAL_MISMATCH');
+        if (m === 'payroll_carry_source_mismatch')
+          return sendError(req, reply, 422, 'PAYROLL_CARRY_SOURCE_MISMATCH');
+        if (m === 'payroll_carry_source_reused')
+          return sendError(req, reply, 409, 'PAYROLL_CARRY_SOURCE_REUSED');
+        if (m === 'payroll_payment_event_conflict')
+          return sendError(req, reply, 409, 'PAYROLL_PAYMENT_EVENT_CONFLICT');
         // DOM-01: the month has a close receipt. Correcting it requires a
         // governed reopen path, which does not exist yet (see the report).
         if (m === 'payroll_month_closed') return sendError(req, reply, 409, 'PAYROLL_MONTH_CLOSED');

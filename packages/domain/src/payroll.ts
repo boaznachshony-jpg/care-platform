@@ -297,15 +297,26 @@ export function toPayrollComponentsAgorot(components: PayrollComponents): Payrol
  * `calculateMonthlyPayrollAgorot` — it holds no arithmetic of its own.
  */
 export function calculateMonthlyPayroll(components: PayrollComponents): PayrollTotals {
-  const totals = calculateMonthlyPayrollAgorot(toPayrollComponentsAgorot(components));
-  return {
-    restDayPay: shekelsOf(totals.restDayPay),
-    additions: shekelsOf(totals.additions),
-    deductions: shekelsOf(totals.deductions),
-    total: shekelsOf(totals.total),
-    payableToWorker: shekelsOf(totals.payableToWorker),
-    calculationOnly: shekelsOf(totals.calculationOnly),
-  };
+  try {
+    const totals = calculateMonthlyPayrollAgorot(toPayrollComponentsAgorot(components));
+    return {
+      restDayPay: shekelsOf(totals.restDayPay),
+      additions: shekelsOf(totals.additions),
+      deductions: shekelsOf(totals.deductions),
+      total: shekelsOf(totals.total),
+      payableToWorker: shekelsOf(totals.payableToWorker),
+      calculationOnly: shekelsOf(totals.calculationOnly),
+    };
+  } catch (error) {
+    // Individually valid components may overflow an aggregate. Report the
+    // existing structured validation error instead of leaking a server 500.
+    if (error instanceof MoneyError)
+      throw new PayrollComponentError(
+        'total',
+        error.problem === 'out_of_range' ? 'out_of_range' : 'not_finite',
+      );
+    throw error;
+  }
 }
 
 /**

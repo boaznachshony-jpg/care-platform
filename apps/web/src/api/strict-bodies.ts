@@ -36,6 +36,9 @@ export function payrollEntryRequest(source: SavePayrollEntryRequest): SavePayrol
     agreedDeductions: source.agreedDeductions,
     total: source.total,
     status: source.status,
+    ...(source.calculationContext === undefined
+      ? {}
+      : { calculationContext: source.calculationContext }),
     ...(source.version === undefined ? {} : { version: source.version }),
   };
 }

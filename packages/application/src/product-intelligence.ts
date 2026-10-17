@@ -287,14 +287,20 @@ export function projectFutureCost(input: {
   const amounts = [
     input.baseSalary,
     ...input.expenses.map((expense) => expense.amount),
-    ...(input.actuals ?? []).map((actual) => actual.amount),
-    ...(input.enteredPayroll ?? []).map((actual) => actual.amount),
     input.scenario?.salaryChange?.amount,
     input.scenario?.insuranceRenewal?.amount,
     input.scenario?.oneTimeExpense?.amount,
   ].filter((amount): amount is number => amount !== undefined);
   if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0))
     throw new Error('Forecast amounts must be finite and non-negative');
+  // A persisted payroll balance can be signed (e.g. an advance exceeded wages).
+  // Preserve that fact instead of crashing the whole projection or erasing it.
+  if (
+    [...(input.actuals ?? []), ...(input.enteredPayroll ?? [])].some(
+      (row) => !Number.isFinite(row.amount),
+    )
+  )
+    throw new Error('Payroll forecast balances must be finite');
   // DOM-04. `roundMoney = (a) => Math.round((a + Number.EPSILON) * 100) / 100`
   // used to live here. EPSILON is ~2.2e-16 while the representation gap at
   // shekel magnitudes is ~1e-13, so it corrected nothing where it mattered and

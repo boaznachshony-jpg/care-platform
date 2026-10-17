@@ -15,6 +15,11 @@ const mockListCanonicalPayrollCloses = vi.fn();
 const mockCloseCanonicalPayrollMonth = vi.fn();
 
 vi.mock('../api/client.js', () => ({
+  listPayrollEntries: () => Promise.resolve([]),
+  savePayrollEntry: (_caseId: string, month: string, input: Record<string, unknown>) =>
+    Promise.resolve({
+      entry: { ...input, id: 'f3e7d48d-7115-4198-96fd-dbc62646a3d8', month, version: 1 },
+    }),
   listCanonicalPayrollCloses: (...args: unknown[]) => mockListCanonicalPayrollCloses(...args),
   closeCanonicalPayrollMonth: (...args: unknown[]) => mockCloseCanonicalPayrollMonth(...args),
 }));

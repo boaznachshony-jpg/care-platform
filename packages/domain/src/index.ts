@@ -7,6 +7,7 @@ export * from './entities.js';
 export * from './money.js';
 export * from './date.js';
 export * from './payroll.js';
+export * from './payroll-policy.js';
 export * from './billing-schedule.js';
 export * from './national-insurance.js';
 export * from './proration.js';

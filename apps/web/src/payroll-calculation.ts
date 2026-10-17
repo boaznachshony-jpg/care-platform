@@ -1,5 +1,6 @@
 import {
   agorotFromShekels,
+  addAgorot,
   calculateMonthlyPayroll as calculateCanonicalPayroll,
   scaleAgorot,
   shekelsOf,
@@ -34,6 +35,7 @@ export interface MonthlyPayrollInput {
   housingDeduction: number;
   advances: number;
   agreedDeduction: number;
+  unallocatedDeductions?: number;
 }
 
 export interface MonthlyPayrollCalculation {
@@ -159,7 +161,13 @@ export function calculateMonthlyPayroll(input: MonthlyPayrollInput): MonthlyPayr
     employerContributions: safeAmount(input.employerContributions),
     additionalPayments: [{ amount: safeAmount(input.otherAddition) }],
     pocketMoney: safeAmount(input.pocketMoney),
-    deductions: safeAmount(input.medicalInsuranceDeduction) + safeAmount(input.housingDeduction),
+    deductions: shekelsOf(
+      addAgorot(
+        agorotFromShekels(safeAmount(input.medicalInsuranceDeduction)),
+        agorotFromShekels(safeAmount(input.housingDeduction)),
+        agorotFromShekels(safeAmount(input.unallocatedDeductions ?? 0)),
+      ),
+    ),
     advances: safeAmount(input.advances),
     agreedDeductions: safeAmount(input.agreedDeduction),
   });

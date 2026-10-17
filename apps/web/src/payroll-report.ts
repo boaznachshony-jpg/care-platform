@@ -1,4 +1,11 @@
 import type { MvpPayrollRecord } from './storage/mvp-storage.js';
+import {
+  addAgorot,
+  agorotFromShekels,
+  shekelsOf,
+  ZERO_AGOROT,
+  type Agorot,
+} from '@caredesk/domain';
 
 export interface AnnualPayrollReport {
   year: string;
@@ -13,11 +20,24 @@ export interface AnnualPayrollReport {
   otherAdditions: number;
   additions: number;
   deductions: number;
+  costDeductions: number;
   totalPaid: number;
+  payableToWorker: number;
+  previouslyPaid: number;
+  employmentCost: number;
 }
 
 function amount(value: number | undefined): number {
   return Number.isFinite(value) ? (value ?? 0) : 0;
+}
+
+function sumMoney(...values: Array<number | undefined>): number {
+  return shekelsOf(
+    values.reduce<Agorot>(
+      (total, value) => addAgorot(total, agorotFromShekels(amount(value))),
+      ZERO_AGOROT,
+    ),
+  );
 }
 
 /**
@@ -43,14 +63,14 @@ export function payrollRecordAdditions(
     | 'additionalPayments'
   >,
 ): number {
-  return (
-    amount(record.saturdayPay) +
-    amount(record.holidayPay) +
-    amount(record.vacationPay) +
-    amount(record.sickPay) +
-    amount(record.employerContributions) +
-    amount(record.otherAddition) +
-    (record.additionalPayments ?? []).reduce((total, payment) => total + amount(payment.amount), 0)
+  return sumMoney(
+    record.saturdayPay,
+    record.holidayPay,
+    record.vacationPay,
+    record.sickPay,
+    record.employerContributions,
+    record.otherAddition,
+    ...(record.additionalPayments ?? []).map((payment) => payment.amount),
   );
 }
 
@@ -64,13 +84,17 @@ export function payrollRecordDeductions(
     | 'agreedDeduction'
   >,
 ): number {
-  return (
-    amount(record.pocketMoney) +
-    amount(record.medicalInsuranceDeduction) +
-    amount(record.housingDeduction) +
-    amount(record.advances) +
-    amount(record.agreedDeduction)
-  );
+  const canonicalDeductions =
+    'canonicalDeductions' in record
+      ? amount(record.canonicalDeductions as number)
+      : sumMoney(record.medicalInsuranceDeduction, record.housingDeduction);
+  return sumMoney(record.pocketMoney, canonicalDeductions, record.advances, record.agreedDeduction);
+}
+
+export function payrollRecordEmploymentCost(
+  record: Pick<MvpPayrollRecord, 'total' | 'advances' | 'pocketMoney'>,
+): number {
+  return sumMoney(record.total, record.advances, record.pocketMoney);
 }
 
 export function getPayrollYears(records: MvpPayrollRecord[]): string[] {
@@ -89,20 +113,39 @@ export function createAnnualPayrollReport(
 
   return annualRecords.reduce<AnnualPayrollReport>(
     (report, record) => {
-      const additionalPayments = (record.additionalPayments ?? []).reduce(
-        (total, payment) => total + amount(payment.amount),
-        0,
+      const additionalPayments = sumMoney(
+        ...(record.additionalPayments ?? []).map((payment) => payment.amount),
       );
-      report.baseSalary += amount(record.baseSalary);
-      report.saturdayPay += amount(record.saturdayPay);
-      report.holidayPay += amount(record.holidayPay);
-      report.vacationPay += amount(record.vacationPay);
-      report.sickPay += amount(record.sickPay);
-      report.employerContributions += amount(record.employerContributions);
-      report.otherAdditions += amount(record.otherAddition) + additionalPayments;
-      report.additions += payrollRecordAdditions(record);
-      report.deductions += payrollRecordDeductions(record);
-      report.totalPaid += amount(record.total);
+      report.baseSalary = sumMoney(report.baseSalary, record.baseSalary);
+      report.saturdayPay = sumMoney(report.saturdayPay, record.saturdayPay);
+      report.holidayPay = sumMoney(report.holidayPay, record.holidayPay);
+      report.vacationPay = sumMoney(report.vacationPay, record.vacationPay);
+      report.sickPay = sumMoney(report.sickPay, record.sickPay);
+      report.employerContributions = sumMoney(
+        report.employerContributions,
+        record.employerContributions,
+      );
+      report.otherAdditions = sumMoney(
+        report.otherAdditions,
+        record.otherAddition,
+        additionalPayments,
+      );
+      report.additions = sumMoney(report.additions, payrollRecordAdditions(record));
+      report.deductions = sumMoney(report.deductions, payrollRecordDeductions(record));
+      report.costDeductions = sumMoney(
+        report.costDeductions,
+        payrollRecordDeductions(record),
+        -amount(record.advances),
+        -amount(record.pocketMoney),
+      );
+      report.totalPaid = sumMoney(report.totalPaid, record.total);
+      report.payableToWorker = sumMoney(
+        report.payableToWorker,
+        record.total,
+        -amount(record.employerContributions),
+      );
+      report.previouslyPaid = sumMoney(report.previouslyPaid, record.advances, record.pocketMoney);
+      report.employmentCost = sumMoney(report.employmentCost, payrollRecordEmploymentCost(record));
       return report;
     },
     {
@@ -118,7 +161,11 @@ export function createAnnualPayrollReport(
       otherAdditions: 0,
       additions: 0,
       deductions: 0,
+      costDeductions: 0,
       totalPaid: 0,
+      payableToWorker: 0,
+      previouslyPaid: 0,
+      employmentCost: 0,
     },
   );
 }

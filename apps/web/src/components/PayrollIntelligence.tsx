@@ -2,14 +2,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { payrollIntelligence } from '../product-intelligence.js';
-import { payrollRecordDeductions } from '../payroll-report.js';
+import { payrollRecordDeductions, payrollRecordEmploymentCost } from '../payroll-report.js';
 import {
   type MvpEmploymentExpense,
   type MvpMonthlyClose,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
 import { closeCanonicalPayrollMonth, listCanonicalPayrollCloses } from '../api/client.js';
+import type { PayrollEntryResponse } from '../api/client.js';
 import { newIdempotencyKey } from '../api/idempotency.js';
+import { calculateMonthlyPayroll, derivePayrollSettlement } from '@caredesk/domain';
+import { finalPayrollForClose, type PayrollReportRecord } from '../payroll-canonical.js';
 import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timestamp.js';
 import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
 import { ValueOrigin, ValueOriginLegend } from './ValueOrigin.js';
@@ -54,9 +57,11 @@ export function canonicalCloseSplit(record: {
   housingDeduction?: number;
   advances: number;
   agreedDeduction: number;
+  employerContributions?: number;
 }): CanonicalCloseSplit {
   const deductions = payrollRecordDeductions(record);
-  const additions = record.total - record.baseSalary + deductions;
+  const additions =
+    record.total - (record.employerContributions ?? 0) - record.baseSalary + deductions;
   return additions < 0
     ? { kind: 'unrepresentable', additions, deductions }
     : { kind: 'ok', additions, deductions };
@@ -67,11 +72,13 @@ export function PayrollIntelligence({
   expenses,
   baseSalary,
   caseLookup,
+  onPayrollSaved,
 }: {
   records: MvpPayrollRecord[];
   expenses: MvpEmploymentExpense[];
   baseSalary: number | null;
   caseLookup: CaseLookupState;
+  onPayrollSaved?: (entry: PayrollEntryResponse) => void;
 }) {
   const { t } = useTranslation();
   /**
@@ -134,7 +141,12 @@ export function PayrollIntelligence({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void refreshCloses(), [caseId]);
   const { analytics, forecast } = payrollIntelligence(
-    records,
+    records.map((record) => ({
+      ...record,
+      total: payrollRecordEmploymentCost(record),
+      advances: 0,
+      pocketMoney: 0,
+    })),
     closes,
     expenses,
     year,
@@ -160,7 +172,7 @@ export function PayrollIntelligence({
           ? 'לא ניתן להתחבר לשרת כדי לאתר את התיק כרגע. נסו שוב בעוד רגע.'
           : null;
   async function closeMonth() {
-    if (!caseId || !open || !paymentDate || open.total <= 0) return;
+    if (!caseId || !open || !paymentDate || closing) return;
     const split = canonicalCloseSplit(open);
     if (split.kind === 'unrepresentable') {
       setCloseRefusal(
@@ -169,21 +181,30 @@ export function PayrollIntelligence({
       return;
     }
     setCloseRefusal('');
-    const deductions = split.deductions;
-    const actualBase = open.baseSalary;
     setClosing(true);
     setCloseError(false);
     try {
+      const entry = await finalPayrollForClose(caseId, open as PayrollReportRecord);
+      onPayrollSaved?.(entry);
+      const settlement = derivePayrollSettlement(
+        entry,
+        entry.calculationContext?.openingBalance?.amount ?? 0,
+      );
+      const totals = calculateMonthlyPayroll(entry);
+      const deductions = totals.deductions + Math.max(-settlement.openingBalance, 0);
+      const additions =
+        totals.additions - entry.employerContributions + Math.max(settlement.openingBalance, 0);
       await closeCanonicalPayrollMonth(
         caseId,
         {
-          payrollReference: open.id,
+          payrollReference: entry.id,
+          payrollVersion: entry.version,
           month: open.month,
           paymentDate,
           paymentMethod,
-          total: open.total,
-          baseSalary: actualBase,
-          additions: split.additions,
+          total: settlement.closingWorkerBalance,
+          baseSalary: entry.baseSalary,
+          additions,
           deductions,
         },
         closeKey.current,
@@ -422,7 +443,15 @@ export function PayrollIntelligence({
               </label>
             </div>
             <p>
-              סכום ששמור לתשלום: <strong>{money.format(open.total)}</strong>{' '}
+              סכום ששמור לתשלום:{' '}
+              <strong>
+                {money.format(
+                  open.total -
+                    (open.employerContributions ?? 0) +
+                    ((open as PayrollReportRecord).canonicalEntry?.calculationContext
+                      ?.openingBalance?.amount ?? 0),
+                )}
+              </strong>{' '}
               {/* R5-02/R5-03. Saved, not paid — the payment date is the field
                   directly above, still empty until the user closes the month. */}
               <ValueOrigin
@@ -456,7 +485,7 @@ export function PayrollIntelligence({
             <button
               className="primary-button"
               type="button"
-              disabled={!paymentDate || open.total <= 0 || !caseId || closing}
+              disabled={!paymentDate || !caseId || closing}
               onClick={() => void closeMonth()}
             >
               {closing ? 'סוגר את החודש…' : 'אישור שהחודש מוכן וסגירה'}

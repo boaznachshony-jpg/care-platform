@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   emptyMvpProfile,
@@ -23,6 +23,8 @@ vi.mock('../sync/use-case-for-legacy-client.js', () => ({
   useCaseForLegacyClient: (legacyClientId: string) => mockUseCaseForLegacyClient(legacyClientId),
 }));
 vi.mock('../api/client.js', () => ({
+  listPayrollEntries: () => Promise.resolve([]),
+  savePayrollEntry: () => Promise.reject(new Error('not used here')),
   listCanonicalPayrollCloses: () => Promise.resolve([]),
   closeCanonicalPayrollMonth: () => Promise.reject(new Error('not used here')),
 }));
@@ -60,8 +62,9 @@ afterEach(() => {
 });
 
 describe('PayrollPage wizard save', () => {
-  it('shows a refused month and never says it was saved', () => {
+  it('shows a refused month and never says it was saved', async () => {
     render(<PayrollPage />);
+    await act(async () => {});
     refuseWrites('caredesk.mvp.payroll.');
 
     fillAndSave();
@@ -77,8 +80,9 @@ describe('PayrollPage wizard save', () => {
     expect(readMvpEmploymentExpenses()).toEqual([]);
   });
 
-  it('says exactly which half was kept when only the tracking row is refused', () => {
+  it('says exactly which half was kept when only the tracking row is refused', async () => {
     render(<PayrollPage />);
+    await act(async () => {});
     refuseWrites('caredesk.mvp.employment-expenses.');
 
     fillAndSave();
@@ -92,8 +96,9 @@ describe('PayrollPage wizard save', () => {
     expect(readMvpEmploymentExpenses()).toEqual([]);
   });
 
-  it('clears the failure once a save lands', () => {
+  it('clears the failure once a save lands', async () => {
     render(<PayrollPage />);
+    await act(async () => {});
     const refusal = refuseWrites('caredesk.mvp.payroll.');
     fillAndSave();
     expect(screen.getByRole('alert')).toBeInTheDocument();

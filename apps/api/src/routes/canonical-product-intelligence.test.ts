@@ -3,7 +3,8 @@ import { closeSchema, currentPayrollMonthInIsrael } from './canonical-product-in
 
 // Synthetic amounts only — no real person's salary appears in fixtures.
 const CLOSE = {
-  payrollReference: 'Synthetic reference 2024-01',
+  payrollReference: '00000000-0000-4000-8000-000000000001',
+  payrollVersion: 1,
   month: '2024-01',
   paymentDate: '2024-02-09',
   paymentMethod: 'bank_transfer' as const,
@@ -36,7 +37,7 @@ describe('monthly-close schema — root 4', () => {
     expect(parsed.success).toBe(false);
   });
 
-  it('rounds each amount to agorot before comparing, so the parse output is what is stored', () => {
+  it('rejects extra decimal places even when a rounded amount would reconcile', () => {
     const parsed = closeSchema.safeParse({
       ...CLOSE,
       total: 1000.13,
@@ -44,8 +45,15 @@ describe('monthly-close schema — root 4', () => {
       additions: 0,
       deductions: 0,
     });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.baseSalary).toBe(1000.13);
+    expect(parsed.success).toBe(false);
+  });
+
+  it('requires a canonical reference and the version being closed', () => {
+    expect(closeSchema.safeParse({ ...CLOSE, payrollReference: 'legacy-reference' }).success).toBe(
+      false,
+    );
+    expect(closeSchema.safeParse({ ...CLOSE, payrollVersion: undefined }).success).toBe(false);
+    expect(closeSchema.safeParse({ ...CLOSE, payrollVersion: 0 }).success).toBe(false);
   });
 
   it('accepts a zero-total month, which could never be closed before (DOM-24)', () => {
