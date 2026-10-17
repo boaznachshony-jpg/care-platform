@@ -14,6 +14,17 @@ import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timest
 import type { CaseLookupState } from '../sync/use-case-for-legacy-client.js';
 import { ValueOrigin, ValueOriginLegend } from './ValueOrigin.js';
 
+/** "2026-06" -> "יוני 2026": a month reads as a word, and does not wrap in a narrow column. */
+const monthName = new Intl.DateTimeFormat('he-IL', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const monthLabel = (month: string) => {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? month : monthName.format(date);
+};
+
 const money = new Intl.NumberFormat('he-IL', {
   style: 'currency',
   currency: 'ILS',
@@ -251,25 +262,43 @@ export function PayrollIntelligence({
                    can be shown without inventing a field. An open month is a
                    derived total and nothing more. */
                 const close = closes.find((c) => c.month === record.month);
+                /* One line per month, four fixed places: the month in words,
+                   the bar, the amount, and ONE status. The row used to render
+                   five items into a four-column grid, so the paid badge and its
+                   provenance fell to a second line inside the 70px month
+                   column and wrapped into a five-line bubble, beside a separate
+                   "סגור ✓" that said the same thing as "✓ שולם". A paid month
+                   draws a solid bar and an open one a pale bar, so the
+                   difference survives a glance as well as the text. */
+                const paid = Boolean(close) || record.closed;
                 return (
-                  <div className="bar-row" key={record.month}>
-                    <span aria-label={record.month}>{record.month.replace('-', ' / ')}</span>
-                    <div>
+                  <div
+                    className={paid ? 'bar-row bar-row-paid' : 'bar-row bar-row-open'}
+                    key={record.month}
+                  >
+                    <span className="bar-row-month">{monthLabel(record.month)}</span>
+                    <div className="bar-row-track">
                       <i style={{ width: `${Math.max(3, (record.total / max) * 100)}%` }} />
                     </div>
-                    <strong>{money.format(record.total)}</strong>
-                    <small>{record.closed ? 'סגור ✓' : 'פתוח !'}</small>
-                    {close ? (
-                      <ValueOrigin
-                        kind="paid"
-                        provenance={{
-                          source: t('valueOrigin.source.monthlyClose'),
-                          when: formatDateOnly(close.paymentDate) ?? close.paymentDate,
-                        }}
-                      />
-                    ) : (
-                      <ValueOrigin kind="calculated" />
-                    )}
+                    <strong className="bar-row-amount">{money.format(record.total)}</strong>
+                    <span className="bar-row-status">
+                      {close ? (
+                        <ValueOrigin
+                          kind="paid"
+                          provenance={{
+                            source: t('valueOrigin.source.monthlyClose'),
+                            when: formatDateOnly(close.paymentDate) ?? close.paymentDate,
+                          }}
+                        />
+                      ) : record.closed ? (
+                        <ValueOrigin kind="paid" />
+                      ) : (
+                        <>
+                          <ValueOrigin kind="calculated" />
+                          <small>טרם נסגר</small>
+                        </>
+                      )}
+                    </span>
                   </div>
                 );
               })}
