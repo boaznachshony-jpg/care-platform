@@ -57,8 +57,12 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
       // the payload, so this is a second, narrow read per tenant rather than a
       // wider elevated one.
       const entries = await this.countEntries(row.tenant_id, row.workspace_version !== null);
+      // R5-09 is a measurement riding on a safety control, never a reason for
+      // that control to stop. Whatever goes wrong here - a query, an
+      // unexpected payload shape - this tenant's row records "not measured"
+      // (null) and the data-loss census carries on for every tenant.
       const nationalInsurance = entries.payload
-        ? await this.measureNationalInsurance(row.tenant_id, entries.payload)
+        ? await this.measureNationalInsurance(row.tenant_id, entries.payload).catch(() => null)
         : null;
       observations.push({
         tenantId: row.tenant_id,

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { createPool, withTenant } from './pool.js';
 import { assertRlsTestTargetIsSafe } from './rls-check-target.js';
+import { PgTenantCensusRepository } from './tenant-census-repository.js';
 
 const NORMALIZED_TABLES = [
   'care_recipient',
@@ -694,6 +695,56 @@ async function main(): Promise<void> {
       );
     }
 
+    // R5-09 stage 3 (0050): the nightly census path itself, against this real
+    // database, as the application role. Tenant A gets a plaintext workspace
+    // holding the same payment as its copied report above, under the
+    // unscoped client its case is linked to; the measurement must find one
+    // payment and no gap. This is the SQL the production scan runs nightly.
+    await admin.query(
+      `update employment_case set legacy_client_id = 'legacy:unscoped' where id = $1`,
+      [a.employmentCase],
+    );
+    await admin.query(
+      `insert into tenant_workspace (tenant_id, schema_version, payload, updated_by)
+       values ($1, 1, $2::jsonb, $3)`,
+      [
+        a.tenant,
+        JSON.stringify({
+          'caredesk.mvp.employment-expenses.v1': JSON.stringify([
+            {
+              id: 'rls-ni-a',
+              dueDate: '2026-10-15',
+              nationalInsuranceMonths: [
+                { month: '2026-07', employed: true, wage: 6000, ratePercent: 3.55, amount: 213 },
+                { month: '2026-08', employed: false, wage: 0, ratePercent: 3.55, amount: 0 },
+              ],
+            },
+          ]),
+        }),
+        a.user,
+      ],
+    );
+    const census = await new PgTenantCensusRepository(pool).collect();
+    const measured = census.find((row) => row.tenantId === a.tenant);
+    const unmeasured = census.find((row) => row.tenantId === b.tenant);
+    if (
+      measured?.nationalInsuranceWorkspaceReports === 1 &&
+      measured.nationalInsuranceUnreconciledReports === 0 &&
+      unmeasured?.nationalInsuranceWorkspaceReports === null
+    ) {
+      pass('tenant census: National Insurance measurement runs as caredesk_app and finds no gap');
+    } else {
+      fail(
+        `tenant census: National Insurance measurement gave ${JSON.stringify({
+          a: [
+            measured?.nationalInsuranceWorkspaceReports,
+            measured?.nationalInsuranceUnreconciledReports,
+          ],
+          b: unmeasured?.nationalInsuranceWorkspaceReports,
+        })}`,
+      );
+    }
+
     await withTenant(pool, a.tenant, async (client) => {
       try {
         await client.query('create table rls_probe_should_fail (id int)');
@@ -709,6 +760,10 @@ async function main(): Promise<void> {
         row.tenant,
       ]);
       await admin.query('delete from national_insurance_report where tenant_id = $1', [row.tenant]);
+      // The 0037 trigger archives a deleted workspace into its history, so the
+      // history goes after it.
+      await admin.query('delete from tenant_workspace where tenant_id = $1', [row.tenant]);
+      await admin.query('delete from tenant_workspace_history where tenant_id = $1', [row.tenant]);
       await admin.query('delete from event_action_plan where tenant_id = $1', [row.tenant]);
       await admin.query('delete from document_intake_review where tenant_id = $1', [row.tenant]);
       await admin.query('delete from audit_event where tenant_id = $1', [row.tenant]);
