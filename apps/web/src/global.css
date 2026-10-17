@@ -6022,24 +6022,118 @@ input[type='number'] {
 }
 .bar-chart {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  /* The rows lay themselves out by the width of this card, not of the
+     screen: the same card sits beside a sidebar on a laptop and alone on a
+     phone. */
+  container-type: inline-size;
 }
+.bar-chart h3 {
+  margin-bottom: 6px;
+}
+/* Monthly cost history: one line per month in four fixed places - month,
+   bar, amount, status. Every column has a set width or a no-wrap rule, so
+   nothing drops onto a second line inside a narrow cell. */
 .bar-row {
   display: grid;
-  grid-template-columns: 70px minmax(80px, 1fr) 110px 60px;
+  /* The status column is a fixed width, not sized by its content: every row
+     is its own grid, and a content-sized column moved the bar and the amount
+     of an open month out of line with the paid months above it. */
+  grid-template-columns: 7.5rem minmax(80px, 1fr) 7rem 17.5rem;
+  grid-template-areas: 'month track amount status';
   align-items: center;
-  gap: 10px;
+  column-gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--cd-border, #d3dde9);
 }
-.bar-row > div {
-  height: 18px;
-  background: #e4e9f1;
-  border-radius: 8px;
+.bar-row:last-child {
+  border-bottom: 0;
+}
+.bar-row-month {
+  grid-area: month;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bar-row-track {
+  grid-area: track;
+  height: 10px;
+  background: var(--cd-pill, #eef2f7);
+  border-radius: 999px;
   overflow: hidden;
 }
-.bar-row i {
+.bar-row-track i {
   display: block;
   height: 100%;
-  background: repeating-linear-gradient(45deg, #1559c7, #1559c7 8px, #4c81d2 8px, #4c81d2 16px);
+  border-radius: 999px;
+  background: var(--cd-accent, #1f62cf);
+}
+/* A month not yet closed is a calculated figure, not a payment: a pale,
+   hatched bar. The status text says so too; the bar is never the only cue. */
+.bar-row-open .bar-row-track i {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cd-accent-soft, #e3efff),
+    var(--cd-accent-soft, #e3efff) 6px,
+    color-mix(in srgb, var(--cd-accent, #1f62cf) 35%, transparent) 6px,
+    color-mix(in srgb, var(--cd-accent, #1f62cf) 35%, transparent) 12px
+  );
+}
+.bar-row-amount {
+  grid-area: amount;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bar-row-status {
+  grid-area: status;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.bar-row-status small {
+  color: var(--cd-text-secondary, #52627a);
+}
+/* In this row the badge is a short label, and its source and date sit as one
+   quiet line under it - not wrapped inside the pill. */
+.bar-row .value-origin {
+  white-space: nowrap;
+}
+.bar-row .value-origin-paid {
+  flex-wrap: wrap;
+  row-gap: 0;
+  border-radius: 10px;
+}
+.bar-row .value-origin-provenance {
+  flex-basis: 100%;
+  white-space: nowrap;
+}
+/* A medium-width card: the status moves under its month instead of
+   squeezing the bar. */
+@container (max-width: 700px) {
+  .bar-row {
+    grid-template-columns: 7rem minmax(60px, 1fr) auto;
+    grid-template-areas:
+      'month track amount'
+      'status status status';
+    row-gap: 6px;
+  }
+}
+/* A phone-width card: month and amount on the first line, the bar under
+   them, the status last - each at full width, nothing squeezed. */
+@container (max-width: 460px) {
+  .bar-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'month amount'
+      'track track'
+      'status status';
+    row-gap: 8px;
+  }
+  .bar-row .value-origin-provenance {
+    white-space: normal;
+  }
 }
 
 /* Forecast card — the figures read before the labelling, not under it.
@@ -6082,13 +6176,6 @@ input[type='number'] {
   .attention-item {
     align-items: stretch;
     flex-direction: column;
-  }
-  .bar-row {
-    grid-template-columns: 55px 1fr;
-  }
-  .bar-row strong,
-  .bar-row small {
-    grid-column: 2;
   }
   .payroll-intelligence details {
     overflow: auto;

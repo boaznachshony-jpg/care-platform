@@ -121,6 +121,40 @@ describe('PayrollIntelligence — R5-02 / R5-03 / R5-04', () => {
     expect(rows[1]?.querySelector('.value-origin-provenance')).toBeNull();
   });
 
+  /**
+   * The history rows rendered five items into a four-column grid: the paid
+   * badge fell into the narrow month column and wrapped into a five-line
+   * bubble, next to a separate "סגור ✓" that repeated "✓ שולם". One status per
+   * row, the month in words, and a visible "not closed yet" for an open month.
+   */
+  it('gives every month one status and names the month in words', async () => {
+    const { container } = renderIntelligence();
+    await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
+
+    const rows = Array.from(container.querySelectorAll('.bar-row'));
+    for (const row of rows) {
+      expect(row.querySelectorAll('.bar-row-status .value-origin')).toHaveLength(1);
+      expect(row.textContent).not.toContain('סגור ✓');
+    }
+    const [closedRow, openRow] = rows;
+    expect(closedRow).toHaveClass('bar-row-paid');
+    expect(openRow).toHaveClass('bar-row-open');
+    expect(openRow?.querySelector('.bar-row-status')?.textContent).toContain('טרם נסגר');
+    expect(closedRow?.querySelector('.bar-row-status')?.textContent).not.toContain('טרם נסגר');
+
+    const monthName = new Intl.DateTimeFormat('he-IL', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    expect(closedRow?.querySelector('.bar-row-month')?.textContent).toBe(
+      monthName.format(new Date(`${CLOSED_MONTH}-01T00:00:00Z`)),
+    );
+    expect(openRow?.querySelector('.bar-row-month')?.textContent).toBe(
+      monthName.format(new Date(`${OPEN_MONTH}-01T00:00:00Z`)),
+    );
+  });
+
   it('marks the amount waiting to be closed as calculated, not as paid', async () => {
     const { container } = renderIntelligence();
     await waitFor(() => expect(mockListCanonicalPayrollCloses).toHaveBeenCalled());
