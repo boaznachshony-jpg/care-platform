@@ -185,12 +185,13 @@ test.describe('מטריצת רוחבים ויזואלית (שער שחרור §2
       page,
     }) => {
       test.slow();
-      await installCanonicalProductIntelligence(page);
+      const canonical = await installCanonicalProductIntelligence(page);
       await page.setViewportSize({ width, height: viewportHeightFor(width) });
 
       const clientHome = await enterSeededClient(page, completedProfile, { clearStorage: true });
       await page.goto(`${clientHome}/payroll`);
       await expect(page.getByRole('heading', { level: 1, name: 'רישום שכר חודשי' })).toBeVisible();
+      await expect.poll(() => canonical.payrollListRequestCount()).toBeGreaterThan(0);
 
       // The Institute's monthly table renders from the default quarterly
       // period, so it is on screen from the first audit. Asserted rather than
@@ -228,6 +229,7 @@ test.describe('מטריצת רוחבים ויזואלית (שער שחרור §2
 
       await page.getByRole('button', { name: 'אישור ושמירה' }).click();
       await expect(page.getByText('השכר נשמר בהצלחה')).toBeVisible();
+      expect(canonical.payrollWrites()).toEqual([]);
       // The annual report is rendered only once a record exists, which is why
       // this audit comes after the save and not instead of it.
       await expect(

@@ -503,7 +503,14 @@ test('notification bell opens the list of open tasks', async ({ page }) => {
 
 test('walks through all payroll steps', async ({ page }) => {
   const clientHome = await seedCompletedProfile(page);
+  const canonicalRead = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' && /\/payroll-entries(?:\?.*)?$/.test(response.url()),
+  );
   await page.goto(`${clientHome}/payroll`);
+  const canonicalResponse = await canonicalRead;
+  expect(canonicalResponse.status()).toBe(200);
+  expect(await canonicalResponse.json()).toEqual([]);
   const next = page.getByRole('button', { name: 'המשך' });
   const payrollMonth = await page.getByLabel('חודש שכר').inputValue();
   await next.click();

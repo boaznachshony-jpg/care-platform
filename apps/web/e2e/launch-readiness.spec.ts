@@ -355,6 +355,10 @@ test.describe('launch readiness interactions', () => {
     await expect(page.getByRole('heading', { name: 'עלות ההעסקה לאורך זמן' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'תחזית 12 חודשים' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'סגירת 2026-07' })).toBeVisible();
+    expect(canonical.payrollListRequestCount()).toBeGreaterThan(0);
+    // An ordinary legacy wizard save stays local. Only the explicit close below
+    // creates its final canonical counterpart; no invisible second write.
+    expect(canonical.payrollWrites()).toEqual([]);
     await page.getByLabel('תאריך תשלום').fill('2026-08-09');
     await page.getByLabel('אמצעי תשלום').selectOption('bank_transfer');
     await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
@@ -373,6 +377,19 @@ test.describe('launch readiness interactions', () => {
     // month is now stated, and it is checked four lines up — "שולם 09.08.2026"
     // against a close that carries a payment date.
     expect(canonical.closeMutationCount()).toBe(1);
+    const [finalWrite] = canonical.payrollWrites();
+    expect(canonical.payrollWrites()).toHaveLength(1);
+    expect(finalWrite!.request.status).toBe('final');
+    expect(finalWrite!.entry).toMatchObject({ month: '2026-07', status: 'final', version: 1 });
+    expect(canonical.closedMonths()[0]).toMatchObject({
+      payrollReference: finalWrite!.entry.id,
+      payrollVersion: finalWrite!.entry.version,
+      settlementBasis: 'worker',
+      calculationTotal: finalWrite!.entry.total,
+      employerContributions: 900,
+      openingBalance: 0,
+      total: finalWrite!.entry.total - 900,
+    });
 
     const replayRequest = canonical.lastCloseRequest();
     expect(replayRequest).toBeDefined();
@@ -425,6 +442,177 @@ test.describe('launch readiness interactions', () => {
     await page.getByLabel('בתוקף מתאריך').fill('2026-07-01');
     await page.getByRole('button', { name: 'שמירת הגדרת השכר' }).click();
     await expect(page.getByRole('heading', { name: 'רישום שכר חודשי' })).toBeVisible();
+  });
+
+  test('finalizes the saved canonical version before closing a negative worker balance', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-07-15T12:00:00.000Z'));
+    const canonical = await seedCompletedProfile(page);
+    await expect.poll(() => canonical.caseListUrl()).toBeDefined();
+    const entryUrl = new URL(
+      `/cases/${canonical.caseId}/payroll-entries/2026-07`,
+      canonical.caseListUrl(),
+    ).href;
+    // Seed through the same intercepted HTTP boundary as the editor. These are
+    // synthetic browser-contract facts, not a claim of external DB persistence.
+    const draft = {
+      baseSalary: 6000,
+      workDays: 26,
+      paidRestDays: 0,
+      restDayRate: 0,
+      paidHolidays: 0,
+      holidayPay: 0,
+      vacationDays: 0,
+      vacationPay: 0,
+      sickDays: 0,
+      sickPay: 0,
+      otherAbsenceDays: 0,
+      employerContributions: 1000,
+      additionalPayments: [],
+      pocketMoney: 0,
+      deductions: 0,
+      advances: 6500,
+      agreedDeductions: 0,
+      total: 500,
+      status: 'draft' as const,
+    };
+    const created = await page.evaluate(
+      async ({ url, input }) => {
+        const response = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+            'idempotency-key': 'browser-draft-create',
+          },
+          body: JSON.stringify(input),
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { url: entryUrl, input: draft },
+    );
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      entry: { status: 'draft', version: 1, total: 500 },
+      replayed: false,
+    });
+    const draftEntry = canonical.payrollEntries()[0]!;
+    const rejected = await page.evaluate(
+      async ({ url, input, id }) => {
+        const stale = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+            'idempotency-key': 'browser-stale-version',
+          },
+          body: JSON.stringify({ ...input, version: 99 }),
+        });
+        const prematureClose = await fetch(
+          url.replace(/payroll-entries\/2026-07$/, 'payroll-month-closes'),
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'idempotency-key': 'browser-premature-close',
+            },
+            body: JSON.stringify({
+              payrollReference: id,
+              payrollVersion: 1,
+              month: '2026-07',
+              paymentDate: '2026-07-15',
+              paymentMethod: 'bank_transfer',
+              total: -500,
+              baseSalary: 6000,
+              additions: 0,
+              deductions: 6500,
+            }),
+          },
+        );
+        return {
+          staleStatus: stale.status,
+          stale: await stale.json(),
+          closeStatus: prematureClose.status,
+          close: await prematureClose.json(),
+        };
+      },
+      { url: entryUrl, input: draft, id: draftEntry.id },
+    );
+    expect(rejected).toMatchObject({
+      staleStatus: 409,
+      stale: { code: 'VERSION_CONFLICT' },
+      closeStatus: 409,
+      close: { code: 'PAYROLL_FINAL_REQUIRED' },
+    });
+    expect(canonical.payrollWrites()).toHaveLength(1);
+    expect(canonical.closeMutationCount()).toBe(0);
+
+    await page.goto(`${canonical.clientHome}/payroll`);
+    const annualReport = page.getByRole('region', { name: 'שכר מצטבר והיסטוריה שנתית' });
+    await expect(annualReport).toBeVisible();
+    await expect(annualReport.locator('.total strong')).toContainText('7,000.00');
+    await expect(page.getByRole('heading', { name: 'סגירת 2026-07' })).toBeVisible();
+    await expect(page.locator('#monthly-close')).toContainText('-500.00');
+    await page.getByLabel('תאריך תשלום').fill('2026-07-15');
+    await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
+    await expect(page.getByRole('list', { name: 'היסטוריית סגירות קנונית' })).toContainText(
+      '2026-07',
+    );
+    expect(canonical.payrollWrites()).toHaveLength(2);
+    expect(canonical.payrollWrites()[1]).toMatchObject({
+      request: { status: 'final', version: 1, total: 500, advances: 6500 },
+      entry: { id: draftEntry.id, status: 'final', version: 2, total: 500 },
+    });
+    expect(canonical.closedMonths()[0]).toMatchObject({
+      payrollReference: draftEntry.id,
+      payrollVersion: 2,
+      settlementBasis: 'worker',
+      total: -500,
+      calculationTotal: 500,
+      employerContributions: 1000,
+      openingBalance: 0,
+      baseSalary: 6000,
+      additions: 0,
+      deductions: 6500,
+    });
+    expect(canonical.closeMutationCount()).toBe(1);
+
+    const afterClose = await page.evaluate(
+      async ({ url, input }) => {
+        const replay = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+            'idempotency-key': 'browser-draft-create',
+          },
+          body: JSON.stringify(input),
+        });
+        const edit = await fetch(url, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json', 'idempotency-key': 'browser-closed-edit' },
+          body: JSON.stringify({ ...input, status: 'final', version: 2 }),
+        });
+        return {
+          replayStatus: replay.status,
+          replay: await replay.json(),
+          editStatus: edit.status,
+          edit: await edit.json(),
+        };
+      },
+      { url: entryUrl, input: draft },
+    );
+    expect(afterClose).toMatchObject({
+      replayStatus: 200,
+      replay: { replayed: true, entry: { status: 'draft', version: 1 } },
+      editStatus: 409,
+      edit: { code: 'PAYROLL_MONTH_CLOSED' },
+    });
+    expect(canonical.payrollEntries()[0]).toMatchObject({ status: 'final', version: 2 });
+    expect(canonical.payrollWrites()).toHaveLength(2);
+    await page.reload();
+    await expect(page.getByRole('list', { name: 'היסטוריית סגירות קנונית' })).toContainText(
+      '2026-07',
+    );
+    await expect(annualReport.locator('.total strong')).toContainText('7,000.00');
   });
 
   test('all dashboard and timeline shortcuts lead to their intended screens', async ({ page }) => {
