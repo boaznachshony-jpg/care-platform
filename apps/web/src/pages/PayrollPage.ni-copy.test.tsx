@@ -30,6 +30,8 @@ vi.mock('../api/client.js', () => ({
       super(code);
     }
   },
+  // The payment screen must finish its canonical read before this copy scenario.
+  listPayrollEntries: () => Promise.resolve([]),
   listCanonicalPayrollCloses: () => Promise.resolve([]),
   closeCanonicalPayrollMonth: () => Promise.reject(new Error('not used here')),
   importNationalInsuranceReport: mocks.importNationalInsuranceReport,
