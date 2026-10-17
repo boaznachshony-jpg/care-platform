@@ -605,6 +605,31 @@ describe('CanonicalPayrollIntelligence — prefill from the MVP setup profile', 
     expect(baseSalaryLabel.querySelector('[data-value-origin="input"]')).not.toBeNull();
   });
 
+  /**
+   * G. The draft used to be the loaded entry spread whole, so re-saving a
+   * month sent `id`, `month`, `createdAt` and `updatedAt` to a `.strict()`
+   * route, which refused it with a 400 the family read as a failed save.
+   */
+  it('re-saves an existing month without the keys only the server owns', async () => {
+    mockListPayrollEntries.mockResolvedValue([
+      {
+        ...SAVED_ENTRY,
+        createdAt: '2026-09-30T10:00:00.000Z',
+        updatedAt: '2026-09-30T10:00:00.000Z',
+      },
+    ]);
+    renderPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'עדכון רשומה' }));
+
+    await waitFor(() => expect(mockSavePayrollEntry).toHaveBeenCalledOnce());
+    const sent = mockSavePayrollEntry.mock.calls[0]![2] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('id');
+    expect(sent).not.toHaveProperty('month');
+    expect(sent).not.toHaveProperty('createdAt');
+    expect(sent).not.toHaveProperty('updatedAt');
+    expect(sent.version).toBe(1);
+  });
+
   it('a saved server entry always wins: no prefill when the month already has one', async () => {
     mockReadMvpProfile.mockReturnValue(PROFILE_WITH_SALARY);
     mockListPayrollEntries.mockResolvedValue([SAVED_ENTRY]); // baseSalary: 0, restDayRate: 0
