@@ -92,6 +92,8 @@ const ALL_TENANT_TABLES = [
   'tenant_data_census', // 0038
   'terms_acceptance', // 0043
   'medication', // 0046
+  'national_insurance_report', // 0049
+  'national_insurance_report_month', // 0049
 ] as const;
 
 interface Fixture {
@@ -572,6 +574,126 @@ async function main(): Promise<void> {
       ]),
     );
 
+    // R5-09 (0049): the National Insurance report tables, as caredesk_app.
+    // Same-tenant writes work; another tenant's rows are invisible and cannot
+    // be written; nothing can be deleted; and the constraints the service
+    // relies on hold in a real database, including the partial-index conflict
+    // target that makes a repeated copy return the existing report.
+    const niReportA = randomUUID();
+    const niReportB = randomUUID();
+    const insertNiReport = (
+      client: PoolClient,
+      tenant: string,
+      employmentCase: string,
+      user: string,
+      id: string,
+      legacyExpenseId: string,
+    ) =>
+      client.query(
+        `insert into national_insurance_report
+           (id, tenant_id, employment_case_id, period_start, period_end, due_date,
+            legacy_expense_id, created_by, updated_by)
+         values ($1, $2, $3, '2026-07-01', '2026-09-01', '2026-10-15', $4, $5, $5)
+         on conflict (tenant_id, employment_case_id, legacy_expense_id)
+           where legacy_expense_id is not null do nothing`,
+        [id, tenant, employmentCase, legacyExpenseId, user],
+      );
+    const insertNiLine = (
+      client: PoolClient,
+      tenant: string,
+      report: string,
+      user: string,
+      month: string,
+      employed: boolean,
+      wage: number,
+      amount: number,
+    ) =>
+      client.query(
+        `insert into national_insurance_report_month
+           (tenant_id, report_id, month, employed, wage, rate_percent, amount, created_by, updated_by)
+         values ($1, $2, $3::date, $4, $5, 3.55, $6, $7, $7)`,
+        [tenant, report, month, employed, wage, amount, user],
+      );
+
+    await withTenant(pool, b.tenant, async (client) => {
+      await insertNiReport(client, b.tenant, b.employmentCase, b.user, niReportB, 'rls-ni-b');
+      await insertNiLine(client, b.tenant, niReportB, b.user, '2026-07-01', true, 6000, 213);
+    });
+    await withTenant(pool, a.tenant, async (client) => {
+      const first = await insertNiReport(
+        client,
+        a.tenant,
+        a.employmentCase,
+        a.user,
+        niReportA,
+        'rls-ni-a',
+      );
+      const repeat = await insertNiReport(
+        client,
+        a.tenant,
+        a.employmentCase,
+        a.user,
+        randomUUID(),
+        'rls-ni-a',
+      );
+      if (first.rowCount === 1 && repeat.rowCount === 0) {
+        pass('national_insurance_report: a repeated copy of one payment inserts nothing');
+      } else {
+        fail(`national_insurance_report: first copy ${first.rowCount}, repeat ${repeat.rowCount}`);
+      }
+      await insertNiLine(client, a.tenant, niReportA, a.user, '2026-07-01', true, 6000, 213);
+      await insertNiLine(client, a.tenant, niReportA, a.user, '2026-08-01', false, 0, 0);
+      const reports = await client.query<{ id: string }>(
+        'select id from national_insurance_report',
+      );
+      const lines = await client.query<{ report_id: string }>(
+        'select report_id from national_insurance_report_month',
+      );
+      const reportIds = reports.rows.map(({ id }) => id);
+      const lineReports = [...new Set(lines.rows.map(({ report_id }) => report_id))];
+      if (
+        reportIds.length === 1 &&
+        reportIds[0] === niReportA &&
+        lines.rows.length === 2 &&
+        lineReports.length === 1 &&
+        lineReports[0] === niReportA
+      ) {
+        pass('national_insurance_report(_month): tenant A reads only its own report and lines');
+      } else {
+        fail(
+          `national_insurance_report(_month): tenant A saw reports ${JSON.stringify(reportIds)} and ${lines.rows.length} line(s)`,
+        );
+      }
+    });
+
+    await expectRejected('national_insurance_report: cross-tenant insert', () =>
+      withTenant(pool, a.tenant, (client) =>
+        insertNiReport(client, b.tenant, b.employmentCase, a.user, randomUUID(), 'rls-ni-cross'),
+      ),
+    );
+    await expectRejected('national_insurance_report_month: a line on another tenant report', () =>
+      withTenant(pool, a.tenant, (client) =>
+        insertNiLine(client, a.tenant, niReportB, a.user, '2026-09-01', true, 6000, 213),
+      ),
+    );
+    await expectRejected('national_insurance_report_month: a second line for one month', () =>
+      withTenant(pool, a.tenant, (client) =>
+        insertNiLine(client, a.tenant, niReportA, a.user, '2026-07-01', true, 6000, 213),
+      ),
+    );
+    await expectRejected('national_insurance_report_month: a wage in a month not employed', () =>
+      withTenant(pool, a.tenant, (client) =>
+        insertNiLine(client, a.tenant, niReportA, a.user, '2026-09-01', false, 6000, 0),
+      ),
+    );
+    for (const table of ['national_insurance_report_month', 'national_insurance_report']) {
+      await expectRejected(`${table}: application delete`, () =>
+        withTenant(pool, a.tenant, (client) =>
+          client.query(`delete from ${table} where tenant_id = $1`, [a.tenant]),
+        ),
+      );
+    }
+
     await withTenant(pool, a.tenant, async (client) => {
       try {
         await client.query('create table rls_probe_should_fail (id int)');
@@ -583,6 +705,10 @@ async function main(): Promise<void> {
   } finally {
     await admin.query('drop table if exists rls_probe_should_fail');
     for (const row of [a, b]) {
+      await admin.query('delete from national_insurance_report_month where tenant_id = $1', [
+        row.tenant,
+      ]);
+      await admin.query('delete from national_insurance_report where tenant_id = $1', [row.tenant]);
       await admin.query('delete from event_action_plan where tenant_id = $1', [row.tenant]);
       await admin.query('delete from document_intake_review where tenant_id = $1', [row.tenant]);
       await admin.query('delete from audit_event where tenant_id = $1', [row.tenant]);
