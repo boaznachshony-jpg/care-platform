@@ -32,6 +32,7 @@ import type {
   LegalAcceptanceResponse,
 } from '@caredesk/schemas';
 import { newIdempotencyKey } from './idempotency.js';
+import { payrollEntryRequest, scenarioExpenseRequest } from './strict-bodies.js';
 import { getBrowserAuthClient } from '../auth/client.js';
 import { getDeploymentEnvironment } from '../environment.js';
 
@@ -737,7 +738,11 @@ export function savePayrollEntry(
 ): Promise<{ entry: PayrollEntryResponse; replayed: boolean }> {
   return apiRequest(
     `/cases/${encodeURIComponent(caseId)}/payroll-entries/${encodeURIComponent(month)}`,
-    { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
+    {
+      method: 'PUT',
+      headers: { 'idempotency-key': idempotencyKey },
+      body: JSON.stringify(payrollEntryRequest(input)),
+    },
   );
 }
 
@@ -769,7 +774,7 @@ export function createScenarioExpense(
   return apiRequest(`/cases/${encodeURIComponent(caseId)}/scenario-expenses`, {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify(input),
+    body: JSON.stringify(scenarioExpenseRequest(input)),
   });
 }
 /**
@@ -786,7 +791,11 @@ export function updateScenarioExpense(
 ): Promise<{ expense: ScenarioExpenseResponse; replayed: boolean }> {
   return apiRequest(
     `/cases/${encodeURIComponent(caseId)}/scenario-expenses/${encodeURIComponent(expenseId)}`,
-    { method: 'PUT', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(input) },
+    {
+      method: 'PUT',
+      headers: { 'idempotency-key': idempotencyKey },
+      body: JSON.stringify(scenarioExpenseRequest(input)),
+    },
   );
 }
 export function deleteScenarioExpense(
