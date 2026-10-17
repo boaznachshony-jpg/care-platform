@@ -29,6 +29,14 @@ export interface TenantCensus {
   taskRows: number;
   employmentCaseRows: number;
   payrollEntryRows: number;
+  /**
+   * R5-09 (migration 0050): saved National Insurance payments carrying report
+   * lines in the workspace, and how many of them have no identical copy in
+   * `national_insurance_report`. The stage 3 cutover waits for zero. Null when
+   * not measured; optional so a census that does not measure them stays valid.
+   */
+  nationalInsuranceWorkspaceReports?: number | null;
+  nationalInsuranceUnreconciledReports?: number | null;
 }
 
 export interface TenantCensusRepository {

@@ -16,9 +16,17 @@ Findings that are not credentials.
   The entry is here because the scan runs over history with fetch-depth: 0,
   and a commit already pushed cannot be un-scanned without rewriting the
   branch. It allowlists that one commit, not the file and not the rule.
+
+  f55a16c — the same class as 3fcc094/34791af: a test constant named KEY
+  holding the CareDesk localStorage namespace
+  'caredesk.mvp.employment-expenses.v1', read by generic-api-key as a key.
+  It is a public browser storage name. The constant was renamed in the next
+  commit so the tree no longer matches; the commit is listed because the PR
+  scan covers it and history is not rewritten (CLAUDE.md §5).
 """
 commits = [
   "3fcc094afef059a4cffef7e799fd495a8c5ff2a4",
   "34791af7ddc5b2926feed250bc5602d3c35323c5",
   "cff857335de51e3cafc4a9353ff1ca3466da4441",
+  "f55a16c9bdc65a7a3f13c766079e49bf38f6bdfd",
 ]

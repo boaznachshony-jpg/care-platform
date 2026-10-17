@@ -1,7 +1,16 @@
 import type { TenantCensus, TenantCensusRepository } from '@caredesk/application';
 import type { Pool } from 'pg';
 import { withAppRole, withTenant } from './pool.js';
-import { countPopulatedEntries, isEncryptedEnvelope } from './workspace-payload-crypto.js';
+import {
+  measureNationalInsuranceReports,
+  type NationalInsuranceMeasurement,
+  type StoredReport,
+} from './national-insurance-reconciliation.js';
+import {
+  countPopulatedEntries,
+  decryptPayload,
+  isEncryptedEnvelope,
+} from './workspace-payload-crypto.js';
 
 interface CensusRow {
   tenant_id: string;
@@ -48,6 +57,9 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
       // the payload, so this is a second, narrow read per tenant rather than a
       // wider elevated one.
       const entries = await this.countEntries(row.tenant_id, row.workspace_version !== null);
+      const nationalInsurance = entries.payload
+        ? await this.measureNationalInsurance(row.tenant_id, entries.payload)
+        : null;
       observations.push({
         tenantId: row.tenant_id,
         observedAt: new Date().toISOString(),
@@ -62,15 +74,77 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
         taskRows: row.task_rows,
         employmentCaseRows: row.employment_case_rows,
         payrollEntryRows: row.payroll_entry_rows,
+        nationalInsuranceWorkspaceReports: nationalInsurance?.workspaceReports ?? null,
+        nationalInsuranceUnreconciledReports: nationalInsurance?.unreconciledReports ?? null,
       });
     }
     return observations;
   }
 
+  /**
+   * R5-09 stage 3: compares the workspace's National Insurance report lines
+   * with the canonical table, for one tenant. Counts only - nothing from the
+   * payload or the table leaves this method. Null when the payload will not
+   * open, which the populated-entry count already reports as a finding.
+   */
+  private async measureNationalInsurance(
+    tenantId: string,
+    payload: Record<string, string>,
+  ): Promise<NationalInsuranceMeasurement | null> {
+    let entries: Record<string, string>;
+    try {
+      entries = decryptPayload(payload, tenantId, this.encryptionKeys);
+    } catch {
+      return null;
+    }
+    const reports = await withTenant(this.pool, tenantId, async (client) => {
+      // The case's legacy client id: a payment is matched on client AND id
+      // (see measureNationalInsuranceReports).
+      const header = await client.query<{
+        id: string;
+        legacy_client_id: string | null;
+        legacy_expense_id: string | null;
+        due_date: string;
+      }>(
+        `select r.id, c.legacy_client_id, r.legacy_expense_id, r.due_date::text as due_date
+           from national_insurance_report r
+           join employment_case c on c.id = r.employment_case_id`,
+      );
+      if (!header.rows.length) return [];
+      const lines = await client.query<{
+        report_id: string;
+        month: string;
+        employed: boolean;
+        wage: number;
+        rate_percent: string;
+        amount: string;
+      }>(
+        `select report_id, to_char(month, 'YYYY-MM') as month, employed, wage,
+                rate_percent::text as rate_percent, amount::text as amount
+           from national_insurance_report_month`,
+      );
+      return header.rows.map((report): StoredReport => ({
+        legacyClientId: report.legacy_client_id,
+        legacyExpenseId: report.legacy_expense_id,
+        dueDate: report.due_date,
+        months: lines.rows
+          .filter((line) => line.report_id === report.id)
+          .map((line) => ({
+            month: line.month,
+            employed: line.employed,
+            wage: Number(line.wage),
+            ratePercent: Number(line.rate_percent),
+            amount: Number(line.amount),
+          })),
+      }));
+    });
+    return measureNationalInsuranceReports(entries, reports);
+  }
+
   private async countEntries(
     tenantId: string,
     hasWorkspace: boolean,
-  ): Promise<{ count: number | null; readable: boolean }> {
+  ): Promise<{ count: number | null; readable: boolean; payload?: Record<string, string> }> {
     // No row means nothing failed to decrypt. Reporting `readable: false` here
     // would raise a key alarm for a tenant that simply has not saved yet.
     if (!hasWorkspace) return { count: null, readable: true };
@@ -86,7 +160,7 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
     // A plaintext row without a configured key is legitimate (the repository
     // re-encrypts it on the next read); an envelope that will not open is not.
     const readable = count !== null || !isEncryptedEnvelope(payload);
-    return { count, readable };
+    return { count, readable, payload };
   }
 
   async findPrevious(tenantId: string): Promise<TenantCensus | null> {
@@ -129,8 +203,9 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
         `insert into tenant_data_census
            (tenant_id, observed_at, workspace_version, workspace_payload_bytes,
             workspace_populated_entries, workspace_history_versions, workspace_file_rows,
-            document_rows, task_rows, employment_case_rows, payroll_entry_rows)
-         values ($1, $2::timestamptz, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            document_rows, task_rows, employment_case_rows, payroll_entry_rows,
+            national_insurance_workspace_reports, national_insurance_unreconciled_reports)
+         values ($1, $2::timestamptz, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           census.tenantId,
           census.observedAt,
@@ -143,6 +218,8 @@ export class PgTenantCensusRepository implements TenantCensusRepository {
           census.taskRows,
           census.employmentCaseRows,
           census.payrollEntryRows,
+          census.nationalInsuranceWorkspaceReports ?? null,
+          census.nationalInsuranceUnreconciledReports ?? null,
         ],
       );
     });
