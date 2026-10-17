@@ -30,8 +30,10 @@ import {
   type EmploymentExpenseFrequency,
   type MvpAdditionalPayment,
   type MvpEmploymentExpense,
+  type MvpNationalInsuranceReportMonth,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
+import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
 import { ValueOrigin, ValueOriginLegend } from '../components/ValueOrigin.js';
 import {
@@ -310,6 +312,41 @@ export function nationalInsuranceTotals(
   return { wages: Math.round(wages), amount: roundMoney(amount) };
 }
 
+/**
+ * L. The report lines as they are saved with the payment: what the form showed,
+ * not the overrides that produced it, so a later change to a payroll record
+ * or to the contract salary cannot rewrite a report that was already filed.
+ */
+export function nationalInsuranceReportMonths(
+  rows: NationalInsuranceMonthRow[],
+): MvpNationalInsuranceReportMonth[] {
+  return rows.map(({ month, employed, wage, ratePercent, amount }) => ({
+    month,
+    employed,
+    wage,
+    ratePercent,
+    amount,
+  }));
+}
+
+/**
+ * L. A saved report reopened for editing: every stored line comes back as an
+ * override, so the table shows what was filed rather than re-deriving it.
+ */
+export function overridesFromReportMonths(
+  months: MvpNationalInsuranceReportMonth[] | undefined,
+): Record<string, NationalInsuranceMonthOverride> {
+  const overrides: Record<string, NationalInsuranceMonthOverride> = {};
+  for (const line of months ?? []) {
+    overrides[line.month] = {
+      employed: line.employed,
+      wage: String(line.wage),
+      rate: String(line.ratePercent),
+    };
+  }
+  return overrides;
+}
+
 /** "2026-07" -> "יולי 2026", using the month names the form itself prints. */
 export function hebrewMonthLabel(month: string, monthNames: string[]): string {
   const index = Number(month.slice(5, 7)) - 1;
@@ -486,6 +523,10 @@ function withNationalInsuranceTracking(
     savedAt: existing?.savedAt ?? new Date().toISOString(),
     source: 'payroll-national-insurance',
     sourcePeriod,
+    // L: saving a payroll month must not drop a report already saved here.
+    ...(existing?.nationalInsuranceMonths
+      ? { nationalInsuranceMonths: existing.nationalInsuranceMonths }
+      : {}),
   };
 
   return existing
@@ -661,6 +702,8 @@ export function PayrollPage() {
   const [expenseAmountOverridden, setExpenseAmountOverridden] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  /** Set when the device refused a periodic-payment write (I); shown by the form. */
+  const [expenseSaveError, setExpenseSaveError] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
@@ -1317,12 +1360,15 @@ export function PayrollPage() {
       savedAt: existingExpense?.savedAt ?? new Date().toISOString(),
       source: existingExpense?.source,
       sourcePeriod: existingExpense?.sourcePeriod,
+      // L: the report lines are kept with the payment instead of discarded.
+      ...(isNationalInsuranceExpense && insuranceMonthRows.length > 0
+        ? { nationalInsuranceMonths: nationalInsuranceReportMonths(insuranceMonthRows) }
+        : {}),
     };
     const next = existingExpense
       ? expenses.map((expense) => (expense.id === existingExpense.id ? saved : expense))
       : [saved, ...expenses];
-    saveMvpEmploymentExpenses(next);
-    setExpenses(next);
+    if (!persistExpenses(next)) return;
     setExpenseDraft((current) => ({ ...current, amount: '', dueDate: '', note: '' }));
     setInsuranceMonthOverrides({});
     setExpenseAmountOverridden(false);
@@ -1343,9 +1389,28 @@ export function PayrollPage() {
     // A saved amount is the customer's figure and must not be overwritten by
     // the calculator; a tracking item with no amount yet is left to compute.
     setExpenseAmountOverridden(expense.amountEntered !== false);
-    setInsuranceMonthOverrides({});
+    // L: a saved report reopens as it was filed.
+    setInsuranceMonthOverrides(overridesFromReportMonths(expense.nationalInsuranceMonths));
     setEditingExpenseId(expense.id);
     setMessage('עדכנו את הפרטים בטופס ושמרו.');
+  }
+
+  /**
+   * I, applied here with L: false when the device refused the write. The list
+   * then stays what is stored and the form says why. Marking a quarter paid
+   * goes through here too, and since D that mark is what clears an overdue
+   * quarter, so a refused one must not look accepted.
+   */
+  function persistExpenses(next: MvpEmploymentExpense[]): boolean {
+    try {
+      saveMvpEmploymentExpenses(next);
+    } catch (error) {
+      setExpenseSaveError(storageWriteFailureMessage(error));
+      return false;
+    }
+    setExpenseSaveError('');
+    setExpenses(next);
+    return true;
   }
 
   function toggleExpense(expense: MvpEmploymentExpense) {
@@ -1354,15 +1419,13 @@ export function PayrollPage() {
         ? { ...item, status: item.status === 'paid' ? ('upcoming' as const) : ('paid' as const) }
         : item,
     );
-    saveMvpEmploymentExpenses(next);
-    setExpenses(next);
+    persistExpenses(next);
   }
 
   function removeExpense(expense: MvpEmploymentExpense) {
     if (!window.confirm(`למחוק את התשלום "${expense.category}"?`)) return;
     const next = expenses.filter((item) => item.id !== expense.id);
-    saveMvpEmploymentExpenses(next);
-    setExpenses(next);
+    if (!persistExpenses(next)) return;
     setMessage('התשלום התקופתי נמחק.');
   }
 
@@ -2692,6 +2755,11 @@ export function PayrollPage() {
               </button>
             ) : null}
           </div>
+          {expenseSaveError ? (
+            <p className="action-notice error" role="alert">
+              {expenseSaveError}
+            </p>
+          ) : null}
         </form>
         {expenses.length > 0 ? (
           <div className="detail-list employment-expenses">

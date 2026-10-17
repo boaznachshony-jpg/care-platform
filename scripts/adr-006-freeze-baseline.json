@@ -93,5 +93,16 @@
       "tracking": "docs/governance/REVIEW-REMEDIATION-PLAN.md"
     }
   ],
-  "exceptions": []
+  "exceptions": [
+    {
+      "id": "national-insurance-report-months",
+      "recordedAt": "2026-10-17",
+      "mvpProfileFields": [],
+      "storageKeys": [],
+      "workspacePayloadEntities": ["MvpNationalInsuranceReportMonth"],
+      "why": "The National Insurance report table on the payroll screen produced per-month lines (employed, wage, rate, amount) that were discarded on save, so a filed report could not be reopened as filed. The lines are kept on MvpEmploymentExpense.nationalInsuranceMonths until a canonical home exists. It adds no new kind of input: it keeps figures the product already showed. Accepted by the owner on 2026-10-17 (work plan item L).",
+      "removalCondition": "Delete this entry, the nationalInsuranceMonths field and the MvpNationalInsuranceReportMonth interface once National Insurance reports are stored in normalized PostgreSQL under the tenant-scoped EmploymentCase aggregate and the web client reads and writes them there (backlog R5-09). This check fails if the interface is gone while this entry still claims it.",
+      "adrAmendment": "docs/adr/ADR-006-amendment-01-national-insurance-report-months.md"
+    }
+  ]
 }

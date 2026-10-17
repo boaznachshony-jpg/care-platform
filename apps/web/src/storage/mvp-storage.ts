@@ -590,6 +590,25 @@ export interface MvpEmploymentExpense {
   savedAt: string;
   source?: 'payroll-national-insurance';
   sourcePeriod?: string;
+  /**
+   * L. The per-month lines of a National Insurance report as they stood when
+   * the payment was saved. They used to be discarded on save, so the amount
+   * survived but not the wages, months and rates it was reported from.
+   * ADR-006 amendment 1 allows this field until NI reports have a canonical
+   * home; see docs/adr/ADR-006-amendment-01-national-insurance-report-months.md.
+   */
+  nationalInsuranceMonths?: MvpNationalInsuranceReportMonth[];
+}
+
+/** One line of a saved National Insurance report. See `nationalInsuranceMonths`. */
+export interface MvpNationalInsuranceReportMonth {
+  month: string;
+  employed: boolean;
+  /** Whole shekels: the Institute's form is "ללא אגורות". */
+  wage: number;
+  ratePercent: number;
+  /** wage x rate, to agorot. */
+  amount: number;
 }
 
 export type MvpTaskPriority = 'normal' | 'important' | 'urgent';

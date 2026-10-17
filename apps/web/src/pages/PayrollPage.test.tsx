@@ -1042,6 +1042,31 @@ describe('PayrollPage national insurance monthly report', () => {
     expect(legend.textContent).toContain('מחושב');
     expect(legend.textContent).toContain('שולם');
   });
+  /**
+   * L. The lines used to be thrown away on save: only the total survived, and
+   * reopening the payment re-derived every line from today's payroll records,
+   * so a corrected wage came back as the original one.
+   */
+  it('keeps the reported lines with the payment and reopens them as they were filed', () => {
+    renderPage();
+
+    enterDueDate(PAST_DUE_DATE);
+    fireEvent.change(wageField('אוגוסט 2020'), { target: { value: '6500' } });
+    fireEvent.change(employedField('ספטמבר 2020'), { target: { value: 'no' } });
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת תשלום למעקב' }));
+
+    expect(readMvpEmploymentExpenses()[0]?.nationalInsuranceMonths).toEqual([
+      { month: '2020-07', employed: true, wage: 7_400, ratePercent: 3.6, amount: 266.4 },
+      { month: '2020-08', employed: true, wage: 6_500, ratePercent: 3.6, amount: 234 },
+      { month: '2020-09', employed: false, wage: 0, ratePercent: 3.6, amount: 0 },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'עדכון פרטים' }));
+
+    expect(wageField('אוגוסט 2020')).toHaveValue(6_500);
+    expect(employedField('ספטמבר 2020')).toHaveValue('no');
+    expect(wageField('יולי 2020')).toHaveValue(7_400);
+  });
 });
 
 describe('PayrollPage wizard summary — R5-01 / R5-02', () => {
