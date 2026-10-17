@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 const preview = {
   VERCEL_ENV: 'preview',
   VERCEL_GIT_COMMIT_REF: 'feature/caredesk-ux-v2',
-  VERCEL_URL: 'care-platform-web-review123-boaznachshony-4103s-projects.vercel.app',
+  VERCEL_URL: 'care-platform-review123-boaznachshony-4103s-projects.vercel.app',
   VERCEL_BRANCH_URL: 'care-platform-web-git-featu-536bb2-boaznachshony-4103s-projects.vercel.app',
 };
 const auth = { authorization: `Bearer ${DEV_TOKEN}` };

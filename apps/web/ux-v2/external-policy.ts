@@ -1,5 +1,7 @@
 export const UX_PREVIEW_BRANCH = 'feature/caredesk-ux-v2';
-const PREVIEW_HOST = /^care-platform-web-[a-z0-9-]+-boaznachshony-4103s-projects\.vercel\.app$/;
+// Immutable deployments use the repository name; the stable branch alias
+// uses the web project name. Both remain confined to this owner's previews.
+const PREVIEW_HOST = /^care-platform-(?:web-)?[a-z0-9-]+-boaznachshony-4103s-projects\.vercel\.app$/;
 
 export function isExternalUxPreview(source: Record<string, string | undefined>): boolean {
   return source.VERCEL_ENV === 'preview' && source.VERCEL_GIT_COMMIT_REF === UX_PREVIEW_BRANCH;
