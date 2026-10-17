@@ -33,7 +33,10 @@ import {
   type MvpNationalInsuranceReportMonth,
   type MvpPayrollRecord,
 } from '../storage/mvp-storage.js';
-import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
+import {
+  storageWriteFailureMessage,
+  storageWriteFailureReason,
+} from '../storage/storage-write-error.js';
 import { PayrollIntelligence } from '../components/PayrollIntelligence.js';
 import { ValueOrigin, ValueOriginLegend } from '../components/ValueOrigin.js';
 import {
@@ -704,6 +707,8 @@ export function PayrollPage() {
   const [message, setMessage] = useState('');
   /** Set when the device refused a periodic-payment write (I); shown by the form. */
   const [expenseSaveError, setExpenseSaveError] = useState('');
+  /** Set when the device refused the wizard's save; shown where success would be. */
+  const [payrollSaveError, setPayrollSaveError] = useState('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [payrollSaved, setPayrollSaved] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
@@ -1299,10 +1304,32 @@ export function PayrollPage() {
       ? records.map((record) => (record.month === saved.month ? saved : record))
       : [saved, ...records];
     const nextExpenses = withNationalInsuranceTracking(expenses, saved.month);
-    saveMvpPayroll(next);
-    saveMvpEmploymentExpenses(nextExpenses);
+    // Silent saves (17.10.2026): both writes used to be unguarded. A refused
+    // write threw out of this handler, so the screen said nothing and the
+    // employer could not tell whether the month existed. The record is written
+    // first and alone decides whether the month was saved; the draft is only
+    // cleared after it has landed, so a refusal loses nothing that was typed.
+    try {
+      saveMvpPayroll(next);
+    } catch (error) {
+      setPayrollSaved(false);
+      setPayrollSaveError(storageWriteFailureMessage(error));
+      return;
+    }
+    setPayrollSaveError('');
     setRecords(next);
-    setExpenses(nextExpenses);
+    // The quarter's tracking row is secondary: the month is already saved, so
+    // a refusal here is reported as exactly that and nothing else is undone.
+    let trackingSaved = true;
+    try {
+      saveMvpEmploymentExpenses(nextExpenses);
+      setExpenses(nextExpenses);
+    } catch (error) {
+      trackingSaved = false;
+      setPayrollSaveError(
+        `רישום השכר החודשי נשמר, אבל מעקב התשלום לביטוח לאומי לרבעון לא נשמר: ${storageWriteFailureReason(error)} שמרו את החודש שוב כדי ליצור את המעקב.`,
+      );
+    }
     setReportYear(saved.month.slice(0, 4));
     // WEB-02: the work is committed, so the draft is no longer recoverable
     // work — it is a stale copy that could later be offered over newer data.
@@ -1310,7 +1337,11 @@ export function PayrollPage() {
     setDraftRestoredNotice(false);
     setDraftStatus('idle');
     setDraftSavedAt('');
-    setMessage('רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.');
+    setMessage(
+      trackingSaved
+        ? 'רישום השכר החודשי נשמר. מעקב התשלום לביטוח לאומי הופעל לרבעון גם ללא סכום.'
+        : 'רישום השכר החודשי נשמר.',
+    );
     setPayrollSaved(true);
     if (sequence && continueSequence) {
       const addedMonths = sequence.addedMonths.includes(saved.month)
@@ -2403,6 +2434,11 @@ export function PayrollPage() {
                 </div>
               </section>
             </>
+          ) : null}
+          {payrollSaveError ? (
+            <p className="action-notice error" role="alert">
+              {payrollSaveError}
+            </p>
           ) : null}
           {step === 5 && payrollSaved ? (
             <div className="success-box payroll-save-confirmation" role="status">
