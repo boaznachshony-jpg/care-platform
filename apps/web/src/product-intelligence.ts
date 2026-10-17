@@ -15,6 +15,7 @@ import type {
   MvpProfile,
   MvpTask,
 } from './storage/mvp-storage.js';
+import { payrollRecordAdditions, payrollRecordDeductions } from './payroll-report.js';
 
 export function productIntelligence(input: {
   clientId: string;
@@ -134,19 +135,9 @@ export function payrollIntelligence(
     records.map((r) => ({
       month: r.month,
       baseSalary: r.baseSalary,
-      additions:
-        (r.saturdayPay ?? 0) +
-        (r.holidayPay ?? 0) +
-        (r.vacationPay ?? 0) +
-        (r.sickPay ?? 0) +
-        (r.employerContributions ?? 0) +
-        r.otherAddition +
-        (r.additionalPayments ?? []).reduce((s, p) => s + p.amount, 0),
-      deductions:
-        (r.medicalInsuranceDeduction ?? 0) +
-        (r.housingDeduction ?? 0) +
-        r.advances +
-        r.agreedDeduction,
+      // C1: the same sums as the annual report on the same screen, pocket money included.
+      additions: payrollRecordAdditions(r),
+      deductions: payrollRecordDeductions(r),
       total: r.total,
       closed: closes.some((c) => c.month === r.month),
     })),
