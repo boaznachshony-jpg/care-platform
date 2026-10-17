@@ -551,7 +551,7 @@ test.describe('launch readiness interactions', () => {
     await expect(annualReport).toBeVisible();
     await expect(annualReport.locator('.total strong')).toContainText('7,000.00');
     await expect(page.getByRole('heading', { name: 'סגירת 2026-07' })).toBeVisible();
-    await expect(page.locator('#monthly-close')).toContainText('-500.00');
+    await expect(page.locator('#monthly-close')).toContainText(/-500[\s\u200e\u200f]*₪/);
     await page.getByLabel('תאריך תשלום').fill('2026-07-15');
     await page.getByRole('button', { name: 'אישור שהחודש מוכן וסגירה' }).click();
     await expect(page.getByRole('list', { name: 'היסטוריית סגירות קנונית' })).toContainText(
