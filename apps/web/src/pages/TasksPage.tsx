@@ -11,6 +11,7 @@ import {
   type MvpTaskSource,
 } from '../storage/mvp-storage.js';
 import { quarterlyInsuranceOverview } from '../national-insurance-presenter.js';
+import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { NATIONAL_INSURANCE_PAYMENT_URL } from '../upcoming-payments.js';
 import {
   archiveCaseTask,
@@ -77,6 +78,8 @@ export function TasksPage({ today }: { today?: Date } = {}) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [message, setMessage] = useState('');
+  /** I: set when the device refused a write; cleared by the next one that lands. */
+  const [saveError, setSaveError] = useState('');
   // D: the same rule as the dashboard. A quarter leaves this screen when it is
   // marked paid on the payroll screen, not when the calendar moves on.
   const { headline: quarterlyInsurance, earlier: earlierQuarters } = useMemo(
@@ -235,9 +238,22 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     [filter, tasks],
   );
 
-  function persist(next: MvpTask[]) {
-    saveMvpTasks(next);
+  /**
+   * I: false when the device refused the write. The list on screen then stays
+   * what is stored, the failure is shown, and the caller stops before saying
+   * anything was saved.
+   */
+  function persist(next: MvpTask[]): boolean {
+    try {
+      saveMvpTasks(next);
+    } catch (error) {
+      setMessage('');
+      setSaveError(storageWriteFailureMessage(error));
+      return false;
+    }
+    setSaveError('');
     setTasks(next);
+    return true;
   }
 
   function openNewTask() {
@@ -270,7 +286,8 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     const next = existing
       ? tasks.map((task) => (task.id === existing.id ? saved : task))
       : [saved, ...tasks];
-    persist(next);
+    // On failure the form stays open with what was typed, so it can be retried.
+    if (!persist(next)) return;
     setShowForm(false);
     setFilter(saved.status === 'completed' ? 'completed' : 'open');
     setMessage(existing ? 'המשימה עודכנה ונשמרה.' : 'המשימה נוספה ונשמרה.');
@@ -285,7 +302,11 @@ export function TasksPage({ today }: { today?: Date } = {}) {
 
   function toggleTask(task: MvpTask) {
     const nextStatus = task.status === 'completed' ? 'open' : 'completed';
-    persist(tasks.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)));
+    if (
+      !persist(tasks.map((item) => (item.id === task.id ? { ...item, status: nextStatus } : item)))
+    ) {
+      return;
+    }
     // Forwarded best-effort only in the open->completed direction: the
     // server has a `complete` action but no `reopen` one, so an uncheck
     // here cannot be mirrored server-side. The task stays reopened locally
@@ -320,13 +341,17 @@ export function TasksPage({ today }: { today?: Date } = {}) {
     // of being fired once and forgotten on failure. It is marked by
     // (now-vanishing) local id, which is why `getUploadedServerId` is looked
     // up before the local record is removed below.
-    if (caseLookup.status === 'found') {
-      const serverId = getUploadedServerId('tasks', caseLookup.caseId, task.id);
-      if (serverId) {
-        markPendingAction('tasks', caseLookup.caseId, task.id, 'archive');
-      }
+    //
+    // I: the archive is recorded only once the local removal has landed, so a
+    // refused write cannot archive on the server a task still shown here.
+    const serverId =
+      caseLookup.status === 'found'
+        ? getUploadedServerId('tasks', caseLookup.caseId, task.id)
+        : undefined;
+    if (!persist(tasks.filter((item) => item.id !== task.id))) return;
+    if (serverId && caseLookup.status === 'found') {
+      markPendingAction('tasks', caseLookup.caseId, task.id, 'archive');
     }
-    persist(tasks.filter((item) => item.id !== task.id));
     setMessage('המשימה נמחקה.');
     if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
   }
@@ -347,6 +372,11 @@ export function TasksPage({ today }: { today?: Date } = {}) {
       {message ? (
         <p className="info-box" role="status">
           {message}
+        </p>
+      ) : null}
+      {saveError ? (
+        <p className="action-notice error" role="alert">
+          {saveError}
         </p>
       ) : null}
 
