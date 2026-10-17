@@ -2058,6 +2058,27 @@ a {
   background: #fde8e8;
   color: #a52f27;
 }
+
+.quarterly-insurance-earlier h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.quarterly-insurance-earlier ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quarterly-insurance-earlier li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  min-width: 0;
+}
 .payroll-history small {
   display: block;
   margin-top: 4px;

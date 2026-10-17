@@ -6,33 +6,42 @@
  *    follows the worked month.
  * 2. National Insurance (Bituach Leumi) — household employers report and pay
  *    quarterly, by the 15th of April, July, October and January (each covering
- *    the preceding quarter).
+ *    the preceding quarter). That deadline is not computed here: it comes from
+ *    `national-insurance-presenter.ts`, which is the domain rule plus labels.
+ *    A passed deadline that is not marked paid stays the reported one, with a
+ *    negative `daysRemaining` (D).
  *
  * All functions are pure so the surfaces that render these obligations
  * (dashboard, timeline, open issues, notifications) stay deterministic and
  * testable.
  */
 import { daysUntil } from './date-diff.js';
+import {
+  quarterlyInsuranceOverview,
+  type QuarterlyInsuranceContext,
+} from './national-insurance-presenter.js';
 
 /** Official Bituach Leumi report-and-pay service for household employers. */
 export const NATIONAL_INSURANCE_PAYMENT_URL =
   'https://b2b.btl.gov.il/BTL.ILG.Payments/MeshekBaitInfoShort.aspx';
 
 const SALARY_DUE_DAY = 9;
-const NATIONAL_INSURANCE_DUE_DAY = 15;
-/** Zero-based months in which a quarterly payment is due: Jan, Apr, Jul, Oct. */
-const NATIONAL_INSURANCE_DUE_MONTHS = [0, 3, 6, 9] as const;
 
 export type UpcomingPaymentId = 'salary' | 'nationalInsurance';
 
 export interface UpcomingPayment {
   id: UpcomingPaymentId;
-  /** ISO date (yyyy-mm-dd) of the next due date, computed from `today`. */
+  /** ISO date (yyyy-mm-dd) of the due date, computed from `today`. */
   dueDate: string;
-  /** Whole days from `today` until the due date; 0 means due today. */
+  /**
+   * Whole days from `today` until the due date; 0 means due today. Negative
+   * for a National Insurance deadline that has passed and is not marked paid.
+   */
   daysRemaining: number;
   /** External payment service, present only for National Insurance. */
   externalUrl?: string;
+  /** National Insurance only: older quarters still not marked paid. */
+  earlierOutstanding?: number;
 }
 
 function isoDate(year: number, monthIndex: number, day: number): string {
@@ -46,18 +55,6 @@ export function nextSalaryPaymentDate(today = new Date()): string {
   }
   const next = new Date(today.getFullYear(), today.getMonth() + 1, SALARY_DUE_DAY);
   return isoDate(next.getFullYear(), next.getMonth(), SALARY_DUE_DAY);
-}
-
-/** Next quarterly National Insurance deadline (15 Jan / Apr / Jul / Oct) on or after today. */
-export function nextNationalInsuranceDueDate(today = new Date()): string {
-  const month = today.getMonth();
-  for (const dueMonth of NATIONAL_INSURANCE_DUE_MONTHS) {
-    if (month < dueMonth || (month === dueMonth && today.getDate() <= NATIONAL_INSURANCE_DUE_DAY)) {
-      return isoDate(today.getFullYear(), dueMonth, NATIONAL_INSURANCE_DUE_DAY);
-    }
-  }
-  // Past 15 October — the next deadline is 15 January of the following year.
-  return isoDate(today.getFullYear() + 1, 0, NATIONAL_INSURANCE_DUE_DAY);
 }
 
 /**
@@ -77,21 +74,31 @@ export function formatDisplayDate(dueIsoDate: string): string {
   return `${day}.${month}.${year}`;
 }
 
-/** The two always-present upcoming payment obligations, computed from today. */
-export function createUpcomingPayments(today = new Date()): UpcomingPayment[] {
+/**
+ * The two recurring payment obligations, computed from today. National
+ * Insurance is left out only when every quarter on the list is marked paid.
+ */
+export function createUpcomingPayments(
+  today = new Date(),
+  nationalInsurance: QuarterlyInsuranceContext = {},
+): UpcomingPayment[] {
   const salaryDueDate = nextSalaryPaymentDate(today);
-  const insuranceDueDate = nextNationalInsuranceDueDate(today);
-  return [
+  const payments: UpcomingPayment[] = [
     {
       id: 'salary',
       dueDate: salaryDueDate,
       daysRemaining: daysUntilDate(salaryDueDate, today),
     },
-    {
-      id: 'nationalInsurance',
-      dueDate: insuranceDueDate,
-      daysRemaining: daysUntilDate(insuranceDueDate, today),
-      externalUrl: NATIONAL_INSURANCE_PAYMENT_URL,
-    },
   ];
+  const { headline, earlier } = quarterlyInsuranceOverview(today, nationalInsurance);
+  if (headline) {
+    payments.push({
+      id: 'nationalInsurance',
+      dueDate: headline.deadlineDate,
+      daysRemaining: headline.daysUntilDeadline,
+      externalUrl: NATIONAL_INSURANCE_PAYMENT_URL,
+      earlierOutstanding: earlier.length,
+    });
+  }
+  return payments;
 }
