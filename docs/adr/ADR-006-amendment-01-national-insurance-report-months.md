@@ -1,8 +1,15 @@
 # ADR-006 amendment 1: National Insurance report months on the periodic payment
 
-Status: **Proposed — awaiting the Product Owner's acceptance**
+Status: **Accepted by owner, 17.10.2026**
 Amends: [ADR-006](ADR-006-normalized-persistence-migration.md), clause 5
 Proposed: 2026-10-17 (work plan of 16.10.2026, item L)
+
+Acceptance, in the Product Owner's words (17.10.2026): "כן, מאשר את החריגה
+המתועדת מ-ADR-006 עבור L: שורות הדיווח החודשי לביטוח לאומי נשמרות עם התשלום
+עד שתהיה טבלה בשרת. ותרשום את הטבלה בשרת כמשימה להמשך."
+
+The server table is recorded as backlog item R5-09 in
+`docs/governance/PRODUCT-UX-IMPROVEMENT-BACKLOG.md`.
 
 ## Context
 
