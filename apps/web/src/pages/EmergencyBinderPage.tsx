@@ -3,11 +3,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import type {
-  CaseContactResponse,
-  DocumentResponse,
-  EmploymentCaseResponse,
-  TaskResponse,
+import {
+  BINDER_EXPORT_PRESETS,
+  BINDER_SECTIONS,
+  type BinderExportPreset,
+  type BinderSection,
+  type CaseContactResponse,
+  type DocumentResponse,
+  type EmploymentCaseResponse,
+  type TaskResponse,
 } from '@caredesk/schemas';
 import {
   createBinderExport,
@@ -27,15 +31,11 @@ import { formatDateOnly, formatDateTime, toIsoAttribute } from '../format-timest
 import { readMvpMedications, type MvpMedication } from '../storage/mvp-storage.js';
 import { medicationResponseToLocal } from '../sync/medication-mapping.js';
 
-const presets = {
-  full: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
-  review: ['case', 'caregiver', 'documents', 'payroll'],
-  // A handover is the case this binder exists for, so the standing
-  // medications belong in it before anything administrative does.
-  handoff: ['case', 'caregiver', 'medications', 'tasks', 'contacts'],
-  documents: ['documents'],
-} as const;
-type Section = (typeof presets.full)[number];
+// The sections and presets come from the same contract the server validates
+// with, so a section the server does not know is a type error here, not a
+// 400 at export time (which the page would print as an unrecorded copy).
+const presets = BINDER_EXPORT_PRESETS;
+type Section = BinderSection;
 const labels: Record<Section, string> = {
   case: 'סיכום המטופל ותיק ההעסקה',
   caregiver: 'סיכום המטפל/ת',
@@ -184,7 +184,7 @@ export function EmergencyBinderPage() {
     setExportState('recording');
     const manifest = {
       // Canonical order so the same explicit selection always hashes the same.
-      sections: presets.full.filter((section) => selected.includes(section)),
+      sections: BINDER_SECTIONS.filter((section) => selected.includes(section)),
       documentIds: selected.includes('documents') ? [...documentIds].sort() : [],
     };
     try {
@@ -277,7 +277,7 @@ export function EmergencyBinderPage() {
                   סוג תיק
                   <select
                     onChange={(event) =>
-                      setSelected([...presets[event.target.value as keyof typeof presets]])
+                      setSelected([...presets[event.target.value as BinderExportPreset]])
                     }
                     defaultValue="full"
                   >
@@ -289,7 +289,7 @@ export function EmergencyBinderPage() {
                 </label>
                 <fieldset>
                   <legend>סעיפים</legend>
-                  {(Object.keys(labels) as Section[]).map((section) => (
+                  {BINDER_SECTIONS.map((section) => (
                     <label key={section}>
                       <input
                         type="checkbox"

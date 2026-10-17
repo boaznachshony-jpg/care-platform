@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTenant } from '@caredesk/db';
+import { BINDER_SECTIONS, type BinderSection } from '@caredesk/schemas';
 
 /**
  * Emergency Binder export receipts (capability #15).
@@ -17,16 +18,12 @@ import { withTenant } from '@caredesk/db';
  * receipt is never a way to reach the exported content.
  */
 
-/** Must stay in sync with the sections EmergencyBinderPage offers. */
-export const BINDER_SECTIONS = [
-  'case',
-  'caregiver',
-  'documents',
-  'payroll',
-  'tasks',
-  'contacts',
-] as const;
-export type BinderSection = (typeof BINDER_SECTIONS)[number];
+/**
+ * One list, shared with EmergencyBinderPage through @caredesk/schemas. A
+ * private copy here once lacked `medications`, so the page's default export
+ * was refused with 400 and printed as an unrecorded local copy.
+ */
+export { BINDER_SECTIONS, type BinderSection };
 
 export interface BinderExportManifest {
   sections: BinderSection[];

@@ -3,7 +3,12 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initI18n } from '@caredesk/i18n';
-import type { EmploymentCaseResponse } from '@caredesk/schemas';
+import {
+  BINDER_EXPORT_PRESETS,
+  BINDER_SECTIONS,
+  createBinderExportRequestSchema,
+  type EmploymentCaseResponse,
+} from '@caredesk/schemas';
 
 // Canonical API mocks — the new EmergencyBinderPage reads from authenticated
 // case APIs, not mvp-storage. Constitution §16: synthetic data only.
@@ -11,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   createBinderExport: vi.fn(),
   listCaseMedications: vi.fn(),
 }));
+
+const DEMO_DOCUMENT_ID = vi.hoisted(() => '00000000-0000-4000-8000-0000000d0c01');
 
 const DEMO_CASE: EmploymentCaseResponse = {
   id: 'case-demo-001',
@@ -45,7 +52,9 @@ vi.mock('../api/client.js', () => ({
   listEmploymentCases: vi.fn(),
   listCaseDocuments: vi.fn().mockResolvedValue([
     {
-      id: 'doc-demo-001',
+      // A UUID, as every real document id is: the server's manifest schema
+      // refuses anything else, and this file now checks against that schema.
+      id: DEMO_DOCUMENT_ID,
       documentType: 'דרכון',
       status: 'valid',
       verificationStatus: 'verified',
@@ -113,6 +122,12 @@ function renderPage(path = '/binder') {
       </MemoryRouter>
     </I18nextProvider>,
   );
+}
+
+/** The manifest must parse under the very schema the API route validates with. */
+function expectServerAccepts(manifest: unknown) {
+  const parsed = createBinderExportRequestSchema.safeParse(manifest);
+  expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
 }
 
 async function selectDemoCase() {
@@ -287,12 +302,13 @@ describe('EmergencyBinderPage', () => {
     expect(mocks.createBinderExport).toHaveBeenCalledOnce();
     expect(mocks.createBinderExport).toHaveBeenCalledWith(
       'case-demo-001',
-      {
-        sections: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
-        documentIds: [],
-      },
+      { sections: [...BINDER_SECTIONS], documentIds: [] },
       expect.any(String),
     );
+    // This test once asserted a seven-section manifest the server refused
+    // with 400: the client is mocked here, so only the server's own schema
+    // can say whether the payload is one the server accepts.
+    expectServerAccepts(mocks.createBinderExport.mock.calls[0]?.[1]);
     // The receipt ("אסמכתת ייצוא") is visible on screen and inside the
     // printable document before window.print ran.
     expect(screen.getAllByText(/אסמכתת ייצוא/).length).toBeGreaterThan(0);
@@ -309,10 +325,31 @@ describe('EmergencyBinderPage', () => {
 
     await waitFor(() => expect(mocks.createBinderExport).toHaveBeenCalledOnce());
     expect(mocks.createBinderExport.mock.calls[0]?.[1]).toEqual({
-      sections: ['case', 'caregiver', 'medications', 'documents', 'payroll', 'tasks', 'contacts'],
-      documentIds: ['doc-demo-001'],
+      sections: [...BINDER_SECTIONS],
+      documentIds: [DEMO_DOCUMENT_ID],
     });
+    expectServerAccepts(mocks.createBinderExport.mock.calls[0]?.[1]);
   });
+
+  it.each(Object.keys(BINDER_EXPORT_PRESETS))(
+    'sends a manifest the server accepts for the "%s" preset',
+    async (preset) => {
+      renderPage();
+      await selectDemoCase();
+
+      fireEvent.change(screen.getByRole('combobox', { name: /סוג תיק/ }), {
+        target: { value: preset },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /יצירת PDF/ }));
+
+      await waitFor(() => expect(mocks.createBinderExport).toHaveBeenCalledOnce());
+      const sent = mocks.createBinderExport.mock.calls[0]?.[1];
+      expect(sent.sections).toEqual([
+        ...BINDER_EXPORT_PRESETS[preset as keyof typeof BINDER_EXPORT_PRESETS],
+      ]);
+      expectServerAccepts(sent);
+    },
+  );
 
   it('still prints when the server is unreachable, labelled as an unrecorded local print', async () => {
     mocks.createBinderExport.mockRejectedValue(new Error('offline'));
