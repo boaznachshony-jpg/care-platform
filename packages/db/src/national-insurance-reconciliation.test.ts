@@ -153,7 +153,7 @@ describe('measureNationalInsuranceReports', () => {
 describe('PgTenantCensusRepository - National Insurance measurement', () => {
   const TENANT = '00000000-0000-4000-8000-000000000001';
 
-  function stubPool(reportsCopied: boolean) {
+  function stubPool(reportsCopied: boolean, reportQueryFails = false) {
     const statements: Array<{ sql: string; values: unknown[] }> = [];
     const client = {
       query: async (text: string, values: unknown[] = []) => {
@@ -196,6 +196,8 @@ describe('PgTenantCensusRepository - National Insurance measurement', () => {
             ],
             rowCount: 1,
           };
+        if (reportQueryFails && sql.includes('from national_insurance_report'))
+          throw new Error('relation does not exist');
         if (sql.includes('from national_insurance_report r join employment_case c'))
           return reportsCopied
             ? {
@@ -253,6 +255,17 @@ describe('PgTenantCensusRepository - National Insurance measurement', () => {
     expect(
       statements.filter((statement) => statement.sql.startsWith('set local role')).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('never lets a failed measurement stop the data-loss census', async () => {
+    const { pool } = stubPool(true, true);
+    const [census] = await new PgTenantCensusRepository(pool).collect();
+    expect(census).toMatchObject({
+      tenantId: TENANT,
+      workspacePopulatedEntries: 1,
+      nationalInsuranceWorkspaceReports: null,
+      nationalInsuranceUnreconciledReports: null,
+    });
   });
 
   it('records zero copied when the table is still empty', async () => {
