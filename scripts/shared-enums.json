@@ -1,0 +1,128 @@
+{
+  "$comment": [
+    "Producer/consumer enum pairs checked by scripts/check-shared-enums.mjs (N2, work plan 16.10.2026).",
+    "producer = the values one side can send; consumer = the enum the other side accepts.",
+    "relation 'subset' (default): producer values must all be accepted. 'equal': the two sets must be identical.",
+    "A pair whose enum moves into @caredesk/schemas and is imported on both sides can be deleted from this file."
+  ],
+  "pairs": [
+    {
+      "name": "scenario expense kind",
+      "relation": "equal",
+      "producer": {
+        "file": "apps/web/src/api/client.ts",
+        "interface": "ScenarioExpenseResponse",
+        "property": "kind"
+      },
+      "consumer": { "file": "apps/api/src/routes/scenario-expenses.ts", "zodEnum": "kind" }
+    },
+    {
+      "name": "payroll month close payment method",
+      "relation": "equal",
+      "producer": {
+        "file": "apps/web/src/api/client.ts",
+        "interface": "CanonicalPayrollClose",
+        "property": "paymentMethod"
+      },
+      "consumer": {
+        "file": "apps/api/src/routes/canonical-product-intelligence.ts",
+        "zodEnum": "paymentMethod",
+        "within": "closeSchema"
+      }
+    },
+    {
+      "name": "payroll entry status",
+      "relation": "equal",
+      "producer": {
+        "file": "apps/web/src/api/client.ts",
+        "interface": "PayrollEntryResponse",
+        "property": "status"
+      },
+      "consumer": { "file": "apps/api/src/routes/payroll-entries.ts", "zodEnum": "status" }
+    },
+    {
+      "name": "case assistant intent",
+      "relation": "equal",
+      "producer": {
+        "file": "apps/web/src/api/client.ts",
+        "function": "askCaseAssistant",
+        "parameter": "intent"
+      },
+      "consumer": {
+        "file": "apps/api/src/routes/product-differentiation.ts",
+        "zodEnum": "intent",
+        "within": "assistantBody"
+      }
+    },
+    {
+      "name": "professional review category sent by the completion panel",
+      "producer": {
+        "file": "apps/web/src/pages/case/ProductCompletionPanel.tsx",
+        "call": "createProfessionalReview",
+        "property": "category"
+      },
+      "consumer": {
+        "file": "apps/api/src/routes/product-differentiation.ts",
+        "zodEnum": "category",
+        "within": "reviewBody"
+      }
+    },
+    {
+      "name": "professional review source sent by the completion panel",
+      "producer": {
+        "file": "apps/web/src/pages/case/ProductCompletionPanel.tsx",
+        "call": "createProfessionalReview",
+        "property": "source"
+      },
+      "consumer": {
+        "file": "apps/api/src/routes/product-differentiation.ts",
+        "zodEnum": "source",
+        "within": "reviewBody"
+      }
+    },
+    {
+      "name": "professional review status the client can display",
+      "relation": "equal",
+      "producer": {
+        "file": "apps/api/src/routes/product-differentiation.ts",
+        "type": "ReviewStatus"
+      },
+      "consumer": { "file": "apps/web/src/api/client.ts", "type": "ProfessionalReviewStatus" }
+    },
+    {
+      "name": "professional review transition target",
+      "producer": {
+        "file": "apps/web/src/api/client.ts",
+        "type": "ProfessionalReviewStatus",
+        "exclude": ["requested"],
+        "excludeReason": "The client type is shared with responses. 'requested' is the initial state, never a transition target; the route refuses it, and ProductCompletionPanel offers only transitions out of it. Narrowing the request type is a client.ts change (Team 1)."
+      },
+      "consumer": {
+        "file": "apps/api/src/routes/product-differentiation.ts",
+        "zodEnum": "status",
+        "within": "transitionBody"
+      }
+    },
+    {
+      "name": "regulation rule transition target",
+      "relation": "equal",
+      "producer": {
+        "file": "apps/web/src/api/client.ts",
+        "type": "RegulationRuleStatus",
+        "exclude": ["draft"],
+        "excludeReason": "transitionRegulationRule sends Exclude<RegulationRuleStatus, 'draft'>; a rule is created as a draft and never transitions back to it."
+      },
+      "consumer": {
+        "file": "apps/api/src/routes/regulation-rules.ts",
+        "zodEnum": "status",
+        "within": "transitionBody"
+      }
+    },
+    {
+      "name": "support request kind",
+      "relation": "equal",
+      "producer": { "file": "apps/web/src/contact.ts", "type": "SupportRequestKind" },
+      "consumer": { "file": "apps/api/src/routes/support-requests.ts", "zodEnum": "kind" }
+    }
+  ]
+}

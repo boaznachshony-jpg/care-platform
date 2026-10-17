@@ -1,0 +1,9 @@
+{
+  "pairs": [
+    {
+      "name": "binder export sections (demo of the pre-#138 bug)",
+      "producer": { "file": "page.tsx.txt", "const": "FULL_PRESET" },
+      "consumer": { "file": "route.ts.txt", "zodEnum": "sections", "within": "body" }
+    }
+  ]
+}

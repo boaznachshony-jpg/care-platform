@@ -1,0 +1,3 @@
+// Demo for scripts/check-shared-enums.mjs: the Emergency Binder bug before #138.
+// The page's default preset names `medications`...
+const FULL_PRESET = ['case', 'caregiver', 'medications', 'documents', 'payroll'] as const;
