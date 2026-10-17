@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,6 +41,11 @@ vi.mock('../sync/use-case-for-legacy-client.js', () => ({
 const mockListCanonicalPayrollCloses = vi.fn();
 const mockCloseCanonicalPayrollMonth = vi.fn();
 vi.mock('../api/client.js', () => ({
+  listPayrollEntries: () => Promise.resolve([]),
+  savePayrollEntry: (_caseId: string, month: string, input: Record<string, unknown>) =>
+    Promise.resolve({
+      entry: { ...input, id: 'f3e7d48d-7115-4198-96fd-dbc62646a3d8', month, version: 1 },
+    }),
   listCanonicalPayrollCloses: (...args: unknown[]) => mockListCanonicalPayrollCloses(...args),
   closeCanonicalPayrollMonth: (...args: unknown[]) => mockCloseCanonicalPayrollMonth(...args),
 }));
@@ -155,7 +160,7 @@ describe('PayrollPage annual report', () => {
 
     expect(screen.getByRole('heading', { name: 'שכר מצטבר והיסטוריה שנתית' })).toBeInTheDocument();
     expect(screen.getByText('עלות ההעסקה בשנת 2026')).toBeInTheDocument();
-    expect(screen.getByText(/14,650\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/14,750\.00/)).toBeInTheDocument();
     expect(screen.getByText('שבתות וימי מנוחה מצטברים')).toBeInTheDocument();
     expect(screen.getByText('תשלום ימי חג מצטבר')).toBeInTheDocument();
     expect(screen.getByText('תשלום חופשה מצטבר')).toBeInTheDocument();
@@ -173,8 +178,9 @@ describe('PayrollPage annual report', () => {
     expect(screen.queryByText('2026-01')).not.toBeInTheDocument();
   });
 
-  it('calculates Saturdays, additions and advances and saves the month cumulatively', () => {
+  it('calculates Saturdays, additions and advances and saves the month cumulatively', async () => {
     render(<PayrollPage />);
+    await act(async () => {});
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     const currentMonth = new Date().toISOString().slice(0, 7);
@@ -234,8 +240,9 @@ describe('PayrollPage annual report', () => {
     });
   });
 
-  it('creates one quarterly national-insurance tracking item after payroll save without requiring an amount', () => {
+  it('creates one quarterly national-insurance tracking item after payroll save without requiring an amount', async () => {
     render(<PayrollPage />);
+    await act(async () => {});
 
     fireEvent.change(screen.getByLabelText('חודש שכר'), { target: { value: '2026-07' } });
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
@@ -356,8 +363,9 @@ describe('PayrollPage annual report', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('תוספת אחרת');
   });
 
-  it('adds multiple named additional payments to the saved calculation and print summary', () => {
+  it('adds multiple named additional payments to the saved calculation and print summary', async () => {
     render(<PayrollPage />);
+    await act(async () => {});
 
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));
     fireEvent.click(screen.getByRole('button', { name: 'המשך' }));

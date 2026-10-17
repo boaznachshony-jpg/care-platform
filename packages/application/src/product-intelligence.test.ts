@@ -241,6 +241,44 @@ describe('product intelligence projections', () => {
     ).toThrow('finite and non-negative');
   });
 
+  it('preserves signed stored payroll balances through components and annual totals', () => {
+    const result = projectFutureCost({
+      startMonth: '2026-07',
+      baseSalary: 6000,
+      enteredPayroll: [{ month: '2026-07', amount: -1000, sourceId: 'synthetic-negative-entry' }],
+      actuals: [{ month: '2026-08', amount: -500, sourceId: 'synthetic-negative-close' }],
+      expenses: [
+        { id: 'synthetic-premium', label: 'Insurance', amount: 100, frequency: 'monthly' },
+      ],
+    });
+    expect(result.months[0]).toMatchObject({
+      actual: -1000,
+      known: 100,
+      projected: 0,
+      total: -900,
+    });
+    expect(result.months[1]).toMatchObject({ actual: -500, known: 100, projected: 0, total: -400 });
+    expect(result.months[0]?.components[0]?.amount).toBe(-1000);
+    expect(result.total).toBe(59700);
+    expect(result.next3MonthsTotal).toBe(4800);
+  });
+
+  it('still refuses non-finite payroll balances and negative expense forecasts', () => {
+    expect(() =>
+      projectFutureCost({
+        startMonth: '2026-07',
+        expenses: [],
+        enteredPayroll: [{ month: '2026-07', amount: Number.NaN, sourceId: 'invalid' }],
+      }),
+    ).toThrow('Payroll forecast balances must be finite');
+    expect(() =>
+      projectFutureCost({
+        startMonth: '2026-07',
+        expenses: [{ id: 'negative', label: 'Invalid', amount: -1, frequency: 'monthly' }],
+      }),
+    ).toThrow('finite and non-negative');
+  });
+
   it('applies a canonical recurring scenario expense only inside its month window', () => {
     const result = projectFutureCost({
       startMonth: '2028-01',

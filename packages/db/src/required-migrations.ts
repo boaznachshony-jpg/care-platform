@@ -71,6 +71,9 @@ export const REQUIRED_MIGRATIONS: readonly string[] = [
   '0047_case_born_active_and_task_source_key',
   '0048_backfill_seeded_task_completion',
   '0049_national_insurance_report',
+  '0049_payroll_settlement_integrity',
+  '0050_payroll_policy_rules',
+  '0051_payroll_context_integrity',
 ];
 
 /**

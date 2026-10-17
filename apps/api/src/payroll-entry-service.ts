@@ -1,7 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTenant } from '@caredesk/db';
-import { calculateMonthlyPayroll, payrollTotalMatches } from '@caredesk/domain';
+import {
+  assertPayrollMoneyPrecision,
+  calculateMonthlyPayroll,
+  deriveApprovedPayrollComponents,
+  payrollTotalMatches,
+  type PayrollCalculationContext,
+  type VerifiedPayrollRule,
+  PayrollPolicyError,
+} from '@caredesk/domain';
+import { resolveVerifiedPayrollRules } from './payroll-policy-resolver.js';
 
 export type PayrollEntryInput = {
   baseSalary: number;
@@ -24,16 +33,17 @@ export type PayrollEntryInput = {
   total: number;
   status: 'draft' | 'final';
   version?: number;
+  calculationContext?: PayrollCalculationContext | null;
 };
 type Actor = { tenantId: string; userId: string; correlationId: string };
-type Row = Record<string, unknown> & {
+export type PayrollEntryRow = Record<string, unknown> & {
   id: string;
   payroll_month: string;
   created_at: Date;
   updated_at: Date;
 };
 const number = (value: unknown) => Number(value);
-const output = (r: Row) => ({
+export const payrollEntryFromRow = (r: PayrollEntryRow) => ({
   id: r.id,
   month: r.payroll_month.slice(0, 7),
   baseSalary: number(r.base_salary),
@@ -48,7 +58,7 @@ const output = (r: Row) => ({
   sickPay: number(r.sick_pay),
   otherAbsenceDays: number(r.other_absence_days),
   employerContributions: number(r.employer_contributions),
-  additionalPayments: r.additional_payments,
+  additionalPayments: r.additional_payments as PayrollEntryInput['additionalPayments'],
   pocketMoney: number(r.pocket_money),
   deductions: number(r.deductions),
   advances: number(r.advances),
@@ -58,8 +68,38 @@ const output = (r: Row) => ({
   version: number(r.version),
   createdAt: r.created_at.toISOString(),
   updatedAt: r.updated_at.toISOString(),
+  ...(r.calculation_context
+    ? { calculationContext: r.calculation_context as PayrollCalculationContext }
+    : {}),
+  ...(Array.isArray(r.calculation_policy_snapshot) && r.calculation_policy_snapshot.length
+    ? { calculationPolicySnapshot: r.calculation_policy_snapshot as VerifiedPayrollRule[] }
+    : {}),
 });
-const columns = `id,payroll_month::text,base_salary::text,work_days::text,paid_rest_days::text,rest_day_rate::text,paid_holidays::text,holiday_pay::text,vacation_days::text,vacation_pay::text,sick_days::text,sick_pay::text,other_absence_days::text,employer_contributions::text,additional_payments,pocket_money::text,deductions::text,advances::text,agreed_deductions::text,total::text,status,version,created_at,updated_at`;
+export const PAYROLL_ENTRY_COLUMNS = `id,payroll_month::text,base_salary::text,work_days::text,paid_rest_days::text,rest_day_rate::text,paid_holidays::text,holiday_pay::text,vacation_days::text,vacation_pay::text,sick_days::text,sick_pay::text,other_absence_days::text,employer_contributions::text,additional_payments,pocket_money::text,deductions::text,advances::text,agreed_deductions::text,total::text,status,version,created_at,updated_at,calculation_context,calculation_policy_snapshot`;
+
+/** Shared with close and the database triggers, including months without a row yet. */
+export async function lockPayrollMonth(
+  client: PoolClient,
+  tenant: string,
+  caseId: string,
+  month: string,
+) {
+  await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [
+    `payroll-month:${tenant.toLowerCase()}:${caseId.toLowerCase()}:${month}`,
+  ]);
+}
+
+/** A request key is tenant/operation scoped even if callers submit different months. */
+export async function lockPayrollRequest(
+  client: PoolClient,
+  tenant: string,
+  operation: string,
+  key: string,
+) {
+  await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [
+    `payroll-request:${tenant}:${operation}:${key}`,
+  ]);
+}
 export class PayrollEntryService {
   constructor(private pool: Pool) {}
   /**
@@ -79,24 +119,68 @@ export class PayrollEntryService {
   list(actor: Actor, caseId: string) {
     return this.tx(actor.tenantId, async (c) =>
       (
-        await c.query<Row>(
-          `select ${columns} from payroll_entry where employment_case_id=$1 order by payroll_month desc`,
+        await c.query<PayrollEntryRow>(
+          `select ${PAYROLL_ENTRY_COLUMNS} from payroll_entry where employment_case_id=$1 order by payroll_month desc`,
           [caseId],
         )
-      ).rows.map(output),
+      ).rows.map(payrollEntryFromRow),
     );
   }
   get(actor: Actor, caseId: string, month: string) {
     return this.tx(actor.tenantId, async (c) => {
-      const r = await c.query<Row>(
-        `select ${columns} from payroll_entry where employment_case_id=$1 and payroll_month=($2||'-01')::date`,
+      const r = await c.query<PayrollEntryRow>(
+        `select ${PAYROLL_ENTRY_COLUMNS} from payroll_entry where employment_case_id=$1 and payroll_month=($2||'-01')::date`,
         [caseId, month],
       );
-      return r.rows[0] ? output(r.rows[0]) : null;
+      return r.rows[0] ? payrollEntryFromRow(r.rows[0]) : null;
     });
   }
   save(actor: Actor, caseId: string, month: string, key: string, input: PayrollEntryInput) {
     return this.tx(actor.tenantId, async (c) => {
+      assertPayrollMoneyPrecision(input);
+      const exists = await c.query('select 1 from employment_case where id=$1', [caseId]);
+      if (!exists.rowCount) throw new Error('case_not_found');
+      await lockPayrollMonth(c, actor.tenantId, caseId, month);
+      await lockPayrollRequest(c, actor.tenantId, 'payroll_entry.save', key);
+      const hash = createHash('sha256')
+        .update(JSON.stringify({ caseId, month, input }))
+        .digest('hex');
+      const replay = await c.query<{
+        request_hash: string;
+        response: ReturnType<typeof payrollEntryFromRow>;
+      }>(
+        `select request_hash,response from idempotency_record where operation='payroll_entry.save' and idempotency_key=$1 for update`,
+        [key],
+      );
+      if (replay.rows[0]) {
+        if (replay.rows[0].request_hash !== hash) throw new Error('idempotency_conflict');
+        return { entry: replay.rows[0].response, replayed: true };
+      }
+      const rules = input.calculationContext ? await resolveVerifiedPayrollRules(c, month) : [];
+      const derived = deriveApprovedPayrollComponents(
+        input,
+        input.calculationContext ?? undefined,
+        month,
+        rules,
+      );
+      const components = derived.components;
+      const carry = input.calculationContext?.openingBalance;
+      if (carry) {
+        // A positive close receipt confirms payment, not an unpaid balance.
+        if (carry.amount > 0) throw new Error('payroll_carry_source_mismatch');
+        const source = await c.query<{ total_amount: string; payroll_version: number }>(
+          `select total_amount::text,payroll_version from payroll_month_close
+           where employment_case_id=$1 and payroll_month=($2||'-01')::date
+             and payroll_entry_id::text=$3 and settlement_basis='worker'`,
+          [caseId, carry.sourceMonth, carry.reference.toLowerCase()],
+        );
+        if (
+          !source.rows[0] ||
+          source.rows[0].payroll_version !== carry.sourceVersion ||
+          Number(source.rows[0].total_amount) !== carry.amount
+        )
+          throw new Error('payroll_carry_source_mismatch');
+      }
       /**
        * Root 4 (DOM-02 / DB-06): the server has an opinion about the total.
        *
@@ -109,13 +193,12 @@ export class PayrollEntryService {
        * persisted — so even a caller that somehow passes the equality check
        * cannot store a number this code did not produce.
        *
-       * Recomputed before the case lookup on purpose: a payload that does not
-       * reconcile must not reach any write, and the rollback is asserted.
+       * A payload that does not reconcile must not reach any write. Identical
+       * successful replays are resolved before derivation so retiring a policy
+       * cannot change the previously committed answer.
        */
-      const totals = calculateMonthlyPayroll(input);
+      const totals = calculateMonthlyPayroll(components);
       if (!payrollTotalMatches(input.total, totals.total)) throw new Error('total_mismatch');
-      const exists = await c.query('select 1 from employment_case where id=$1', [caseId]);
-      if (!exists.rowCount) throw new Error('case_not_found');
       /**
        * Root 4 (DOM-01): a closed month is frozen.
        *
@@ -131,17 +214,6 @@ export class PayrollEntryService {
         [caseId, month],
       );
       if (closed.rowCount) throw new Error('payroll_month_closed');
-      const hash = createHash('sha256')
-        .update(JSON.stringify({ caseId, month, input }))
-        .digest('hex');
-      const replay = await c.query<{ request_hash: string; response: ReturnType<typeof output> }>(
-        `select request_hash,response from idempotency_record where operation='payroll_entry.save' and idempotency_key=$1 for update`,
-        [key],
-      );
-      if (replay.rows[0]) {
-        if (replay.rows[0].request_hash !== hash) throw new Error('idempotency_conflict');
-        return { entry: replay.rows[0].response, replayed: true };
-      }
       const previous = await c.query<{ id: string; version: number; status: string }>(
         `select id,version,status from payroll_entry where employment_case_id=$1 and payroll_month=($2||'-01')::date for update`,
         [caseId, month],
@@ -168,33 +240,74 @@ export class PayrollEntryService {
       const action = previous.rows[0] ? 'payroll.entry_updated' : 'payroll.entry_created';
       const meaningful = !previous.rows[0] || previous.rows[0].status !== input.status;
       const values = [
-        input.baseSalary,
-        input.workDays,
-        input.paidRestDays,
-        input.restDayRate,
-        input.paidHolidays,
-        input.holidayPay,
-        input.vacationDays,
-        input.vacationPay,
-        input.sickDays,
-        input.sickPay,
-        input.otherAbsenceDays,
-        input.employerContributions,
-        JSON.stringify(input.additionalPayments),
-        input.pocketMoney,
-        input.deductions,
-        input.advances,
-        input.agreedDeductions,
+        components.baseSalary,
+        components.workDays,
+        components.paidRestDays,
+        components.restDayRate,
+        components.paidHolidays,
+        components.holidayPay,
+        components.vacationDays,
+        components.vacationPay,
+        components.sickDays,
+        components.sickPay,
+        components.otherAbsenceDays,
+        components.employerContributions,
+        JSON.stringify(components.additionalPayments),
+        components.pocketMoney,
+        components.deductions,
+        components.advances,
+        components.agreedDeductions,
         // DOM-02: the derived total, not `input.total`. The submitted value was
         // checked above and is not carried any further.
         totals.total,
         input.status,
       ];
-      const saved = await c.query<Row>(
-        `insert into payroll_entry (id,tenant_id,employment_case_id,payroll_month,base_salary,work_days,paid_rest_days,rest_day_rate,paid_holidays,holiday_pay,vacation_days,vacation_pay,sick_days,sick_pay,other_absence_days,employer_contributions,additional_payments,pocket_money,deductions,advances,agreed_deductions,total,status,created_by,updated_by) values ($1,$2,$3,($4||'-01')::date,${values.map((_, i) => `$${i + 5}`).join(',')},$24,$24) on conflict (tenant_id,employment_case_id,payroll_month) do update set base_salary=$5,work_days=$6,paid_rest_days=$7,rest_day_rate=$8,paid_holidays=$9,holiday_pay=$10,vacation_days=$11,vacation_pay=$12,sick_days=$13,sick_pay=$14,other_absence_days=$15,employer_contributions=$16,additional_payments=$17,pocket_money=$18,deductions=$19,advances=$20,agreed_deductions=$21,total=$22,status=$23,version=payroll_entry.version+1,updated_by=$24,updated_at=now() returning ${columns}`,
-        [id, actor.tenantId, caseId, month, ...values, actor.userId],
-      );
-      const entry = output(saved.rows[0]!);
+      const saved = await c
+        .query<PayrollEntryRow>(
+          `insert into payroll_entry (id,tenant_id,employment_case_id,payroll_month,base_salary,work_days,paid_rest_days,rest_day_rate,paid_holidays,holiday_pay,vacation_days,vacation_pay,sick_days,sick_pay,other_absence_days,employer_contributions,additional_payments,pocket_money,deductions,advances,agreed_deductions,total,status,created_by,updated_by,calculation_context,calculation_policy_snapshot) values ($1,$2,$3,($4||'-01')::date,${values.map((_, i) => `$${i + 5}`).join(',')},$24,$24,$25,$26) on conflict (tenant_id,employment_case_id,payroll_month) do update set base_salary=$5,work_days=$6,paid_rest_days=$7,rest_day_rate=$8,paid_holidays=$9,holiday_pay=$10,vacation_days=$11,vacation_pay=$12,sick_days=$13,sick_pay=$14,other_absence_days=$15,employer_contributions=$16,additional_payments=$17,pocket_money=$18,deductions=$19,advances=$20,agreed_deductions=$21,total=$22,status=$23,calculation_context=$25,calculation_policy_snapshot=$26,version=payroll_entry.version+1,updated_by=$24,updated_at=now() returning ${PAYROLL_ENTRY_COLUMNS}`,
+          [
+            id,
+            actor.tenantId,
+            caseId,
+            month,
+            ...values,
+            actor.userId,
+            input.calculationContext ? JSON.stringify(input.calculationContext) : null,
+            JSON.stringify(rules.filter((rule) => derived.ruleIds.includes(rule.id))),
+          ],
+        )
+        .catch((error: unknown) => {
+          if (
+            error &&
+            typeof error === 'object' &&
+            'constraint' in error &&
+            error.constraint === 'payroll_carry_source_mismatch'
+          )
+            throw new Error('payroll_carry_source_mismatch');
+          if (
+            error &&
+            typeof error === 'object' &&
+            'constraint' in error &&
+            error.constraint === 'payroll_context_policy_unavailable'
+          )
+            throw new PayrollPolicyError('rule_unavailable', 'calculationContext');
+          if (
+            error &&
+            typeof error === 'object' &&
+            'constraint' in error &&
+            error.constraint === 'payroll_entry_carry_source_once'
+          )
+            throw new Error('payroll_carry_source_reused');
+          if (
+            error &&
+            typeof error === 'object' &&
+            'constraint' in error &&
+            error.constraint === 'payroll_payment_event_conflict'
+          )
+            throw new Error('payroll_payment_event_conflict');
+          throw error;
+        });
+      const entry = payrollEntryFromRow(saved.rows[0]!);
       await c.query(
         `insert into audit_event (id,tenant_id,actor_id,action,resource_type,resource_id,occurred_at,correlation_id,purpose,change_summary,sensitivity) values ($1,$2,$3,$4,'payroll_entry',$5,now(),$6,'payroll_entry','Payroll entry recorded.','financial_sensitive')`,
         [randomUUID(), actor.tenantId, actor.userId, action, id, actor.correlationId],

@@ -113,6 +113,7 @@ function stubPool(knownCaseIds: string[], closedMonths: string[] = []) {
     version,
     created_at: now,
     updated_at: now,
+    calculation_context: values[24] ? JSON.parse(String(values[24])) : null,
   });
 
   const client = {
@@ -127,6 +128,7 @@ function stubPool(knownCaseIds: string[], closedMonths: string[] = []) {
         // the tenant. The stub must let it through, and the assertions below
         // require it to have happened.
         sql.startsWith('set local role') ||
+        sql.includes('pg_advisory_xact_lock') ||
         sql.includes('set_config')
       ) {
         return { rows: [], rowCount: 0 };
@@ -134,6 +136,7 @@ function stubPool(knownCaseIds: string[], closedMonths: string[] = []) {
       if (sql.includes('select 1 from employment_case')) {
         return { rows: [], rowCount: knownCaseIds.includes(String(values?.[0])) ? 1 : 0 };
       }
+      if (sql.includes('from payroll_policy_rule')) return { rows: [], rowCount: 0 };
       // Root 4 (DOM-01): the closed-month lookup the write path did not have.
       if (sql.includes('select 1 from payroll_month_close')) {
         const closed = closedMonths.includes(String(values?.[1]));
@@ -200,6 +203,74 @@ const payrollInserts = (queries: RecordedQuery[]) =>
   queries.filter((query) => query.text.toLowerCase().startsWith('insert into payroll_entry'));
 
 describe('PayrollEntryService.save', () => {
+  it('persists explicit payment-event context and derives advances from its event facts', async () => {
+    const { pool } = stubPool([CASE_ID]);
+    const calculationContext: NonNullable<PayrollEntryInput['calculationContext']> = {
+      schemaVersion: 1,
+      paymentEvents: [
+        {
+          id: 'synthetic-payment-1',
+          date: '2026-07-10',
+          appliesToMonth: '2026-07',
+          kind: 'advance',
+          amount: 1000,
+        },
+      ],
+    };
+    const result = await new PayrollEntryService(pool).save(
+      ACTOR,
+      CASE_ID,
+      '2026-07',
+      'payroll-event-context',
+      { ...ENTRY, advances: 1, total: 7150, calculationContext },
+    );
+    expect(result.entry).toMatchObject({
+      advances: 1000,
+      pocketMoney: 0,
+      total: 7150,
+      calculationContext,
+    });
+  });
+  it('locks the month and request before checking the first-row version or receipt', async () => {
+    const { pool, queries } = stubPool([CASE_ID]);
+    await new PayrollEntryService(pool).save(ACTOR, CASE_ID, '2026-07', 'payroll-lock-test', ENTRY);
+    const locks = queries.filter((q) => q.text.includes('pg_advisory_xact_lock'));
+    expect(locks.map((q) => q.values?.[0])).toEqual([
+      `payroll-month:${TENANT_ID}:${CASE_ID}:2026-07`,
+      `payroll-request:${TENANT_ID}:payroll_entry.save:payroll-lock-test`,
+    ]);
+    expect(queries.indexOf(locks[0]!)).toBeLessThan(
+      queries.findIndex((q) => q.text.startsWith('select id,version,status')),
+    );
+  });
+
+  it('replays an identical successful save after the month closes without writing again', async () => {
+    const closedMonths: string[] = [];
+    const { pool, queries } = stubPool([CASE_ID], closedMonths);
+    const service = new PayrollEntryService(pool);
+    const first = await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-after-close', ENTRY);
+    closedMonths.push('2026-07');
+    expect(await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-after-close', ENTRY)).toEqual({
+      entry: first.entry,
+      replayed: true,
+    });
+    expect(payrollInserts(queries)).toHaveLength(1);
+    await expect(
+      service.save(ACTOR, CASE_ID, '2026-07', 'payroll-new-after-close', ENTRY),
+    ).rejects.toThrow('payroll_month_closed');
+  });
+
+  it('rejects raw half-agora additional payments before any write', async () => {
+    const { pool, queries } = stubPool([CASE_ID]);
+    await expect(
+      new PayrollEntryService(pool).save(ACTOR, CASE_ID, '2026-07', 'payroll-precision', {
+        ...ENTRY,
+        additionalPayments: [{ description: 'Synthetic', amount: 0.005 }],
+      }),
+    ).rejects.toThrow('money_precision');
+    expect(payrollInserts(queries)).toHaveLength(0);
+    expect(queries.at(-1)?.text).toBe('rollback');
+  });
   it('creates the entry inside a tenant-scoped transaction with audit, timeline and receipt', async () => {
     const { pool, queries } = stubPool([CASE_ID]);
     const service = new PayrollEntryService(pool);

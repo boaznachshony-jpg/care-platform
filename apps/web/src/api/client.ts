@@ -618,6 +618,10 @@ export interface CanonicalPayrollClose {
   baseSalary: number | null;
   additions: number | null;
   deductions: number | null;
+  settlementBasis?: 'worker' | 'legacy_total';
+  calculationTotal?: number | null;
+  employerContributions?: number | null;
+  openingBalance?: number | null;
   closedAt: string;
   /**
    * R5-08. The display name of whoever closed the month. Null when the server
@@ -634,10 +638,17 @@ export const closeCanonicalPayrollMonth = (
   // `closedBy` is derived by the server from the authenticated actor and is
   // never accepted from the client — a caller must not be able to name someone
   // else as the person who signed off on a month's pay.
-  input: Omit<
-    CanonicalPayrollClose,
-    'id' | 'closedAt' | 'closedBy' | 'total' | 'baseSalary' | 'additions' | 'deductions'
-  > & { total: number; baseSalary: number; additions: number; deductions: number },
+  input: {
+    payrollReference: string;
+    payrollVersion: number;
+    month: string;
+    paymentDate: string;
+    paymentMethod: CanonicalPayrollClose['paymentMethod'];
+    total: number;
+    baseSalary: number;
+    additions: number;
+    deductions: number;
+  },
   idempotencyKey: string,
 ) =>
   apiRequest<{ close: CanonicalPayrollClose; replayed: boolean }>(
@@ -722,6 +733,7 @@ export interface PayrollEntryResponse {
   version: number;
   createdAt: string;
   updatedAt: string;
+  calculationContext?: import('@caredesk/domain').PayrollCalculationContext | null;
 }
 export type SavePayrollEntryRequest = Omit<
   PayrollEntryResponse,

@@ -44,3 +44,4 @@ export * from './visa-renewal.js';
 export * from './binder-export.js';
 export * from './national-insurance-report.js';
 export * from './date.js';
+export * from './payroll-policy.js';

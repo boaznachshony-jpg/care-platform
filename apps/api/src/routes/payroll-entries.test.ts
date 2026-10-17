@@ -55,7 +55,7 @@ interface RecordedQuery {
  */
 function stubPool(knownCaseIds: Set<string>) {
   const queries: RecordedQuery[] = [];
-  const state = { manager: true, closedMonths: [] as string[] };
+  const state = { manager: true, closedMonths: [] as string[], paymentEventConflict: false };
   const receipts = new Map<string, { hash: string; response: unknown }>();
   const entries = new Map<
     string,
@@ -95,6 +95,7 @@ function stubPool(knownCaseIds: Set<string>) {
     version,
     created_at: now,
     updated_at: now,
+    calculation_context: values[24] ? JSON.parse(String(values[24])) : null,
   });
 
   const client = {
@@ -106,6 +107,7 @@ function stubPool(knownCaseIds: Set<string>) {
         sql === 'commit' ||
         sql === 'rollback' ||
         sql.startsWith('set local role') ||
+        sql.includes('pg_advisory_xact_lock') ||
         sql.includes('set_config')
       ) {
         return { rows: [], rowCount: 0 };
@@ -142,6 +144,11 @@ function stubPool(knownCaseIds: Set<string>) {
         return { rows, rowCount: rows.length };
       }
       if (sql.startsWith('insert into payroll_entry')) {
+        if (state.paymentEventConflict)
+          throw Object.assign(new Error('payroll_payment_event_conflict'), {
+            code: '23514',
+            constraint: 'payroll_payment_event_conflict',
+          });
         const caseId = String(values?.[2]);
         const month = String(values?.[3]);
         const previous = entries.get(`${caseId}|${month}`);
@@ -199,6 +206,57 @@ const payrollInserts = (queries: RecordedQuery[]) =>
   queries.filter((query) => query.text.toLowerCase().startsWith('insert into payroll_entry'));
 
 describe('payroll entry routes', () => {
+  it('returns a controlled conflict when the database refuses omission or alteration of recorded payments', async () => {
+    const { app, caseId, state, queries } = await buildApp();
+    state.paymentEventConflict = true;
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/cases/${caseId}/payroll-entries/2026-07`,
+      headers: KEYED,
+      payload: { ...ENTRY_BODY, calculationContext: null },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().code).toBe('PAYROLL_PAYMENT_EVENT_CONFLICT');
+    expect(queries.at(-1)?.text).toBe('rollback');
+    expect(queries.some((q) => q.text.includes('insert into audit_event'))).toBe(false);
+  });
+  it('rejects excess raw money precision as field validation rather than a database error', async () => {
+    const { app, caseId, queries } = await buildApp();
+    for (const changes of [
+      { baseSalary: 6000.005 },
+      { additionalPayments: [{ description: 'Synthetic half agora', amount: 0.005 }] },
+      { total: 8050.001 },
+    ]) {
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/cases/${caseId}/payroll-entries/2026-07`,
+        headers: KEYED,
+        payload: { ...ENTRY_BODY, ...changes },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('VALIDATION_ERROR');
+    }
+    expect(payrollInserts(queries)).toHaveLength(0);
+  });
+
+  it('allows half rest days while rejecting count precision the SQL column cannot retain', async () => {
+    const { app, caseId } = await buildApp();
+    const saved = await app.inject({
+      method: 'PUT',
+      url: `/cases/${caseId}/payroll-entries/2026-07`,
+      headers: KEYED,
+      payload: { ...ENTRY_BODY, paidRestDays: 0.5, total: 7000 },
+    });
+    expect(saved.statusCode).toBe(201);
+    expect(saved.json().entry.paidRestDays).toBe(0.5);
+    const invalid = await app.inject({
+      method: 'PUT',
+      url: `/cases/${caseId}/payroll-entries/2026-07`,
+      headers: KEYED,
+      payload: { ...ENTRY_BODY, paidRestDays: 0.333, total: 6950 },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
   it('requires authentication on every payroll route', async () => {
     const { app, caseId } = await buildApp();
     const base = `/cases/${caseId}/payroll-entries`;

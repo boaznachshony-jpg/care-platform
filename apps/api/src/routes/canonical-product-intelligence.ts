@@ -1,19 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { payrollTotalMatches, roundShekels } from '@caredesk/domain';
+import {
+  PayrollComponentError,
+  PayrollPolicyError,
+  payrollTotalMatches,
+  roundShekels,
+} from '@caredesk/domain';
 import type { Container } from '../container.js';
 import { makeAuthenticate } from '../plugins/authenticate.js';
 import { CanonicalIntelligenceService } from '../product-intelligence/canonical-intelligence-service.js';
 import { sendError, sendValidationError } from './http-errors.js';
 
 const paramsSchema = z.object({ caseId: z.string().uuid() });
-/** Every close amount is rounded to agorot the way `numeric(12,2)` will store it. */
+/** Reject precision the database would otherwise silently round. */
 const closeAmount = z
   .number()
   .finite()
   .min(-10_000_000)
   .max(10_000_000)
-  .transform((value) => roundShekels(value));
+  .refine((value) => value === roundShekels(value), 'Money must use whole agorot');
 
 /**
  * The current month in Israel, stated explicitly rather than inherited from the
@@ -32,7 +37,8 @@ export function currentPayrollMonthInIsrael(now: Date = new Date()): string {
 /** Exported for the DOM-14/DOM-24 regression test; the route is its only caller. */
 export const closeSchema = z
   .object({
-    payrollReference: z.string().trim().min(1).max(200),
+    payrollReference: z.string().uuid(),
+    payrollVersion: z.number().int().positive(),
     month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
     paymentDate: z.string().date(),
     paymentMethod: z.enum(['bank_transfer', 'cash', 'check', 'other']),
@@ -50,6 +56,7 @@ export const closeSchema = z
     additions: closeAmount.pipe(z.number().nonnegative()),
     deductions: closeAmount.pipe(z.number().nonnegative()),
   })
+  .strict()
   /**
    * DOM-14: exact equality on rounded amounts, not a 0.01 tolerance window.
    *
@@ -58,8 +65,8 @@ export const closeSchema = z
    * passed validation (difference 0.006) and then violated
    * `payroll_month_close_amount_reconciles` after `numeric(12,2)` rounded the
    * base to 1000.13 — a bare 500 on the one operation the user cannot retry
-   * their way out of. Rounding in the transform above and comparing exactly
-   * here makes validation and constraint agree by construction.
+   * their way out of. Rejecting excess precision above and comparing exactly
+   * here makes validation and the stored cents agree by construction.
    */
   .refine(
     (value) =>
@@ -70,7 +77,7 @@ export const closeSchema = z
     },
   )
   // DOM-24, second half: a future month could be closed today. A close is a
-  // statement about a month that has ended.
+  // statement about the current or a previous month under the existing contract.
   .refine((value) => value.month <= currentPayrollMonthInIsrael(), {
     message: 'A future payroll month cannot be closed',
     path: ['month'],
@@ -121,11 +128,39 @@ export function registerCanonicalProductIntelligenceRoutes(
         const result = await service.close(actor, params.data.caseId, key, body.data);
         reply.status(result.replayed ? 200 : 201).send(result);
       } catch (error) {
+        if (error instanceof PayrollComponentError)
+          return sendError(request, reply, 422, 'TOTAL_MISMATCH', {
+            [error.component]: [error.problem],
+          });
+        if (error instanceof PayrollPolicyError)
+          return sendError(
+            request,
+            reply,
+            error.code === 'money_precision' ? 400 : 422,
+            error.code === 'money_precision' ? 'VALIDATION_ERROR' : 'PAYROLL_POLICY_REQUIRED',
+            { [error.field]: [error.code] },
+          );
         const message = error instanceof Error ? error.message : '';
         if (message === 'manager_required') return sendError(request, reply, 403, 'FORBIDDEN');
         if (message === 'case_not_found') return sendError(request, reply, 404, 'NOT_FOUND');
         if (message === 'idempotency_conflict')
           return sendError(request, reply, 409, 'IDEMPOTENCY_CONFLICT');
+        if (message === 'version_required')
+          return sendError(request, reply, 428, 'VERSION_REQUIRED');
+        if (message === 'version_conflict')
+          return sendError(request, reply, 409, 'VERSION_CONFLICT');
+        if (message === 'payroll_reference_not_found')
+          return sendError(request, reply, 409, 'PAYROLL_REFERENCE_NOT_FOUND');
+        if (message === 'payroll_final_required')
+          return sendError(request, reply, 409, 'PAYROLL_FINAL_REQUIRED');
+        if (message === 'payroll_close_conflict')
+          return sendError(request, reply, 409, 'PAYROLL_CLOSE_CONFLICT');
+        if (message === 'payroll_close_amount_mismatch')
+          return sendError(request, reply, 422, 'TOTAL_MISMATCH');
+        if (message === 'payroll_carry_source_mismatch')
+          return sendError(request, reply, 422, 'PAYROLL_CARRY_SOURCE_MISMATCH');
+        if (message === 'money_precision')
+          return sendError(request, reply, 400, 'VALIDATION_ERROR');
         throw error;
       }
     },

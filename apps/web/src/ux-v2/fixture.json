@@ -1,0 +1,19 @@
+{
+  "clientId": "ux-v2-demo",
+  "profile": {
+    "employerName": "מעסיק בדיקה",
+    "recipientName": "מטופל בדיקה",
+    "caregiverName": "Synthetic Caregiver",
+    "caregiverCountry": "Philippines",
+    "employmentStartDate": "2026-02-01",
+    "onboardingCompleted": true,
+    "employmentAgreementConfirmed": true,
+    "medicalInsuranceConfirmed": true,
+    "medicalInsuranceExpiryDate": "2027-06-30",
+    "baseSalary": 7000,
+    "salaryEffectiveDate": "2026-02-01",
+    "saturdayRate": 440,
+    "licenseRenewalDate": "2027-01-15",
+    "visaRenewalDate": "2026-12-31"
+  }
+}

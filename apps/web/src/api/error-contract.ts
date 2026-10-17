@@ -111,6 +111,11 @@ export const API_ERROR_CONTRACT: readonly ApiErrorContractRow[] = [
   row('COMMIT_IN_PROGRESS', 409, 'errors.api.inProgress', true),
   row('CONFIRMATION_IN_PROGRESS', 409, 'errors.api.inProgress', true),
   row('PAYROLL_MONTH_CLOSED', 409, 'errors.api.payrollMonthClosed'),
+  row('PAYROLL_REFERENCE_NOT_FOUND', 409, 'errors.api.notFound'),
+  row('PAYROLL_FINAL_REQUIRED', 409, 'errors.api.invalidState'),
+  row('PAYROLL_CLOSE_CONFLICT', 409, 'errors.api.conflict'),
+  row('PAYROLL_CARRY_SOURCE_REUSED', 409, 'errors.api.conflict'),
+  row('PAYROLL_PAYMENT_EVENT_CONFLICT', 409, 'errors.api.conflict'),
   row('RULE_EXISTS', 409, 'errors.api.ruleExists'),
   row('FAMILY_MEMBER_EXISTS', 409, 'errors.api.familyMemberExists'),
   row('WORKSPACE_SHRINK_REJECTED', 409, 'errors.api.workspaceShrinkRejected'),
@@ -118,6 +123,9 @@ export const API_ERROR_CONTRACT: readonly ApiErrorContractRow[] = [
   row('INVITATION_INVALID', 410, 'errors.api.invitationInvalid'),
   // 422
   row('TOTAL_MISMATCH', 422, 'errors.api.totalMismatch'),
+  row('PAYROLL_CARRY_SOURCE_MISMATCH', 422, 'errors.api.validation'),
+  // Selected dynamically by the policy guard, outside the literal-code scan.
+  row('PAYROLL_POLICY_REQUIRED', 422, 'errors.api.invalidState'),
   row('EFFECTIVE_FROM_REQUIRED', 422, 'errors.api.validation'),
   row('PLAN_INVALID', 422, 'errors.api.validation'),
   row('RULE_UNVERIFIED', 422, 'errors.api.invalidState'),

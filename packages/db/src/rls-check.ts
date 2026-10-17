@@ -94,6 +94,8 @@ const ALL_TENANT_TABLES = [
   'medication', // 0046
   'national_insurance_report', // 0049
   'national_insurance_report_month', // 0049
+  'payroll_policy_rule', // 0050: server-owned reviewed numeric rules
+  'payroll_payment_event', // 0049: append-only payment attribution
 ] as const;
 
 interface Fixture {

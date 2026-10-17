@@ -10,6 +10,7 @@ import {
   scaleAgorot,
   shekelsOf,
   ZERO_AGOROT,
+  assertPayrollMoneyPrecision,
   type Agorot,
 } from '@caredesk/domain';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
@@ -17,13 +18,25 @@ import { useClientPath } from '../hooks/use-client-path.js';
 import { useLegacyClientId } from '../hooks/use-legacy-client-id.js';
 import { useCaseForLegacyClient } from '../sync/use-case-for-legacy-client.js';
 import { calculateMonthlyPayroll, calculateProratedBaseSalary } from '../payroll-calculation.js';
-import { createAnnualPayrollReport, getPayrollYears } from '../payroll-report.js';
+import {
+  createAnnualPayrollReport,
+  getPayrollYears,
+  payrollRecordEmploymentCost,
+} from '../payroll-report.js';
+import {
+  mergePayrollReportSources,
+  canonicalDeductionBreakdown,
+  canonicalWizardRequest,
+} from '../payroll-canonical.js';
+import { listPayrollEntries, savePayrollEntry, type PayrollEntryResponse } from '../api/client.js';
+import { newIdempotencyKey } from '../api/idempotency.js';
 import {
   NATIONAL_INSURANCE_CATEGORY,
   quarterlyInsuranceScheduleForPayrollMonth,
 } from '../national-insurance-presenter.js';
 import {
   readMvpEmploymentExpenses,
+  MVP_PROFILE_CHANGED,
   readMvpPayroll,
   saveMvpEmploymentExpenses,
   saveMvpPayroll,
@@ -603,6 +616,12 @@ function isUsableDraft(draft: unknown): draft is PayrollWizardDraft {
 }
 
 export function PayrollPage() {
+  const clientId = useLegacyClientId();
+  // A route transition must not reuse the previous client's report or draft.
+  return <PayrollPageContent key={clientId} />;
+}
+
+function PayrollPageContent() {
   const { t } = useTranslation();
   // The payroll close API is keyed by the canonical EMPLOYMENT CASE id, and
   // the route only ever gives a legacy CLIENT id. Passing the client id
@@ -621,6 +640,45 @@ export function PayrollPage() {
   const path = useClientPath();
   const [profile, setProfile, profileSaveError] = useMvpProfile();
   const [records, setRecords] = useState(readMvpPayroll);
+  const [canonicalEntries, setCanonicalEntries] = useState<PayrollEntryResponse[]>([]);
+  const [canonicalLoadError, setCanonicalLoadError] = useState(false);
+  const [canonicalReady, setCanonicalReady] = useState(false);
+  const [editingCanonical, setEditingCanonical] = useState<PayrollEntryResponse | null>(null);
+  const reportRecords = useMemo(
+    () => mergePayrollReportSources(records, canonicalEntries),
+    [records, canonicalEntries],
+  );
+  const canonicalCaseId = caseLookup.status === 'found' ? caseLookup.caseId : undefined;
+  useEffect(() => {
+    let active = true;
+    setCanonicalEntries([]);
+    setCanonicalLoadError(false);
+    setCanonicalReady(false);
+    if (canonicalCaseId) {
+      void Promise.resolve()
+        .then(() => listPayrollEntries(canonicalCaseId))
+        .then((entries) => {
+          if (active) {
+            setCanonicalEntries(entries);
+            setCanonicalReady(true);
+          }
+        })
+        .catch(() => {
+          if (active) setCanonicalLoadError(true);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [canonicalCaseId]);
+  useEffect(() => {
+    const reload = () => {
+      setRecords(readMvpPayroll());
+      setExpenses(readMvpEmploymentExpenses());
+    };
+    window.addEventListener(MVP_PROFILE_CHANGED, reload);
+    return () => window.removeEventListener(MVP_PROFILE_CHANGED, reload);
+  }, []);
   const [expenses, setExpenses] = useState(readMvpEmploymentExpenses);
   /**
    * WEB-02: read once, synchronously, before the first paint. Restoring in an
@@ -727,12 +785,12 @@ export function PayrollPage() {
    * done and the product has not committed.
    */
   const committedSnapshot = useMemo(() => {
-    const record = records.find((item) => item.month === values.month);
+    const record = reportRecords.find((item) => item.month === values.month);
     return payrollWizardSnapshot(
       { ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month: values.month },
       additionalPaymentDrafts(record),
     );
-  }, [records, values.month, profile.baseSalary, profile.saturdayRate]);
+  }, [reportRecords, values.month, profile.baseSalary, profile.saturdayRate]);
   const currentSnapshot = useMemo(
     () => payrollWizardSnapshot(values, additionalPayments),
     [values, additionalPayments],
@@ -858,11 +916,15 @@ export function PayrollPage() {
       </small>
     ) : null;
   }
-  const payrollYears = useMemo(() => getPayrollYears(records), [records]);
+  const payrollYears = useMemo(() => getPayrollYears(reportRecords), [reportRecords]);
   const [reportYear, setReportYear] = useState(() => payrollYears[0] ?? currentMonth.slice(0, 4));
+  useEffect(() => {
+    if (payrollYears.length > 0 && !payrollYears.includes(reportYear))
+      setReportYear(payrollYears[0]!);
+  }, [payrollYears, reportYear]);
   const annualReport = useMemo(
-    () => createAnnualPayrollReport(records, reportYear),
-    [records, reportYear],
+    () => createAnnualPayrollReport(reportRecords, reportYear),
+    [reportRecords, reportYear],
   );
   const proratedBaseSalary = useMemo(
     () =>
@@ -904,6 +966,10 @@ export function PayrollPage() {
         housingDeduction: numeric(values.housingDeduction),
         advances: numeric(values.advances),
         agreedDeduction: numeric(values.agreedDeduction),
+        unallocatedDeductions:
+          editingCanonical?.month === values.month
+            ? canonicalDeductionBreakdown(editingCanonical).unallocated
+            : 0,
       });
     } catch (error) {
       // Root 8: the domain refuses a component outside 0 … MAX_PAYROLL_AMOUNT,
@@ -931,7 +997,7 @@ export function PayrollPage() {
       }
       throw error;
     }
-  }, [additionalPaymentsTotal, proratedBaseSalary.amount, values]);
+  }, [additionalPaymentsTotal, proratedBaseSalary.amount, values, editingCanonical]);
   const otherAdditions = Math.max(0, calculation.additions - calculation.saturdayPay);
   // Holiday pay is subtracted here because it now has a line of its own above.
   // Leaving it in would show the same shekels twice and make the summary stop
@@ -982,13 +1048,19 @@ export function PayrollPage() {
   const insuranceMonthRows = useMemo(
     () =>
       nationalInsuranceMonthRows(
-        records,
+        reportRecords,
         insuranceWageMonths,
         profile.baseSalary,
         insuranceRate,
         insuranceMonthOverrides,
       ),
-    [records, insuranceWageMonths, profile.baseSalary, insuranceRate, insuranceMonthOverrides],
+    [
+      reportRecords,
+      insuranceWageMonths,
+      profile.baseSalary,
+      insuranceRate,
+      insuranceMonthOverrides,
+    ],
   );
   const insuranceTotals = useMemo(
     () => nationalInsuranceTotals(insuranceMonthRows),
@@ -1085,8 +1157,15 @@ export function PayrollPage() {
     const errors: string[] = [];
     const validateAmount = (value: string, label: string, positive = false) => {
       const parsed = Number(value);
+      let precise = true;
+      try {
+        assertPayrollMoneyPrecision({ baseSalary: parsed });
+      } catch {
+        precise = false;
+      }
       if (
         value.trim() === '' ||
+        !precise ||
         !Number.isFinite(parsed) ||
         parsed < (positive ? Number.EPSILON : 0) ||
         parsed > MAX_PAYROLL_AMOUNT
@@ -1184,7 +1263,8 @@ export function PayrollPage() {
     // history, used to overwrite every typed value with no warning at all.
     if (confirmDiscard && hasUnsavedWork && !window.confirm(t('payments.draftSwitchMonthConfirm')))
       return;
-    const record = records.find((item) => item.month === month);
+    const record = reportRecords.find((item) => item.month === month);
+    setEditingCanonical(record?.canonicalEntry ?? null);
     setDraftRestoredNotice(false);
     const loaded = { ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month };
     setValues(loaded);
@@ -1237,7 +1317,12 @@ export function PayrollPage() {
     setStep(1);
   }
 
-  function savePayroll(continueSequence = false) {
+  async function savePayroll(continueSequence = false) {
+    if (canonicalCaseId && !canonicalReady) {
+      setPayrollSaved(false);
+      setPayrollSaveError('טעינת נתוני השכר הקנוניים נכשלה.');
+      return;
+    }
     const errorsByStep = [1, 2, 3, 4].map((stepNumber) => ({
       stepNumber,
       errors: validateStep(stepNumber),
@@ -1313,14 +1398,34 @@ export function PayrollPage() {
     // first and alone decides whether the month was saved; the draft is only
     // cleared after it has landed, so a refusal loses nothing that was typed.
     try {
-      saveMvpPayroll(next);
+      const canonical = canonicalEntries.find((entry) => entry.month === saved.month);
+      if (canonical && canonicalCaseId) {
+        if (
+          !editingCanonical ||
+          editingCanonical.id !== canonical.id ||
+          editingCanonical.version !== canonical.version
+        )
+          throw new Error('PAYROLL_VERSION_CONFLICT');
+        const response = await savePayrollEntry(
+          canonicalCaseId,
+          saved.month,
+          canonicalWizardRequest(saved, editingCanonical),
+          newIdempotencyKey(),
+        );
+        setEditingCanonical(response.entry);
+        setCanonicalEntries((entries) =>
+          entries.map((entry) => (entry.id === canonical.id ? response.entry : entry)),
+        );
+      } else {
+        saveMvpPayroll(next);
+        setRecords(next);
+      }
     } catch (error) {
       setPayrollSaved(false);
       setPayrollSaveError(storageWriteFailureMessage(error));
       return;
     }
     setPayrollSaveError('');
-    setRecords(next);
     // The quarter's tracking row is secondary: the month is already saved, so
     // a refusal here is reported as exactly that and nothing else is undone.
     let trackingSaved = true;
@@ -1538,9 +1643,9 @@ export function PayrollPage() {
           עדכון שכר בסיס
         </button>
       </header>
-      {message ? (
+      {message || canonicalLoadError ? (
         <p className="info-box" role="status">
-          {message}
+          {message || 'טעינת נתוני השכר הקנוניים נכשלה.'}
         </p>
       ) : null}
       {validationErrors.length > 0 ? (
@@ -1554,7 +1659,13 @@ export function PayrollPage() {
         </div>
       ) : null}
       <PayrollIntelligence
-        records={records}
+        records={reportRecords}
+        onPayrollSaved={(entry) =>
+          setCanonicalEntries((entries) => [
+            ...entries.filter((item) => item.month !== entry.month),
+            entry,
+          ])
+        }
         expenses={expenses}
         baseSalary={profile.baseSalary}
         caseLookup={caseLookup}
@@ -2874,7 +2985,7 @@ export function PayrollPage() {
           <p className="empty-copy">עדיין לא נשמרו תשלומים תקופתיים.</p>
         )}
       </section>
-      {records.length > 0 ? (
+      {reportRecords.length > 0 ? (
         <section className="card" aria-labelledby="annual-payroll-history-title">
           <div className="section-heading">
             <div>
@@ -2959,26 +3070,21 @@ export function PayrollPage() {
               <span>
                 ניכויים מצטברים <small>כל הניכויים שהוזנו בחודשים</small>
               </span>
-              <strong>−{money.format(annualReport.deductions)}</strong>
+              <strong>−{money.format(annualReport.costDeductions)}</strong>
             </div>
             <div className="total">
               <span>
                 עלות ההעסקה בשנת {reportYear}
-                {/* R5-02/R5-03. The underlying field is called `totalPaid`, but
-                    it is the sum of the payroll records that were SAVED for the
-                    year — a saved month is not a paid month, and closing a month
-                    is a separate act with its own payment date. Marking this
-                    `calculated` rather than `paid` is the point of R5-03.
-                    The heading says cost rather than "לתשלום" because each
-                    record's `total` includes the employer's own contributions,
-                    which never reach the caregiver — the same correction made
-                    to the monthly summary. */}
+                {/* Historical totalPaid and record.total retain their meaning.
+                    Cost restores advances/pocket money already paid, includes
+                    employer accrual, and excludes signed settlement carry.
+                    It is calculated cost, not evidence of a bank transfer. */}
                 <ValueOrigin
                   kind="calculated"
                   provenance={{ source: t('valueOrigin.source.payrollRecord') }}
                 />
               </span>
-              <strong>{money.format(annualReport.totalPaid)}</strong>
+              <strong>{money.format(annualReport.employmentCost)}</strong>
             </div>
             {/* Footnote, not a banner: the caveat stays available without competing
                 with the figures it annotates. */}
@@ -3011,7 +3117,7 @@ export function PayrollPage() {
                     </small>
                   ) : null}
                 </span>
-                <strong>{money.format(record.total)}</strong>
+                <strong>{money.format(payrollRecordEmploymentCost(record))}</strong>
                 <button
                   className="secondary-button"
                   type="button"
