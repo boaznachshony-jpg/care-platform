@@ -391,4 +391,155 @@ describe('product intelligence projections', () => {
     expect(result.months[0]!.total).toBe(8.17);
     expect(result.total).toBe(98.04);
   });
+
+  /**
+   * E (work plan 16.10.2026). A quarterly or annual expense counted only in
+   * the month of its due date: a quarterly payment appeared once a year, and
+   * an annual renewal last due before the window did not appear at all.
+   */
+  describe('quarterly and annual expenses recur at their real frequency', () => {
+    const monthsWith = (result: ReturnType<typeof projectFutureCost>, id: string) =>
+      result.months
+        .filter((month) => month.components.some((component) => component.id === id))
+        .map((month) => month.month);
+
+    it('forecasts a quarterly expense four times a year, from its due date', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [
+          { id: 'ni', label: 'NI', amount: 600, frequency: 'quarterly', dueDate: '2026-10-15' },
+        ],
+      });
+      expect(monthsWith(result, 'ni')).toEqual(['2026-10', '2027-01', '2027-04', '2027-07']);
+      expect(result.total).toBe(2400);
+      expect(result.reserveRecommendation).toBe(200);
+    });
+
+    it('forecasts an annual expense last due before the window when it falls due again inside it', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [
+          {
+            id: 'renewal',
+            label: 'Insurance renewal',
+            amount: 1200,
+            frequency: 'annual',
+            dueDate: '2025-11-20',
+          },
+        ],
+      });
+      expect(monthsWith(result, 'renewal')).toEqual(['2026-11']);
+      expect(result.total).toBe(1200);
+      const november = result.months[1]!;
+      expect(november.components.find((c) => c.id === 'renewal')?.explanation).toBe(
+        'Stored annual employment cost, repeated from its last due date',
+      );
+    });
+
+    it('still counts an annual expense due inside the window exactly once', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [
+          { id: 'fee', label: 'Fee', amount: 300, frequency: 'annual', dueDate: '2027-03-01' },
+        ],
+      });
+      expect(monthsWith(result, 'fee')).toEqual(['2027-03']);
+      expect(result.total).toBe(300);
+    });
+
+    /**
+     * The web app records National Insurance as one row per quarter, each
+     * marked quarterly. Repeating every row would count each future quarter
+     * once per recorded row; only the latest row of the series repeats.
+     */
+    it('repeats one row per series, so recorded quarters are not multiplied', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [
+          { id: 'ni-q1', label: 'NI', amount: 500, frequency: 'quarterly', dueDate: '2026-04-15' },
+          { id: 'ni-q2', label: 'NI', amount: 550, frequency: 'quarterly', dueDate: '2026-07-15' },
+          { id: 'ni-q3', label: 'NI', amount: 600, frequency: 'quarterly', dueDate: '2026-10-15' },
+        ],
+      });
+      const niMonths = result.months
+        .filter((month) => month.components.some((c) => c.id.startsWith('ni-')))
+        .map((month) => month.month);
+      expect(niMonths).toEqual(['2026-10', '2027-01', '2027-04', '2027-07']);
+      // The latest recorded quarter sets the amount carried forward.
+      expect(result.total).toBe(2400);
+      expect(result.assumptions).toEqual([
+        { id: 'ni-q3', label: 'NI repeats every 3 months', amount: 600 },
+      ]);
+    });
+
+    it('keeps two different quarterly expenses as two series', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [
+          { id: 'a', label: 'NI', amount: 100, frequency: 'quarterly', dueDate: '2026-10-15' },
+          { id: 'b', label: 'Agency', amount: 50, frequency: 'quarterly', dueDate: '2026-11-01' },
+        ],
+      });
+      expect(monthsWith(result, 'a')).toEqual(['2026-10', '2027-01', '2027-04', '2027-07']);
+      expect(monthsWith(result, 'b')).toEqual(['2026-11', '2027-02', '2027-05', '2027-08']);
+      expect(result.total).toBe(600);
+    });
+
+    it('stops repeating after endMonth', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [
+          {
+            id: 'ni',
+            label: 'NI',
+            amount: 600,
+            frequency: 'quarterly',
+            dueDate: '2026-10-15',
+            endMonth: '2027-02',
+          },
+        ],
+      });
+      expect(monthsWith(result, 'ni')).toEqual(['2026-10', '2027-01']);
+    });
+
+    it('names a quarterly expense it cannot place instead of dropping it silently', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 0,
+        expenses: [{ id: 'undated', label: 'Fee', amount: 90, frequency: 'quarterly' }],
+      });
+      expect(result.total).toBe(0);
+      expect(result.unknowns).toEqual(['expense_schedule:undated']);
+    });
+
+    it('keeps every month summing to its headline total', () => {
+      const result = projectFutureCost({
+        startMonth: '2026-10',
+        baseSalary: 7000,
+        expenses: [
+          { id: 'ni', label: 'NI', amount: 612.4, frequency: 'quarterly', dueDate: '2026-07-15' },
+          {
+            id: 'ins',
+            label: 'Insurance',
+            amount: 1450,
+            frequency: 'annual',
+            dueDate: '2026-02-01',
+          },
+          { id: 'm', label: 'Monthly', amount: 80, frequency: 'monthly' },
+        ],
+      });
+      for (const month of result.months) {
+        const sum = month.components.reduce((total, c) => total + (c.amount ?? 0), 0);
+        expect(Math.round(sum * 100)).toBe(Math.round(month.total * 100));
+      }
+      // 12 x (7000 + 80) + 4 x 612.40 + 1450 = 84,960 + 2,449.60 + 1,450
+      expect(result.total).toBe(88_859.6);
+    });
+  });
 });
