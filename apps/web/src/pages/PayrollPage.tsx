@@ -7,7 +7,6 @@ import {
   MoneyError,
   PayrollComponentError,
   percentOfAgorot,
-  scaleAgorot,
   shekelsOf,
   ZERO_AGOROT,
   type Agorot,
@@ -408,49 +407,18 @@ function numeric(value: string): number {
 }
 
 /**
- * A worked holiday is paid at the rest-day rate — the same field the form
- * already labels "תעריף לכל שבת או יום מנוחה", a holiday being one of those
- * rest days. The rate is shared rather than duplicated because the product has
- * no second rate to offer and inventing one would be a claim about
- * entitlement, which this screen explicitly does not make (`liability.calculation`).
+ * A worked holiday is paid at the rest-day rate, by the rest-day formula.
  *
- * Integer agorot throughout, by the same path the rest-day product uses in
- * `calculateMonthlyPayrollAgorot`: one rounding step on entry, none after. A
- * float multiply here would disagree with the server's recomputation and be
- * rejected by the reconcile CHECK.
+ * Both figures are now `count × restDayRate` in `@caredesk/domain`: the same
+ * rate, the same multiplication, counted apart only so the employer can see
+ * how many holidays were paid. The amount is never typed, so there is nothing
+ * here to derive, no override to carry and no way to record a worked holiday
+ * paid nothing — which is what a typed amount made possible, and what a
+ * production record (one holiday, ₪0, September 2026) actually did.
+ *
+ * Anything owed beyond the rate belongs in "תשלומים נוספים", which already
+ * carries its own line and its own description.
  */
-function derivedHolidayPay(paidHolidays: string, restDayRate: string): number {
-  // A value in transit is not a crash. `agorotFromShekels` and `scaleAgorot`
-  // both throw `MoneyError` above MAX_AGOROT, and a half-typed rate reaches
-  // that range easily — `20000000` is four keystrokes. This runs inside both a
-  // `setValues` updater and render, so an uncaught throw unmounts the whole
-  // wizard and takes every typed field with it; the neighbouring `roundMoney`
-  // and `nationalInsuranceAmount` catch for exactly this reason, and the
-  // out-of-range value is reported by `validateAmount` where it belongs.
-  try {
-    return shekelsOf(scaleAgorot(agorotFromShekels(numeric(restDayRate)), numeric(paidHolidays)));
-  } catch (error) {
-    if (error instanceof MoneyError) return 0;
-    throw error;
-  }
-}
-
-/**
- * Whether the stored holiday amount is the employer's own figure rather than
- * the derived one. Compared unconditionally: a record that reads zero against
- * a derived ₪440 is precisely a deliberate zero, and the early return that
- * used to exempt it both displayed a ₪440 that existed in no record and let
- * the next keystroke overwrite what the employer meant. A month with no
- * holidays derives zero anyway, so a genuine fresh zero still reads as
- * not-overridden.
- */
-function holidayPayWasTyped(values: {
-  paidHolidays: string;
-  saturdayRate: string;
-  holidayPay: string;
-}): boolean {
-  return numeric(values.holidayPay) !== derivedHolidayPay(values.paidHolidays, values.saturdayRate);
-}
 
 function payrollValues(
   record: MvpPayrollRecord | undefined,
@@ -474,7 +442,6 @@ function payrollValues(
     paidSaturdays: String(record?.paidSaturdays ?? 0),
     saturdayRate: String(saturdayRate),
     paidHolidays: String(record?.paidHolidays ?? 0),
-    holidayPay: String(record?.holidayPay ?? 0),
     vacationPay: String(record?.vacationPay ?? 0),
     sickPay: String(record?.sickPay ?? 0),
     pocketMoney: String(record?.pocketMoney ?? 0),
@@ -561,11 +528,9 @@ export interface PayrollWizardDraft {
   values: PayrollWizardValues;
   additionalPayments: AdditionalPaymentDraft[];
   /**
-   * Carried in the draft rather than re-inferred on restore. Inference cannot
-   * tell a typed amount that happens to equal the derived one from a derived
-   * one, so a reload would quietly hand the field back to the calculator and
-   * the next rate change would overwrite what the employer typed. Optional
-   * because drafts written before this field exists must still restore.
+   * Written by an older bundle, when the holiday amount could be typed. Read
+   * by nothing: the amount is derived now, so there is no override to restore.
+   * Declared only so a draft saved by that bundle still parses.
    */
   holidayPayOverridden?: boolean;
 }
@@ -652,40 +617,6 @@ export function PayrollPage() {
       restoredDraft?.value.values ??
       payrollValues(initialRecord, profile.baseSalary, profile.saturdayRate),
   );
-  /**
-   * Holiday pay: derived by default, typed only on purpose.
-   *
-   * "ימי חג שעבדו" was collected, stored and never used. The wizard computed
-   * `4 × ₪440 = ₪1,760` for rest days one line above and then showed nothing
-   * at all for a worked holiday, so a reader who trusted the pattern — and the
-   * pattern is the only thing the screen teaches — reached step 3 with the
-   * holiday amount still at zero and underpaid the caregiver by a whole day.
-   * That is the same defect as the rest-day one reported from production, in
-   * the field directly beneath it.
-   *
-   * The money still lives in exactly one place (`holidayPay`), so nothing is
-   * counted twice and the totals, the reconcile CHECK in migration 0045 and
-   * every stored record keep their meaning. What changes is where its value
-   * comes from: the count times the rest-day rate, until the user types an
-   * amount of their own.
-   *
-   * A record saved before this existed is treated as overridden when its
-   * amount does not match the derived one. Re-opening an old month must never
-   * silently rewrite what was actually paid.
-   */
-  const [holidayPayOverridden, setHolidayPayOverridden] = useState(() => {
-    // A restored draft carries the flag; only a draft written before the field
-    // existed, or a plain record load, has to be inferred.
-    if (restoredDraft?.value.holidayPayOverridden !== undefined)
-      return restoredDraft.value.holidayPayOverridden;
-    return holidayPayWasTyped(
-      restoredDraft?.value.values ?? {
-        paidHolidays: String(initialRecord?.paidHolidays ?? 0),
-        saturdayRate: String(initialRecord?.saturdayRate ?? profile.saturdayRate ?? 0),
-        holidayPay: String(initialRecord?.holidayPay ?? 0),
-      },
-    );
-  });
   const [additionalPayments, setAdditionalPayments] = useState<AdditionalPaymentDraft[]>(
     () => restoredDraft?.value.additionalPayments ?? additionalPaymentDrafts(initialRecord),
   );
@@ -765,7 +696,7 @@ export function PayrollPage() {
       try {
         saveFormDraft<PayrollWizardDraft>(
           PAYROLL_WIZARD_DRAFT,
-          { step, values, additionalPayments, holidayPayOverridden },
+          { step, values, additionalPayments },
           savedAt,
         );
         setDraftStatus('saved');
@@ -778,10 +709,7 @@ export function PayrollPage() {
       }
     }, 400);
     return () => window.clearTimeout(timer);
-    // `holidayPayOverridden` is in the deps because it is now in the payload:
-    // taking the field over is a change the draft has to carry, and without it
-    // a reload hands the typed amount back to the calculator.
-  }, [hasUnsavedWork, step, values, additionalPayments, holidayPayOverridden]);
+  }, [hasUnsavedWork, step, values, additionalPayments]);
 
   /**
    * A reload or a tab close is the one navigation the draft alone cannot make
@@ -807,11 +735,6 @@ export function PayrollPage() {
       month: values.month,
     };
     setValues(restored);
-    // Every path that replaces `values` wholesale must re-decide this with
-    // them. A flag left over from the discarded work would either keep the
-    // derivation switched off — reproducing the unpaid-holiday bug for the
-    // restored month — or switch it back on over a figure that was typed.
-    setHolidayPayOverridden(holidayPayWasTyped(restored));
     setAdditionalPayments(additionalPaymentDrafts(record));
     setDraftRestoredNotice(false);
     setValidationErrors([]);
@@ -829,7 +752,6 @@ export function PayrollPage() {
     paidSaturdays: ['שבתות בתשלום'],
     saturdayRate: ['תעריף שבת'],
     paidHolidays: ['ימי חג'],
-    holidayPay: ['תשלום עבור יום חג'],
     vacationPay: ['תשלום חופשה'],
     sickPay: ['תשלום מחלה'],
     employerContributions: ['הפרשות מעסיק'],
@@ -899,7 +821,7 @@ export function PayrollPage() {
         baseSalary: proratedBaseSalary.amount,
         paidSaturdays: numeric(values.paidSaturdays),
         saturdayRate: numeric(values.saturdayRate),
-        holidayPay: numeric(values.holidayPay),
+        paidHolidays: numeric(values.paidHolidays),
         vacationPay: numeric(values.vacationPay),
         sickPay: numeric(values.sickPay),
         pocketMoney: numeric(values.pocketMoney),
@@ -927,6 +849,7 @@ export function PayrollPage() {
       if (error instanceof PayrollComponentError) {
         return {
           saturdayPay: 0,
+          holidayPay: 0,
           additions: 0,
           deductions: 0,
           total: 0,
@@ -943,7 +866,7 @@ export function PayrollPage() {
   // reconciling to the total the reconcile CHECK (0041, 0045) asserts.
   const standardOtherAdditions = Math.max(
     0,
-    otherAdditions - additionalPaymentsTotal - numeric(values.holidayPay),
+    otherAdditions - additionalPaymentsTotal - calculation.holidayPay,
   );
   const beforeDeductions = proratedBaseSalary.amount + calculation.additions;
   const deductionBreakdown = [
@@ -1042,27 +965,10 @@ export function PayrollPage() {
   }
 
   function update(key: keyof typeof values, value: string) {
-    setValues((current) => {
-      const next = { ...current, [key]: value };
-      // The derived holiday amount follows its two inputs until the user takes
-      // it over. Recomputed here rather than at render so that what is stored
-      // and what is shown are the same number — a figure that only existed in
-      // the view would be absent from the saved record, which is the shape of
-      // the bug this is fixing.
-      if (!holidayPayOverridden && (key === 'paidHolidays' || key === 'saturdayRate')) {
-        next.holidayPay = String(derivedHolidayPay(next.paidHolidays, next.saturdayRate));
-      }
-      return next;
-    });
+    setValues((current) => ({ ...current, [key]: value }));
     setMessage('');
     setValidationErrors([]);
     setPayrollSaved(false);
-  }
-
-  /** Typing an amount in step 3 is the override; nothing else sets the flag. */
-  function updateHolidayPay(value: string) {
-    setHolidayPayOverridden(true);
-    update('holidayPay', value);
   }
 
   function updateAdditionalPayment(id: string, field: 'description' | 'amount', value: string) {
@@ -1143,7 +1049,6 @@ export function PayrollPage() {
     if (stepToValidate === 3) {
       (
         [
-          ['holidayPay', 'תשלום עבור יום חג'],
           ['vacationPay', 'תשלום חופשה'],
           ['sickPay', 'תשלום מחלה'],
           ['employerContributions', 'הפרשות מעסיק'],
@@ -1193,7 +1098,6 @@ export function PayrollPage() {
     setDraftRestoredNotice(false);
     const loaded = { ...payrollValues(record, profile.baseSalary, profile.saturdayRate), month };
     setValues(loaded);
-    setHolidayPayOverridden(holidayPayWasTyped(loaded));
     setAdditionalPayments(additionalPaymentDrafts(record));
     setValidationErrors([]);
     setPayrollSaved(false);
@@ -1288,7 +1192,7 @@ export function PayrollPage() {
       saturdayRate: numeric(values.saturdayRate),
       paidHolidays: numeric(values.paidHolidays),
       saturdayPay: calculation.saturdayPay,
-      holidayPay: numeric(values.holidayPay),
+      holidayPay: calculation.holidayPay,
       vacationPay: numeric(values.vacationPay),
       sickPay: numeric(values.sickPay),
       pocketMoney: numeric(values.pocketMoney),
@@ -1370,8 +1274,6 @@ export function PayrollPage() {
       }
       setSequence({ ...sequence, addedMonths });
       setValues(nextSequencePayrollValues(nextMonth, values.baseSalary, values.saturdayRate));
-      // A month that has just been opened holds nothing the employer typed.
-      setHolidayPayOverridden(false);
       setAdditionalPayments([]);
       setValidationErrors([]);
       setPayrollSaved(false);
@@ -1860,21 +1762,10 @@ export function PayrollPage() {
                   {/* Mirrors the rest-day line directly above, deliberately: the
                       absence of this line is what taught a reader that a worked
                       holiday carries no payment. */}
-                  <ValueOrigin kind={holidayPayOverridden ? 'input' : 'calculated'} />
+                  <ValueOrigin kind="calculated" />
                 </span>
-                <strong>
-                  {money.format(
-                    holidayPayOverridden
-                      ? numeric(values.holidayPay)
-                      : derivedHolidayPay(values.paidHolidays, values.saturdayRate),
-                  )}
-                </strong>
+                <strong>{money.format(calculation.holidayPay)}</strong>
               </div>
-              {holidayPayOverridden ? (
-                <p className="form-note">
-                  הסכום לימי החג הוזן ידנית בשלב ההוספות ומחליף את החישוב הזה.
-                </p>
-              ) : null}
               <p className="form-note">
                 מקור שכר הבסיס: נתוני ההעסקה, בתוקף מ־{profile.salaryEffectiveDate}.
               </p>
@@ -1882,34 +1773,24 @@ export function PayrollPage() {
           ) : null}
           {step === 3 ? (
             <div className="form-grid">
-              <label>
-                תשלום עבור יום חג
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={values.holidayPay}
-                  {...invalidFieldProps('holidayPay')}
-                  onChange={(event) => updateHolidayPay(event.target.value)}
-                />
-                {fieldErrorMessage('holidayPay')}
-                <small>
-                  {holidayPayOverridden
-                    ? 'הסכום הוזן ידנית ומחליף את החישוב לפי ימי החג והתעריף.'
-                    : 'הסכום מולא מימי החג והתעריף שהוזנו. אפשר להקליד כאן סכום אחר.'}
-                </small>
-                {/* Same contract as the national-insurance amount field: one
-                    field, two possible kinds, and the badge follows the flag
-                    that already decides which. */}
-                <ValueOrigin
-                  kind={holidayPayOverridden ? 'input' : 'calculated'}
-                  provenance={
-                    holidayPayOverridden
-                      ? undefined
-                      : { source: t('valueOrigin.source.payrollRecord') }
-                  }
-                />
-              </label>
+              {/* A worked holiday is not typed here. It is ימי חג שעבדו times
+                  the rest-day rate, both collected on the previous step, so an
+                  amount field on this one could only ever disagree with them.
+                  Shown rather than hidden, because the figure belongs in the
+                  list of this month's additions. */}
+              <div className="payroll-live-total" aria-live="polite">
+                <span>
+                  תשלום עבור יום חג
+                  <small>
+                    {numeric(values.paidHolidays)} × {money.format(numeric(values.saturdayRate))}
+                  </small>
+                  <ValueOrigin
+                    kind="calculated"
+                    provenance={{ source: t('valueOrigin.source.payrollRecord') }}
+                  />
+                </span>
+                <strong>{money.format(calculation.holidayPay)}</strong>
+              </div>
               <label>
                 תשלום חופשה
                 <input
@@ -2178,9 +2059,9 @@ export function PayrollPage() {
                     <small>
                       {numeric(values.paidHolidays)} × {money.format(numeric(values.saturdayRate))}
                     </small>
-                    <ValueOrigin kind={holidayPayOverridden ? 'input' : 'calculated'} />
+                    <ValueOrigin kind="calculated" />
                   </span>
-                  <strong>{money.format(numeric(values.holidayPay))}</strong>
+                  <strong>{money.format(calculation.holidayPay)}</strong>
                 </div>
                 <div>
                   <span>
@@ -2346,7 +2227,7 @@ export function PayrollPage() {
                         {numeric(values.paidHolidays)} ימי חג / {numeric(values.paidHolidays)} paid
                         holidays
                       </td>
-                      <td>{money.format(numeric(values.holidayPay))}</td>
+                      <td>{money.format(calculation.holidayPay)}</td>
                     </tr>
                     <tr>
                       <td>תשלום חופשה / Vacation pay</td>

@@ -16,7 +16,7 @@ const BLANK: PayrollComponents = {
   baseSalary: 0,
   paidRestDays: 0,
   restDayRate: 0,
-  holidayPay: 0,
+  paidHolidays: 0,
   vacationPay: 0,
   sickPay: 0,
   employerContributions: 0,
@@ -63,19 +63,21 @@ describe('calculateMonthlyPayroll', () => {
         baseSalary: 6000,
         paidRestDays: 4,
         restDayRate: 300,
-        holidayPay: 250,
+        paidHolidays: 1,
         employerContributions: 500,
         additionalPayments: [{ amount: 200 }],
         pocketMoney: 100,
       }),
     ).toEqual({
       restDayPay: 1200,
-      additions: 2150,
+      // The fifth rest day of the month, which happened to be a holiday.
+      holidayPay: 300,
+      additions: 2200,
       deductions: 100,
-      total: 8050,
+      total: 8100,
       // The employer's ₪500 share is inside `total` and outside what the
       // caregiver is handed. Owner's decision, 13.10.2026.
-      payableToWorker: 7550,
+      payableToWorker: 7600,
       calculationOnly: 500,
     });
   });
@@ -104,7 +106,12 @@ describe('calculateMonthlyPayroll', () => {
     });
 
     it('keeps the two figures equal when nothing accrues', () => {
-      const totals = calculateMonthlyPayroll({ ...BLANK, baseSalary: 6000, holidayPay: 440 });
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        baseSalary: 6000,
+        restDayRate: 440,
+        paidHolidays: 1,
+      });
       expect(totals.payableToWorker).toBe(totals.total);
       expect(totals.calculationOnly).toBe(0);
     });
@@ -117,7 +124,7 @@ describe('calculateMonthlyPayroll', () => {
         baseSalary: 6000.33,
         paidRestDays: 3.5,
         restDayRate: 440.55,
-        holidayPay: 250.25,
+        paidHolidays: 1,
         employerContributions: 1000.67,
         additionalPayments: [{ amount: 125.49 }],
         pocketMoney: 100.01,
@@ -143,6 +150,50 @@ describe('calculateMonthlyPayroll', () => {
       expect(PAYROLL_SETTLEMENT_BASIS.employerContributions).toBe('calculation_only');
       for (const key of ['baseSalary', 'restDayPay', 'holidayPay', 'vacationPay', 'sickPay'])
         expect(PAYROLL_SETTLEMENT_BASIS[key]).toBe('worker');
+    });
+  });
+
+  describe('a worked holiday', () => {
+    it('is the rest-day rate times the count, like a rest day', () => {
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        baseSalary: 6500,
+        paidRestDays: 4,
+        restDayRate: 440,
+        paidHolidays: 1,
+      });
+      expect(totals.restDayPay).toBe(1760);
+      expect(totals.holidayPay).toBe(440);
+      expect(totals.total).toBe(8700);
+    });
+
+    it('cannot be recorded as a day worked for nothing', () => {
+      // The defect this replaced: `holidayPay` was a free money term, so a
+      // count of 1 beside an amount of 0 was a legal, reconciling record — and
+      // production held one (September 2026, one holiday at ₪440, paid ₪0).
+      // There is no longer an amount to disagree with the count.
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        baseSalary: 6500,
+        restDayRate: 440,
+        paidHolidays: 1,
+      });
+      expect(totals.holidayPay).toBe(440);
+    });
+
+    it('rounds on its own count, not on the sum of both counts', () => {
+      // Half a rest day and a holiday at the same odd rate: rounded together
+      // the pair would disagree with the two figures the slip prints
+      // separately. 0.5 × 440.55 = 220.275 → ₪220.28 on its own.
+      const totals = calculateMonthlyPayroll({
+        ...BLANK,
+        paidRestDays: 0.5,
+        restDayRate: 440.55,
+        paidHolidays: 1,
+      });
+      expect(totals.restDayPay).toBe(220.28);
+      expect(totals.holidayPay).toBe(440.55);
+      expect(totals.additions).toBe(660.83);
     });
   });
 
@@ -174,9 +225,9 @@ describe('calculateMonthlyPayroll', () => {
       calculateMonthlyPayroll({ ...BLANK, baseSalary: 6000, advances: Number.NaN }),
     ).toThrow(PayrollComponentError);
     try {
-      calculateMonthlyPayroll({ ...BLANK, holidayPay: Number.NaN });
+      calculateMonthlyPayroll({ ...BLANK, paidHolidays: Number.NaN });
     } catch (error) {
-      expect(error).toMatchObject({ component: 'holidayPay', problem: 'not_finite' });
+      expect(error).toMatchObject({ component: 'paidHolidays', problem: 'not_finite' });
     }
   });
 

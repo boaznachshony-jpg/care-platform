@@ -24,7 +24,8 @@ export interface MonthlyPayrollInput {
   baseSalary: number;
   paidSaturdays: number;
   saturdayRate: number;
-  holidayPay: number;
+  /** A day count. The amount is `paidHolidays × saturdayRate`, as for a Saturday. */
+  paidHolidays: number;
   vacationPay: number;
   sickPay: number;
   pocketMoney: number;
@@ -38,6 +39,8 @@ export interface MonthlyPayrollInput {
 
 export interface MonthlyPayrollCalculation {
   saturdayPay: number;
+  /** A worked holiday, at the same rate and by the same multiplication. */
+  holidayPay: number;
   additions: number;
   deductions: number;
   /** Cost of the month to the employer. See `PayrollTotals.total`. */
@@ -153,7 +156,7 @@ export function calculateMonthlyPayroll(input: MonthlyPayrollInput): MonthlyPayr
     baseSalary: safeAmount(input.baseSalary),
     paidRestDays: safeAmount(input.paidSaturdays),
     restDayRate: safeAmount(input.saturdayRate),
-    holidayPay: safeAmount(input.holidayPay),
+    paidHolidays: safeAmount(input.paidHolidays),
     vacationPay: safeAmount(input.vacationPay),
     sickPay: safeAmount(input.sickPay),
     employerContributions: safeAmount(input.employerContributions),
@@ -165,6 +168,7 @@ export function calculateMonthlyPayroll(input: MonthlyPayrollInput): MonthlyPayr
   });
   return {
     saturdayPay: totals.restDayPay,
+    holidayPay: totals.holidayPay,
     additions: totals.additions,
     deductions: totals.deductions,
     total: totals.total,

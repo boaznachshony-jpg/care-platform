@@ -42,7 +42,6 @@ const ENTRY: PayrollEntryInput = {
   paidRestDays: 4,
   restDayRate: 300,
   paidHolidays: 1,
-  holidayPay: 250,
   vacationDays: 0,
   vacationPay: 0,
   sickDays: 0,
@@ -54,10 +53,14 @@ const ENTRY: PayrollEntryInput = {
   deductions: 0,
   advances: 0,
   agreedDeductions: 0,
-  // Root 4 (DOM-02): 6000 + (4 x 300 + 250 + 500 + 200) - 100. The fixture used
-  // to say 7350, a number no combination of these components produces, and
-  // every assertion below passed anyway - which is precisely the finding.
-  total: 8050,
+  // Root 4 (DOM-02): 6000 + (4 x 300 + 1 x 300 + 500 + 200) - 100. The fixture
+  // used to say 7350, a number no combination of these components produces,
+  // and every assertion below passed anyway - which is precisely the finding.
+  //
+  // The holiday term is the second `count x restDayRate`, not a figure of its
+  // own: `holidayPay` is no longer an input, so a fixture cannot state one
+  // that disagrees with `paidHolidays`.
+  total: 8100,
   status: 'draft',
 };
 
@@ -256,7 +259,7 @@ describe('PayrollEntryService.save', () => {
       service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0003', {
         ...ENTRY,
         advances: 200,
-        total: 7850,
+        total: 7900,
       }),
     ).rejects.toThrow('idempotency_conflict');
     expect(payrollInserts(queries)).toHaveLength(1);
@@ -298,7 +301,7 @@ describe('PayrollEntryService.save', () => {
     await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0009', {
       ...ENTRY,
       advances: 200,
-      total: 7850,
+      total: 7900,
       version: 1,
     });
 
@@ -334,7 +337,6 @@ describe('PayrollEntryService.save — root 4, the server does not trust the bro
         ...ENTRY,
         paidRestDays: 0,
         restDayRate: 0,
-        holidayPay: 0,
         employerContributions: 0,
         additionalPayments: [],
         pocketMoney: 0,
@@ -365,7 +367,9 @@ describe('PayrollEntryService.save — root 4, the server does not trust the bro
       ...ENTRY,
       paidRestDays: 4.5,
       restDayRate: 372.15,
-      holidayPay: 0,
+      // Zero holidays, so this case stays about the one rounding step it was
+      // written for: 4.5 rest days, not 4.5 rest days plus a holiday.
+      paidHolidays: 0,
       employerContributions: 0,
       additionalPayments: [],
       pocketMoney: 0,
@@ -402,7 +406,7 @@ describe('PayrollEntryService.save — root 4, the server does not trust the bro
       service.save(ACTOR, CASE_ID, '2026-03', 'payroll-key-0105', {
         ...ENTRY,
         advances: 200,
-        total: 7850,
+        total: 7900,
       }),
     ).rejects.toThrow('version_required');
     expect(payrollInserts(queries)).toHaveLength(1);
@@ -413,7 +417,7 @@ describe('PayrollEntryService.save — root 4, the server does not trust the bro
     const service = new PayrollEntryService(pool);
 
     const created = await service.save(ACTOR, CASE_ID, '2026-05', 'payroll-key-0106', ENTRY);
-    expect(created.entry).toMatchObject({ version: 1, total: 8050 });
+    expect(created.entry).toMatchObject({ version: 1, total: 8100 });
   });
 });
 
@@ -426,12 +430,12 @@ describe('PayrollEntryService reads', () => {
     await service.save(ACTOR, CASE_ID, '2026-07', 'payroll-key-0012', {
       ...ENTRY,
       advances: 200,
-      total: 7850,
+      total: 7900,
     });
 
     const listed = await service.list(ACTOR, CASE_ID);
     expect(listed.map((entry) => entry.month)).toEqual(['2026-07', '2026-06']);
-    expect(listed[0]).toMatchObject({ total: 7850, baseSalary: 6000, version: 1 });
+    expect(listed[0]).toMatchObject({ total: 7900, baseSalary: 6000, version: 1 });
 
     expect(await service.get(ACTOR, CASE_ID, '2026-06')).toMatchObject({ month: '2026-06' });
     expect(await service.get(ACTOR, CASE_ID, '2026-01')).toBeNull();

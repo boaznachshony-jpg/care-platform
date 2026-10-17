@@ -22,7 +22,6 @@ const ENTRY_BODY = {
   paidRestDays: 4,
   restDayRate: 300,
   paidHolidays: 1,
-  holidayPay: 250,
   vacationDays: 0,
   vacationPay: 0,
   sickDays: 0,
@@ -34,9 +33,11 @@ const ENTRY_BODY = {
   deductions: 0,
   advances: 0,
   agreedDeductions: 0,
-  // Root 4 (DOM-02): 6000 + (4 x 300 + 250 + 500 + 200) - 100. The fixture used
-  // to say 7350 and every assertion still passed, which is the finding itself.
-  total: 8050,
+  // Root 4 (DOM-02): 6000 + (4 x 300 + 1 x 300 + 500 + 200) - 100. The fixture
+  // used to say 7350 and every assertion still passed, which is the finding
+  // itself. The holiday term is `paidHolidays x restDayRate`, the same
+  // multiplication as the rest days, so the payload no longer states it.
+  total: 8100,
   status: 'draft',
 };
 
@@ -294,6 +295,25 @@ describe('payroll entry routes', () => {
     expect((await app.inject({ method: 'GET', url: base, headers: AUTH })).statusCode).toBe(200);
   });
 
+  it('ignores a holiday amount sent by an older bundle', async () => {
+    // The field is still in the schema so a bundle deployed before the holiday
+    // became a formula is not rejected outright, but what it sends is not what
+    // is stored: the amount is `paidHolidays x restDayRate`, here 1 x 300.
+    // A stale client that also mis-states the total is refused by the total
+    // assertion, which is the loud failure. The quiet one it replaces was a
+    // count of 1 stored beside an amount of 0.
+    const { app, caseId } = await buildApp();
+    const saved = await app.inject({
+      method: 'PUT',
+      url: `/cases/${caseId}/payroll-entries/2026-07`,
+      headers: KEYED,
+      payload: { ...ENTRY_BODY, holidayPay: 0 },
+    });
+
+    expect(saved.statusCode).toBe(201);
+    expect(saved.json().entry).toMatchObject({ holidayPay: 300, total: 8100 });
+  });
+
   it('saves an entry, lists it, fetches it by month and records evidence', async () => {
     const { app, caseId, queries } = await buildApp();
     const base = `/cases/${caseId}/payroll-entries`;
@@ -307,7 +327,7 @@ describe('payroll entry routes', () => {
     expect(saved.statusCode).toBe(201);
     expect(saved.json()).toMatchObject({
       replayed: false,
-      entry: { month: '2026-07', version: 1, status: 'draft', total: 8050 },
+      entry: { month: '2026-07', version: 1, status: 'draft', total: 8100 },
     });
 
     const listed = await app.inject({ method: 'GET', url: base, headers: AUTH });
@@ -352,7 +372,7 @@ describe('payroll entry routes', () => {
       method: 'PUT',
       url,
       headers: KEYED,
-      payload: { ...ENTRY_BODY, advances: 200, total: 7850 },
+      payload: { ...ENTRY_BODY, advances: 200, total: 7900 },
     });
     expect(conflicting.statusCode).toBe(409);
     expect(conflicting.json().code).toBe('IDEMPOTENCY_CONFLICT');
@@ -386,7 +406,6 @@ describe('payroll entry routes', () => {
         ...ENTRY_BODY,
         paidRestDays: 0,
         restDayRate: 0,
-        holidayPay: 0,
         employerContributions: 0,
         additionalPayments: [],
         pocketMoney: 0,
@@ -411,7 +430,7 @@ describe('payroll entry routes', () => {
       method: 'PUT',
       url,
       headers: { ...AUTH, 'idempotency-key': 'payroll-route-key-0003' },
-      payload: { ...ENTRY_BODY, advances: 200, total: 7850 },
+      payload: { ...ENTRY_BODY, advances: 200, total: 7900 },
     });
 
     expect(versionless.statusCode).toBe(428);
@@ -419,7 +438,7 @@ describe('payroll entry routes', () => {
 
     // Manager A's figures survive.
     const read = await app.inject({ method: 'GET', url, headers: AUTH });
-    expect(read.json()).toMatchObject({ total: 8050, version: 1 });
+    expect(read.json()).toMatchObject({ total: 8100, version: 1 });
   });
 
   it('refuses any write against a month that has been closed, with 409 (DOM-01)', async () => {

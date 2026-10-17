@@ -5,7 +5,7 @@ const emptyInput = {
   baseSalary: 7_000,
   paidSaturdays: 0,
   saturdayRate: 0,
-  holidayPay: 0,
+  paidHolidays: 0,
   vacationPay: 0,
   sickPay: 0,
   pocketMoney: 0,
@@ -18,6 +18,20 @@ const emptyInput = {
 };
 
 describe('monthly payroll calculation', () => {
+  it('pays a worked holiday at the Saturday rate, by the Saturday formula', () => {
+    // Saturday and holiday sit on one process and one rate. The separation is
+    // the count, so the employer can see how many holidays were paid.
+    expect(
+      calculateMonthlyPayroll({
+        ...emptyInput,
+        baseSalary: 6_500,
+        paidSaturdays: 4,
+        saturdayRate: 440,
+        paidHolidays: 1,
+      }),
+    ).toMatchObject({ saturdayPay: 1_760, holidayPay: 440, total: 8_700 });
+  });
+
   it('prorates the base salary from the selected date through the end of the month', () => {
     expect(calculateProratedBaseSalary(6_400, '2026-07', '2026-07-16')).toEqual({
       amount: 3_318.52,
@@ -74,6 +88,7 @@ describe('monthly payroll calculation', () => {
       }),
     ).toEqual({
       saturdayPay: 1_350,
+      holidayPay: 0,
       additions: 1_350,
       deductions: 0,
       total: 8_350,
@@ -90,16 +105,18 @@ describe('monthly payroll calculation', () => {
         ...emptyInput,
         paidSaturdays: 2,
         saturdayRate: 500,
-        holidayPay: 300,
+        paidHolidays: 1,
         otherAddition: 250,
         advances: 700,
         agreedDeduction: 100,
       }),
     ).toMatchObject({
       saturdayPay: 1_000,
-      additions: 1_550,
+      // The holiday is the third day at the same ₪500, not a figure of its own.
+      holidayPay: 500,
+      additions: 1_750,
       deductions: 800,
-      total: 7_750,
+      total: 7_950,
     });
   });
 
