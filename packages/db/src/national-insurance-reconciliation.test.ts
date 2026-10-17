@@ -16,8 +16,8 @@ const LINES: ReportLine[] = [
   { month: '2026-08', employed: true, wage: 6000, ratePercent: 3.55, amount: 213 },
   { month: '2026-09', employed: false, wage: 0, ratePercent: 3.55, amount: 0 },
 ];
-const KEY = 'caredesk.mvp.employment-expenses.v1';
-const clientKey = (clientId: string) => `${KEY}.client.${clientId}`;
+const EXPENSES_STORAGE_NAME = 'caredesk.mvp.employment-expenses.v1';
+const clientKey = (clientId: string) => `${EXPENSES_STORAGE_NAME}.client.${clientId}`;
 
 const payment = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
@@ -110,9 +110,10 @@ describe('measureNationalInsuranceReports', () => {
 
   it('matches an unsuffixed key to the legacy:unscoped client', () => {
     expect(
-      measureNationalInsuranceReports(entries({ [KEY]: [payment('expense-ni-q3')] }), [
-        report({ legacyClientId: 'legacy:unscoped' }),
-      ]),
+      measureNationalInsuranceReports(
+        entries({ [EXPENSES_STORAGE_NAME]: [payment('expense-ni-q3')] }),
+        [report({ legacyClientId: 'legacy:unscoped' })],
+      ),
     ).toEqual({ workspaceReports: 1, unreconciledReports: 0 });
   });
 
