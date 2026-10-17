@@ -3,6 +3,7 @@ import {
   decryptBusinessStorageValue,
   encryptBusinessStorageValue,
 } from './business-storage-crypto.js';
+import { StorageWriteError } from './storage-write-error.js';
 
 export type ReminderLeadDays = 1 | 7 | 14 | 21 | 30;
 
@@ -136,8 +137,17 @@ function readBusinessItem(key: string): string | null {
   return stored === null ? null : decryptBusinessStorageValue(stored);
 }
 
+/**
+ * I. Every workspace write goes through here, and a refused one throws
+ * `StorageWriteError`: one type the screens can catch and show, instead of a
+ * raw DOMException that escaped them and left an unsaved row on screen.
+ */
 function writeBusinessItem(key: string, value: string): void {
-  window.localStorage.setItem(key, encryptBusinessStorageValue(value));
+  try {
+    window.localStorage.setItem(key, encryptBusinessStorageValue(value));
+  } catch (reason) {
+    throw new StorageWriteError(key, reason);
+  }
 }
 
 export function clientIdFromPath(

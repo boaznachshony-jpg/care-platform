@@ -12,6 +12,7 @@ import {
   type MvpDocument,
   type MvpDocumentStatus,
 } from '../storage/mvp-storage.js';
+import { storageWriteFailureMessage } from '../storage/storage-write-error.js';
 import { MAX_DOCUMENT_BYTES } from '@caredesk/schemas';
 import { useAuth } from '../auth/auth-context.js';
 import { importCaseDocument, listCaseDocuments } from '../api/client.js';
@@ -116,6 +117,8 @@ export function DocumentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
+  /** I: set when the device refused a write; cleared by the next one that lands. */
+  const [saveError, setSaveError] = useState('');
   /**
    * R1-07. Saving a document awaits an IndexedDB write (or, when signed in on
    * a client-scoped route, a network upload). The submit button used to stay
@@ -243,10 +246,23 @@ export function DocumentsPage() {
     };
   }, [caseLookup, legacyClientIdParam, syncAttempt]);
 
-  function persist(next: MvpDocument[]) {
-    saveMvpDocuments(next);
+  /**
+   * I: false when the device refused the write. The list on screen then stays
+   * what is stored, the failure is shown, and the caller stops before saying
+   * anything was saved.
+   */
+  function persist(next: MvpDocument[]): boolean {
+    try {
+      saveMvpDocuments(next);
+    } catch (error) {
+      setMessage('');
+      setSaveError(storageWriteFailureMessage(error));
+      return false;
+    }
+    setSaveError('');
     setDocuments(next);
     if (caseLookup.status === 'found') setSyncAttempt((count) => count + 1);
+    return true;
   }
 
   function startEdit(document: MvpDocument) {
@@ -303,11 +319,16 @@ export function DocumentsPage() {
         fileType: file?.type ?? existing?.fileType ?? '',
         updatedAt: new Date().toISOString(),
       };
-      persist(
-        existing
-          ? documents.map((item) => (item.id === existing.id ? saved : item))
-          : [saved, ...documents],
-      );
+      // On failure the form stays open with what was typed, so it can be retried.
+      if (
+        !persist(
+          existing
+            ? documents.map((item) => (item.id === existing.id ? saved : item))
+            : [saved, ...documents],
+        )
+      ) {
+        return;
+      }
       resetForm();
       setMessage(existing ? 'פרטי המסמך עודכנו ונשמרו.' : 'המסמך נוסף ונשמר.');
     } catch {
@@ -346,8 +367,11 @@ export function DocumentsPage() {
 
   async function removeDocument(document: MvpDocument) {
     if (!window.confirm(`למחוק את "${document.name}"?`)) return;
+    // I: the record goes first. The file used to be deleted before a write
+    // that could fail, leaving a document on screen whose file was gone. Now a
+    // refused write deletes nothing, and a file left behind is only space.
+    if (!persist(documents.filter((item) => item.id !== document.id))) return;
     await deleteDocumentFile(document.id);
-    persist(documents.filter((item) => item.id !== document.id));
     setMessage('המסמך נמחק.');
   }
 
@@ -367,6 +391,11 @@ export function DocumentsPage() {
       {message ? (
         <p className="info-box" role="status">
           {message}
+        </p>
+      ) : null}
+      {saveError ? (
+        <p className="action-notice error" role="alert">
+          {saveError}
         </p>
       ) : null}
 
