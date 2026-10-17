@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useClientPath } from '../hooks/use-client-path.js';
 import { useMvpProfile } from '../hooks/use-mvp-profile.js';
@@ -8,7 +8,12 @@ import { getCaseHealth, type CaseHealthResponse } from '../api/client.js';
 import { findCanonicalCase } from '../canonical-case.js';
 import { UpcomingPaymentsCard } from '../components/UpcomingPaymentsCard.js';
 import { createUpcomingPayments, formatDisplayDate } from '../upcoming-payments.js';
-import { readMvpDocuments, readMvpTasks } from '../storage/mvp-storage.js';
+import {
+  readMvpDocuments,
+  readMvpEmploymentExpenses,
+  readMvpTasks,
+} from '../storage/mvp-storage.js';
+import { OVERDUE_SHORT_LABEL } from '../national-insurance-presenter.js';
 import { missingProfileFieldCount } from '../profile-completeness.js';
 import {
   healthFactorAction,
@@ -198,7 +203,15 @@ export function DashboardPage() {
       block: 'start',
     });
   };
-  const upcomingPayments = createUpcomingPayments();
+  // One context for the tile and the card below it, so they cannot disagree.
+  const nationalInsurance = useMemo(
+    () => ({
+      expenses: readMvpEmploymentExpenses(),
+      employmentStartDate: profile.employmentStartDate,
+    }),
+    [profile.employmentStartDate],
+  );
+  const upcomingPayments = createUpcomingPayments(new Date(), nationalInsurance);
   const nextSalary = upcomingPayments.find((payment) => payment.id === 'salary');
   const nextInsurance = upcomingPayments.find((payment) => payment.id === 'nationalInsurance');
   const attentionCount =
@@ -254,7 +267,11 @@ export function DashboardPage() {
       id: 'nationalInsurance',
       icon: tileIcons.buildingColumns,
       label: t('dashboard.tiles.nationalInsurance'),
-      value: nextInsurance ? formatDisplayDate(nextInsurance.dueDate) : '—',
+      value: nextInsurance
+        ? `${formatDisplayDate(nextInsurance.dueDate)}${
+            nextInsurance.daysRemaining < 0 ? ` · ${OVERDUE_SHORT_LABEL}` : ''
+          }`
+        : '—',
       to: path('/tasks'),
     },
     {
@@ -470,7 +487,7 @@ export function DashboardPage() {
         </Link>
       </section>
       <div id="dashboard-payments">
-        <UpcomingPaymentsCard />
+        <UpcomingPaymentsCard nationalInsurance={nationalInsurance} />
       </div>
       <div className="dashboard-grid" id="dashboard-case">
         <section className="card">
