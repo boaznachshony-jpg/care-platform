@@ -59,6 +59,10 @@ const WHY: Record<StorageWriteFailure, string> = {
  * shows `error.message`, which carries a storage key.
  */
 export function storageWriteFailureMessage(error: unknown): string {
-  const failure = error instanceof StorageWriteError ? error.failure : 'unknown';
-  return `השמירה נכשלה והשינוי לא נשמר: ${WHY[failure]} המסך מציג רק את מה שנשמר בפועל. נסו שוב, ואם זה חוזר — אל תסגרו את הדף לפני שתפנו לתמיכה.`;
+  return `השמירה נכשלה והשינוי לא נשמר: ${storageWriteFailureReason(error)} המסך מציג רק את מה שנשמר בפועל. נסו שוב, ואם זה חוזר — אל תסגרו את הדף לפני שתפנו לתמיכה.`;
+}
+
+/** Why the device refused, as one sentence, for a screen that words the rest itself. */
+export function storageWriteFailureReason(error: unknown): string {
+  return WHY[error instanceof StorageWriteError ? error.failure : 'unknown'];
 }
