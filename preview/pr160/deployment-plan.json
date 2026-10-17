@@ -4,8 +4,10 @@
   "productSourceSha": "376ca59e447a3944b48d4bd420b85f0a84cee21b",
   "validatedProductCi": "https://github.com/boaznachshony-jpg/care-platform/actions/runs/39058918894",
   "previewBranch": "test/pr-160-external-preview",
-  "status": "handoff_to_development_pending_TEST_connections_and_hosted_acceptance",
-  "executionOwner": "Development team; claim ownership in issue 162 before service provisioning",
+  "status": "ownership_accepted_by_Team_2_pending_owner_connection_steps_and_hosted_acceptance",
+  "executionOwner": "Team 2 (local Claude Code), explicitly accepted in issue 162 comment 6239340249",
+  "ownershipEvidence": "https://github.com/boaznachshony-jpg/care-platform/issues/162#issuecomment-6239340249",
+  "executionSplitEvidence": "https://github.com/boaznachshony-jpg/care-platform/issues/162#issuecomment-6239525732",
   "deploymentTarget": "preview",
   "productionDeploymentAllowed": false,
   "mergeAllowed": false,
@@ -53,7 +55,7 @@
     "scope": "Configuration validation only; live identity, database permissions, RLS and browser behavior remain unverified until the actual services are connected."
   },
   "deploymentSequence": [
-    "Development team connects Vercel and Supabase using its authorized service access; select or create dedicated TEST resources without production credentials or data. This handoff is not permission for the preparing agent to sign in.",
+    "Follow Team 2's documented owner/development execution split in issue 162. The owner completes the agreed account connection and synthetic Auth-user preparation; Team 2 owns the remaining verified TEST infrastructure, Preview deployment and acceptance. This handoff is not permission for the preparing agent to sign in.",
     "Verify actual provider project identities and distinct TEST/production Supabase refs before accepting any database or storage credential.",
     "Apply the existing migrations to the empty TEST database, provision the least-privilege app role, and verify forced tenant RLS using the existing scripts.",
     "Configure real TEST Auth, private TEST storage/backup buckets, a freshly generated workspace encryption key, disabled billing and mock AI. Do not configure real messaging providers.",
