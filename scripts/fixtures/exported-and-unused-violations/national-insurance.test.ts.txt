@@ -1,0 +1,4 @@
+// A test is not a consumer: this import does not make the export "used".
+import { outstandingQuarters } from './national-insurance.js';
+
+outstandingQuarters('2026-10-16');
