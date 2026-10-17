@@ -12,7 +12,7 @@ The separate entry imports `apps/web/src/main.tsx` unchanged. It therefore uses
 the real App, AppShell, pages, translation resources, auth provider, storage,
 API client and business logic. `prototype.css` adds scoped visual overrides:
 neutral canvas, dark green navigation, lime selection accents, restrained card
-borders and shadows, and a five-column desktop tile grid. Existing dark mode,
+borders and shadows, and an adaptive desktop tile grid. Existing dark mode,
 font scaling, mobile navigation and focus behavior remain available. No text is
 hidden, replaced or generated with CSS. Production files and shared tokens have
 no changes relative to `origin/main`.
@@ -78,10 +78,52 @@ patched or hidden by the design layer. It needs a separate product fix.
 
 ## Review boundary
 
-Current baseline: origin/main 6394a22, merged into the isolated branch.
+Current baseline: origin/main de26938, synchronized into the isolated branch.
 No dependency on current launch, payroll or sponsor work. Shared design tokens,
 component contracts, product/legal authority and all production behavior remain
 unchanged. This document records the experimental visual proposal for human
 review; it grants no release or deployment approval.
 
 Validation result (2026-10-13): full `pnpm check` passed (1719 tests: 799 web, 433 API, plus workspace packages); separate preview build passed. Desktop 1440px and mobile 390px reviewed; 320px with enlarged text had no page-level horizontal overflow.
+
+## Visual review — 2026-10-17
+
+Reviewed the case picker, dashboard, tasks, standing medications, payroll,
+documents and settings at desktop (1440px) and mobile (390px) widths. Also
+checked the dashboard at 320px with the maximum existing text scale (1.3),
+desktop navigation at that scale, and the medication screen in dark mode.
+
+Only `apps/web/src/ux-v2/prototype.css` changed in this review:
+
+- Corrected the case picker's brand contrast, neutral surfaces and action-row
+  layout. Mobile actions now measure 58px high instead of inheriting a 170px
+  horizontal flex basis as their height.
+- Removed the duplicate mobile environment-banner inset. Desktop sidebar and
+  topbar insets account for the existing font zoom; the sidebar stays within
+  the viewport and its remaining links can scroll into view.
+- Restored native checkbox/radio dimensions to 24px, with labels retaining at
+  least a 48px touch target. Standing-medication forms have clearer grouping.
+- Let dashboard tabs wrap when enlarged text needs extra room. Adaptive tile
+  columns keep labels within their cards. CSS scroll margins keep the same
+  navigation targets below the sticky header.
+- Harmonized close buttons, task filters and the mobile overflow menu with
+  the existing preview palette. Kept the shared on-accent foreground intact
+  and scoped the light-green button foreground to preview primary buttons.
+
+The case picker and medication screen retained identical main-content text
+and control signatures in before/after browser comparisons. Original page,
+component, translation, routing, storage, API and domain files have no diff
+against `origin/main`. Existing task-title/date defects remain visible.
+
+Validation: full `pnpm check` passed again (1,719 tests); final preview build
+and CSS formatting check passed. No page-level or control horizontal overflow
+was found in the reviewed layouts. Task/document forms, native medication
+choices, original navigation, theme switching and text-scale controls were
+exercised without submitting real data.
+
+The active review session is at
+<http://127.0.0.1:5182/clients/ux-v2-demo>. The built preview remains available
+on port 4182. Both use the same isolated in-memory API on port 4183; existing
+browser workspaces are preserved. Additional case-picker and medication-form
+screenshots accompany the review artifacts. PR #134 remains a draft; no merge
+into main or production deployment was performed.

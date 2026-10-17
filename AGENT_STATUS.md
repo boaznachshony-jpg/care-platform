@@ -17,7 +17,7 @@ UX V2 isolation note: the user explicitly authorized side-environment work along
 <!-- prettier-ignore -->
 | Workstream | Issue | Owner/Agent | Branch | PR | Status | Depends on | Parallel safe | Blocker | Next action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| CareDesk UX V2 isolated prototype | #133 | Codex UX V2 | `feature/caredesk-ux-v2` | #134 (draft) | IN_REVIEW | — | yes | None; baseline 6394a22; pnpm check passed (1719 tests); existing task-title/date defect documented | Human review of visual-only revision in draft PR #134; no merge or production deployment |
+| CareDesk UX V2 isolated prototype | #133 | Codex UX V2 | `feature/caredesk-ux-v2` | #134 (draft) | IN_REVIEW | — | yes | None; baseline de26938; visual review complete; pnpm check passed (1719 tests) | Human review of CSS-only desktop/mobile repairs in draft PR #134; no merge into main or production deployment |
 | Current delivery coordination | — | Orchestrator | `main` | — | ACTIVE | — | n/a | None recorded | Assign each new task through an Issue and update this row set before parallel implementation |
 | Wave 3 canonical Product Intelligence closure | — | Codex primary | `codex/finalize-wave-3-closure-for-product-intelligence` | #48 | DONE | — | no | None; merged main CI succeeded at `a97f61f` | Retain as completed dependency evidence |
 | Final capability and production-readiness assessment | — | Codex primary | `codex/final-product-gap-production-readiness` | #50 | DONE | PR #48 | no | None; merged at `dc98410` | Retain as production-readiness scope authority |
